@@ -691,6 +691,54 @@ describe("runAi", () => {
     ).resolves.toBe(1);
   });
 
+  it("passes runId through to record_ai_usage as p_run_id", async () => {
+    // The correlation that makes a DELEGATED child's spend attributable at
+    // all. Without it every personal-agent call in an org collapses into one
+    // `personal_agent_run` bucket, and the run-history subtree total (Task 7)
+    // has nothing to sum. A nested run passes its OWN id, never its parent's.
+    const { runAi } = await import("@/lib/ai/gateway");
+    const RUN_ID = "11111111-2222-4333-8444-555555555555";
+
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: "user-1",
+        feature: "personal_agent_run",
+        runId: RUN_ID,
+      },
+      async () => ({
+        result: "ok",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      }),
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({ p_run_id: RUN_ID }),
+    );
+  });
+
+  it("sends p_run_id as null when the call belongs to no run", async () => {
+    // Explicit null, not an omitted key: `record_ai_usage` defaults the
+    // parameter, but every other optional argument in this call is written
+    // out, and an omitted key is indistinguishable from a key we forgot to
+    // thread through when reading a failing ledger row.
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await runAi(
+      { orgId: ORG_ID, userId: "user-1", feature: "ask_pulse" },
+      async () => ({
+        result: "ok",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      }),
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({ p_run_id: null }),
+    );
+  });
+
   it("passes cache token counts through to record_ai_usage", async () => {
     const { runAi } = await import("@/lib/ai/gateway");
 

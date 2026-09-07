@@ -30,6 +30,7 @@ const state = (
   },
   isAdmin: true,
   configured: false,
+  assistantName: "Monolith Autopilot",
   ...over,
 });
 
@@ -83,13 +84,23 @@ describe("AutopilotCard", () => {
     );
   });
 
-  it("names the posting identity Monolith Autopilot", async () => {
+  it("names the posting identity with the product default when the org has not renamed it", async () => {
     getBoardAutopilot.mockResolvedValue(state());
     wrap(<AutopilotCard boardId="b1" />);
 
-    // Must match the seeded profiles.full_name the bot's updates are stamped with.
+    // The column's default, and the name the bot's updates are stamped with.
     expect(await screen.findByText("Monolith Autopilot")).toBeInTheDocument();
     expect(screen.queryByText(/Pulse Autopilot/)).not.toBeInTheDocument();
+  });
+
+  // The name is per-ORG now, so this card must render what the admin chose in
+  // Settings → AI rather than the product string it used to hardcode.
+  it("names the posting identity with the org's own assistant name", async () => {
+    getBoardAutopilot.mockResolvedValue(state({ assistantName: "Ada" }));
+    wrap(<AutopilotCard boardId="b1" />);
+
+    expect(await screen.findByText("Ada")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith Autopilot")).not.toBeInTheDocument();
   });
 
   it("locks the controls and hides Save for a non-admin", async () => {

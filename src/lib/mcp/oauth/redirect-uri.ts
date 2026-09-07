@@ -73,6 +73,67 @@ function invariants(url: URL): string {
 }
 
 /**
+ * Schemes that must never be a redirect target, whatever a client registers.
+ *
+ * `javascript:` and `vbscript:` execute; `data:`, `blob:`, `filesystem:` and
+ * `view-source:` render attacker-authored content in a document context; `file:`
+ * reaches the local disk. All of them can wear an authority-looking shape
+ * (`javascript://%0aalert(1)` is valid JS — the `//` is a line comment), so the
+ * hierarchical-form check below does NOT catch them and this list is what does.
+ *
+ * Compared against `URL.protocol`, which the WHATWG parser has already
+ * lowercased and terminated with `:` — so `JavaScript:` cannot slip past on case.
+ */
+const DENIED_SCHEMES = new Set([
+  "javascript:",
+  "vbscript:",
+  "data:",
+  "blob:",
+  "file:",
+  "about:",
+  "filesystem:",
+  "view-source:",
+]);
+
+/**
+ * May `value` be used as an OAuth redirect target at all?
+ *
+ * This is the SCHEME question, asked once at the validation boundary
+ * (`src/lib/validations/mcp-oauth.ts`) for register, authorize and token —
+ * separate from `isRegisteredRedirectUri` below, which asks whether a given URI
+ * belongs to a given client.
+ *
+ * Deliberately NOT `isHttpUrl` (`src/lib/validations/boards.ts`): that guard
+ * exists to stop stored XSS in a board link cell rendered as `<a href>`, where
+ * http(s)-only is exactly right. An OAuth authorization server has a different
+ * requirement — RFC 8252 §7.1 has native apps redirect to a PRIVATE-USE scheme
+ * (`cursor://…`, `vscode://…`, `com.example.app://…`), and rejecting those made
+ * every desktop MCP client fail dynamic registration with "URL must be http or
+ * https".
+ *
+ * So the rule is: http(s) always; any other scheme only in hierarchical
+ * `scheme://…` form and only if it is not one of the DENIED_SCHEMES above. The
+ * hierarchical requirement is what keeps `mailto:` / `tel:`-style opaque URIs
+ * out; the deny list is what keeps the script-bearing schemes out. Neither
+ * alone is sufficient — both are load-bearing.
+ *
+ * Note this gate does not decide WHERE a user can be sent: a redirect target
+ * must additionally have been registered by the client
+ * (`isRegisteredRedirectUri`), which is the open-redirect defense.
+ *
+ * TOTAL — never throws; an unparseable value is simply not allowed.
+ */
+export function isAllowedRedirectUri(value: string): boolean {
+  const url = parse(value);
+  if (!url) return false;
+  if (DENIED_SCHEMES.has(url.protocol)) return false;
+  if (url.protocol === "http:" || url.protocol === "https:") return true;
+  // `url.href` is the parser-normalized form, so leading whitespace or an
+  // upper-case scheme cannot fake the hierarchical shape.
+  return url.href.startsWith(`${url.protocol}//`);
+}
+
+/**
  * Does `candidate` match one of the client's `registered` redirect URIs?
  *
  * Exact match always wins. Beyond that, a registered `http` loopback URI also

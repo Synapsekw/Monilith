@@ -11,6 +11,8 @@ import {
   getBoardAgentByBoard,
   upsertBoardAgent,
 } from "@/lib/ai/agentic/board-agents-db";
+import { readOrgAiSettings } from "@/lib/ai/org-settings";
+import { DEFAULT_ASSISTANT_NAME } from "@/lib/org/assistant-name";
 
 /** The default (disabled) agent shape shown before one is configured. */
 const DEFAULT_SETTINGS: BoardAgentSettings = {
@@ -26,6 +28,12 @@ export type BoardAutopilotState = {
   isAdmin: boolean;
   /** Whether a row already exists (vs. the default template). */
   configured: boolean;
+  /**
+   * What THIS org calls the built-in assistant — the identity the agent's
+   * comments and notifications are posted as. Resolved server-side so the card
+   * never has to know the product default.
+   */
+  assistantName: string;
 };
 
 async function isOrgAdmin(
@@ -60,14 +68,36 @@ export async function getBoardAutopilot(
     .eq("id", boardId)
     .maybeSingle();
   if (!board)
-    return { settings: DEFAULT_SETTINGS, isAdmin: false, configured: false };
+    return {
+      settings: DEFAULT_SETTINGS,
+      isAdmin: false,
+      configured: false,
+      assistantName: DEFAULT_ASSISTANT_NAME,
+    };
 
-  const [agent, isAdmin] = await Promise.all([
+  // Three bounded reads, all on the primary/indexed key, run together — the
+  // assistant name is one more column on a one-row-per-org table the member
+  // can already select (`org_ai_settings_select_member`), not a new round-trip
+  // per interaction: the card holds it as client state from here on.
+  const [agent, isAdmin, assistantName] = await Promise.all([
     getBoardAgentByBoard(supabase, boardId),
     isOrgAdmin(supabase, board.org_id),
+    // Non-fatal: `readOrgAiSettings` THROWS on a read error, and this whole
+    // card — kill switch included — would go down with it over a label. The
+    // name is the only thing taken from that read, so a failure degrades to
+    // the product default instead.
+    readOrgAiSettings(supabase, board.org_id)
+      .then((s) => s.assistantName)
+      .catch(() => DEFAULT_ASSISTANT_NAME),
   ]);
 
-  if (!agent) return { settings: DEFAULT_SETTINGS, isAdmin, configured: false };
+  if (!agent)
+    return {
+      settings: DEFAULT_SETTINGS,
+      isAdmin,
+      configured: false,
+      assistantName,
+    };
   return {
     settings: {
       enabled: agent.enabled,
@@ -77,6 +107,7 @@ export async function getBoardAutopilot(
     },
     isAdmin,
     configured: true,
+    assistantName,
   };
 }
 

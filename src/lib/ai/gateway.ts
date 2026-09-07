@@ -219,6 +219,20 @@ export async function runAi<T>(
      * rewriting it — but nothing in the app passes it today.
      */
     tier?: ModelTier;
+    /**
+     * The `user_agent_runs.id` this call belongs to, when there is one.
+     *
+     * Correlation only — `ai_usage.run_id` has deliberately NO foreign key, so
+     * a deleted or cascaded-away run can never fail the ledger write. The
+     * ledger is money; it must record the spend even when the thing that spent
+     * it is gone.
+     *
+     * A nested (delegated) run passes its OWN id, never its parent's. That is
+     * what makes a child's spend attributable at all: without it, the parent
+     * and all three of its children collapse into one undifferentiated
+     * `personal_agent_run` bucket for the org.
+     */
+    runId?: string;
   },
   fn: (
     resolved: ResolvedAiCall,
@@ -267,7 +281,12 @@ export async function runAi<T>(
     // model id here would silently drop both (see pricing.ts · applyRateFloor).
     const costUsd = computeCostUsd(usable.rates, usage);
     const credits = costToCredits(costUsd);
-    const { error } = await svc.rpc("record_ai_usage", {
+    // typedRpc, not svc.rpc, for the same reason runEmbedding uses it below:
+    // supabase codegen narrows every function argument to its non-null base
+    // type, so `p_run_id uuid default null` is generated as `p_run_id?: string`
+    // and an intentional NULL does not typecheck. typedRpc widens each arg to
+    // `| null`, which is exactly what the SQL signature accepts.
+    const { error } = await typedRpc(svc, "record_ai_usage", {
       p_org: args.orgId,
       p_user: args.userId,
       p_feature: args.feature,
@@ -281,6 +300,10 @@ export async function runAi<T>(
       p_cache_write_tokens: usage.cacheWriteTokens ?? 0,
       p_cost_usd: costUsd,
       p_credits: credits,
+      // Explicit null rather than an omitted key: `record_ai_usage` defaults
+      // the parameter either way, but a written-out null is the difference
+      // between "this call belongs to no run" and "we forgot to thread it".
+      p_run_id: args.runId ?? null,
     });
     if (error)
       console.error("[ai] record_ai_usage failed:", {

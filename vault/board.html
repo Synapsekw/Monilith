@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-04 12:53",
+  "updated": "2026-09-05 13:14",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "b2d00dec",
-        "tone": "warn",
-        "note": "Ahead of main by 35 (bdc946b7..HEAD), of which 31 are source: Spec 2c agent memory, the create_pdf agent tool, and the sidebar-folders hardening slice — three stalled worktrees closed out on 2026-09-04. Two of those commits are security repairs. Promote."
+        "value": "c90abb42",
+        "tone": "ok",
+        "note": "Ahead of main by 4 from the heal watermark 6d2a0813: the Spec 3 design+plan and two changelog commits. No unpromoted feature work."
       },
       {
         "name": "main",
-        "value": "6b83e571",
+        "value": "24ad32b4",
         "tone": "ok",
-        "note": "PR #102 merged 2026-08-27 — admin route skeletons, canonical ActionResult, dev-memory."
+        "note": "PR #109 merged 2026-09-05 — the Settings navigation hotfix. Preceded by PR #108 (Spec 2c agent memory, create_pdf, sidebar-folders hardening) on 2026-09-04."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 6b83e571. Nothing from the 2026-09-04 batch is live yet."
+        "note": "Serving 24ad32b4. Verified live: Vercel state=success, main CI green, /settings returning 307 → /settings/profile → 307 /login → 200."
       }
     ],
     "gates": [
@@ -162,14 +162,14 @@
         "name": "lint",
         "value": "pass",
         "tone": "ok",
-        "note": "4 pre-existing unrelated warnings (apple-icon.tsx, NotificationsBell.tsx)",
+        "note": "0 errors, 4 pre-existing unrelated warnings.",
         "label": "lint"
       },
       {
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Each worktree gated separately before merge: 6227, 6214 and 6313 tests green. finish-task re-ran all four gates against the rebased state.",
+        "note": "6413 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #109 plus main CI were green.",
         "label": "test"
       },
       {
@@ -182,26 +182,34 @@
         "name": "ledger",
         "value": "152/152",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after all three merges. Three migrations landed in this batch; no reconcile was needed.",
+        "note": "Verified by db:ledger-check at promotion time. No migrations in this batch.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Promote develop → main",
-      "why": "31 source commits are unpromoted, including two security repairs that only help users once they ship: agent_forget() closing a delete-then-rewrite bypass of the owner-note invariant, and a restrictive CSP on the agent PDF shell. gotcha-92 is the standing lesson — a fix merged to develop is not a fix in production, and the last one sat for three days while production served the break.",
-      "tags": [
-        "promote",
-        "critical"
-      ]
-    },
-    {
       "title": "Open the org ceiling so agent memory does something",
-      "why": "Spec 2c ships installable-but-inert by the 2026-08-27 owner ruling: the ceiling backfill was deliberately not run, so every memory write is denied by the org clamp and no proposal is recorded. Nothing is broken — but until an admin opens it, the whole feature is invisible. Owner’s move, and it is why memory was not announced on /updates.",
+      "why": "Spec 2c is now live in production (PR #108) but ships installable-but-inert by the 2026-08-27 owner ruling: the ceiling backfill was deliberately not run, so every memory write is denied by the org clamp and no proposal is recorded. Nothing is broken — but until an admin opens it, the whole feature is invisible. Owner’s move, and it is why memory was not announced on /updates.",
       "tags": [
         "owner",
         "agents"
+      ]
+    },
+    {
+      "title": "Land Spec 3 (orchestration and @handle addressing)",
+      "why": "Design and plan are on develop (0a7f5586) and four task worktrees are running the first batch in parallel. Nothing else is in flight, so the critical path is whichever of t1–t4 finishes last.",
+      "tags": [
+        "agents",
+        "spec3"
+      ]
+    },
+    {
+      "title": "Unblock the settings shell from three sequential reads",
+      "why": "settings/layout.tsx awaits requireUser(), resolveActiveOrg() and isOrgAdminCached() above the loading.tsx boundary — loading.tsx wraps a layout’s children, not the layout itself — so the dev overlay reports blocking-prerender-dynamic on /settings/*. Dev-only warning, gotcha-97’s shape, and it did not cause the blank page; but the shell does block on all three.",
+      "tags": [
+        "perf",
+        "nextjs"
       ]
     },
     {
@@ -299,17 +307,38 @@
       "text": "Spec 2c is complete and merged, and does nothing: the org ceiling clamp denies every write and records no proposal, by owner ruling. Deliberate, not a defect — but it means the feature has never run end to end against a real model, and its RLS integration suite only executes with PULSE_TEST_DB set, so it did not run in any gate."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/spec3-t1-schema",
+      "head": "62c6a4b8",
+      "note": "spec3"
+    },
+    {
+      "branch": "task/spec3-t2-vocabulary",
+      "head": "ddf8ca13",
+      "note": "spec3"
+    },
+    {
+      "branch": "task/spec3-t3-execute-run",
+      "head": "2f06fa0b",
+      "note": "spec3"
+    },
+    {
+      "branch": "task/spec3-t4-mention-model",
+      "head": "66ef1149",
+      "note": "spec3"
+    }
+  ],
   "session": {
-    "id": "2026-09-04-1253-close-three-stalled-worktrees",
-    "when": "2026-09-04 12:53",
-    "title": "Close the three stalled worktrees",
+    "id": "2026-09-05-1314-settings-menu-blank-streaming-redirect",
+    "when": "2026-09-05 13:14",
+    "title": "Settings opened to nothing — a redirect thrown inside the streaming shell",
     "bullets": [
-      "Three task/* worktrees had been frozen since 2026-08-27, each with committed AND uncommitted work, none merged. All three gated and merged to develop one at a time.",
-      "agent-pdf-output had died with escapeHtml switched off in a shared markdown renderer, behind a comment promising it would be restored immediately after a CSP experiment (gotcha-98).",
-      "An applied-but-uncommitted migration was one worktree prune from a DEV ledger row whose DDL existed in no git object; committed before anything else.",
-      "Spec 2c (agent memory) is complete on develop, including the uncommitted review-repair pass: agent_forget() closing a delete-then-rewrite bypass, the marker guard rejecting the LABEL not the sentinel, all seven line-break characters.",
-      "Ledger 152/152, no worktrees, no task/* branches. Four /updates entries announced; memory deliberately not announced because it ships inert."
+      "Clicking the profile icon → Settings did nothing in production: the menu closed, the page stayed put, and no error was recorded anywhere.",
+      "/settings was a redirect-only page inside the (app) streaming shell, so redirect() was thrown from a streaming context — a meta refresh in the flushed HTML, and an inert NEXT_REDIRECT digest in the RSC payload the router never acted on.",
+      "A hard page load recovered after 1s; a client-side navigation — the path every user takes — rendered the settings layout with an empty content column.",
+      "Fixed at the routing layer with next.config.ts redirects(), the page deleted, guarded by a test. Promoted as PR #109 and verified live.",
+      "gotcha-99 records the two-transport probe a redirect fix has to pass: curl plain AND RSC: 1. A curl alone passes the broken version."
     ]
   }
 }

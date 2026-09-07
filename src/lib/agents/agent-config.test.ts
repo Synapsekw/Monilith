@@ -7,6 +7,7 @@ import {
   INSTRUCTIONS_MAX,
 } from "./agent-config";
 import { AGENT_CAPABILITIES } from "./capabilities";
+import { slugifyHandle } from "./handle";
 
 describe("agent templates", () => {
   it("ships four templates with unique ids", () => {
@@ -19,6 +20,7 @@ describe("agent templates", () => {
     for (const t of AGENT_TEMPLATES) {
       const parsed = personalAgentSettingsSchema.safeParse({
         name: t.name,
+        handle: slugifyHandle(t.name, t.id),
         templateId: t.id,
         instructions: t.instructions,
         boardScope: t.boardScope,
@@ -60,6 +62,7 @@ describe("boardScopeSchema", () => {
 describe("personalAgentSettingsSchema", () => {
   const base = {
     name: "Morning Brief",
+    handle: "ops",
     templateId: "morning-brief",
     instructions: "Summarise what is pending.",
     boardScope: { mode: "all" as const },
@@ -181,6 +184,7 @@ describe("personalAgentSettingsSchema", () => {
 describe("personalAgentSettingsSchema — grants and cadence", () => {
   const base = {
     name: "A",
+    handle: "ops",
     templateId: "morning-brief",
     instructions: "do the thing",
     boardScope: { mode: "all" as const },
@@ -245,13 +249,56 @@ describe("personalAgentSettingsSchema — grants and cadence", () => {
     if (r.success) expect(r.data.capabilities).toEqual([]);
   });
 
-  it("ships the four cadences the check constraint allows", () => {
+  it("ships the five cadences the check constraint allows", () => {
     expect([...AGENT_CADENCES]).toEqual([
       "daily",
       "weekdays",
       "weekly",
       "monthly",
+      // Spec 3. A manual agent never occupies a fire slot — it runs only when
+      // it is delegated to or addressed by handle.
+      "manual",
     ]);
+  });
+
+  it("accepts the manual cadence with neither day operand", () => {
+    const r = personalAgentSettingsSchema.safeParse({
+      ...base,
+      cadence: "manual",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects a day operand on the manual cadence", () => {
+    for (const over of [{ runOnWeekday: 3 }, { runOnDayOfMonth: 12 }]) {
+      const r = personalAgentSettingsSchema.safeParse({
+        ...base,
+        cadence: "manual",
+        ...over,
+      });
+      expect(r.success).toBe(false);
+    }
+  });
+
+  it("requires a handle", () => {
+    const { handle: _handle, ...withoutHandle } = base;
+    expect(
+      personalAgentSettingsSchema.safeParse({
+        ...withoutHandle,
+        cadence: "daily",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a handle the mention grammar could not carry", () => {
+    for (const handle of ["a", "Ops", "ops chaser", "everyone"]) {
+      const r = personalAgentSettingsSchema.safeParse({
+        ...base,
+        cadence: "daily",
+        handle,
+      });
+      expect(r.success, handle).toBe(false);
+    }
   });
 
   it("rejects a cadence outside the vocabulary", () => {

@@ -19,6 +19,7 @@ import { MessageList, type UIMessage } from "./MessageList";
 import { ProposalCard } from "@/components/agents/ProposalCard";
 import type { PendingProposal } from "@/lib/agents/proposal-display";
 import type { DropState } from "./StreamDropNotice";
+import type { MentionTarget } from "@/lib/collaboration/mentions";
 import { Composer } from "./Composer";
 
 /**
@@ -58,11 +59,16 @@ import { Composer } from "./Composer";
  * where both of those are wrong. The two hardcoded behaviours are therefore
  * injectable (`onStarted`, `onTurnComplete`) and default to the `/ask` ones.
  */
+/** Stable empty default — a fresh `[]` would give the prop a new identity on
+ *  every render of the surfaces that have no agents to offer. */
+const NO_AGENTS: readonly MentionTarget[] = [];
+
 export function AskChat({
   conversationId,
   initialMessages,
   boardId,
   agentId,
+  agents = NO_AGENTS,
   agentProposals = [],
   onStarted,
   onTurnComplete,
@@ -81,6 +87,11 @@ export function AskChat({
    *  reads the persona off the conversation row, not off the client, so it is
    *  deliberately NOT sent per turn. */
   agentId?: string;
+  /** The owner's agents, so a message can ADDRESS one by `@handle`. Loaded on
+   *  first paint and filtered in the composer — typing a handle costs no server
+   *  round-trip (working agreement #5). A handle that leads the first message
+   *  wins over `agentId`: it is the more explicit of the two. */
+  agents?: readonly MentionTarget[];
   /** Called with the new id instead of rewriting the URL to /ask/<id>. */
   onStarted?: (conversationId: string) => void;
   /** Called instead of router.refresh() when a turn completes. The dock uses
@@ -98,6 +109,9 @@ export function AskChat({
   const [activeId, setActiveId] = useState<string | null>(conversationId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [dropState, setDropState] = useState<DropState>("none");
+  // Raised when a handle addressed an agent in a thread that already has (or
+  // hasn't) a persona: the answer is "start a new one", not a silent no-op.
+  const [personaIgnored, setPersonaIgnored] = useState(false);
   const [, startTransition] = useTransition();
   const { streaming, send } = useAskStream();
   // Renders an approved write on a mounted board with no round-trip. A no-op
@@ -146,7 +160,7 @@ export function AskChat({
     }
   }
 
-  async function onSubmit(text: string) {
+  async function onSubmit(text: string, addressedAgentId: string | null) {
     // The hard guard. Everything below — including two awaited Server Actions —
     // is part of ONE turn, and a second one may not start inside it.
     if (turnInFlight.current) return;
@@ -154,6 +168,9 @@ export function AskChat({
     setTurnBusy(true);
     try {
       let convId = activeId;
+      // An addressed handle is only ever honoured by the branch that MINTS the
+      // conversation; every send re-decides whether the hint is warranted.
+      setPersonaIgnored(!!convId && !!addressedAgentId);
       setDropState("none");
       setMessages((m) => [
         ...m,
@@ -167,10 +184,13 @@ export function AskChat({
       setStatus(null);
 
       if (!convId) {
+        // The typed handle beats the surface's default persona: the user said
+        // who to ask in this very message.
+        const persona = addressedAgentId ?? agentId;
         const res = await createConversation({
           firstMessage: text,
           ...(boardId ? { boardId } : {}),
-          ...(agentId ? { agentId } : {}),
+          ...(persona ? { agentId: persona } : {}),
         });
         if (!res.ok) {
           setStreamText(null);
@@ -295,8 +315,19 @@ export function AskChat({
           covering the pre-stream round-trips that `streaming` misses. */}
       <Composer
         disabled={turnBusy || streaming || dropState === "checking"}
+        agents={agents}
         onSubmit={onSubmit}
       />
+      {/* `ai_messages` has no UPDATE policy and a live transcript cannot be
+          re-personified, so the handle is dropped rather than half-honoured —
+          and the composer says so instead of swallowing it. */}
+      {personaIgnored ? (
+        <div className="bg-background px-4 pb-3">
+          <p className="text-muted-foreground mx-auto max-w-3xl px-1 text-xs">
+            Start a new chat to ask a different agent.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

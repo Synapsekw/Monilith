@@ -2,10 +2,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 import {
-  AGENT_CAPABILITIES,
-  type AgentCapability,
-} from "@/lib/agents/capabilities";
+  DEFAULT_ASSISTANT_NAME,
+  resolveAssistantName,
+} from "@/lib/org/assistant-name";
 
 export type AiMode = Database["public"]["Enums"]["ai_mode"];
 
@@ -33,6 +34,13 @@ export type OrgAiSettings = {
    * editing any of them. Mirrors `org_ai_settings.agent_capability_ceiling`.
    */
   agentCapabilityCeiling: AgentCapability[];
+  /**
+   * What THIS org calls the built-in platform assistant — the name every
+   * render site shows instead of a hardcoded product string. Display only: the
+   * bot's identity (`auth.users.email`) is global and unrenamed, because
+   * `platform_agent_user_id()` resolves it by that email.
+   */
+  assistantName: string;
 };
 
 /**
@@ -63,7 +71,23 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = Object.freeze({
   // `mode: "off"` anyway — no agent runs there regardless — but this constant
   // and the column default must not disagree, or an org would silently lose
   // capabilities the moment its first settings row was written.
-  agentCapabilityCeiling: [...AGENT_CAPABILITIES],
+  //
+  // Spec 3 note: the list is now stated LITERALLY rather than as
+  // `[...AGENT_CAPABILITIES]`, because the two stopped being the same thing.
+  // `agent.delegate` joined the vocabulary but deliberately did NOT join the
+  // column default, and existing rows are deliberately NOT backfilled with it:
+  // delegation ships installable-but-inert, switched on by an admin ticking it
+  // in the org ceiling. Deriving this constant from the vocabulary would have
+  // handed it to every row-less org silently, which is the drift this comment
+  // exists to prevent — in the other direction.
+  agentCapabilityCeiling: [
+    "board.write",
+    "files.write",
+    "automation.create",
+    "time.log",
+    "memory.write",
+  ] satisfies AgentCapability[],
+  assistantName: DEFAULT_ASSISTANT_NAME,
 });
 
 /**
@@ -133,7 +157,7 @@ export async function readOrgAiSettings(
   const { data, error } = await client
     .from("org_ai_settings")
     .select(
-      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, agent_capability_ceiling",
+      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, agent_capability_ceiling, assistant_name",
     )
     .eq("org_id", orgId)
     .maybeSingle();
@@ -156,5 +180,11 @@ export async function readOrgAiSettings(
     // `org_ai_settings_ceiling_known` is what actually enforces.
     agentCapabilityCeiling:
       (data.agent_capability_ceiling as AgentCapability[] | null) ?? [],
+    // Resolved, never raw. The column is NOT NULL with a default and a
+    // 1..40 check, so a blank is unreachable through any supported path — but
+    // a row read before the column existed, or through an older select list,
+    // arrives as `undefined`, and an empty assistant name renders as a hole in
+    // the sentence rather than as an error anyone would notice.
+    assistantName: resolveAssistantName(data.assistant_name),
   };
 }

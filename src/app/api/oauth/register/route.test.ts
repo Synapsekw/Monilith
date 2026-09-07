@@ -119,3 +119,25 @@ describe("POST /api/oauth/register — existing behavior is unchanged", () => {
     expect(registerOauthClient).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/oauth/register — native clients (RFC 8252 §7.1)", () => {
+  it("registers a private-use scheme callback such as Cursor's", async () => {
+    const redirect_uris = ["cursor://anysphere.cursor-retrieval/callback"];
+    registerOauthClient.mockResolvedValue({
+      client_id: "c2",
+      client_name: "Cursor",
+      redirect_uris,
+    });
+    const res = await POST(req({ client_name: "Cursor", redirect_uris }));
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toMatchObject({ redirect_uris });
+  });
+
+  it("still rejects a javascript: callback with 400", async () => {
+    const res = await POST(
+      req({ client_name: "Evil", redirect_uris: ["javascript:alert(1)"] }),
+    );
+    expect(res.status).toBe(400);
+    expect(registerOauthClient).not.toHaveBeenCalled();
+  });
+});

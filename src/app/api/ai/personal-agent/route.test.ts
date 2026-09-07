@@ -10,6 +10,8 @@ import {
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
+import { CLAIM_PLACEHOLDER } from "@/lib/agents/run-status";
+import { DEFAULT_RUN_TASK } from "@/lib/agents/run-loop";
 
 const SECRET = "test-secret";
 const ORG = "00000000-0000-4000-8000-0000000000f1";
@@ -40,8 +42,22 @@ vi.mock("@/lib/agents/agents-db", () => ({
 // simulated 23505 unique-violation on the claim insert (Finding 1) and a
 // simulated ordinary write failure on the finalize update (Finding 2).
 type RunPatch = Record<string, unknown>;
+/** A row in the in-memory `user_agent_runs` stand-in below. */
+type RunRow = RunPatch & { id: string };
 const runInserts: RunPatch[] = [];
-const runUpdates: { patch: RunPatch; key: RunPatch }[] = [];
+const runUpdates: { patch: RunPatch; key: RunPatch; matched: string[] }[] = [];
+/**
+ * The rows the finalize's filters are applied TO. Seeded per test, empty for
+ * every test that predates the run tree.
+ *
+ * This exists because the defect Task 10 fixes is a predicate that matches
+ * MORE THAN ONE row: a mock that only records the filters it was handed can
+ * assert which columns were named, but never that the update hit exactly one
+ * run. Two mention runs of the same agent on the same day both carry
+ * `fire_hour: null`, so the old (user_agent_id, fire_date, fire_hour) filter
+ * selects both of them.
+ */
+let runRows: RunRow[] = [];
 let forceClaimConflict = false;
 let forceFinalizeError = false;
 
@@ -73,6 +89,16 @@ vi.mock("@/lib/supabase/service", () => ({
             }),
           };
         },
+        // The `{ run_id }` branch loads the already-claimed row by id before
+        // it runs anything.
+        select: (_cols: string) => ({
+          eq: (col: string, val: unknown) => ({
+            maybeSingle: async () => ({
+              data: runRows.find((r) => r[col] === val) ?? null,
+              error: null,
+            }),
+          }),
+        }),
         update(patch: RunPatch) {
           const key: RunPatch = {};
           // Thenable chain: each .eq() records a key column and returns the
@@ -84,7 +110,21 @@ vi.mock("@/lib/supabase/service", () => ({
               return builder;
             },
             then(onFulfilled: (v: { error: unknown }) => unknown) {
-              runUpdates.push({ patch, key: { ...key } });
+              // Apply the filters to the seeded rows, so a predicate that
+              // matches two runs shows up as two matches instead of passing
+              // silently. `null === null` matches on purpose: it is the most
+              // CHARITABLE reading of the old slot filter, and the fix has to
+              // hold even under it.
+              const matched = runRows.filter((row) =>
+                Object.entries(key).every(([col, val]) => row[col] === val),
+              );
+              if (!forceFinalizeError)
+                for (const row of matched) Object.assign(row, patch);
+              runUpdates.push({
+                patch,
+                key: { ...key },
+                matched: matched.map((r) => r.id),
+              });
               const result = forceFinalizeError
                 ? { error: { message: "db blip" } }
                 : { error: null };
@@ -179,6 +219,7 @@ function chainable(result: { data: unknown; error: unknown }) {
   const builder = {
     select: () => builder,
     eq: () => builder,
+    neq: () => builder,
     order: () => builder,
     limit: () => builder,
     then: (onFulfilled: (v: typeof result) => unknown) =>
@@ -186,6 +227,20 @@ function chainable(result: { data: unknown; error: unknown }) {
   };
   return builder;
 }
+
+/**
+ * The other agents this owner has, as `listDelegateRoster` reads them through
+ * the OWNER's client. EMPTY by default — an owner with one agent is the case
+ * every pre-Spec-3 test in this file describes, and `makeDelegateDescriptors`
+ * returns no tool for it, so turning delegation on changes nothing here.
+ */
+type RosterRow = {
+  id: string;
+  handle: string;
+  name: string;
+  instructions: string;
+};
+let rosterRows: RosterRow[] = [];
 
 function ownerClientDouble() {
   return {
@@ -197,6 +252,9 @@ function ownerClientDouble() {
     from(table: string) {
       if (table === "user_agent_documents") {
         return chainable({ data: docRows, error: null });
+      }
+      if (table === "user_agents") {
+        return chainable({ data: rosterRows, error: null });
       }
       if (table === "agent_memory") {
         return chainable({ data: memoryRows, error: null });
@@ -254,6 +312,22 @@ vi.mock("@/lib/agents/proposals-db", () => ({
     proposalRows = rows;
     return insertProposals();
   },
+}));
+
+// ── Task 11: the mention reply and the summoning text ────────────────────
+// `postAgentReply` and `loadMentionSummons` have their own unit suites; what
+// the ROUTE owes is that it calls them with the right things, and that the
+// summoning text really reaches the model as the task.
+const postAgentReply = vi.fn(async () => {});
+vi.mock("@/lib/agents/agent-reply", () => ({
+  postAgentReply: (...a: unknown[]) => postAgentReply(...(a as [])),
+}));
+const loadMentionSummons = vi.fn(async () => null as string | null);
+vi.mock("@/lib/agents/mention-summons", async (importOriginal) => ({
+  // `buildMentionTask` stays REAL: the containment it applies is the point of
+  // the assertion below, and a stub would prove nothing about it.
+  ...(await importOriginal<typeof import("@/lib/agents/mention-summons")>()),
+  loadMentionSummons: (...a: unknown[]) => loadMentionSummons(...(a as [])),
 }));
 
 const sendBriefingEmail = vi.fn(async () => ({ emailed: true }));
@@ -435,6 +509,10 @@ const enabledAgent = () => ({
   org_id: ORG,
   owner_id: OWNER,
   name: "Morning Brief",
+  // The typeable identifier a mention carries, and half of the attribution
+  // line an agent's reply is posted under.
+  handle: "brief",
+  kind: "user" as const,
   template_id: "morning-brief",
   instructions: "Be concise.",
   board_scope: { mode: "all" as const },
@@ -461,6 +539,8 @@ beforeEach(() => {
   findUserAgentRun.mockResolvedValue(null);
   runInserts.length = 0;
   runUpdates.length = 0;
+  runRows = [];
+  rosterRows = [];
   forceClaimConflict = false;
   forceFinalizeError = false;
   requireAiEntitlement.mockReset();
@@ -482,6 +562,10 @@ beforeEach(() => {
   proposalRows = [];
   sendBriefingEmail.mockReset();
   sendBriefingEmail.mockResolvedValue({ emailed: true });
+  postAgentReply.mockReset();
+  postAgentReply.mockResolvedValue(undefined);
+  loadMentionSummons.mockReset();
+  loadMentionSummons.mockResolvedValue(null);
   languageModelFor.mockClear();
   nextModel = () => textOnlyModel("You have 1 overdue item.");
   runAi.mockReset();
@@ -1470,6 +1554,368 @@ describe("POST /api/ai/personal-agent", () => {
       expect(sink.toolNames).toEqual(
         expect.arrayContaining(["remember", "forget"]),
       );
+    });
+  });
+
+  // ── Task 10: the run tree reaches the route ────────────────────────────
+  // Two things change here and they are entangled: the route can now be handed
+  // a run that was ALREADY claimed (by `agent_run_claim`, which is the only way
+  // a mention or delegated run comes into being), and the finalize can no
+  // longer key on the fire slot, because such a run does not occupy one.
+  describe("a pre-claimed run ({ run_id })", () => {
+    const RUN = "00000000-0000-4000-8000-0000000000b1";
+    const SIBLING = "00000000-0000-4000-8000-0000000000b2";
+    const MISSING = "00000000-0000-4000-8000-0000000000b9";
+    const ITEM = "00000000-0000-4000-8000-0000000000c1";
+    const UPDATE = "00000000-0000-4000-8000-0000000000d1";
+
+    /** A row exactly as `agent_run_claim` inserts it: claimed, no fire slot,
+     *  status 'error' carrying the placeholder until it finalises. */
+    function claimedRow(over: Partial<RunRow> = {}): RunRow {
+      return {
+        id: RUN,
+        user_agent_id: AGENT_ID,
+        org_id: ORG,
+        owner_id: OWNER,
+        fire_date: "2026-09-04",
+        fire_hour: null,
+        trigger: "mention",
+        depth: 0,
+        status: "error",
+        error: CLAIM_PLACEHOLDER,
+        ...over,
+      };
+    }
+
+    it("runs an already-claimed run without touching the fire slot", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+
+      const res = await POST(post({ run_id: RUN, item_id: ITEM }));
+
+      await expect(res.json()).resolves.toEqual({ status: "ran" });
+      // No second claim: the row already exists, and inserting another would
+      // mint a duplicate run for one summons.
+      expect(runInserts).toHaveLength(0);
+      // And no fire-slot probe either — this run never had a slot to redeliver.
+      expect(findUserAgentRun).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unsigned { run_id } body", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      expect((await POST(post({ run_id: RUN }, "deadbeef"))).status).toBe(401);
+    });
+
+    it("404s a run_id that does not exist", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      expect((await POST(post({ run_id: MISSING }))).status).toBe(404);
+    });
+
+    it("replies on the item instead of emailing or threading a briefing", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
+
+      // A summoned answer is a conversational reply, not a daily briefing.
+      expect(sendBriefingEmail).not.toHaveBeenCalled();
+      expect(ownerConversationInsert).not.toHaveBeenCalled();
+      // It goes back to the item, attributed to the AGENT, carrying the run's
+      // own report.
+      expect(postAgentReply).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          runId: RUN,
+          itemId: ITEM,
+          agentName: "Morning Brief",
+          agentHandle: "brief",
+          text: "You have 1 overdue item.",
+        }),
+      );
+    });
+
+    it("logs rather than inventing a destination when a mention has no item", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await POST(post({ run_id: RUN }));
+
+      expect(postAgentReply).not.toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith(
+        "[personal-agent] mention run had no item to reply to",
+        expect.objectContaining({ runId: RUN }),
+      );
+      spy.mockRestore();
+    });
+
+    // ── the summoning text reaches the model ────────────────────────────
+    // The gap Task 10 flagged: a mention run that falls back to
+    // DEFAULT_RUN_TASK ignores the question it was asked.
+    it("asks the model the question the person actually typed", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      loadMentionSummons.mockResolvedValue("@brief what's blocking us?");
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "You have 1 overdue item." }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
+
+      expect(loadMentionSummons).toHaveBeenCalledWith(
+        expect.anything(),
+        UPDATE,
+      );
+      expect(sink.user).toContain("what's blocking us?");
+      // NOT the unattended briefing task.
+      expect(sink.user).not.toContain(DEFAULT_RUN_TASK);
+      // Quoted inside the marker keyed on THIS agent's own doc_nonce.
+      expect(sink.user).toContain("BEGIN MESSAGE [fixture-agent-nonce]");
+      expect(sink.user).toContain("END MESSAGE [fixture-agent-nonce]");
+    });
+
+    it("says the summons was lost rather than silently running the briefing", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      loadMentionSummons.mockResolvedValue(null);
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "ok" }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
+
+      expect(sink.user).toContain("could not be read");
+      expect(sink.user).not.toContain(DEFAULT_RUN_TASK);
+    });
+
+    it("still asks a SCHEDULED run to do its daily work", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "ok" }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post(slot));
+
+      expect(sink.user).toContain(DEFAULT_RUN_TASK);
+      expect(loadMentionSummons).not.toHaveBeenCalled();
+    });
+
+    // ── the defect this task exists for ─────────────────────────────────
+    // Both rows are the same agent, the same day and `fire_hour: null` — the
+    // exact shape two mentions (or a mention and a delegated child) produce.
+    // Under the old (user_agent_id, fire_date, fire_hour) filter this finalize
+    // stamps ONE run's outcome onto BOTH of them.
+    it("finalizes ONLY the run it was handed, never every slot-less run of that agent that day", async () => {
+      runRows = [claimedRow(), claimedRow({ id: SIBLING })];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+
+      await POST(post({ run_id: RUN, item_id: ITEM }));
+
+      expect(runUpdates).toHaveLength(1);
+      expect(runUpdates[0]!.key).toEqual({ id: RUN });
+      expect(runUpdates[0]!.matched).toEqual([RUN]);
+      // The sibling is untouched: still claimed, still unfinished.
+      expect(runRows.find((r) => r.id === SIBLING)).toMatchObject({
+        status: "error",
+        error: CLAIM_PLACEHOLDER,
+      });
+    });
+
+    it("finalizes a SCHEDULED run by id too, not by its fire slot", async () => {
+      // "run-1" is what the claim insert returns in this file's service double.
+      runRows = [
+        claimedRow({
+          id: "run-1",
+          trigger: "schedule",
+          fire_date: slot.fire_date,
+          fire_hour: slot.fire_hour,
+        }),
+      ];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+
+      await POST(post(slot));
+
+      expect(runUpdates[0]!.key).toEqual({ id: "run-1" });
+      expect(runUpdates[0]!.matched).toEqual(["run-1"]);
+    });
+  });
+
+  // ── delegation is on for ROOT runs only ────────────────────────────────
+  describe("delegation", () => {
+    const RUN = "00000000-0000-4000-8000-0000000000b1";
+
+    /** Captures the tool DEFINITIONS the run offered — where "the delegate
+     *  tool was never built" and "it was built for a child run" both show. */
+    function capturingToolsModel(sink: { toolNames?: string[] }) {
+      return new MockLanguageModelV4({
+        doGenerate: async ({ tools }) => {
+          sink.toolNames = ((tools ?? []) as { name: string }[]).map(
+            (t) => t.name,
+          );
+          return {
+            content: [{ type: "text", text: "You have 1 overdue item." }],
+            finishReason: { unified: "stop", raw: undefined },
+            usage: USAGE,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    /** Step 1 asks a teammate to do something; step 2 reports. */
+    function delegateThenReportModel(): LanguageModel {
+      let step = 0;
+      return new MockLanguageModelV4({
+        doGenerate: async () => {
+          step++;
+          if (step === 1) {
+            return {
+              content: [
+                {
+                  type: "tool-call",
+                  toolCallId: "call-1",
+                  toolName: "delegate",
+                  input: JSON.stringify({
+                    handle: "scout",
+                    task: "Check the overdue items.",
+                  }),
+                },
+              ],
+              finishReason: { unified: "tool-calls", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          }
+          return {
+            content: [{ type: "text", text: "Done." }],
+            finishReason: { unified: "stop", raw: undefined },
+            usage: USAGE,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    const teammate = {
+      id: "00000000-0000-4000-8000-0000000000dd",
+      handle: "scout",
+      name: "Scout",
+      instructions: "Find things.",
+    };
+
+    it("offers the delegate tool to a ROOT (scheduled) run", async () => {
+      rosterRows = [teammate];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { toolNames?: string[] } = {};
+      nextModel = () => capturingToolsModel(sink);
+
+      await POST(post(slot));
+
+      expect(sink.toolNames).toEqual(expect.arrayContaining(["delegate"]));
+    });
+
+    it("never offers it to a NESTED run, whatever the roster says", async () => {
+      rosterRows = [teammate];
+      runRows = [
+        {
+          id: RUN,
+          user_agent_id: AGENT_ID,
+          org_id: ORG,
+          owner_id: OWNER,
+          fire_date: "2026-09-04",
+          fire_hour: null,
+          trigger: "delegation",
+          // The whole point: depth 1 is a run that was delegated TO.
+          depth: 1,
+          status: "error",
+          error: CLAIM_PLACEHOLDER,
+        },
+      ];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { toolNames?: string[] } = {};
+      nextModel = () => capturingToolsModel(sink);
+
+      await POST(post({ run_id: RUN }));
+
+      expect(sink.toolNames).not.toContain("delegate");
+    });
+
+    it("offers no tool at all when the owner has no other agents", async () => {
+      rosterRows = []; // the DEV default: one agent per owner
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { toolNames?: string[] } = {};
+      nextModel = () => capturingToolsModel(sink);
+
+      await POST(post(slot));
+
+      expect(sink.toolNames).not.toContain("delegate");
+    });
+
+    // Why flipping the flag is inert on every existing org: `agent.delegate` is
+    // not in any org's ceiling until an admin ticks it (the backfill was
+    // deliberately skipped), and an above-ceiling call is denied WITHOUT a
+    // proposal — so no child run is ever claimed.
+    it("refuses the call, and claims no child run, while the org ceiling withholds agent.delegate", async () => {
+      rosterRows = [teammate];
+      ceiling = AGENT_CAPABILITIES.filter((c) => c !== "agent.delegate");
+      getUserAgentById.mockResolvedValue({
+        ...enabledAgent(),
+        capabilities: ["agent.delegate"],
+      });
+      nextModel = delegateThenReportModel;
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({
+        status: "ran",
+        // Nothing executed, so nothing was spent on a child.
+        tools_used: [],
+        grants: [],
+      });
+      // Above the ceiling means denied outright — never queued for an approval
+      // nobody in the org is permitted to grant.
+      expect(proposalRows).toHaveLength(0);
     });
   });
 

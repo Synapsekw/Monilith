@@ -32,6 +32,27 @@ const cache: UpdatesCache = {
 
 const members = [{ userId: "user-1", fullName: "Ada Lovelace" }];
 
+const agents = [
+  { kind: "agent" as const, agentId: "a1", handle: "ops", name: "Ops Chaser" },
+];
+
+const cacheWithAgentMention: UpdatesCache = {
+  updates: [
+    {
+      id: "u3",
+      org_id: "o1",
+      board_id: "b1",
+      item_id: "i1",
+      author_id: "user-1",
+      body: { text: "Hey @ops take this", mentions: [] },
+      body_text: "Hey @ops take this",
+      edited_at: null,
+      created_at: "2026-06-21T15:45:00Z",
+      updated_at: "2026-06-21T15:45:00Z",
+    },
+  ],
+};
+
 const cacheWithMention: UpdatesCache = {
   updates: [
     {
@@ -50,6 +71,74 @@ const cacheWithMention: UpdatesCache = {
 };
 
 describe("UpdatesTab", () => {
+  it("accents an agent's @handle in the update body", () => {
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          itemId="item-1"
+          cache={cacheWithAgentMention}
+          members={members}
+          agents={agents}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    const mention = screen.getByText("@ops");
+    expect(mention.className).toContain("text-primary");
+    expect(mention.closest("p")?.textContent).toBe("Hey @ops take this");
+  });
+
+  it("submits tagged mention targets for a chosen agent", () => {
+    const onAdd = vi.fn();
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          itemId="item-1"
+          cache={cache}
+          members={members}
+          agents={agents}
+          onAdd={onAdd}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /write an update/i }));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hi @op", selectionStart: 6 },
+    });
+    fireEvent.mouseDown(screen.getByText("@ops"));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    expect(onAdd).toHaveBeenCalledWith("hi @ops", [
+      { kind: "agent", agentId: "a1" },
+    ]);
+  });
+
+  it("drops a target whose label was edited back out of the body", () => {
+    const onAdd = vi.fn();
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          itemId="item-1"
+          cache={cache}
+          members={members}
+          agents={agents}
+          onAdd={onAdd}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /write an update/i }));
+    const ta = screen.getByRole("textbox");
+    fireEvent.change(ta, { target: { value: "hi @op", selectionStart: 6 } });
+    fireEvent.mouseDown(screen.getByText("@ops"));
+    fireEvent.change(ta, {
+      target: { value: "never mind", selectionStart: 10 },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    expect(onAdd).toHaveBeenCalledWith("never mind", []);
+  });
+
   it("accents a known member's @mention in the update body without touching surrounding text", () => {
     render(
       <TimeZoneProvider timeZone="UTC">

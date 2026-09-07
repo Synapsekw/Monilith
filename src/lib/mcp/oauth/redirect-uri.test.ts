@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isRegisteredRedirectUri } from "./redirect-uri";
+import { isAllowedRedirectUri, isRegisteredRedirectUri } from "./redirect-uri";
 
 describe("isRegisteredRedirectUri — exact matching (the default)", () => {
   it("accepts a byte-identical registered URI", () => {
@@ -191,5 +191,61 @@ describe("isRegisteredRedirectUri — RFC 8252 §7.3 loopback port flexibility",
         "http://[::1]:65535/cb",
       ),
     ).toBe(true);
+  });
+});
+
+describe("isAllowedRedirectUri — which schemes may be a redirect target", () => {
+  it("accepts https", () => {
+    expect(
+      isAllowedRedirectUri("https://claude.ai/api/mcp/auth_callback"),
+    ).toBe(true);
+  });
+
+  it("accepts http (loopback callbacks of native clients)", () => {
+    expect(isAllowedRedirectUri("http://127.0.0.1:38559/callback")).toBe(true);
+  });
+
+  it("accepts a private-use app scheme — RFC 8252 §7.1", () => {
+    expect(
+      isAllowedRedirectUri("cursor://anysphere.cursor-retrieval/callback"),
+    ).toBe(true);
+    expect(isAllowedRedirectUri("vscode://vscode.mcp/callback")).toBe(true);
+    expect(isAllowedRedirectUri("com.example.app://oauth/callback")).toBe(true);
+  });
+
+  it("is case-insensitive about the scheme", () => {
+    expect(isAllowedRedirectUri("Cursor://anysphere.cursor-retrieval/cb")).toBe(
+      true,
+    );
+  });
+
+  it("rejects javascript:, including the //-comment form that mimics an authority", () => {
+    expect(isAllowedRedirectUri("javascript:alert('xss')")).toBe(false);
+    expect(isAllowedRedirectUri("javascript://%0aalert(1)")).toBe(false);
+    expect(isAllowedRedirectUri("JavaScript:alert(1)")).toBe(false);
+  });
+
+  it("rejects the other script-bearing and local-resource schemes", () => {
+    for (const uri of [
+      "data:text/html,<script>alert(1)</script>",
+      "vbscript:msgbox(1)",
+      "file:///etc/passwd",
+      "blob:https://example.com/uuid",
+      "about:blank",
+      "view-source:https://example.com",
+      "filesystem:https://example.com/temporary/x",
+    ]) {
+      expect(isAllowedRedirectUri(uri)).toBe(false);
+    }
+  });
+
+  it("rejects a non-hierarchical custom scheme — a redirect target needs an authority", () => {
+    expect(isAllowedRedirectUri("mailto:attacker@example.com")).toBe(false);
+    expect(isAllowedRedirectUri("tel:+15551234567")).toBe(false);
+  });
+
+  it("returns false rather than throwing on an unparseable value", () => {
+    expect(isAllowedRedirectUri("not a url")).toBe(false);
+    expect(isAllowedRedirectUri("")).toBe(false);
   });
 });

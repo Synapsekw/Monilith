@@ -18,6 +18,8 @@ const rpcCalls: { fn: string; args: unknown }[] = [];
 const runInserts: unknown[] = [];
 let agentRow: Record<string, unknown> | null;
 let existingRun: { id: string } | null;
+/** The org's `org_ai_settings` row — null is an org that has never had one. */
+let orgAiRow: Record<string, unknown> | null;
 
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
@@ -28,6 +30,15 @@ vi.mock("@/lib/supabase/service", () => ({
         return {
           select: () => ({
             eq: () => ({ maybeSingle: async () => ({ data: agentRow }) }),
+          }),
+        };
+      }
+      if (table === "org_ai_settings") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: orgAiRow, error: null }),
+            }),
           }),
         };
       }
@@ -147,6 +158,7 @@ beforeEach(() => {
   runInserts.length = 0;
   agentRow = enabledAgent();
   existingRun = null;
+  orgAiRow = null;
   requireAiEntitlement.mockReset();
   requireAiEntitlement.mockResolvedValue(undefined);
   buildAgentContext.mockClear();
@@ -176,6 +188,27 @@ describe("POST /api/ai/autopilot", () => {
     );
     expect(res.status).toBe(401);
     expect(autopilotRun).not.toHaveBeenCalled();
+  });
+
+  // The bot authors this board's comments and notifications, so the loop has
+  // to introduce itself by the name the org set in Settings → AI — not the
+  // product string. A run that signs off as something the org renamed away is
+  // the visible defect.
+  it("runs the loop under the org's assistant name", async () => {
+    orgAiRow = { ai_mode: "managed", assistant_name: "Ada" };
+    const { body, sig } = signed();
+    expect((await POST(req(body, sig))).status).toBe(200);
+    expect(autopilotRun).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantName: "Ada" }),
+    );
+  });
+
+  it("falls back to the product name for an org with no settings row", async () => {
+    const { body, sig } = signed();
+    expect((await POST(req(body, sig))).status).toBe(200);
+    expect(autopilotRun).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantName: "Monolith Autopilot" }),
+    );
   });
 
   it("applies each chosen action ONLY via board_agent_apply and writes ONE run row", async () => {

@@ -120,3 +120,36 @@ describe("GET /api/oauth/authorize", () => {
     expect(await res.text()).toBe("invalid_client");
   });
 });
+
+describe("GET /api/oauth/authorize — RFC 8252 §7.1 private-use scheme clients", () => {
+  const APP_SCHEME = "cursor://anysphere.cursor-retrieval/callback";
+
+  it("carries a registered app-scheme callback through to consent", async () => {
+    getOauthClient.mockResolvedValue({ redirect_uris: [APP_SCHEME] });
+    getUser.mockResolvedValue({ id: "user-1" });
+
+    const result = await run(authorizeUrl({ redirect_uri: APP_SCHEME }));
+    expect(result).toHaveProperty("redirectedTo");
+    const target = new URL((result as { redirectedTo: string }).redirectedTo);
+    expect(target.pathname).toBe("/oauth/consent");
+    expect(target.searchParams.get("redirect_uri")).toBe(APP_SCHEME);
+  });
+
+  it("sends an unauthenticated app-scheme request to login first", async () => {
+    getOauthClient.mockResolvedValue({ redirect_uris: [APP_SCHEME] });
+    getUser.mockResolvedValue(null);
+
+    const result = await run(authorizeUrl({ redirect_uri: APP_SCHEME }));
+    expect((result as { redirectedTo: string }).redirectedTo).toMatch(
+      /^\/login\?next=/,
+    );
+  });
+
+  it("still 400s a script-scheme redirect_uri before any client lookup", async () => {
+    const result = await run(
+      authorizeUrl({ redirect_uri: "javascript:alert(1)" }),
+    );
+    expect((result as Response).status).toBe(400);
+    expect(getOauthClient).not.toHaveBeenCalled();
+  });
+});

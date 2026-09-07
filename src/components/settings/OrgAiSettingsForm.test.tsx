@@ -15,7 +15,9 @@ const setOrgByoKey = vi.fn();
 const removeOrgByoKey = vi.fn();
 const setOrgDefaultModel = vi.fn();
 const clearOrgDefaultModel = vi.fn();
+const setAssistantName = vi.fn();
 vi.mock("@/lib/ai/settings-actions", () => ({
+  setAssistantName: (...a: unknown[]) => setAssistantName(...a),
   setAiMode: (...a: unknown[]) => setAiMode(...a),
   setOrgByoKey: (...a: unknown[]) => setOrgByoKey(...a),
   removeOrgByoKey: (...a: unknown[]) => removeOrgByoKey(...a),
@@ -93,6 +95,7 @@ const base: Initial = {
   byoKeyLast4: null,
   defaultProvider: null,
   defaultModelId: null,
+  assistantName: "Monolith Autopilot",
 };
 
 function renderForm(initial: Initial = base, modelOptions = MODELS) {
@@ -111,6 +114,71 @@ beforeEach(() => {
   removeOrgByoKey.mockReset();
   setOrgDefaultModel.mockReset();
   clearOrgDefaultModel.mockReset();
+  setAssistantName.mockReset();
+});
+
+describe("OrgAiSettingsForm · assistant name", () => {
+  const field = () => screen.getByLabelText(/assistant name/i);
+  const renameButton = () => screen.getByRole("button", { name: /^rename$/i });
+
+  it("shows the org's current assistant name", () => {
+    renderForm({ ...base, assistantName: "Ada" });
+    expect(field()).toHaveValue("Ada");
+  });
+
+  // Working agreement #5: typing is client state. A rename is ONE round-trip,
+  // on Save — not one per keystroke, and not a `router.refresh()` per field.
+  it("does not touch the server while the admin types", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.clear(field());
+    await user.type(field(), "Ada");
+    expect(setAssistantName).not.toHaveBeenCalled();
+  });
+
+  it("saves the trimmed name once, and confirms it", async () => {
+    const user = userEvent.setup();
+    setAssistantName.mockResolvedValue({ ok: true, data: { name: "Ada" } });
+    renderForm();
+    await user.clear(field());
+    await user.type(field(), "  Ada  ");
+    await user.click(renameButton());
+    await waitFor(() =>
+      expect(setAssistantName).toHaveBeenCalledExactlyOnceWith({ name: "Ada" }),
+    );
+    expect(await screen.findByText(/renamed/i)).toBeInTheDocument();
+  });
+
+  it("keeps Rename unavailable for an unchanged or empty name", async () => {
+    const user = userEvent.setup();
+    renderForm({ ...base, assistantName: "Ada" });
+    expect(renameButton()).toBeDisabled();
+    await user.clear(field());
+    expect(renameButton()).toBeDisabled();
+    await user.type(field(), "   ");
+    expect(renameButton()).toBeDisabled();
+  });
+
+  // The name is admin-editable content behind a server-side `has_org_role`
+  // check. A refusal has to reach the admin on the field that caused it —
+  // and the typed name has to survive it, or a rejected save silently
+  // discards what they wrote.
+  it("shows a refused rename on the field, keeping what was typed", async () => {
+    const user = userEvent.setup();
+    setAssistantName.mockResolvedValue({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    renderForm();
+    await user.clear(field());
+    await user.type(field(), "Ada");
+    await user.click(renameButton());
+    expect(
+      await screen.findByText(/only organization admins/i),
+    ).toBeInTheDocument();
+    expect(field()).toHaveValue("Ada");
+    expect(field()).toHaveAttribute("aria-invalid", "true");
+  });
 });
 
 describe("OrgAiSettingsForm", () => {

@@ -154,3 +154,27 @@ describe("POST /api/oauth/token — refresh_token grant", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "invalid_grant" });
   });
 });
+
+describe("POST /api/oauth/token — RFC 8252 §7.1 private-use scheme clients", () => {
+  const APP_SCHEME = "cursor://anysphere.cursor-retrieval/callback";
+
+  it("exchanges a code whose redirect_uri is an app scheme", async () => {
+    consumeAuthorizationCode.mockResolvedValue({
+      client_id: "client-1",
+      user_id: "user-1",
+      redirect_uri: APP_SCHEME,
+      code_challenge: "challenge",
+    });
+    const res = await POST(tokenRequest({ redirect_uri: APP_SCHEME }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ access_token: "at" });
+  });
+
+  it("still rejects a script-scheme redirect_uri", async () => {
+    const res = await POST(
+      tokenRequest({ redirect_uri: "javascript:alert(1)" }),
+    );
+    expect(res.status).toBe(400);
+    expect(consumeAuthorizationCode).not.toHaveBeenCalled();
+  });
+});

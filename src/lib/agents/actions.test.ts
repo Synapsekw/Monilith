@@ -6,6 +6,7 @@ const assertCanCreateAgent = vi.fn();
 const insert = vi.fn();
 const revalidatePath = vi.fn();
 const listAgentRuns = vi.fn();
+const listChildRuns = vi.fn();
 
 /** Every `.eq()` any action applies, as [column, value]. The owner filters are
  *  defence-in-depth on top of RLS; asserting them stops a refactor from quietly
@@ -17,6 +18,16 @@ let eqCalls: [string, unknown][] = [];
 let lastUpdate: Record<string, unknown> | null = null;
 /** What the update()/delete() chain resolves to. */
 let writeResult: { error: unknown } = { error: null };
+/** The column list handed to a bare `.select()` (NOT the one chained onto an
+ *  insert), and the row it resolves to — `deleteAgent`'s built-in probe is the
+ *  only such read in this module. Defaults to an ordinary user-made agent, so
+ *  every pre-existing delete test keeps its old meaning. */
+let lastSelect: string | null = null;
+let selectEqCalls: [string, unknown][] = [];
+let readResult: { data: unknown; error: unknown } = {
+  data: { kind: "user" },
+  error: null,
+};
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: () => requireUser(),
@@ -35,6 +46,7 @@ vi.mock("./agents-db", async (importOriginal) => ({
   // RUN_HISTORY_LIMIT is a real constant the action clamps against — keep it.
   ...(await importOriginal<typeof import("./agents-db")>()),
   listAgentRuns: (...a: unknown[]) => listAgentRuns(...a),
+  listChildRuns: (...a: unknown[]) => listChildRuns(...a),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => revalidatePath() }));
 
@@ -53,9 +65,27 @@ function eqChain(): Record<string, unknown> {
   return chain;
 }
 
+/** A thenable-free `.select().eq().eq().maybeSingle()` read chain. Recorded
+ *  separately from `eqCalls` so the delete's OWN owner filter stays assertable
+ *  once a probe read runs ahead of it. */
+function selectChain(): Record<string, unknown> {
+  const chain = {
+    eq(col: string, val: unknown) {
+      selectEqCalls.push([col, val]);
+      return chain;
+    },
+    maybeSingle: () => Promise.resolve(readResult),
+  };
+  return chain;
+}
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({
+      select: (cols: string) => {
+        lastSelect = cols;
+        return selectChain();
+      },
       insert: (row: unknown) => ({
         select: () => ({ single: () => insert(row) }),
       }),
@@ -68,13 +98,22 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-const { createAgent, updateAgent, setAgentEnabled, deleteAgent, getAgentRuns } =
-  await import("./actions");
+const {
+  createAgent,
+  updateAgent,
+  setAgentEnabled,
+  deleteAgent,
+  getAgentRuns,
+  getChildRuns,
+} = await import("./actions");
 
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";
 
 const valid = {
   name: "Morning Brief",
+  // The typeable name. Required by `personalAgentSettingsSchema` — an agent
+  // with no handle cannot be addressed, so there is no valid payload without.
+  handle: "morning-brief",
   templateId: "morning-brief",
   instructions: "Summarise what is pending.",
   boardScope: { mode: "all" as const },
@@ -98,9 +137,13 @@ beforeEach(() => {
   assertCanCreateAgent.mockReset();
   insert.mockReset();
   listAgentRuns.mockReset();
+  listChildRuns.mockReset();
   eqCalls = [];
+  selectEqCalls = [];
+  lastSelect = null;
   lastUpdate = null;
   writeResult = { error: null };
+  readResult = { data: { kind: "user" }, error: null };
   requireUser.mockResolvedValue({ id: "user-1" });
   resolveActiveOrg.mockResolvedValue({
     id: "org-1",
@@ -109,6 +152,7 @@ beforeEach(() => {
   });
   insert.mockResolvedValue({ data: { id: "agent-1" }, error: null });
   listAgentRuns.mockResolvedValue([]);
+  listChildRuns.mockResolvedValue([]);
 });
 
 describe("createAgent", () => {
@@ -153,6 +197,38 @@ describe("createAgent", () => {
         run_on_day_of_month: 28,
       }),
     );
+  });
+
+  // `handle` was added to authenticated's column-level INSERT grant by
+  // 20260905045108 precisely so the editor can write it. Leaving it out would
+  // fall back to the column default (`agent-<8 hex>`) and quietly ignore the
+  // address the owner typed.
+  it("persists the handle it was given", async () => {
+    await createAgent({ ...valid, handle: "chaser" });
+    const row = insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(row).toMatchObject({ handle: "chaser" });
+  });
+
+  it("rejects a reserved handle without touching the db", async () => {
+    const r = await createAgent({ ...valid, handle: "everyone" });
+    expect(r.ok).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("reports a duplicate handle as a handle collision", async () => {
+    insert.mockResolvedValue({
+      data: null,
+      error: {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "user_agents_owner_handle_uniq"',
+      },
+    });
+    const r = await createAgent(valid);
+    expect(r).toEqual({
+      ok: false,
+      error: "You already have an agent with that handle.",
+    });
   });
 
   it("refuses a cadence with no day setting without touching the db", async () => {
@@ -250,6 +326,7 @@ describe("updateAgent", () => {
       "cadence",
       "capabilities",
       "enabled",
+      "handle",
       "instructions",
       "model_id",
       "name",
@@ -260,6 +337,48 @@ describe("updateAgent", () => {
       "template_id",
       "updated_at",
     ]);
+  });
+
+  // Renaming an agent must be able to re-address it. Dropping `handle` from
+  // the patch would make the handle field in the editor a control that
+  // silently does nothing.
+  it("persists an edited handle", async () => {
+    await updateAgent(AGENT_ID, { ...valid, handle: "chaser" });
+    expect(lastUpdate).toMatchObject({ handle: "chaser" });
+  });
+
+  // `user_agents_owner_handle_uniq` is what actually enforces uniqueness —
+  // the editor cannot know another agent's handle without a query it must not
+  // make. The collision has to read as a field problem, not "Couldn't save
+  // that agent".
+  it("reports a duplicate handle as a handle collision", async () => {
+    writeResult = {
+      error: {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "user_agents_owner_handle_uniq"',
+      },
+    };
+    const r = await updateAgent(AGENT_ID, { ...valid, handle: "chaser" });
+    expect(r).toEqual({
+      ok: false,
+      error: "You already have an agent with that handle.",
+    });
+  });
+
+  it("reports a duplicate name as a name collision, not a handle one", async () => {
+    writeResult = {
+      error: {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "user_agents_org_owner_name_uniq"',
+      },
+    };
+    const r = await updateAgent(AGENT_ID, { ...valid, name: "Taken" });
+    expect(r).toEqual({
+      ok: false,
+      error: "You already have an agent with that name.",
+    });
   });
 
   // `authenticated` holds no TABLE-level UPDATE on user_agents — every column
@@ -380,6 +499,35 @@ describe("deleteAgent", () => {
     ]);
   });
 
+  // The CLIENT hides Delete for a built-in agent; this is the boundary that
+  // actually holds. `seed_builtin_agent` would recreate the row on the next
+  // org join anyway, and until then the owner would have no orchestrator and
+  // no way to get one back.
+  it("refuses to delete the built-in assistant", async () => {
+    readResult = { data: { kind: "builtin" }, error: null };
+    const r = await deleteAgent(AGENT_ID);
+    expect(r).toEqual({
+      ok: false,
+      error: "Your built-in assistant can't be deleted. Switch it off instead.",
+    });
+    // Nothing was deleted: the delete chain never ran, so it recorded no
+    // filters of its own.
+    expect(eqCalls).toEqual([]);
+  });
+
+  // The probe is owner-scoped like every other statement here: another
+  // person's built-in must not be readable, and RLS plus this filter both say
+  // so. Without the owner filter the probe would answer for a row the caller
+  // could never delete anyway.
+  it("probes kind for the caller's own row only", async () => {
+    await deleteAgent(AGENT_ID);
+    expect(lastSelect).toBe("kind");
+    expect(selectEqCalls).toEqual([
+      ["id", AGENT_ID],
+      ["owner_id", "user-1"],
+    ]);
+  });
+
   it("reports a db failure", async () => {
     writeResult = { error: { message: "boom" } };
     const r = await deleteAgent(AGENT_ID);
@@ -458,6 +606,57 @@ describe("getAgentRuns", () => {
     listAgentRuns.mockRejectedValue(cause);
     await getAgentRuns(AGENT_ID);
     expect(spy).toHaveBeenCalledWith(expect.stringContaining(AGENT_ID), cause);
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec 3: the delegated children of a page of runs.
+// ---------------------------------------------------------------------------
+
+describe("getChildRuns", () => {
+  const OTHER_RUN = "22222222-2222-4222-8222-222222222222";
+
+  it("returns the children of the runs it was given", async () => {
+    const children = [{ id: "child-1", agentName: "Risk Spotter" }];
+    listChildRuns.mockResolvedValue(children);
+    await expect(getChildRuns([AGENT_ID, OTHER_RUN])).resolves.toEqual({
+      ok: true,
+      data: children,
+    });
+    expect(listChildRuns).toHaveBeenCalledWith(expect.anything(), [
+      AGENT_ID,
+      OTHER_RUN,
+    ]);
+  });
+
+  // The id list comes from a CLIENT. Unbounded in means unbounded `IN (…)`,
+  // which is the one way this indexed read stops being bounded.
+  it("refuses a list longer than the run-history page without querying", async () => {
+    const tooMany = Array.from({ length: 51 }, () => AGENT_ID);
+    const r = await getChildRuns(tooMany);
+    expect(r.ok).toBe(false);
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-uuid run id without querying", async () => {
+    const r = await getChildRuns(["not-a-uuid"]);
+    expect(r.ok).toBe(false);
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("requires a signed-in caller", async () => {
+    requireUser.mockRejectedValue(new Error("unauthenticated"));
+    await expect(getChildRuns([AGENT_ID])).rejects.toThrow();
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("reports a read failure rather than an empty subtree", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    listChildRuns.mockRejectedValue(new Error("listChildRuns: boom"));
+    const r = await getChildRuns([AGENT_ID]);
+    expect(r.ok).toBe(false);
+    expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
 });

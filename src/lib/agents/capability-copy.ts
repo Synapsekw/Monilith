@@ -35,4 +35,11 @@ export const CAPABILITY_COPY: Record<
       "This agent can keep short notes between runs, and read them back at the " +
       "start of every run. You can see, edit and delete everything it remembers.",
   },
+  "agent.delegate": {
+    label: "Ask your other agents for help",
+    consequence:
+      "This agent can hand a task to up to three of your other agents in one " +
+      "run and use what they report back. Each of them acts under its own " +
+      "permissions, never this one's.",
+  },
 };

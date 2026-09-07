@@ -6,6 +6,7 @@ import {
   AGENT_CAPABILITIES,
   type AgentCapability,
 } from "@/lib/agents/capabilities";
+import { CAPABILITY_COPY } from "@/lib/agents/capability-copy";
 import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
 
 const FULL_CEILING: AgentCapability[] = [...AGENT_CAPABILITIES];
@@ -131,5 +132,16 @@ describe("CapabilityToggles", () => {
     const filesToggle = toggleFor(/create and attach files/i);
     expect(filesToggle).toBeDisabled();
     expect(filesToggle).toHaveAttribute("data-state", "checked");
+  });
+
+  // The toggles render one row per capability, reading its label and
+  // consequence out of `CAPABILITY_COPY`. A capability added to the vocabulary
+  // without copy is a TypeScript error (the map is `Record<AgentCapability,…>`);
+  // copy left behind for a capability that was removed is not, and would render
+  // nothing while looking maintained. This asserts the pair in both directions.
+  it("has copy for every capability in the vocabulary", () => {
+    expect(Object.keys(CAPABILITY_COPY).sort()).toEqual(
+      [...AGENT_CAPABILITIES].sort(),
+    );
   });
 });

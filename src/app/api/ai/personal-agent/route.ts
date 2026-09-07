@@ -5,44 +5,44 @@ import type { Database } from "@/types/database.types";
 import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
-import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { readOrgAiSettings } from "@/lib/ai/org-settings";
-import { languageModelFor } from "@/lib/ai/providers/language-model";
 import {
   AiDisabledError,
   AiQuotaExceededError,
   PersonalAiKeyMissingError,
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
-import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
+import {
+  getUserAgentById,
+  findUserAgentRun,
+  type UserAgentRow,
+} from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
+import { ModelNotToolCapableError } from "@/lib/agents/run-loop";
+// The per-run work — budget, tools, bounded loop, proposals — lives in
+// `execute-run.ts` so a delegated child run executes the identical path this
+// route does. What stays HERE is everything that is about the FIRE rather than
+// the run: the claim, the entitlement and per-user caps, the owner client, the
+// org ceiling read, the thread, the email, and the single audit row.
 import {
-  buildAgentRuntime,
-  runAgentLoop,
-  ModelNotToolCapableError,
-} from "@/lib/agents/run-loop";
-import { listDocumentsForAgent } from "@/lib/agents/documents-db";
-import {
-  documentBudget,
-  selectDocuments,
-  selectMemory,
-  estimateTokens,
-  ASSUMED_PREFIX_TOKENS,
-} from "@/lib/agents/document-budget";
-import { listMemoryForAgent } from "@/lib/agents/memory-db";
-import { makeMemoryDescriptors } from "@/lib/agents/memory-tools";
-import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
-import type { ProposedCall } from "@/lib/agents/grant-gate";
-import type { AgentCapability } from "@/lib/agents/capabilities";
-import { insertProposals } from "@/lib/agents/proposals-db";
-import { summariseProposal } from "@/lib/agents/proposal-summary";
+  executeAgentRun,
+  newRunProgress,
+  AGENT_RUN_FEATURE,
+  type ExecuteRunResult,
+} from "@/lib/agents/execute-run";
 import { sendBriefingEmail } from "@/lib/agents/send";
 import { writeBriefingThread } from "@/lib/agents/briefing-thread";
 import {
   assertRunAllowedToday,
   AgentCapExceededError,
 } from "@/lib/agents/caps";
+import { postAgentReply } from "@/lib/agents/agent-reply";
+import {
+  buildMentionTask,
+  loadMentionSummons,
+  MENTION_SUMMONS_LOST_TASK,
+} from "@/lib/agents/mention-summons";
 /** Conservative placeholder on the claim row: if the process dies before
  *  `finalizeRun` runs, the audit trail correctly reads "did not complete"
  *  rather than falsely "ran". `status` has no fourth ("pending"/"claimed")
@@ -53,16 +53,69 @@ import {
  *  render it as a hard failure; the two must never drift apart. */
 import { CLAIM_PLACEHOLDER } from "@/lib/agents/run-status";
 
-const FEATURE = "personal_agent_run";
 const SIGNATURE_HEADER = "x-pulse-signature";
 /** Postgres unique_violation — raised by `user_agent_runs_slot_uniq`. */
 const PG_UNIQUE_VIOLATION = "23505";
 
-const bodySchema = z.object({
-  agent_id: z.string().uuid(),
-  fire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  fire_hour: z.number().int().min(0).max(23),
-});
+/**
+ * Up to 1 + DELEGATE_FANOUT_MAX (= 4) bounded tool loops run inside ONE
+ * invocation of this function, serially, each capped at AGENT_MAX_STEPS (= 12)
+ * model round-trips — 48 in the worst case. The route declared no duration at
+ * all before delegation existed and relied on whatever the platform default
+ * happened to be; with a delegating run that is no longer a safe assumption, so
+ * the number is stated here rather than inherited. 300s is the ceiling a
+ * non-Enterprise Vercel function may ask for, so it is also the most this can
+ * be without a plan change: past it, the fix is a smaller fan-out, not a bigger
+ * timeout.
+ */
+export const maxDuration = 300;
+
+const bodySchema = z.union([
+  // Already claimed by `agent_run_claim` — the ONE creation path for a run with
+  // no fire slot. Nothing here re-claims it.
+  //
+  // `item_id` and `update_id` are present exactly for a mention run: the item
+  // the agent was summoned from (and the item its reply is posted to), and the
+  // comment that summoned it — whose text IS the run's task. Both ride the
+  // signed body rather than `user_agent_runs` columns, because no other trigger
+  // has such values and a column that is null for every scheduled and delegated
+  // run invites a null-check at every read. Being inside the HMAC is what stops
+  // either from being swapped for an item or a comment the summoner never saw.
+  z.object({
+    run_id: z.string().uuid(),
+    item_id: z.string().uuid().optional(),
+    update_id: z.string().uuid().optional(),
+  }),
+  // The hourly sweep's fire slot. This branch, and only this branch, claims.
+  z.object({
+    agent_id: z.string().uuid(),
+    fire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    fire_hour: z.number().int().min(0).max(23),
+  }),
+]);
+
+/** The already-claimed row, read by id. Deliberately a local read rather than
+ *  an `agents-db.ts` helper: this is the route's own dispatch concern, and the
+ *  columns it needs (why the run exists, and whether it is a root) are exactly
+ *  the ones nothing else reads. */
+async function loadRun(
+  svc: SupabaseClient<Database>,
+  runId: string,
+): Promise<{
+  id: string;
+  user_agent_id: string;
+  fire_date: string;
+  trigger: string;
+  depth: number;
+} | null> {
+  const { data, error } = await svc
+    .from("user_agent_runs")
+    .select("id, user_agent_id, fire_date, trigger, depth")
+    .eq("id", runId)
+    .maybeSingle();
+  if (error) throw new Error(`loadRun: ${error.message}`);
+  return data ?? null;
+}
 
 type RunKey = {
   user_agent_id: string;
@@ -107,13 +160,18 @@ async function claimRun(
   throw new Error(`claimRun: ${error?.message ?? "no row returned"}`);
 }
 
-/** Update the already-claimed row to its final status. Keyed on the same
- *  (user_agent_id, fire_date, fire_hour) slot the claim insert used — an
- *  UPDATE can never itself hit the unique index, so there is nothing left to
- *  arbitrate here; a failure is an ordinary write failure, not a race. */
+/**
+ * Update the already-claimed row to its final status.
+ *
+ * Keyed on the run's OWN id. It used to filter on
+ * (user_agent_id, fire_date, fire_hour) — which was unique only while every run
+ * was scheduled. A mention and a delegated run both carry fire_hour = null, so
+ * that filter would now update EVERY non-scheduled run of the agent on that day
+ * with one run's outcome.
+ */
 async function finalizeRun(
   svc: SupabaseClient<Database>,
-  key: RunKey,
+  runId: string,
   patch: {
     status: "ran" | "skipped" | "error";
     error?: string | null;
@@ -141,31 +199,27 @@ async function finalizeRun(
   const { error } = await svc
     .from("user_agent_runs")
     .update(patch)
-    .eq("user_agent_id", key.user_agent_id)
-    .eq("fire_date", key.fire_date)
-    .eq("fire_hour", key.fire_hour);
+    .eq("id", runId);
   if (error) throw new Error(`finalizeRun: ${error.message}`);
 }
 
 /**
- * By the time this is called the slot is already claimed (the fire ledger
- * has consumed it) and the real outcome — email sent, correctly gated, or
- * genuinely errored — has already happened. A failure writing THAT outcome
- * down must never crash the response or mask the real result, so it is
- * logged rather than thrown.
+ * By the time this is called the run is already claimed — by `claimRun` for a
+ * fire slot, or by `agent_run_claim` before the request even arrived — and the
+ * real outcome (delivered, correctly gated, or genuinely errored) has already
+ * happened. A failure writing THAT outcome down must never crash the response
+ * or mask the real result, so it is logged rather than thrown.
  */
 async function safeFinalize(
   svc: SupabaseClient<Database>,
-  key: RunKey,
+  runId: string,
   patch: Parameters<typeof finalizeRun>[2],
 ): Promise<void> {
   try {
-    await finalizeRun(svc, key, patch);
+    await finalizeRun(svc, runId, patch);
   } catch (e) {
     console.error("[personal-agent] finalizeRun failed:", {
-      agentId: key.user_agent_id,
-      fireDate: key.fire_date,
-      fireHour: key.fire_hour,
+      runId,
       patchStatus: patch.status,
       cause: e instanceof Error ? e.message : String(e),
     });
@@ -179,10 +233,15 @@ async function safeFinalize(
  * `net.http_post { agent_id, fire_date, fire_hour }` here. This handler
  * (service-role, HMAC-verified) resolves an OWNER-SCOPED client, runs a
  * BOUNDED TOOL LOOP under that owner's RLS, queues anything the agent had no
- * grant for as a proposal, emails the agent's report, and writes ONE
+ * grant for as a proposal, delivers the agent's report, and writes ONE
  * `user_agent_runs` audit row. Idempotent: a redelivered fire slot is a
  * no-op — see `claimRun` for why that holds even under concurrent delivery,
  * not just sequential redelivery.
+ *
+ * It also accepts a second body, `{ run_id, item_id? }`, for a run that was
+ * already claimed by `agent_run_claim` — today a mention. That run has no fire
+ * slot, so nothing about the slot applies to it: no probe, no claim, no email,
+ * and the finalize keys on the run's own id.
  *
  * The loop replaced a fixed briefing pipeline (build a payload → one
  * tool-less summarise call → email). Everything OUTSIDE the model call is
@@ -203,127 +262,140 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let agentId: string;
-  let fireDate: string;
-  let fireHour: number;
+  let parsed: z.infer<typeof bodySchema>;
   try {
-    const parsed = bodySchema.parse(JSON.parse(raw));
-    agentId = parsed.agent_id;
-    fireDate = parsed.fire_date;
-    fireHour = parsed.fire_hour;
+    parsed = bodySchema.parse(JSON.parse(raw));
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
 
   const svc = createServiceClient();
 
-  // 2. Load the agent.
-  const agent = await getUserAgentById(svc, agentId);
-  if (!agent) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-  // Kill switch: a disabled agent does nothing (no run row, no spend).
-  if (!agent.enabled) {
-    return NextResponse.json({ status: "skipped", reason: "disabled" });
+  // ── 2. Resolve THE RUN. Two ways in, and only two ──────────────────────
+  // The sweep sends a FIRE SLOT and this route claims it (that claim is the
+  // idempotency backstop for a redelivered slot). Everything else — a mention
+  // today, anything else that reaches HTTP later — was ALREADY claimed by
+  // `agent_run_claim`, the single creation path for a run with no slot, and
+  // arrives as its own id. The second branch therefore claims nothing and does
+  // not probe the fire ledger: the row exists, it has no slot to redeliver, and
+  // a second insert would mint a duplicate run for one summons.
+  let agent: UserAgentRow;
+  let runId: string;
+  let fireDate: string;
+  /** Why this run exists — 'schedule' | 'mention' | 'delegation'. Decides
+   *  DELIVERY below: a briefing is emailed, a summoned answer is replied. */
+  let trigger: string;
+  /** 0 for a root run, 1 for one that was delegated TO. Decides whether the
+   *  `delegate` tool is offered at all. */
+  let depth: number;
+  /** Present only on a mention: the item the agent was summoned from, carried
+   *  by the SIGNED body (see `bodySchema`). */
+  const itemId = "run_id" in parsed ? parsed.item_id : undefined;
+  /** Present only on a mention: the comment that summoned the agent. Its text
+   *  is the run's TASK — see `mention-summons.ts` for why the id travels and
+   *  the prose does not. */
+  const updateId = "run_id" in parsed ? parsed.update_id : undefined;
+
+  if ("run_id" in parsed) {
+    const run = await loadRun(svc, parsed.run_id);
+    if (!run) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    const claimed = await getUserAgentById(svc, run.user_agent_id);
+    if (!claimed) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    if (!claimed.enabled) {
+      // Unlike the slot branch below there IS a row to write: it was claimed
+      // before the agent was switched off, and leaving the placeholder on it
+      // would render as "Didn't finish" for a run that was correctly refused.
+      await safeFinalize(svc, run.id, {
+        status: "skipped",
+        error: "Agent is switched off.",
+      });
+      return NextResponse.json({ status: "skipped", reason: "disabled" });
+    }
+    agent = claimed;
+    runId = run.id;
+    fireDate = run.fire_date;
+    trigger = run.trigger;
+    depth = run.depth;
+  } else {
+    const scheduled = await getUserAgentById(svc, parsed.agent_id);
+    if (!scheduled) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    // Kill switch: a disabled agent does nothing (no run row, no spend).
+    if (!scheduled.enabled) {
+      return NextResponse.json({ status: "skipped", reason: "disabled" });
+    }
+
+    // 3. Fast-path idempotency probe. This is an optimisation ONLY — it can
+    //    race under concurrent delivery of the same fire slot (two deliveries
+    //    can both observe `null` here). claimRun below is what actually
+    //    arbitrates; this just avoids the extra round trip on the
+    //    overwhelmingly common case of a plain sequential redelivery.
+    const existing = await findUserAgentRun(
+      svc,
+      parsed.agent_id,
+      parsed.fire_date,
+      parsed.fire_hour,
+    );
+    if (existing) {
+      return NextResponse.json({ status: "noop", reason: "already_ran" });
+    }
+
+    // 4. Claim the slot BEFORE any token spend or email (Finding 1).
+    let claim: Awaited<ReturnType<typeof claimRun>>;
+    try {
+      claim = await claimRun(svc, {
+        user_agent_id: parsed.agent_id,
+        org_id: scheduled.org_id,
+        owner_id: scheduled.owner_id,
+        fire_date: parsed.fire_date,
+        fire_hour: parsed.fire_hour,
+      });
+    } catch (e) {
+      // The claim attempt itself failed for a reason OTHER than a conflict
+      // (e.g. a transient DB error). Nothing was spent and nothing else was
+      // written, so it's safe to just fail closed — there is no row to
+      // finalize.
+      console.error("[personal-agent] claimRun failed:", {
+        agentId: parsed.agent_id,
+        fireDate: parsed.fire_date,
+        fireHour: parsed.fire_hour,
+        cause: e instanceof Error ? e.message : String(e),
+      });
+      return NextResponse.json({ error: "agent run failed" }, { status: 500 });
+    }
+    if (claim.outcome === "already_claimed") {
+      // Another delivery of this exact fire slot already won the claim — do
+      // nothing further. This is the case a redelivery landing concurrently
+      // with an in-flight run relies on: no second summarise call, no second
+      // email.
+      return NextResponse.json({ status: "noop", reason: "already_ran" });
+    }
+    agent = scheduled;
+    runId = claim.runId;
+    fireDate = parsed.fire_date;
+    trigger = "schedule";
+    depth = 0;
   }
 
-  // 3. Fast-path idempotency probe. This is an optimisation ONLY — it can
-  //    race under concurrent delivery of the same fire slot (two deliveries
-  //    can both observe `null` here). claimRun below is what actually
-  //    arbitrates; this just avoids the extra round trip on the
-  //    overwhelmingly common case of a plain sequential redelivery.
-  const existing = await findUserAgentRun(svc, agentId, fireDate, fireHour);
-  if (existing) {
-    return NextResponse.json({ status: "noop", reason: "already_ran" });
-  }
-
-  const key: RunKey = {
-    user_agent_id: agentId,
-    org_id: agent.org_id,
-    owner_id: agent.owner_id,
-    fire_date: fireDate,
-    fire_hour: fireHour,
-  };
-
-  // 4. Claim the slot BEFORE any token spend or email (Finding 1).
-  let claim: Awaited<ReturnType<typeof claimRun>>;
-  try {
-    claim = await claimRun(svc, key);
-  } catch (e) {
-    // The claim attempt itself failed for a reason OTHER than a conflict
-    // (e.g. a transient DB error). Nothing was spent and nothing else was
-    // written, so it's safe to just fail closed — there is no row to
-    // finalize.
-    console.error("[personal-agent] claimRun failed:", {
-      agentId,
-      fireDate,
-      fireHour,
-      cause: e instanceof Error ? e.message : String(e),
-    });
-    return NextResponse.json({ error: "agent run failed" }, { status: 500 });
-  }
-  if (claim.outcome === "already_claimed") {
-    // Another delivery of this exact fire slot already won the claim — do
-    // nothing further. This is the case a redelivery landing concurrently
-    // with an in-flight run relies on: no second summarise call, no second
-    // email.
-    return NextResponse.json({ status: "noop", reason: "already_ran" });
-  }
-
-  // ── Hoisted above the try so the CATCH can see them ────────────────────
+  // ── Hoisted above the try so the CATCH can see it ──────────────────────
   // A run that dies at step 5 still did whatever steps 1–4 did: granted writes
   // that really landed on the owner's boards, and denied calls the model was
   // already told were "Recorded for your approval." All of that used to be
   // discarded with the rejected promise, leaving `user_agent_runs` unable to
   // answer "what did my agent do to my boards" for the one run where the
-  // question matters most.
-  const proposals: ProposedCall[] = [];
-  let effectiveGrants: AgentCapability[] = [];
-  // High-water marks, updated by `runAgentLoop`'s onStep after every completed
-  // step — the last values before a throw are what that run actually achieved.
-  let loopSteps = 0;
-  let loopToolsUsed: string[] = [];
-
-  /**
-   * Persist the run's proposals, at most once.
-   *
-   * The flag is set BEFORE the await on purpose. The owner's ruling is that a
-   * FAILING insert fails the whole run loudly (it throws, the outer catch
-   * records "error", no email) — so a retry from that catch would be pointless
-   * and would mask the original error. What the flag does NOT cover, and what
-   * this function exists for, is never REACHING the insert: a provider 5xx or
-   * timeout mid-loop used to drop every proposal on the floor while the model
-   * had already told the owner they were recorded.
-   */
-  let proposalsPersisted = false;
-  const persistProposals = async (): Promise<void> => {
-    if (proposalsPersisted) return;
-    proposalsPersisted = true;
-    await insertProposals(
-      svc,
-      proposals.map((p) => ({
-        userAgentId: agent.id,
-        runId: claim.runId,
-        orgId: agent.org_id,
-        ownerId: agent.owner_id,
-        capability: p.capability,
-        toolName: p.toolName,
-        toolCallId: p.toolCallId,
-        input: p.input,
-        // SERVER-derived, never model text — the security property the column's
-        // own comment states. `summariseProposal` builds its sentence from the
-        // tool input alone, so what the owner approves is a description of what
-        // will actually execute. It never throws: a bad shape degrades to
-        // `Run <tool>.` rather than failing the whole batch insert.
-        summary: summariseProposal(p.toolName, p.input),
-      })),
-    );
-  };
+  // question matters most. `executeAgentRun` mutates this as it goes, so the
+  // catch below reads the high-water marks of a run that never returned.
+  const progress = newRunProgress();
 
   try {
     // 5. Entitlement + per-user caps BEFORE any token spend.
     try {
-      await requireAiEntitlement(agent.org_id, FEATURE);
+      await requireAiEntitlement(agent.org_id, AGENT_RUN_FEATURE);
       await assertRunAllowedToday(svc, agent.org_id, agent.owner_id, fireDate);
     } catch (e) {
       if (
@@ -331,7 +403,7 @@ export async function POST(req: Request): Promise<Response> {
         e instanceof AiQuotaExceededError ||
         e instanceof AgentCapExceededError
       ) {
-        await safeFinalize(svc, key, { status: "skipped", error: e.message });
+        await safeFinalize(svc, runId, { status: "skipped", error: e.message });
         return NextResponse.json({ status: "skipped", reason: "gated" });
       }
       throw e;
@@ -346,13 +418,10 @@ export async function POST(req: Request): Promise<Response> {
     // an admin who lowers the ceiling clamps every existing agent at once,
     // without anyone editing them. `agentCapabilityCeiling` may be the module
     // singleton `DEFAULT_ORG_AI_SETTINGS` returns by identity — never mutate
-    // it in place (no push/sort/splice); `.filter` below copies.
+    // it in place (no push/sort/splice); `executeAgentRun` only `.filter`s it.
     const { agentCapabilityCeiling } = await readOrgAiSettings(
       svc,
       agent.org_id,
-    );
-    effectiveGrants = agent.capabilities.filter((c) =>
-      agentCapabilityCeiling.includes(c),
     );
 
     // 7. Run the bounded tool loop (metered). Two states are CONFIGURATION
@@ -361,157 +430,63 @@ export async function POST(req: Request): Promise<Response> {
     //    clear reason:
     //      - PersonalAiKeyMissingError: the owner has no per_user key on file.
     //      - ByoKeyMissingError: the org's org_byo mode has no vault secret.
-    //    A third — ModelNotToolCapableError — is raised INSIDE the callback
-    //    (only there is the resolved model known) and handled the same way:
-    //    the agent's pinned model, or the org default, cannot call tools, so
-    //    there is no loop to run. The old ProviderNotCapableError guard is
-    //    GONE with it: this loop is provider-agnostic (the AI SDK drives it
-    //    through whichever adapter the key resolved to), so the honest
-    //    question is no longer "is this Anthropic?" but "can THIS model call
-    //    tools?", which `ai_models.supports_tools` answers per model.
-    //    Deliberately NOT caught here: a plain (non-Personal) AiNotConfiguredError
-    //    — e.g. `managed` mode's platform ANTHROPIC_API_KEY missing — is an
-    //    OPERATIONAL fault (nobody but ops can fix it, and it silently kills
-    //    every briefing in the org every day), so it falls through to the
-    //    generic catch below and is recorded as "error", not "skipped".
-    let result: Awaited<ReturnType<typeof runAgentLoop>>;
-    // Written to the run row below. `user_agent_runs.model_substituted` exists
-    // precisely so "your pinned model is gone, this ran on the default" is its
-    // own signal instead of being overloaded onto `error` — a substituted run
-    // still SUCCEEDED, and recording it as an error would tell the owner their
-    // agent is broken when it is not.
-    let modelSubstituted = false;
+    //    A third — ModelNotToolCapableError — is raised INSIDE `runAi`'s
+    //    callback (only there is the resolved model known) and handled the
+    //    same way: the agent's pinned model, or the org default, cannot call
+    //    tools, so there is no loop to run. The old ProviderNotCapableError
+    //    guard is GONE with it: this loop is provider-agnostic (the AI SDK
+    //    drives it through whichever adapter the key resolved to), so the
+    //    honest question is no longer "is this Anthropic?" but "can THIS model
+    //    call tools?", which `ai_models.supports_tools` answers per model.
+    //    Deliberately NOT caught here: a plain (non-Personal)
+    //    AiNotConfiguredError — e.g. `managed` mode's platform
+    //    ANTHROPIC_API_KEY missing — is an OPERATIONAL fault (nobody but ops
+    //    can fix it, and it silently kills every briefing in the org every
+    //    day), so it falls through to the generic catch below and is recorded
+    //    as "error", not "skipped".
+    // WHAT THIS RUN IS ASKED TO DO. A scheduled run gets `DEFAULT_RUN_TASK`
+    // (resolved inside `executeAgentRun` from `task: undefined`). A MENTION run
+    // is asked the question the person actually typed — an agent summoned by
+    // "@ops what's blocking us?" that reports its daily briefing instead is not
+    // the feature. The text is read back from the summoning comment by id and
+    // composed into a nonce-keyed quoted block; `mention-summons.ts` is the
+    // whole argument for why it travels that way and how it is contained.
+    let task: string | undefined;
+    if (trigger === "mention") {
+      const summons = updateId ? await loadMentionSummons(svc, updateId) : null;
+      task = summons
+        ? buildMentionTask({ text: summons, nonce: agent.doc_nonce })
+        : MENTION_SUMMONS_LOST_TASK;
+    }
+
+    let result: ExecuteRunResult;
     try {
-      result = await runAi(
-        {
-          orgId: agent.org_id,
-          userId: agent.owner_id,
-          feature: FEATURE,
-          // The per-agent pin. Null on either means "org default", which is
-          // exactly what runAi does when they are omitted.
-          provider: agent.provider ?? undefined,
-          requestedModel: agent.model_id,
-        },
-        async ({ adapter, apiKey, baseUrl, model }, reportUsage) => {
-          if (!model.supportsTools)
-            throw new ModelNotToolCapableError(model.model);
-          modelSubstituted = model.substituted;
-
-          // Read the agent's attached documents AND its memory here, inside
-          // the callback — this is the only place the resolved model (and
-          // therefore its real context window) is known.
-          // `listDocumentsForAgent`/`listMemoryForAgent` are the one query
-          // shape for each read; `documentBudget` divides ONE envelope
-          // between them. A second arithmetic here is exactly the drift that
-          // module exists to prevent.
-          const attached = await listDocumentsForAgent(ownerClient, agent.id);
-          const notes = await listMemoryForAgent(ownerClient, agent.id);
-          const memoryTokens = notes.reduce((n, m) => n + m.tokenEstimate, 0);
-
-          const { budget, memoryNoteBudget } = documentBudget({
-            contextLength: model.contextLength,
-            // ASSUMED_PREFIX_TOKENS, imported from document-budget — the
-            // attach-time meter uses the identical constant. A local 9_500
-            // here would let the two drift, and the meter's whole guarantee
-            // is that they cannot.
-            prefixTokens: ASSUMED_PREFIX_TOKENS,
-            instructionTokens: estimateTokens(agent.instructions),
-            memoryTokens,
-          });
-          const { included, omitted } = selectDocuments(attached, budget);
-          // PARTIAL, unlike documents: notes are independent atoms, so the
-          // freshest that fit are kept and the tail is dropped and COUNTED.
-          // `memoryNoteBudget`, NOT `memoryBudget`: the latter includes the
-          // block's own ~100-token framing, which `buildMemoryBlock` emits on
-          // top of the lines. Spending it on lines would overrun the envelope
-          // the budget was sized against by exactly the framing's length.
-          const { included: memory, dropped: memoryNotesDropped } =
-            selectMemory(notes, memoryNoteBudget);
-
-          // ONE call assembles BOTH halves. `buildAgentTools` and
-          // `makeGrantGate` are each a pure function of the same descriptor
-          // list, and building them separately is exactly how a tool once
-          // ended up executable but unclassified — see buildAgentRuntime.
-          const { tools, gate } = buildAgentRuntime({
-            ctx: {
-              getClient: async () => ownerClient,
-              actorId: agent.owner_id,
-            },
-            scope: agent.board_scope,
-            client: ownerClient,
-            // The SAME array reaches `buildAgentTools` and `makeGrantGate` —
-            // `buildAgentRuntime` takes it once precisely so they cannot
-            // disagree. The memory descriptors are built PER RUN because they
-            // close over this agent's id and this run's id; neither is in
-            // `ToolInvokeContext`, and taking them from model input would be
-            // a cross-agent write primitive.
-            extra: [
-              ...AGENT_ONLY_DESCRIPTORS,
-              ...makeMemoryDescriptors({
-                userAgentId: agent.id,
-                runId: claim.runId,
-              }),
-            ],
-            granted: effectiveGrants,
-            ceiling: agentCapabilityCeiling,
-            // Collected, not written through per call: `insertProposals` is
-            // one bounded insert for the whole run, and the run is the unit
-            // that either produced these or died trying. The error path
-            // persists them too — see `persistProposals`.
-            onPropose: (call) => proposals.push(call),
-          });
-
-          const r = await runAgentLoop({
-            // The WIRE id, never the catalog key the pin stores: the Gateway
-            // publishes `claude-haiku-4.5` where Anthropic's API wants the
-            // dated snapshot, and sending the key is a 404.
-            model: languageModelFor({
-              kind: adapter.kind,
-              apiKey,
-              baseUrl,
-              model: model.requestModel,
-            }),
-            instructions: agent.instructions,
-            // This agent's own stable secret — keys the instructions
-            // delimiter (document-inject.ts) whenever `documents` is
-            // non-empty, so a document body forging the literal
-            // `INSTRUCTIONS_SENTINEL` can't reproduce the real marker.
-            // Spec 2c widened that predicate to ANY untrusted block, so this
-            // is load-bearing for an agent with memory and no documents too.
-            nonce: agent.doc_nonce,
-            documents: included,
-            documentsOmitted: omitted,
-            memory,
-            memoryNotesDropped,
-            tools,
-            gate,
-            // No per-run output ceiling: the loop is bounded by
-            // AGENT_MAX_STEPS, and a token cap that truncates mid-report
-            // emails a half-sentence. The seam stays for when the catalog's
-            // per-model `max_output_tokens` is threaded through.
-            maxOutputTokens: null,
-            // The audit trail for a run that dies mid-loop. Without this, a
-            // throw at step 5 discards everything steps 1–4 did — including
-            // the tokens those steps really spent, which `reportUsage` hands
-            // to `runAi` so its catch can still write the ledger row. Steps
-            // 1–11 of a run that dies at step 12 are real, billed provider
-            // round-trips; metering only on success spends managed-mode money
-            // against no ledger row and under-counts the monthly ceiling.
-            onStep: ({ steps, toolsUsed, usage }) => {
-              loopSteps = steps;
-              loopToolsUsed = toolsUsed;
-              reportUsage(usage);
-            },
-          });
-          return { result: r, usage: r.usage };
-        },
-      );
+      result = await executeAgentRun({
+        svc,
+        ownerClient,
+        agent,
+        runId,
+        ceiling: agentCapabilityCeiling,
+        // Undefined for every non-mention run, which is what makes
+        // `executeAgentRun` fall back to DEFAULT_RUN_TASK for them.
+        task,
+        // A ROOT run — scheduled or summoned — may delegate; a run that was
+        // itself delegated to may not, so it is never even offered the tool.
+        // This is the second layer only: `agent_run_claim` answers
+        // `refused_depth` from the DB CHECK regardless of what any caller
+        // passes here. Note this is still INERT on an org whose
+        // `agent_capability_ceiling` withholds `agent.delegate` — the tool is
+        // offered and then denied by the grant gate — and the backfill that
+        // would have added it was deliberately skipped.
+        allowDelegation: depth === 0,
+        progress,
+      });
     } catch (e) {
       if (
         e instanceof PersonalAiKeyMissingError ||
         e instanceof ByoKeyMissingError
       ) {
-        await safeFinalize(svc, key, {
+        await safeFinalize(svc, runId, {
           status: "skipped",
           error: `AI not configured for this run (${e.message})`,
         });
@@ -522,7 +497,7 @@ export async function POST(req: Request): Promise<Response> {
         // "skipped" with a message naming the model and both places a model
         // can come from. Nothing was spent — the throw happens before the
         // first model call.
-        await safeFinalize(svc, key, { status: "skipped", error: e.message });
+        await safeFinalize(svc, runId, { status: "skipped", error: e.message });
         return NextResponse.json({
           status: "skipped",
           reason: "model_not_tool_capable",
@@ -531,44 +506,68 @@ export async function POST(req: Request): Promise<Response> {
       throw e;
     }
 
-    // 8. Persist what the agent asked permission for. BEFORE the email, so the
-    //    "N actions await your approval" line can never name rows that do not
-    //    exist yet. `insertProposals` stamps `status` and `expires_at`
-    //    (now + PROPOSAL_TTL_DAYS) itself — no caller can queue a proposal
-    //    that is born approved or born immortal. A failure here throws, by
-    //    design: it lands in the catch below as a loud "error" run rather than
-    //    an email promising approvals that were never queued.
-    await persistProposals();
+    // 8. The proposals are already queued — `executeAgentRun` persists them
+    //    BEFORE returning, so the "N actions await your approval" line below
+    //    can never name rows that do not exist yet, and a failed insert has
+    //    already failed the run loudly rather than emailing a promise it did
+    //    not keep.
+    //
+    // Delivery depends on WHY the run happened. A briefing is a scheduled
+    // report: it gets a thread and an email. A mention is a conversational
+    // reply to something someone just wrote on an item — emailing it would turn
+    // a comment into an inbox item, and threading it would file an answer to
+    // one item under the daily briefing of another.
+    if (trigger === "mention") {
+      if (itemId) {
+        // The answer goes back where the question was asked, authored by the
+        // platform bot and prefixed with the agent's name and handle so it can
+        // never read as a teammate's comment. Best-effort inside: the run has
+        // already succeeded and its report is already going onto the run row.
+        await postAgentReply(svc, {
+          runId,
+          itemId,
+          agentName: agent.name,
+          agentHandle: agent.handle,
+          text: result.text,
+        });
+      } else {
+        // A mention run with no item is not reachable through `addUpdate`,
+        // which always signs one. Log rather than invent a destination.
+        console.error("[personal-agent] mention run had no item to reply to", {
+          runId,
+        });
+      }
+    } else {
+      // Thread BEFORE email, so the email can link to it. Never gates the run: a
+      // failed write returns null and the email simply omits the link.
+      const threadId = await writeBriefingThread(ownerClient, {
+        orgId: agent.org_id,
+        ownerId: agent.owner_id,
+        agentId: agent.id,
+        agentName: agent.name,
+        runId,
+        fireDate,
+        summary: result.text,
+      });
 
-    // Thread BEFORE email, so the email can link to it. Never gates the run: a
-    // failed write returns null and the email simply omits the link.
-    const threadId = await writeBriefingThread(ownerClient, {
-      orgId: agent.org_id,
-      ownerId: agent.owner_id,
-      agentId: agent.id,
-      agentName: agent.name,
-      runId: claim.runId,
-      fireDate,
-      summary: result.text,
-    });
-
-    await sendBriefingEmail(svc, {
-      agent,
-      fireDate,
-      summary: result.text,
-      proposalCount: proposals.length,
-      threadId,
-    });
+      await sendBriefingEmail(svc, {
+        agent,
+        fireDate,
+        summary: result.text,
+        proposalCount: result.proposalCount,
+        threadId,
+      });
+    }
 
     // 9. Finalize the single audit row for this fire (Finding 2: never let
     //    a bookkeeping-write failure crash a response whose real outcome —
     //    the email — already succeeded).
-    await safeFinalize(svc, key, {
+    await safeFinalize(svc, runId, {
       status: "ran",
       error: null,
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
-      model_substituted: modelSubstituted,
+      model_substituted: progress.modelSubstituted,
       // Straight off the loop's own result, not a local mirror of it. Same
       // rationale as `modelSubstituted`: a run whose documents did not fit
       // still SUCCEEDED — `documents_omitted` is its own signal, never folded
@@ -579,7 +578,7 @@ export async function POST(req: Request): Promise<Response> {
       // memory was truncated SUCCEEDED. A count, because "12 of your 50 notes
       // didn't fit" is actionable and "memory omitted" is not.
       memory_notes_dropped: result.memoryNotesDropped,
-      grants: effectiveGrants,
+      grants: progress.grants,
       steps: result.steps,
       tools_used: result.toolsUsed,
       output: result.text,
@@ -589,36 +588,22 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown";
 
-    // The model was told "Recorded for your approval." before this run died,
-    // and may have said so to the owner in text that is now lost. Queueing the
-    // proposals anyway keeps that promise: the owner finds them under the
-    // failed run and can still approve them. BEST EFFORT here and only here —
-    // we are already on the failure path, so a second failure must be logged
-    // rather than thrown, or it would replace the real cause of the run's
-    // death with a bookkeeping error. (No-op when the success path already
-    // persisted them, including when THAT insert is what threw.)
-    try {
-      await persistProposals();
-    } catch (pe) {
-      console.error("[personal-agent] proposal persist on error path failed:", {
-        agentId: key.user_agent_id,
-        runId: claim.runId,
-        proposals: proposals.length,
-        cause: pe instanceof Error ? pe.message : String(pe),
-      });
-    }
+    // Proposals are NOT queued here: `executeAgentRun` owns that on both of
+    // its paths — it persists them before returning, and best-effort persists
+    // them (logging, never throwing, on a second failure) when the loop dies
+    // mid-run. A run that died AFTER it returned therefore has them already.
 
     // The partial audit trail. A run that wrote to three boards and then threw
     // must not record silence — `grants` says what it was permitted to do,
     // `steps`/`tools_used` what it got through before it died. `output` is
     // deliberately absent: there is no report, and inventing one would be
     // worse than the empty column.
-    await safeFinalize(svc, key, {
+    await safeFinalize(svc, runId, {
       status: "error",
       error: message,
-      grants: effectiveGrants,
-      steps: loopSteps,
-      tools_used: loopToolsUsed,
+      grants: progress.grants,
+      steps: progress.steps,
+      tools_used: progress.toolsUsed,
     });
     return NextResponse.json({ error: "agent run failed" }, { status: 500 });
   }

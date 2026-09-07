@@ -75,6 +75,10 @@ const agent: UserAgentRow = {
   org_id: ORG,
   owner_id: OWNER,
   name: "Morning Brief",
+  // Added with `user_agents.handle`/`.kind` — every UserAgentRow now carries
+  // its typeable address and whether it is the seeded orchestrator.
+  handle: "morning-brief",
+  kind: "user",
   template_id: "morning-brief",
   instructions: "Be concise.",
   board_scope: { mode: "all" },

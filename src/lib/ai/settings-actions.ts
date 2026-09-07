@@ -23,6 +23,7 @@ import { readOrgBillingStatus } from "@/lib/billing/status";
 import { entitlesAi } from "@/lib/billing/entitling";
 import { capabilitySchema } from "@/lib/agents/agent-config";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import { assistantNameSchema } from "@/lib/org/assistant-name";
 
 const NOT_ADMIN = "Only organization admins can change AI settings.";
 
@@ -62,6 +63,9 @@ export async function getOrgAiSettings(): Promise<
     /** The org-wide ceiling on what a personal agent may be granted — see
      *  `OrgAgentCeiling`, the admin control that writes it. */
     agentCapabilityCeiling: AgentCapability[];
+    /** What this org calls the built-in assistant — resolved, never raw, so a
+     *  row-less org still gets a name to render. */
+    assistantName: string;
   }>
 > {
   await requireUser();
@@ -84,6 +88,7 @@ export async function getOrgAiSettings(): Promise<
       defaultProvider: settings.defaultProvider,
       defaultModelId: settings.defaultModelId,
       agentCapabilityCeiling: settings.agentCapabilityCeiling,
+      assistantName: settings.assistantName,
     },
   };
 }
@@ -358,6 +363,58 @@ export async function clearOrgDefaultModel(): Promise<
 
   revalidatePath("/settings/ai");
   return { ok: true, data: {} };
+}
+
+const assistantNameInputSchema = z.object({
+  // Reused, not re-declared: the same schema the form validates with, and the
+  // app-side mirror of the column's own `between 1 and 40` check.
+  name: assistantNameSchema,
+});
+
+/**
+ * Renames the built-in assistant FOR THIS ORG.
+ *
+ * The name is org-admin-editable CONTENT, not an entitlement — but it is
+ * written exactly like every entitlement on this table: schema first, then
+ * `requireOrgAdmin` (a `has_org_role` check through the RLS client), then a
+ * scoped UPDATE on the service client. `org_ai_settings` deliberately has NO
+ * authenticated write policy at all, so there is no client write path to
+ * reopen here; this action is the boundary.
+ *
+ * UPDATE, never UPSERT, for the same reason as `setOrgDefaultModel`: inserting
+ * a row here would hand a never-subscribed org the default row shape and, with
+ * it, AI. An org with no row is told to choose how AI is powered first.
+ *
+ * Only the DISPLAY name moves. The bot's `auth.users` row stays global and its
+ * email stays `pulse-autopilot@pulse.internal`, because
+ * `platform_agent_user_id()` resolves the bot by that email — see
+ * `src/lib/org/assistant-name.ts`.
+ */
+export async function setAssistantName(input: {
+  name: string;
+}): Promise<ActionResult<{ name: string }>> {
+  const parsed = assistantNameInputSchema.safeParse(input);
+  if (!parsed.success)
+    return fail("Give the assistant a name of 1–40 characters.");
+  const { name } = parsed.data;
+
+  const ctx = await requireOrgAdmin();
+  if (!ctx) return fail(NOT_ADMIN);
+
+  const svc = createServiceClient();
+  const { error, count } = await svc
+    .from("org_ai_settings")
+    .update(
+      { assistant_name: name, updated_by: ctx.userId },
+      { count: "exact" },
+    )
+    .eq("org_id", ctx.orgId);
+  if (error) return fail("Couldn't rename the assistant. Please try again.");
+  if (count === 0)
+    return fail("Choose how AI is powered for this organization first.");
+
+  revalidatePath("/settings/ai");
+  return { ok: true, data: { name } };
 }
 
 export async function removeOrgByoKey(): Promise<

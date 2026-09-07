@@ -13,6 +13,7 @@ import {
   AGENT_MAX_STEPS,
   ModelNotToolCapableError,
   PREAMBLE,
+  DEFAULT_RUN_TASK,
 } from "./run-loop";
 import { makeGrantGate, UNGRANTED_REASON } from "./grant-gate";
 
@@ -897,5 +898,79 @@ describe("memory in the system prompt", () => {
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
     });
     expect(r.memoryNotesDropped).toBe(0);
+  });
+});
+
+// ── The user turn ────────────────────────────────────────────────────────
+// The system message is the cached prefix; the USER turn is not. A per-run
+// task therefore costs no cache — which is exactly why a summoned or delegated
+// run replaces THIS message and never the instructions.
+describe("the run's task", () => {
+  function capturingModel(sink: { prompt?: unknown }): LanguageModel {
+    return new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        sink.prompt = prompt;
+        return {
+          content: [{ type: "text", text: "Done." }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+  }
+
+  const base = {
+    instructions: "Do the thing.",
+    nonce: "n-test-agent",
+    tools,
+    maxOutputTokens: null,
+    gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+  };
+
+  /** The AI SDK converts a string user message into a one-part content array. */
+  function userText(prompt: unknown): string {
+    const messages = prompt as {
+      role: string;
+      content: string | { type: string; text: string }[];
+    }[];
+    const user = messages.find((m) => m.role === "user")!;
+    return typeof user.content === "string"
+      ? user.content
+      : user.content.map((p) => p.text).join("");
+  }
+
+  it("sends DEFAULT_RUN_TASK when no task is given", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({ ...base, model: capturingModel(sink) });
+    expect(userText(sink.prompt)).toBe(DEFAULT_RUN_TASK);
+  });
+
+  it("sends the given task verbatim", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      task: "Check whether board Ops has anything overdue.",
+    });
+    expect(userText(sink.prompt)).toBe(
+      "Check whether board Ops has anything overdue.",
+    );
+  });
+
+  // The task is the USER turn, never the system message: the cache breakpoint
+  // lives on the system message, so folding a per-run task into it would break
+  // every agent's prefix cache on every summoned run.
+  it("leaves the cached system message untouched", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      task: "Something else entirely.",
+    });
+    const system = (sink.prompt as { role: string; content: string }[])[0];
+    expect(system.content).toBe(
+      `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\nDo the thing.`,
+    );
   });
 });

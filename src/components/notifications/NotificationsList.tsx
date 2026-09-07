@@ -11,6 +11,10 @@ function label(n: AppNotification): string {
       return "mentioned you in an update";
     case "assigned":
       return "assigned you to an item";
+    case "agent_reply":
+      // System notification (actor_id null): the comment is authored by the
+      // platform bot, not by a member, so there is no actor to join to.
+      return "replied to your mention";
     case "automation":
       return "an automation ran on an item";
     case "feedback_response":

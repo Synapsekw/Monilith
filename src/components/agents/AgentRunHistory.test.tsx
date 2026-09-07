@@ -7,6 +7,7 @@ import { AgentRunHistory } from "./AgentRunHistory";
 import { CLAIM_PLACEHOLDER, STALE_CLAIM_MS } from "@/lib/agents/run-status";
 
 const getAgentRuns = vi.fn();
+const getChildRuns = vi.fn();
 /**
  * `throwWith` is the "the action call itself blew up" case, and it deliberately
  * bypasses the `vi.fn()` spy. Vitest's spy records the settled result of every
@@ -20,6 +21,7 @@ let throwWith: Error | null = null;
 vi.mock("@/lib/agents/actions", () => ({
   getAgentRuns: (...a: unknown[]) =>
     throwWith ? Promise.reject(throwWith) : getAgentRuns(...a),
+  getChildRuns: (...a: unknown[]) => getChildRuns(...a),
 }));
 
 const getPendingProposals = vi.fn();
@@ -63,8 +65,28 @@ function row(over: Record<string, unknown> = {}) {
     modelSubstituted: false,
     documentsOmitted: false,
     memoryNotesDropped: 0,
+    // Spec 3: every run that predates delegation is a scheduled root, which is
+    // also every run on every org until an admin grants `agent.delegate`.
+    parentRunId: null,
+    depth: 0,
+    trigger: "schedule",
     ...over,
   };
+}
+
+/** A delegated child of `r1`, as `getChildRuns` returns it. */
+function child(over: Record<string, unknown> = {}) {
+  return row({
+    id: "c1",
+    parentRunId: "r1",
+    depth: 1,
+    trigger: "delegation",
+    agentName: "Risk Spotter",
+    fireHour: null,
+    inputTokens: 100,
+    outputTokens: 50,
+    ...over,
+  });
 }
 
 async function expand() {
@@ -74,6 +96,7 @@ async function expand() {
 beforeEach(() => {
   getAgentRuns.mockReset();
   getPendingProposals.mockReset().mockResolvedValue({ ok: true, data: [] });
+  getChildRuns.mockReset().mockResolvedValue({ ok: true, data: [] });
   decideProposal
     .mockReset()
     .mockResolvedValue({ ok: true, data: { status: "approved" } });
@@ -362,6 +385,118 @@ describe("AgentRunHistory — proposals", () => {
     // must not replace it with an error.
     getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
     getPendingProposals.mockResolvedValue({ ok: false, error: "nope" });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nested runs, under the run that delegated them
+// ---------------------------------------------------------------------------
+
+describe("AgentRunHistory — nested runs", () => {
+  it("asks for the listed runs' children in ONE read, not one per run", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ id: "r1" }), row({ id: "r2" })],
+    });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await waitFor(() => expect(getChildRuns).toHaveBeenCalledTimes(1));
+    expect(getChildRuns).toHaveBeenCalledWith(["r1", "r2"]);
+  });
+
+  it("costs no child read at all until the row is expanded", () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    expect(getChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("does not query for an agent that has never run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText(/no runs yet/i);
+    expect(getChildRuns).not.toHaveBeenCalled();
+  });
+
+  // The children are already in hand when the disclosure opens, so seeing what
+  // a run delegated costs ZERO further round trips (working agreement #5).
+  it("names the agent a run delegated to, under that run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row({ id: "r1" })] });
+    getChildRuns.mockResolvedValue({ ok: true, data: [child()] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Risk Spotter")).toBeInTheDocument();
+    expect(screen.getAllByText("Ran")).toHaveLength(2);
+  });
+
+  // A child bills its own ai_usage row, so the parent's own token columns
+  // undercount the orchestration. This line is the only place the real cost of
+  // a delegating run is visible to its owner.
+  it("totals the tokens across the run and its children", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row({ id: "r1" })] });
+    getChildRuns.mockResolvedValue({ ok: true, data: [child()] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    // 1200 + 300 (the parent) + 100 + 50 (the child)
+    const total = (1650).toLocaleString();
+    expect(
+      await screen.findByText(`${total} tokens across 2 runs`),
+    ).toBeInTheDocument();
+  });
+
+  // Delegation is inert until an admin grants `agent.delegate`, so this is the
+  // state EVERY run is in today: a run with no children must look exactly as it
+  // did before this feature — no empty expander, no "0 children".
+  it("adds nothing at all to a run that delegated to nobody", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row({ id: "r1" })] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText("Ran");
+    expect(screen.queryByText(/tokens across/)).not.toBeInTheDocument();
+    // The disclosure toggle is still the only control on the surface.
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  // Why a run exists, for the two kinds the hourly sweep did not start. Read on
+  // the delegate's OWN history, where the run is a top-level row and nothing
+  // else explains where it came from.
+  it("marks a run another agent started", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ id: "r9", trigger: "delegation", depth: 1 })],
+    });
+    wrap(<AgentRunHistory agentId="a2" agentName="Risk Spotter" />);
+    await expand();
+    expect(await screen.findByText("Delegated")).toBeInTheDocument();
+  });
+
+  it("marks a run someone summoned with an @handle", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ id: "r9", trigger: "mention" })],
+    });
+    wrap(<AgentRunHistory agentId="a2" agentName="Risk Spotter" />);
+    await expand();
+    expect(await screen.findByText("Summoned")).toBeInTheDocument();
+  });
+
+  it("says nothing about the trigger on a scheduled run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText("Ran");
+    expect(screen.queryByText("Delegated")).not.toBeInTheDocument();
+    expect(screen.queryByText("Summoned")).not.toBeInTheDocument();
+  });
+
+  // Same rule as the proposal read beside it: run history is the signal this
+  // surface exists for, and a failed side read must not replace it.
+  it("still shows the run history when the child read fails", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    getChildRuns.mockResolvedValue({ ok: false, error: "nope" });
     wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
     await expand();
     expect(await screen.findByText("Ran")).toBeInTheDocument();

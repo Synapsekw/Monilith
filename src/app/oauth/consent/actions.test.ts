@@ -100,7 +100,7 @@ describe("approveConsent", () => {
     expect(getOauthClient).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-http(s) redirect_uri before looking up the client", async () => {
+  it("rejects a script-scheme redirect_uri before looking up the client", async () => {
     await expect(
       approveConsent(form({ redirect_uri: "javascript:alert(1)" })),
     ).rejects.toThrow(/Invalid authorization request/);
@@ -149,6 +149,39 @@ describe("approveConsent — RFC 8252 §7.3 loopback clients", () => {
     await expect(
       approveConsent(
         form({ redirect_uri: "https://client.example.com:8443/callback" }),
+      ),
+    ).rejects.toThrow(/Unknown client or redirect_uri/);
+    expect(createAuthorizationCode).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A desktop MCP client (Cursor, VS Code) registers a private-use scheme callback
+ * — RFC 8252 §7.1 — and the code must be delivered to that scheme unchanged.
+ */
+describe("approveConsent — RFC 8252 §7.1 private-use scheme clients", () => {
+  const REGISTERED = "cursor://anysphere.cursor-retrieval/callback";
+
+  beforeEach(() => {
+    getOauthClient.mockResolvedValue({ redirect_uris: [REGISTERED] });
+  });
+
+  it("issues a code and redirects to the app scheme with code + state", async () => {
+    await approveConsent(form({ redirect_uri: REGISTERED }));
+
+    expect(createAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: REGISTERED }),
+    );
+    const target = new URL(redirect.mock.calls[0][0] as string);
+    expect(target.protocol).toBe("cursor:");
+    expect(target.searchParams.get("code")).toBe("the-code");
+    expect(target.searchParams.get("state")).toBe("xyz");
+  });
+
+  it("refuses a different path on the same app scheme — no port/path flexibility", async () => {
+    await expect(
+      approveConsent(
+        form({ redirect_uri: "cursor://anysphere.cursor-retrieval/evil" }),
       ),
     ).rejects.toThrow(/Unknown client or redirect_uri/);
     expect(createAuthorizationCode).not.toHaveBeenCalled();

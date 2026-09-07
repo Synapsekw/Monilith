@@ -5,9 +5,12 @@ import {
   agentRunStatusLabel,
   describeAgentRun,
   memoryDroppedNote,
+  subtreeTokens,
+  agentRunTriggerLabel,
   CLAIM_PLACEHOLDER,
   STALE_CLAIM_MS,
   type AgentRunLike,
+  type AgentRunSummary,
 } from "./run-status";
 
 const NOW = Date.parse("2026-08-02T09:00:00.000Z");
@@ -185,5 +188,67 @@ describe("memoryDroppedNote", () => {
   it("is singular for exactly one and plural otherwise", () => {
     expect(memoryDroppedNote(1)).toContain("note didn't");
     expect(memoryDroppedNote(2)).toContain("notes didn't");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec 3. A delegated child run bills its OWN ai_usage row, so a parent's own
+// token columns describe the parent alone. The number an owner cares about is
+// what the whole orchestration cost.
+// ---------------------------------------------------------------------------
+
+function summary(
+  inputTokens: number | null,
+  outputTokens: number | null,
+  over: Partial<AgentRunSummary> = {},
+): AgentRunSummary {
+  return {
+    ...run(),
+    id: "r1",
+    fireDate: "2026-08-02",
+    fireHour: 7,
+    inputTokens,
+    outputTokens,
+    modelSubstituted: false,
+    documentsOmitted: false,
+    memoryNotesDropped: 0,
+    parentRunId: null,
+    depth: 0,
+    trigger: "schedule",
+    ...over,
+  };
+}
+
+describe("subtreeTokens", () => {
+  it("sums a run's own tokens plus its children's", () => {
+    expect(subtreeTokens(summary(10, 5), [summary(1, 2), summary(3, 4)])).toBe(
+      25,
+    );
+  });
+
+  it("treats null token columns as zero", () => {
+    // A claimed-but-unfinalised child has NULL on both columns. Coercing that
+    // to NaN would blank the parent's total — the one row most worth reading.
+    expect(subtreeTokens(summary(null, null), [summary(1, null)])).toBe(1);
+  });
+
+  it("is the run's own total when it delegated to nobody", () => {
+    expect(subtreeTokens(summary(10, 5), [])).toBe(15);
+  });
+});
+
+// Why a run EXISTS is not the same question as how it went. The status pill
+// answers the second; these two words answer the first, and only for the runs
+// the hourly sweep did not start.
+describe("agentRunTriggerLabel", () => {
+  it("names a delegated run and a summoned one", () => {
+    expect(agentRunTriggerLabel("delegation")).toBe("Delegated");
+    expect(agentRunTriggerLabel("mention")).toBe("Summoned");
+  });
+
+  // The overwhelming majority of rows are scheduled. Labelling those would put
+  // a kicker on every line and make the two that matter invisible.
+  it("says nothing about an ordinary scheduled run", () => {
+    expect(agentRunTriggerLabel("schedule")).toBeNull();
   });
 });

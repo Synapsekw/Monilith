@@ -131,3 +131,53 @@ describe("tokenExchangeSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// A native/desktop MCP client (Cursor, VS Code) registers a private-use scheme
+// callback — RFC 8252 §7.1. Rejecting those was what made `cursor://` connects
+// fail at registration with "URL must be http or https".
+const CURSOR_URI = "cursor://anysphere.cursor-retrieval/callback";
+
+describe("private-use scheme redirect URIs (RFC 8252 §7.1)", () => {
+  it("registerClientSchema accepts a private-use scheme callback", () => {
+    const result = registerClientSchema.safeParse({
+      client_name: "Cursor",
+      redirect_uris: [CURSOR_URI],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("registerClientSchema still rejects data: and file: alongside a valid URI", () => {
+    for (const bad of [
+      "data:text/html,<script>1</script>",
+      "file:///etc/passwd",
+    ]) {
+      const result = registerClientSchema.safeParse({
+        client_name: "Cursor",
+        redirect_uris: [CURSOR_URI, bad],
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("authorizeRequestSchema accepts the same private-use scheme callback", () => {
+    const result = authorizeRequestSchema.safeParse({
+      client_id: "abc",
+      redirect_uri: CURSOR_URI,
+      response_type: "code",
+      code_challenge: "x".repeat(43),
+      code_challenge_method: "S256",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("tokenExchangeSchema accepts the same private-use scheme callback", () => {
+    const result = tokenExchangeSchema.safeParse({
+      grant_type: "authorization_code",
+      code: "abc",
+      client_id: "def",
+      code_verifier: "x".repeat(43),
+      redirect_uri: CURSOR_URI,
+    });
+    expect(result.success).toBe(true);
+  });
+});
