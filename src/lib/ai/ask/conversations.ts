@@ -131,41 +131,64 @@ export function toThreadMessages(rows: MessageRow[]): ThreadMessage[] {
 /**
  * Who is on duty in this thread.
  *
- * The LAST USER TURN wins over `ai_conversations.agent_id`: the column is
- * rewritten by the same send that writes the message, so the two agree — but
- * the message is the record of what was actually asked, and a persona that
- * disagrees with the last question is the bug this whole slice removes. The
- * column is the fallback for threads written before the column existed, and
- * for a briefing thread whose only turn is the agent's own report.
+ * `ai_conversations.agent_id` is AUTHORITATIVE; the newest user turn is the
+ * FALLBACK. The column is the only thing the header switcher writes
+ * (`setConversationAgent`), so any rule that let a stamped message outrank it
+ * made the switcher a no-op: the chip moved, every following turn kept routing
+ * to the agent the last question happened to address, and — worse — handing a
+ * thread back to the plain Monolith assistant became impossible, because the
+ * old agent's id was still sitting on a message. The escape hatch the spec
+ * requires only exists if the column wins.
+ *
+ * The fallback is a REPAIR, not a second opinion: `appendUserMessage` stamps the
+ * message and only then best-effort-writes the column, so a lost write must not
+ * lose the agent the turn actually addressed. It reads the NEWEST user turn and
+ * stops there — including when that turn's `agent_id` is null. A null on the
+ * newest user turn is now meaningful ("this thread was handed back to the plain
+ * assistant"); scanning past it to an older stamped turn would resurrect the
+ * agent the owner just dismissed. Threads written before per-message routing
+ * carry null on every turn AND on the column, so they answer null either way.
  */
 export function currentPersonaFrom(
   rows: MessageRow[],
   conversationAgentId: string | null,
 ): string | null {
+  if (conversationAgentId) return conversationAgentId;
   for (let i = rows.length - 1; i >= 0; i--) {
     const r = rows[i]!;
-    if (r.role === "user" && r.agent_id) return r.agent_id;
+    if (r.role === "user") return r.agent_id;
   }
-  return conversationAgentId;
+  return null;
 }
 
-/** The thread's title and persona, for a surface that has the id but not the
- *  rows — the existing-conversation page's header, which needs both without a
- *  second round-trip. One indexed single-row read; degrades to nulls rather
- *  than throwing — a thread that renders with a placeholder title and the
- *  plain assistant beats a 500. */
-export async function getConversationHeader(
-  conversationId: string,
-): Promise<{ title: string | null; agentId: string | null }> {
+/** The thread's title, persona and OWNER, for a surface that has the id but not
+ *  the rows — the existing-conversation page's header, which needs all three
+ *  without a second round-trip. `ownerId` rides along on the same single-row
+ *  read because `ai_conversations_select_board_shared` lets any member of the
+ *  board READ a shared thread: "the page rendered" no longer implies "this is
+ *  my thread", and only the owner may be offered the switcher and the composer.
+ *  One indexed single-row read; degrades to nulls rather than throwing — a
+ *  thread that renders with a placeholder title and the plain assistant beats a
+ *  500, and a null `ownerId` matches no user, so the degraded page is
+ *  read-only rather than falsely writable. */
+export async function getConversationHeader(conversationId: string): Promise<{
+  title: string | null;
+  agentId: string | null;
+  ownerId: string | null;
+}> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_conversations")
-    .select("title, agent_id")
+    .select("title, agent_id, user_id")
     .eq("id", conversationId)
     .maybeSingle();
   if (error) {
     console.error(`[ask] header read failed for ${conversationId}`, error);
-    return { title: null, agentId: null };
+    return { title: null, agentId: null, ownerId: null };
   }
-  return { title: data?.title ?? null, agentId: data?.agent_id ?? null };
+  return {
+    title: data?.title ?? null,
+    agentId: data?.agent_id ?? null,
+    ownerId: data?.user_id ?? null,
+  };
 }

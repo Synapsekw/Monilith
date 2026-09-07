@@ -151,16 +151,27 @@ describe("currentPersonaFrom", () => {
     created_at,
   });
 
-  it("takes the LAST user turn's agent, not the conversation column", () => {
+  // Rewritten deliberately (2026-09-07): this used to pin the OPPOSITE
+  // precedence — the last user turn beating `ai_conversations.agent_id`. That
+  // rule made the header switcher a no-op on any thread with a stamped turn:
+  // `setConversationAgent` writes only the column, so the next turn kept
+  // routing to the old agent while the chip showed the new one.
+  it("takes the conversation column over the last user turn — the switcher is authoritative", () => {
     const rows = [
       row("user", "a-ops", "2026-09-07T10:00:00Z"),
       row("assistant", "a-ops", "2026-09-07T10:00:05Z"),
-      row("user", "a-fin", "2026-09-07T10:01:00Z"),
     ];
-    expect(currentPersonaFrom(rows, "a-ops")).toBe("a-fin");
+    expect(currentPersonaFrom(rows, "a-fin")).toBe("a-fin");
   });
 
-  it("falls back to the conversation column when no user turn carries one", () => {
+  it("falls back to the last user turn when the column carries nothing", () => {
+    // The repair path: `appendUserMessage` stamps the message first and only
+    // then best-effort-writes the column, so a lost write must not lose the
+    // agent the turn actually addressed.
+    expect(currentPersonaFrom([row("user", "a-ops", "t")], null)).toBe("a-ops");
+  });
+
+  it("still answers the column when no user turn carries one", () => {
     expect(currentPersonaFrom([row("user", null, "t")], "a-ops")).toBe("a-ops");
   });
 
@@ -168,14 +179,25 @@ describe("currentPersonaFrom", () => {
     expect(currentPersonaFrom([], null)).toBeNull();
   });
 
-  it("skips a null-agent user turn and keeps scanning back to an earlier one", () => {
-    // Intentional: a null on the LAST user turn does not mean "no persona" —
-    // it means "this particular turn didn't carry one" (e.g. written before
-    // per-message routing existed). The scan keeps going back rather than
-    // stopping at the first user row it sees.
+  // Rewritten deliberately (2026-09-07): this used to scan PAST a null user
+  // turn to an older stamped one, which was necessary only while the message
+  // beat the column. Now the column is read first, so a null on the newest
+  // user turn is meaningful: it is the thread that was handed back to the
+  // plain assistant from the header. Scanning past it would resurrect the old
+  // agent and make the escape hatch impossible — the exact bug this rule fixes.
+  it("keeps a cleared persona cleared: the newest user turn's null is the answer", () => {
     const rows = [
       row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", "a-ops", "2026-09-07T10:00:05Z"),
       row("user", null, "2026-09-07T10:01:00Z"),
+    ];
+    expect(currentPersonaFrom(rows, null)).toBeNull();
+  });
+
+  it("ignores assistant turns when falling back", () => {
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", null, "2026-09-07T10:00:05Z"),
     ];
     expect(currentPersonaFrom(rows, null)).toBe("a-ops");
   });
@@ -228,32 +250,52 @@ describe("getConversationHeader", () => {
   function clientReturning(data: unknown, error: unknown = null) {
     const maybeSingle = vi.fn().mockResolvedValue({ data, error });
     const eq = vi.fn().mockReturnValue({ maybeSingle });
-    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
-    return { eq, maybeSingle };
+    const select = vi.fn().mockReturnValue({ eq });
+    from.mockReturnValue({ select });
+    return { eq, maybeSingle, select };
   }
 
-  it("returns the row's title and agent_id", async () => {
-    const { eq } = clientReturning({ title: "Q3 slippage", agent_id: "a-ops" });
+  it("returns the row's title, agent_id and OWNER", async () => {
+    const { eq, select } = clientReturning({
+      title: "Q3 slippage",
+      agent_id: "a-ops",
+      user_id: "u-owner",
+    });
     expect(await getConversationHeader("c1")).toEqual({
       title: "Q3 slippage",
       agentId: "a-ops",
+      ownerId: "u-owner",
     });
     expect(eq).toHaveBeenCalledWith("id", "c1");
+    // `user_id` rides along on the SAME single-row read — no second
+    // round-trip — because `ai_conversations_select_board_shared` lets any
+    // board member render this page, so "the page loaded" no longer means
+    // "this is my thread". Drop it from the select and the read-only guard on
+    // /ask/<id> silently starts offering a switcher that can never write.
+    expect(select).toHaveBeenCalledWith("title, agent_id, user_id");
   });
 
   it("returns nulls when the row has no title or agent_id", async () => {
-    clientReturning({ title: null, agent_id: null });
+    clientReturning({ title: null, agent_id: null, user_id: "u-owner" });
     expect(await getConversationHeader("c1")).toEqual({
       title: null,
       agentId: null,
+      ownerId: "u-owner",
     });
   });
 
   it("degrades to nulls on a query error rather than throwing", async () => {
     clientReturning(null, { message: "boom" });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // A degraded read must fail CLOSED on the write affordances: `ownerId`
+    // null matches no user, so the page renders read-only rather than handing
+    // a switcher and a composer to someone whose ownership we could not
+    // establish.
     expect(await getConversationHeader("c1")).toEqual({
       title: null,
       agentId: null,
+      ownerId: null,
     });
+    spy.mockRestore();
   });
 });

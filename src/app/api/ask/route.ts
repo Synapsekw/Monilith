@@ -184,10 +184,17 @@ export async function POST(req: Request) {
     try {
       const allRows = await getMessages(conversationId);
 
-      // WHO ANSWERS. The last user turn's `agent_id` — written by
-      // appendUserMessage from the message text against an RLS-scoped roster —
-      // is the record of what was actually asked. The request body carries no
+      // WHO ANSWERS. `ai_conversations.agent_id` — the column the header
+      // switcher writes — with the newest user turn as the fallback for a lost
+      // column write (see `currentPersonaFrom`). The request body carries no
       // agent field at all, so a client cannot select a persona here.
+      //
+      // `enabled` is part of the read for the same reason it is part of
+      // `ownedAgentId`: every display path resolves names against the
+      // enabled-only `listOwnerAgentTargets`, so answering AS a disabled agent
+      // would compose its instructions, documents and memory into a turn the
+      // header and the kicker both label "Monolith". A disabled agent degrades
+      // to the plain assistant, which is what the whole UI is already saying.
       const personaAgentId = currentPersonaFrom(allRows, conv.data.agent_id);
       const personaAgent = personaAgentId
         ? (
@@ -195,6 +202,7 @@ export async function POST(req: Request) {
               .from("user_agents")
               .select("id, name, instructions, doc_nonce")
               .eq("id", personaAgentId)
+              .eq("enabled", true)
               .maybeSingle()
           ).data
         : null;
@@ -313,6 +321,12 @@ export async function POST(req: Request) {
       if (result.proposedActions.length)
         trace.proposedActions = result.proposedActions;
 
+      // Stamped with the agent that was actually READ, never the id we set out
+      // to resolve: a deleted or unreadable agent leaves `personaAgent` null,
+      // and stamping the dangling id would have the FK reject the whole insert
+      // — losing a fully-streamed, already-paid answer to attribute a turn that
+      // was, in the end, answered by the plain assistant (that is what the
+      // composed system prompt says above).
       const ins = await supabase
         .from("ai_messages")
         .insert({
@@ -320,10 +334,23 @@ export async function POST(req: Request) {
           role: "assistant",
           content: result.answer,
           tool_trace: trace as unknown as Json,
-          agent_id: personaAgentId,
+          agent_id: personaAgent?.id ?? null,
         })
         .select("id")
         .single();
+      // A failed insert is NOT a completed turn. `done` with an empty message
+      // id reads as success to the client — the answer sits in the transcript
+      // until the next reload silently drops it, and an unconfirmed proposal
+      // card loses the row Approve re-reads its actions from. Say so instead:
+      // the catch below emits `error` and logs, which is the one honest
+      // outcome available once the tokens are already spent.
+      if (ins.error || !ins.data) {
+        console.error(
+          `[ask] assistant insert failed for ${conversationId}`,
+          ins.error,
+        );
+        throw new Error("Your answer couldn't be saved to this thread.");
+      }
 
       if (result.title) {
         await supabase
@@ -335,7 +362,7 @@ export async function POST(req: Request) {
       emit({
         type: "done",
         conversationId,
-        assistantMessageId: ins.data?.id ?? "",
+        assistantMessageId: ins.data.id,
         boardsConsulted: result.boardsConsulted,
         title: result.title,
       });
