@@ -24,10 +24,10 @@ import {
 } from "@/lib/agents/documents-db";
 import { listMemoryTotalsByAgent } from "@/lib/agents/memory-db";
 
-export const metadata = { title: "Agents · Settings" };
+export const metadata = { title: "Agent setup · Settings" };
 
 /**
- * Settings → Agents. Server Component.
+ * Settings → Agent setup. Server Component.
  *
  * First paint is EIGHT bounded reads, all indexed, issued concurrently:
  *   1. the roster — `.eq("owner_id", …)` hits the (owner_id, enabled) index
@@ -235,7 +235,7 @@ export default async function AgentsSettingsPage() {
 
   return (
     <SettingsSection
-      title="Agents"
+      title="Agent setup"
       description="Scheduled assistants that read your boards and email you what's pending, once a day."
     >
       <div className="pt-4">
