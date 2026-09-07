@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { listConversations } from "@/lib/ai/ask/conversations";
+import { listChats, listBriefings } from "@/lib/ai/ask/conversations";
 import { ConversationRail } from "./ConversationRail";
 
 /**
@@ -9,6 +9,11 @@ import { ConversationRail } from "./ConversationRail";
  */
 export async function AskRailData() {
   const user = await requireUser();
-  const conversations = await listConversations(user.id);
-  return <ConversationRail conversations={conversations} />;
+  // Two bounded, indexed reads issued concurrently — one round-trip's latency
+  // for both (working agreement #5).
+  const [chats, briefings] = await Promise.all([
+    listChats(user.id),
+    listBriefings(user.id),
+  ]);
+  return <ConversationRail chats={chats} briefings={briefings} />;
 }

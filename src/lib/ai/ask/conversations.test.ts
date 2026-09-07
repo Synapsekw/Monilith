@@ -6,7 +6,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
-  listConversations,
+  listChats,
+  listBriefings,
   getMessages,
   getConversationRunId,
   getConversationPersona,
@@ -16,58 +17,33 @@ import {
 
 beforeEach(() => from.mockReset());
 
-describe("listConversations", () => {
-  it("returns the user's conversations newest-first, bounded", async () => {
+describe("listChats / listBriefings", () => {
+  it("lists only threads with no run, bounded and newest-first", async () => {
     const limit = vi
       .fn()
-      .mockResolvedValue({ data: [{ id: "c1", title: "A" }], error: null });
+      .mockResolvedValue({ data: [{ id: "c1" }], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
+    const is = vi.fn().mockReturnValue({ order });
+    const eq = vi.fn().mockReturnValue({ is });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
-    const rows = await listConversations("user-1");
-    expect(rows).toEqual([{ id: "c1", title: "A" }]);
+    await listChats("user-1");
     expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(is).toHaveBeenCalledWith("run_id", null);
     expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
-    expect(limit).toHaveBeenCalledWith(100);
+    expect(limit).toHaveBeenCalledWith(50);
   });
 
-  it("throws when the query errors", async () => {
-    const limit = vi
-      .fn()
-      .mockResolvedValue({ data: null, error: { message: "boom" } });
+  it("lists only briefings", async () => {
+    const limit = vi.fn().mockResolvedValue({ data: [], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
+    const not = vi.fn().mockReturnValue({ order });
+    const eq = vi.fn().mockReturnValue({ not });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
-    await expect(listConversations("u")).rejects.toThrow("listConversations");
-  });
-
-  it("lists a board thread in the rail alongside plain /ask threads", async () => {
-    // Deliberate: a board thread is still the user's own conversation. The rail
-    // filters on user_id and nothing else, so scoping a thread to a board does
-    // not hide it from /ask. Do not add a `.is("board_id", null)` filter here.
-    const limit = vi.fn().mockResolvedValue({
-      data: [
-        { id: "c1", title: "Plain ask", updated_at: "2026-08-03T10:00:00Z" },
-        {
-          id: "c2",
-          title: "About the roadmap",
-          updated_at: "2026-08-03T09:00:00Z",
-        },
-      ],
-      error: null,
-    });
-    const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
-    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
-
-    const rows = await listConversations("user-1");
-
-    expect(rows).toHaveLength(2);
-    // The only scoping filter is user_id — no board_id filter is applied.
-    expect(eq).toHaveBeenCalledTimes(1);
-    expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+    await listBriefings("user-1");
+    expect(not).toHaveBeenCalledWith("run_id", "is", null);
+    expect(limit).toHaveBeenCalledWith(50);
   });
 });
 
