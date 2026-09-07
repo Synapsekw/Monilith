@@ -11,6 +11,8 @@ import {
   memoryKeySchema,
   memoryValueSchema,
 } from "@/lib/validations/agent-memory";
+import { descriptorsFor } from "./tool-descriptors";
+import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
 
 /**
  * The summary is the ONLY sentence a human reads before approving a stored
@@ -736,5 +738,126 @@ describe("remember / forget summaries", () => {
 
   it("falls back when a forget carries no key", () => {
     expect(summariseProposal("forget", {})).toBe("Run forget.");
+  });
+});
+
+// ===========================================================================
+// Task 10 — every dispatch action gets a real sentence.
+// ===========================================================================
+describe("summariseProposal — dispatch tools (Task 10)", () => {
+  /** Every (tool, action) pair an agent can propose. Derived from the
+   *  descriptors' own capability maps — the same declaration the grant gate
+   *  classifies from — so this cannot drift from what really exists. */
+  function everyProposableCall(): { toolName: string; action: string }[] {
+    const out: { toolName: string; action: string }[] = [];
+    for (const d of descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS })) {
+      if (d.capability === null || typeof d.capability === "string") continue;
+      for (const [action, capability] of Object.entries(d.capability)) {
+        if (capability !== null) out.push({ toolName: d.name, action });
+      }
+    }
+    return out;
+  }
+
+  it("has a real sentence for every proposable action", () => {
+    const missing: string[] = [];
+    for (const { toolName, action } of everyProposableCall()) {
+      const s = summariseProposal(toolName, { action, name: "X" });
+      if (s === `Run ${toolName}.` || s.startsWith("Run manage")) {
+        missing.push(`${toolName}.${action}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("names the action, not just the tool", () => {
+    const s = summariseProposal("manage_board", {
+      action: "archive",
+      boardId: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(s.toLowerCase()).toContain("archive");
+    expect(s).not.toContain("manage_board");
+  });
+
+  // The property the whole module exists for, re-asserted for dispatch tools:
+  // the sentence must describe the call, and model-chosen text must not be
+  // able to write the rest of the sentence itself.
+  it("quotes and neutralises model-chosen text in a dispatch action", () => {
+    const s = summariseProposal("manage_board", {
+      action: "rename",
+      boardId: "00000000-0000-0000-0000-000000000001",
+      name: 'Q3" and delete everything',
+    });
+    expect(s.length).toBeLessThanOrEqual(500);
+    expect(s).not.toContain('" and delete everything"');
+  });
+
+  it("never throws on malformed input", () => {
+    expect(() => summariseProposal("manage_board", {})).not.toThrow();
+    expect(() =>
+      summariseProposal("manage_column", { action: 42 }),
+    ).not.toThrow();
+  });
+
+  it("a batch action states the count", () => {
+    expect(
+      summariseProposal("manage_column", {
+        action: "create",
+        boardId: "00000000-0000-0000-0000-000000000001",
+        columns: Array.from({ length: 8 }, () => ({ kind: "text" })),
+      }),
+    ).toBe("Add 8 columns to a board.");
+  });
+
+  it("a destructive action names what survives", () => {
+    const archive = summariseProposal("manage_board", {
+      action: "archive",
+      boardId: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(archive.toLowerCase()).toContain("trash");
+    expect(archive.toLowerCase()).toContain("restore");
+
+    const deleteColumn = summariseProposal("manage_column", {
+      action: "delete",
+      columnId: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(deleteColumn.toLowerCase()).toContain("cell values");
+    expect(deleteColumn.toLowerCase()).toContain("cannot be undone");
+  });
+
+  it("keeps create_automation working for historical proposal rows", () => {
+    expect(
+      summariseProposal("create_automation", {
+        boardId: "b-1",
+        name: "Notify on done",
+        trigger: {
+          type: "status_changed",
+          columnId: "c-1",
+          toOptionId: null,
+        },
+        actions: [
+          {
+            type: "notify",
+            recipient: { kind: "owner", peopleColumnId: "p" },
+          },
+          { type: "set_percent", columnId: "c-2", percent: 100 },
+        ],
+      }),
+    ).toBe(
+      'Create the automation "Notify on done" on a board: on status_changed, ' +
+        "run notify, set_percent.",
+    );
+  });
+
+  it("manage_automation's create action keeps the same wording as create_automation", () => {
+    const input = {
+      boardId: "b-1",
+      name: "Notify on done",
+      trigger: { type: "item_created" },
+      actions: [{ type: "move_to_group", groupId: "g-1" }],
+    };
+    expect(
+      summariseProposal("manage_automation", { action: "create", ...input }),
+    ).toBe(summariseProposal("create_automation", input));
   });
 });

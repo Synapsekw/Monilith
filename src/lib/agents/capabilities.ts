@@ -11,6 +11,8 @@ export const AGENT_CAPABILITIES = [
   "time.log",
   "memory.write",
   "agent.delegate",
+  "board.structure",
+  "board.destroy",
 ] as const;
 
 export type AgentCapability = (typeof AGENT_CAPABILITIES)[number];

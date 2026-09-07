@@ -8,7 +8,11 @@ import type {
   ToolInvokeContext,
 } from "@/lib/mcp/tools/descriptor";
 import type { BoardScope } from "./agent-config";
-import { isBoardInScope, resolveTargetBoardId } from "./board-scope-guard";
+import {
+  isBoardInScope,
+  refusesUnscopedCreate,
+  resolveTargetBoardId,
+} from "./board-scope-guard";
 import { descriptorsFor } from "./tool-descriptors";
 
 /** What the model is told when a call names a board outside this agent's
@@ -16,6 +20,12 @@ import { descriptorsFor } from "./tool-descriptors";
  *  crash. */
 export const OUT_OF_SCOPE_ERROR =
   "That board is outside this agent's configured scope.";
+
+/** The refusal a NARROWED agent gets for a create. It names the fix, so the
+ *  model reports it to the owner instead of retrying the call. */
+export const OUT_OF_SCOPE_CREATE_ERROR =
+  "This agent is scoped to specific boards, so it cannot create new ones. " +
+  "Ask its owner to widen its scope.";
 
 /** What the model is told when a handler throws something that is not an
  *  `Error` and therefore carries no message worth forwarding. */
@@ -84,6 +94,9 @@ export function buildAgentTools(args: {
         // Descriptors carry MCP's raw shape; the AI SDK wants a schema.
         inputSchema: z.object(d.inputSchema),
         execute: async (input: Record<string, unknown>) => {
+          if (refusesUnscopedCreate(d, args.scope, input)) {
+            return toolFailure(OUT_OF_SCOPE_CREATE_ERROR);
+          }
           const boardId = await resolveTargetBoardId(args.client, d, input);
           if (!isBoardInScope(args.scope, boardId)) {
             return toolFailure(OUT_OF_SCOPE_ERROR);

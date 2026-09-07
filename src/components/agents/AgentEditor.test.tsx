@@ -410,6 +410,25 @@ describe("AgentEditor · capabilities", () => {
   });
 });
 
+describe("AgentEditor · board scope", () => {
+  // Spec §4: `refusesUnscopedCreate` (`src/lib/agents/board-scope-guard.ts`)
+  // refuses ALL of create-board, create-dashboard, create-portfolio,
+  // create-goal and create-report to a board-narrowed agent. The help text
+  // next to "Reads from" must say so, not just gesture at "some limits" —
+  // an owner who narrows scope without reading the fine print otherwise
+  // discovers this the first time their agent's board-structure proposal is
+  // refused.
+  it("warns that a narrowed scope also stops the agent creating boards, dashboards, portfolios, goals or reports", () => {
+    renderEditor();
+    expect(
+      screen.getByText(
+        "Limiting an agent to specific boards also stops it creating new " +
+          "boards, dashboards, portfolios, goals or reports.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("AgentEditor · cadence", () => {
   function cadenceField(): HTMLElement {
     return screen.getByLabelText(/^runs$/i);

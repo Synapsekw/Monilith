@@ -14,7 +14,17 @@ import { parseReportConfig, type ReportConfig } from "@/lib/reports/config";
  */
 export type ReportScope = "board" | "boards" | "portfolio" | "template";
 
-const SCOPES: readonly string[] = ["board", "boards", "portfolio", "template"];
+/** The single source of truth for `ReportScope`'s values, enumerable at
+ *  runtime — a TS union alone cannot be. Exported so consumers (e.g. the MCP
+ *  `describe_schema` anti-drift test) enumerate the same declaration
+ *  `toScope`'s narrowing uses, instead of hand-copying the list. */
+export const REPORT_SCOPES: readonly ReportScope[] = [
+  "board",
+  "boards",
+  "portfolio",
+  "template",
+];
+const SCOPES: readonly string[] = REPORT_SCOPES;
 
 /** `reports.scope` is `text` in the DB; narrow it, defaulting to the legacy shape. */
 function toScope(raw: string | null): ReportScope {

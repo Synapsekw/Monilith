@@ -21,6 +21,12 @@ vi.mock("@/lib/boards/actions/internal", () => ({
 vi.mock("@/lib/auth/session", () => ({ getUser: async () => ({ id: "u1" }) }));
 vi.mock("@/lib/boards/queries", () => ({
   getBoardAccess: (...a: unknown[]) => getBoardAccess(...a),
+  // `core/board.ts` calls `getBoardAccessCore(supabase, userId, boardId)`
+  // directly (never the cookie-reading `getBoardAccess`, which would throw on
+  // the MCP path) — forward it to the same mock so the existing
+  // `getBoardAccess.mockResolvedValue(...)` stubs keep governing archive/
+  // restore/duplicate ownership checks unchanged.
+  getBoardAccessCore: (...a: unknown[]) => getBoardAccess(...a),
 }));
 vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: (...a: unknown[]) => removeAttachmentObjects(...a),

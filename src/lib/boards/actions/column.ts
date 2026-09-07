@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { midpoint } from "@/lib/boards/position";
 import {
   createColumnSchema,
   renameColumnSchema,
@@ -12,12 +11,28 @@ import {
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
-import type { ColumnKind } from "@/lib/validations/boards";
-import { defaultColumn } from "@/lib/boards/column-defaults";
-import { columnSettingsSchema } from "@/lib/validations/boards";
+import {
+  columnSettingsSchema,
+  type ColumnKind,
+} from "@/lib/validations/boards";
 import type { Tables } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import {
+  createColumnsCore,
+  renameColumnCore,
+  resizeColumnCore,
+  reorderColumnCore,
+  updateColumnSettingsCore,
+  removeColumnOptionCore,
+  deleteColumnCore,
+} from "@/lib/boards/core/column";
 
+/**
+ * Single-column create — the board UI's contract, unchanged. Delegates to the
+ * batch core (`createColumnsCore`) with a one-element array and unwraps the
+ * result, so the per-kind settings validation and the single board read live
+ * in exactly one place.
+ */
 export async function createColumn(input: {
   boardId: string;
   kind: ColumnKind;
@@ -28,9 +43,10 @@ export async function createColumn(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  // If initial settings were supplied, validate them against the kind's schema
-  // (e.g. a relation column must carry a target_board_id). Otherwise default.
-  let initialSettings: Record<string, unknown> | null = null;
+  // Validated here, before any query, so an invalid settings blob never
+  // costs a database round-trip — matches the pre-move contract this
+  // action's own tests assert on. The core re-validates per entry too (it
+  // must, for the batch path), but that happens after a board read.
   if (parsed.data.settings) {
     const settingsParsed = columnSettingsSchema(parsed.data.kind).safeParse(
       parsed.data.settings,
@@ -39,54 +55,18 @@ export async function createColumn(input: {
       return fail(
         settingsParsed.error.issues[0]?.message ?? "Invalid settings",
       );
-    initialSettings = settingsParsed.data as Record<string, unknown>;
   }
 
-  const supabase = await createClient();
-  const { data: board, error: boardErr } = await supabase
-    .from("boards")
-    .select("org_id")
-    .eq("id", parsed.data.boardId)
-    .maybeSingle();
-  if (boardErr || !board) return fail("Board not found.");
-
-  const { data: last } = await supabase
-    .from("columns")
-    .select("position")
-    .eq("board_id", parsed.data.boardId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { name, settings } = defaultColumn(parsed.data.kind, parsed.data.name);
-
-  const { data, error } = await supabase
-    .from("columns")
-    .insert({
-      org_id: board.org_id,
-      board_id: parsed.data.boardId,
-      kind: parsed.data.kind,
-      name,
-      settings: (initialSettings ?? settings) as Tables<"columns">["settings"],
-      position: midpoint(last?.position ?? null, null),
-    })
-    .select("*")
-    .single();
-  if (error || !data) return fail(error?.message ?? "Could not create column.");
-
-  return { ok: true, data: { column: data } };
-}
-
-async function columnBoardId(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  columnId: string,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("columns")
-    .select("board_id")
-    .eq("id", columnId)
-    .maybeSingle();
-  return data?.board_id ?? null;
+  const { boardId, ...column } = parsed.data;
+  const r = await createColumnsCore(await createClient(), {
+    boardId,
+    columns: [column],
+  });
+  if (!r.ok) return r;
+  const first = r.data.created[0];
+  if (!first)
+    return fail(r.data.errors[0]?.error ?? "Could not create column.");
+  return { ok: true, data: { column: first } };
 }
 
 export async function renameColumn(input: {
@@ -96,15 +76,7 @@ export async function renameColumn(input: {
   const parsed = renameColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const boardId = await columnBoardId(supabase, parsed.data.columnId);
-  if (!boardId) return fail("Column not found.");
-  const { error } = await supabase
-    .from("columns")
-    .update({ name: parsed.data.name })
-    .eq("id", parsed.data.columnId);
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return renameColumnCore(await createClient(), parsed.data);
 }
 
 export async function resizeColumn(input: {
@@ -114,15 +86,7 @@ export async function resizeColumn(input: {
   const parsed = resizeColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const boardId = await columnBoardId(supabase, parsed.data.columnId);
-  if (!boardId) return fail("Column not found.");
-  const { error } = await supabase
-    .from("columns")
-    .update({ width: parsed.data.width })
-    .eq("id", parsed.data.columnId);
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return resizeColumnCore(await createClient(), parsed.data);
 }
 
 /** Update a column's position (header drag-reorder / Move left-right). */
@@ -133,23 +97,15 @@ export async function reorderColumn(input: {
   const parsed = reorderColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("columns")
-    .update({ position: parsed.data.position })
-    .eq("id", parsed.data.columnId)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail("Column not found.");
-  return { ok: true, data: undefined };
+  return reorderColumnCore(await createClient(), parsed.data);
 }
 
 /**
  * Resize the built-in Name column (per-board). `width: null` clears the manual
  * width so the client falls back to auto-fit. RLS is the boundary; no need to
  * derive the board (the id is the board).
+ *
+ * Writes to `boards`, not `columns` — no core, no MCP tool action.
  */
 export async function resizeNameColumn(input: {
   boardId: string;
@@ -179,23 +135,7 @@ export async function updateColumnSettings(input: {
   const parsed = updateColumnSettingsSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const { data: col } = await supabase
-    .from("columns")
-    .select("board_id, kind")
-    .eq("id", parsed.data.columnId)
-    .maybeSingle();
-  if (!col) return fail("Column not found.");
-  const shape = columnSettingsSchema(col.kind);
-  const settingsParsed = shape.safeParse(parsed.data.settings);
-  if (!settingsParsed.success)
-    return fail(settingsParsed.error.issues[0]?.message ?? "Invalid settings");
-  const { error } = await supabase
-    .from("columns")
-    .update({ settings: settingsParsed.data as Tables<"columns">["settings"] })
-    .eq("id", parsed.data.columnId);
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return updateColumnSettingsCore(await createClient(), parsed.data);
 }
 
 /**
@@ -210,15 +150,7 @@ export async function removeColumnOption(input: {
   const parsed = removeColumnOptionSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const boardId = await columnBoardId(supabase, parsed.data.columnId);
-  if (!boardId) return fail("Column not found.");
-  const { data, error } = await supabase.rpc("delete_column_option", {
-    p_column_id: parsed.data.columnId,
-    p_option_id: parsed.data.optionId,
-  });
-  if (error) return fail(error.message);
-  return { ok: true, data: { clearedCells: data ?? 0 } };
+  return removeColumnOptionCore(await createClient(), parsed.data);
 }
 
 export async function deleteColumn(input: {
@@ -227,14 +159,5 @@ export async function deleteColumn(input: {
   const parsed = deleteColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const boardId = await columnBoardId(supabase, parsed.data.columnId);
-  if (!boardId) return fail("Column not found.");
-  // cell_values cascade via the column_id FK (on delete cascade).
-  const { error } = await supabase
-    .from("columns")
-    .delete()
-    .eq("id", parsed.data.columnId);
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return deleteColumnCore(await createClient(), parsed.data);
 }

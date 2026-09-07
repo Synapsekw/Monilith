@@ -57,31 +57,75 @@ function deriveRegisteredToolNames(): string[] {
 
 describe("McpToolsTable", () => {
   it("carries consent prose for every registered tool", () => {
-    // `access` is derived and cannot drift; `what` is written by hand. A tool
-    // rendered with an empty description understates the access being granted,
-    // which is the exact hazard this table exists to prevent.
-    expect(Object.keys(TOOL_PROSE).sort()).toEqual(
-      ALL_TOOL_DESCRIPTORS.map((d) => d.name).sort(),
-    );
+    // Exact key-set comparison: `TOOL_PROSE` must have exactly one entry per
+    // descriptor in `ALL_TOOL_DESCRIPTORS` — no missing entry (which the type
+    // annotation alone cannot catch, see the comment on `TOOL_PROSE`) and no
+    // stale entry left behind for a tool that no longer exists.
+    const proseNames = Object.keys(TOOL_PROSE).sort();
+    const descriptorNames = ALL_TOOL_DESCRIPTORS.map((d) => d.name).sort();
+    expect(proseNames).toEqual(descriptorNames);
+
     for (const row of MCP_TOOLS_TABLE_ROWS)
-      expect(row.what.length).toBeGreaterThan(0);
+      expect((row.what ?? "").length).toBeGreaterThan(0);
   });
 
-  it("marks exactly the write tools as writes", () => {
-    const writes = MCP_TOOLS_TABLE_ROWS.filter((r) => r.access === "write").map(
-      (r) => r.name,
-    );
+  it("derives every tool's access from its capability, in both directions", () => {
+    // Independent of the frozen write-list check below: this derives the
+    // expected classification directly from each descriptor's `capability`
+    // (`access` in `mcp-tools-table.tsx` is computed FROM `capability`, not
+    // hand-written) and asserts every row agrees: a descriptor whose
+    // capability is `null`, or whose capability map (a grouped-dispatch tool,
+    // keyed by action) has `null` for every action, must render as "read";
+    // every other descriptor must render as "write". Looping over
+    // `ALL_TOOL_DESCRIPTORS` means this needs no update when a tool is added
+    // and catches misclassification in EITHER direction — strictly stronger
+    // than the frozen list, which only ever pins the tools already on it.
+    const byName = new Map(MCP_TOOLS_TABLE_ROWS.map((r) => [r.name, r]));
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      const isAlwaysRead =
+        d.capability === null ||
+        (typeof d.capability === "object" &&
+          Object.values(d.capability).every((v) => v === null));
+      const expected = isAlwaysRead ? "read" : "write";
+      expect(
+        byName.get(d.name)?.access,
+        `expected "${d.name}" to render as "${expected}"`,
+      ).toBe(expected);
+    }
+  });
+
+  it("classifies the original read tools as reads", () => {
+    // Second, independent check that pins the specific pre-existing
+    // classifications that were reasoned about by hand (the derived test
+    // above covers every tool structurally; this one is a cheap, targeted
+    // pin on top of it).
+    const byName = new Map(MCP_TOOLS_TABLE_ROWS.map((r) => [r.name, r]));
+
     // `create_attachment_upload` inserts nothing itself, but it hands out a
     // signed URL that puts bytes in the caller's storage — a real mutation of
     // tenant state even when `attach_file` is never called. The consent screen
     // errs toward naming a capability as a write rather than understating it.
-    expect(writes.sort()).toEqual([
+    const preExistingWrites = [
       "attach_file",
       "create_attachment_upload",
       "create_item",
       "log_time_allocation",
       "update_item",
-    ]);
+    ];
+    for (const name of preExistingWrites) {
+      expect(byName.get(name)?.access).toBe("write");
+    }
+
+    const preExistingReads = [
+      "list_boards",
+      "get_board",
+      "list_items",
+      "search_items",
+      "get_item",
+    ];
+    for (const name of preExistingReads) {
+      expect(byName.get(name)?.access).toBe("read");
+    }
   });
 
   it("renders every tool name", () => {
@@ -99,15 +143,7 @@ describe("McpToolsTable", () => {
     // `delete from public.time_allocations` (migration 20260806060855), and
     // log_time_allocation's Zod accepts `secs: 0`. The consent screen is the
     // user's only account of what they are granting, so it must name that.
-    expect(
-      screen.getByText(
-        /only thing a connected client can erase is your logged time/i,
-      ),
-    ).toBeInTheDocument();
     expect(screen.getByText(/0 seconds clears it/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/no other delete tool exists on the server/i),
-    ).toBeInTheDocument();
     expect(screen.queryByText(/cannot delete anything/i)).toBeNull();
 
     // …and it must agree with the row two lines above it, which already says
@@ -116,5 +152,25 @@ describe("McpToolsTable", () => {
       (r) => r.name === "log_time_allocation",
     );
     expect(row?.what).toMatch(/0 clears it/);
+  });
+
+  // The "only thing that can be deleted is logged time" claim this replaced
+  // (F2, final whole-branch review) was ALSO false the moment manage_column,
+  // manage_view, manage_widget, manage_goal, manage_report, and
+  // manage_dashboard shipped their delete/remove_option actions. The trailer
+  // must name what those six tools can do, and preserve the actual safety
+  // story: boards/groups/items can only be archived to Trash and restored.
+  it("discloses that six more tools can delete outright, and preserves the archive/restore contrast for boards, groups, and items", () => {
+    render(<McpToolsTable />);
+
+    expect(
+      screen.getByText(/can also be deleted outright/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/only archive them to Trash and restore them/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/no other delete tool exists on the server/i),
+    ).toBeNull();
   });
 });

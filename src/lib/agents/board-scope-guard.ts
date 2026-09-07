@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
+import { scopeFor, type ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { resolveItemScope } from "@/lib/collaboration/attachment-core";
 import type { BoardScope } from "./agent-config";
 
@@ -40,7 +40,7 @@ export async function resolveTargetBoardId(
   descriptor: ToolDescriptor,
   input: Record<string, unknown>,
 ): Promise<string | null> {
-  switch (descriptor.scope) {
+  switch (scopeFor(descriptor, input)) {
     case "none":
       return null;
     case "boardId":
@@ -61,6 +61,35 @@ export async function resolveTargetBoardId(
         .maybeSingle();
       return data?.board_id ?? null;
     }
+    // Each of the three below is ONE indexed probe on a primary key, the same
+    // shape as the groupId branch. Never a scan.
+    case "columnId": {
+      if (typeof input.columnId !== "string") return null;
+      const { data } = await client
+        .from("columns")
+        .select("board_id")
+        .eq("id", input.columnId)
+        .maybeSingle();
+      return data?.board_id ?? null;
+    }
+    case "viewId": {
+      if (typeof input.viewId !== "string") return null;
+      const { data } = await client
+        .from("board_views")
+        .select("board_id")
+        .eq("id", input.viewId)
+        .maybeSingle();
+      return data?.board_id ?? null;
+    }
+    case "automationId": {
+      if (typeof input.automationId !== "string") return null;
+      const { data } = await client
+        .from("automations")
+        .select("board_id")
+        .eq("id", input.automationId)
+        .maybeSingle();
+      return data?.board_id ?? null;
+    }
   }
 }
 
@@ -73,4 +102,25 @@ export function isBoardInScope(
   if (boardId === null) return true;
   if (scope.mode === "all") return true;
   return scope.boardIds.includes(boardId);
+}
+
+/**
+ * Whether this call is a create that a NARROWED agent may not make.
+ *
+ * `board_scope` narrows board-ADDRESSED calls. A create addresses no existing
+ * board, so ordinary scope resolution has nothing to catch it on: an agent
+ * scoped to boards A and B could create board C and then be unable to touch
+ * it. This closes that, and closes it by REFUSING rather than by widening the
+ * agent's scope — an agent that edits its own permission config is an
+ * escalation primitive a prompt injection can drive one board at a time.
+ */
+export function refusesUnscopedCreate(
+  descriptor: ToolDescriptor,
+  scope: BoardScope,
+  input: Record<string, unknown>,
+): boolean {
+  if (scope.mode === "all") return false;
+  const actions = descriptor.unscopedCreateActions;
+  if (!actions || actions.length === 0) return false;
+  return typeof input.action === "string" && actions.includes(input.action);
 }

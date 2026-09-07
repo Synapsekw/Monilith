@@ -22,10 +22,10 @@ const ctx: ToolInvokeContext = {
   actorId: "00000000-0000-4000-8000-000000000001",
 };
 
-const NAMES = ["create_file", "create_automation", "create_pdf"];
+const NAMES = ["create_file", "manage_automation", "create_pdf"];
 
 describe("AGENT_ONLY_DESCRIPTORS", () => {
-  it("offers create_file, create_automation and create_pdf to the model", () => {
+  it("offers create_file, manage_automation and create_pdf to the model", () => {
     const tools = buildAgentTools({
       ctx,
       scope: { mode: "all" },
@@ -51,9 +51,19 @@ describe("AGENT_ONLY_DESCRIPTORS", () => {
       capability: "files.write",
       scope: "itemId",
     });
-    expect(byName.get("create_automation")).toMatchObject({
-      capability: "automation.create",
-      scope: "boardId",
+    // No new capability for the create/update/delete grown lifecycle — all
+    // three actions still charge the EXISTING automation.create.
+    expect(byName.get("manage_automation")).toMatchObject({
+      capability: {
+        create: "automation.create",
+        update: "automation.create",
+        delete: "automation.create",
+      },
+      scope: {
+        create: "boardId",
+        update: "automationId",
+        delete: "automationId",
+      },
     });
     // REUSES files.write. Minting a new capability would leave every agent
     // already trusted to write files unable to render one until its owner
@@ -89,7 +99,7 @@ describe("AGENT_ONLY_DESCRIPTORS", () => {
     expect(
       await gate({
         toolCall: {
-          toolName: "create_automation",
+          toolName: "manage_automation",
           toolCallId: "c2",
           input: {},
         },
@@ -97,7 +107,7 @@ describe("AGENT_ONLY_DESCRIPTORS", () => {
     ).toEqual({ type: "denied", reason: UNGRANTED_REASON });
     expect(onPropose).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolName: "create_automation",
+        toolName: "manage_automation",
         capability: "automation.create",
       }),
     );

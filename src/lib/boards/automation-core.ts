@@ -1,7 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
-import { createAutomationSchema } from "@/lib/validations/automations";
+import {
+  createAutomationSchema,
+  updateAutomationSchema,
+  deleteAutomationSchema,
+} from "@/lib/validations/automations";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Database, Json } from "@/types/database.types";
 
@@ -14,6 +18,19 @@ export type CreateAutomationCoreInput = {
   actions: unknown;
   condition?: unknown;
 };
+
+/** What updating an automation needs, still unparsed. */
+export type UpdateAutomationCoreInput = {
+  id: string;
+  name?: string;
+  enabled?: boolean;
+  trigger?: unknown;
+  actions?: unknown;
+  condition?: unknown;
+};
+
+/** What deleting an automation needs. */
+export type DeleteAutomationCoreInput = { id: string };
 
 /**
  * True when `actorId` is an owner/admin of `orgId`.
@@ -55,8 +72,8 @@ export async function isOrgAdmin(
  * `next/cache`, so both transports can reach it.
  *
  * Callers: `createAutomation` (`./automation-actions.ts`, cookie client, which
- * adds the `revalidatePath` a request context allows) and
- * `createAutomationDescriptor` (`@/lib/agents/create-automation-tool`).
+ * adds the `revalidatePath` a request context allows) and the `create` branch
+ * of `manageAutomationDescriptor` (`@/lib/agents/manage-automation-tool`).
  */
 export async function createAutomationCore(
   supabase: SupabaseClient<Database>,
@@ -107,4 +124,94 @@ export async function createAutomationCore(
   if (error || !data) return fail(error?.message ?? "Failed to create");
 
   return { ok: true, data: { id: data.id } };
+}
+
+/**
+ * The single implementation of "update one automation rule", beside
+ * {@link createAutomationCore} for the same reason: the `updateAutomation`
+ * Server Action (`./automation-actions.ts`, which adds the `revalidatePath` a
+ * request context allows) and the agent-only `manage_automation` tool
+ * (`@/lib/agents/manage-automation-tool`) must produce identical side effects.
+ *
+ * KEEPS the `actionsContainWebhook` guard: an agent editing an existing
+ * automation to ADD a webhook action is exactly the case that guard exists
+ * for, so dropping it here — the one place both callers actually run the
+ * patch — would be a real security regression, not a simplification. Like
+ * `createAutomationCore`, the actor is injected rather than read from
+ * `supabase.auth` so a bridged (bearer-token) client is not charged a GoTrue
+ * round-trip per check.
+ */
+export async function updateAutomationCore(
+  supabase: SupabaseClient<Database>,
+  input: UpdateAutomationCoreInput,
+  actorId: string | null,
+): Promise<ActionResult<{ boardId: string | null }>> {
+  const parsed = updateAutomationSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  if (
+    parsed.data.actions !== undefined &&
+    actionsContainWebhook(parsed.data.actions)
+  ) {
+    const { data: row } = await supabase
+      .from("automations")
+      .select("org_id")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    if (!row) return fail("Automation not found.");
+    if (!(await isOrgAdmin(supabase, row.org_id, actorId))) {
+      return fail("Webhook actions require an organization admin");
+    }
+  }
+
+  const patch = {
+    ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+    ...(parsed.data.enabled !== undefined
+      ? { enabled: parsed.data.enabled }
+      : {}),
+    ...(parsed.data.trigger !== undefined
+      ? { trigger: parsed.data.trigger as unknown as Json }
+      : {}),
+    ...(parsed.data.actions !== undefined
+      ? { actions: parsed.data.actions as unknown as Json }
+      : {}),
+    ...(parsed.data.condition !== undefined
+      ? { condition: parsed.data.condition as unknown as Json }
+      : {}),
+  };
+
+  const { data, error } = await supabase
+    .from("automations")
+    .update(patch)
+    .eq("id", parsed.data.id)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+
+  return { ok: true, data: { boardId: data?.board_id ?? null } };
+}
+
+/**
+ * The single implementation of "delete one automation rule". No admin gate:
+ * deleting a rule (unlike adding a webhook to one) was never gated for a
+ * human, so this stays a plain org-scoped delete — RLS is the boundary.
+ */
+export async function deleteAutomationCore(
+  supabase: SupabaseClient<Database>,
+  input: DeleteAutomationCoreInput,
+): Promise<ActionResult<{ boardId: string | null }>> {
+  const parsed = deleteAutomationSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const { data, error } = await supabase
+    .from("automations")
+    .delete()
+    .eq("id", parsed.data.id)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+
+  return { ok: true, data: { boardId: data?.board_id ?? null } };
 }

@@ -26,46 +26,49 @@ import {
 import type { SeriesData } from "@/lib/dashboards/series";
 import {
   configSchemaForKind,
-  createDashboardSchema,
-  createWidgetSchema,
-  deleteDashboardSchema,
-  duplicateDashboardSchema,
-  deleteWidgetSchema,
   getWidgetDataSchema,
   getWidgetsDataSchema,
   getWidgetPreviewDataSchema,
-  renameDashboardSchema,
-  saveLayoutSchema,
-  updateWidgetConfigSchema,
   widgetKindSchema,
 } from "@/lib/validations/dashboards";
-import type { Json, Tables } from "@/types/database.types";
+import {
+  createDashboardCore,
+  createWidgetCore,
+  deleteDashboardCore,
+  deleteWidgetCore,
+  duplicateDashboardCore,
+  renameDashboardCore,
+  saveLayoutCore,
+  updateWidgetConfigCore,
+} from "@/lib/dashboards/core";
+import type { Tables } from "@/types/database.types";
 import type { DisplayColumn } from "@/lib/dashboards/list-rows";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 type Widget = Tables<"dashboard_widgets">;
+
+/**
+ * Every mutation below is a thin cookie-bound wrapper: it supplies the
+ * request's RLS client to the matching core in `./core`, then does the ONE
+ * thing a core cannot — expire this deployment's caches. The core holds the
+ * validation, the guards and the statements, so the MCP transport
+ * (`src/lib/mcp/tools/manage-dashboard.ts`, `manage-widget.ts`) runs exactly
+ * the same code with a bridged client.
+ */
 
 /** Create a dashboard (server derives org from workspace). */
 export async function createDashboard(input: {
   workspaceId: string;
   name: string;
 }): Promise<ActionResult<{ dashboard: Tables<"dashboards"> }>> {
-  const parsed = createDashboardSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_dashboard", {
-    p_workspace_id: parsed.data.workspaceId,
-    p_name: parsed.data.name,
-  });
-  if (error || !data)
-    return fail(error?.message ?? "Could not create dashboard.");
+  const res = await createDashboardCore(supabase, input);
+  if (!res.ok) return res;
 
   // Invalidate the cached org dashboards list (read-your-own-writes).
-  updateTag(dashboardsTag((data as Tables<"dashboards">).org_id));
+  updateTag(dashboardsTag(res.data.dashboard.org_id));
   revalidatePath("/dashboards");
-  return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
+  return res;
 }
 
 /** Rename a dashboard. RLS enforces org membership; returns the updated row. */
@@ -73,45 +76,25 @@ export async function renameDashboard(input: {
   dashboardId: string;
   name: string;
 }): Promise<ActionResult<{ dashboard: Tables<"dashboards"> }>> {
-  const parsed = renameDashboardSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("dashboards")
-    .update({ name: parsed.data.name })
-    .eq("id", parsed.data.dashboardId)
-    .select("*")
-    .maybeSingle();
-  if (error || !data)
-    return fail(error?.message ?? "Could not rename dashboard.");
+  const res = await renameDashboardCore(supabase, input);
+  if (!res.ok) return res;
 
-  updateTag(dashboardsTag((data as Tables<"dashboards">).org_id));
-  revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
+  updateTag(dashboardsTag(res.data.dashboard.org_id));
+  revalidatePath(`/dashboards/${input.dashboardId}`);
   revalidatePath("/dashboards");
-  return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
+  return res;
 }
 
 /** Delete a dashboard. Widgets cascade via the dashboard_id FK. */
 export async function deleteDashboard(input: {
   dashboardId: string;
 }): Promise<ActionResult<undefined>> {
-  const parsed = deleteDashboardSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  // Return the deleted row's org_id so we can invalidate the cached list.
-  const { data, error } = await supabase
-    .from("dashboards")
-    .delete()
-    .eq("id", parsed.data.dashboardId)
-    .select("org_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
+  const res = await deleteDashboardCore(supabase, input);
+  if (!res.ok) return res;
 
-  if (data) updateTag(dashboardsTag(data.org_id));
+  if (res.data.orgId) updateTag(dashboardsTag(res.data.orgId));
   // Narrow to the dashboards index (its redirect picks the first remaining
   // dashboard); the sidebar/palette lists are served from the `dashboards:org`
   // cache the updateTag above expired. Mirrors createDashboard/renameDashboard.
@@ -123,29 +106,16 @@ export async function deleteDashboard(input: {
 export async function duplicateDashboard(input: {
   dashboardId: string;
 }): Promise<ActionResult<{ dashboardId: string }>> {
-  const parsed = duplicateDashboardSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  // The copy lands in the same org as the source — read it for the cache tag.
-  const { data: source } = await supabase
-    .from("dashboards")
-    .select("org_id")
-    .eq("id", parsed.data.dashboardId)
-    .maybeSingle();
-  const { data, error } = await supabase.rpc("duplicate_dashboard", {
-    p_dashboard_id: parsed.data.dashboardId,
-  });
-  if (error || !data)
-    return fail(error?.message ?? "Could not duplicate dashboard.");
+  const res = await duplicateDashboardCore(supabase, input);
+  if (!res.ok) return res;
 
-  if (source) updateTag(dashboardsTag(source.org_id));
+  if (res.data.orgId) updateTag(dashboardsTag(res.data.orgId));
   // Narrow to the dashboards index; sidebar/palette lists are served from the
   // `dashboards:org` cache the updateTag above expired. The client navigates to
   // the new copy. Mirrors createDashboard/renameDashboard.
   revalidatePath("/dashboards");
-  return { ok: true, data: { dashboardId: data.id } };
+  return { ok: true, data: { dashboardId: res.data.dashboardId } };
 }
 
 /** Add a widget. Validates the kind-specific config, returns the full row. */
@@ -156,36 +126,16 @@ export async function createWidget(input: {
   title: string;
   config: Record<string, unknown>;
 }): Promise<ActionResult<{ widget: Widget }>> {
-  const parsed = createWidgetSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const cfg = configSchemaForKind(parsed.data.kind).safeParse(
-    parsed.data.config,
-  );
-  if (!cfg.success)
-    return fail(cfg.error.issues[0]?.message ?? "Invalid widget config");
-
-  // Default starting layout: a 3×2 tile at the origin (the canvas relays out on add).
-  const layout = { x: 0, y: 0, w: 3, h: 2 };
-
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_dashboard_widget", {
-    p_dashboard_id: parsed.data.dashboardId,
-    p_kind: parsed.data.kind,
-    p_source_board_id: parsed.data.sourceBoardId,
-    p_title: parsed.data.title,
-    p_config: cfg.data as Json,
-    p_layout: layout as Json,
-  });
-  if (error || !data) return fail(error?.message ?? "Could not add widget.");
+  const res = await createWidgetCore(supabase, input);
+  if (!res.ok) return res;
 
-  const widget = data as Widget;
+  const widget = res.data.widget;
   // Read-your-own-writes: invalidate this widget's cached aggregation so the
   // first load reflects the brand-new config (not a stale/empty entry).
   updateTag(widgetAggregationTag(widget.org_id, widget.id));
-  revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
-  return { ok: true, data: { widget } };
+  revalidatePath(`/dashboards/${input.dashboardId}`);
+  return res;
 }
 
 /** Update a widget's title/source/config. Returns the updated row. */
@@ -195,69 +145,30 @@ export async function updateWidgetConfig(input: {
   sourceBoardId?: string;
   config?: Record<string, unknown>;
 }): Promise<ActionResult<{ widget: Widget }>> {
-  const parsed = updateWidgetConfigSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
+  const res = await updateWidgetConfigCore(supabase, input);
+  if (!res.ok) return res;
 
-  // Validate config against the widget's actual kind (read it first).
-  const patch: Partial<Widget> = {};
-  if (parsed.data.title !== undefined) patch.title = parsed.data.title;
-  if (parsed.data.sourceBoardId !== undefined)
-    patch.source_board_id = parsed.data.sourceBoardId;
-  if (parsed.data.config !== undefined) {
-    const { data: existing } = await supabase
-      .from("dashboard_widgets")
-      .select("kind")
-      .eq("id", parsed.data.widgetId)
-      .maybeSingle();
-    if (!existing) return fail("Widget not found.");
-    // The DB enum can be ahead of this build (a widget kind added by a newer
-    // migration before its handling ships here) — validate at the boundary.
-    const kind = widgetKindSchema.safeParse(existing.kind);
-    if (!kind.success) return fail("Unsupported widget kind.");
-    const cfg = configSchemaForKind(kind.data).safeParse(parsed.data.config);
-    if (!cfg.success)
-      return fail(cfg.error.issues[0]?.message ?? "Invalid widget config");
-    patch.config = cfg.data as Json;
-  }
-
-  const { data, error } = await supabase
-    .from("dashboard_widgets")
-    .update(patch)
-    .eq("id", parsed.data.widgetId)
-    .select("*")
-    .maybeSingle();
-  if (error || !data) return fail(error?.message ?? "Could not update widget.");
-
+  const widget = res.data.widget;
   // Read-your-own-writes: a config edit changes the aggregation inputs, so drop
   // this widget's cached entry immediately (board-data edits stay TTL-bounded).
-  updateTag(widgetAggregationTag(data.org_id, parsed.data.widgetId));
-  revalidatePath(`/dashboards/${data.dashboard_id}`);
-  return { ok: true, data: { widget: data as Widget } };
+  updateTag(widgetAggregationTag(widget.org_id, widget.id));
+  revalidatePath(`/dashboards/${widget.dashboard_id}`);
+  return res;
 }
 
 /** Delete a widget. */
 export async function deleteWidget(input: {
   widgetId: string;
 }): Promise<ActionResult<{ widgetId: string }>> {
-  const parsed = deleteWidgetSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  // Return the deleted row's org_id so we can drop its cached aggregation.
-  const { data, error } = await supabase
-    .from("dashboard_widgets")
-    .delete()
-    .eq("id", parsed.data.widgetId)
-    .select("org_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (data) updateTag(widgetAggregationTag(data.org_id, parsed.data.widgetId));
+  const res = await deleteWidgetCore(supabase, input);
+  if (!res.ok) return res;
 
-  return { ok: true, data: { widgetId: parsed.data.widgetId } };
+  if (res.data.orgId)
+    updateTag(widgetAggregationTag(res.data.orgId, res.data.widgetId));
+
+  return { ok: true, data: { widgetId: res.data.widgetId } };
 }
 
 /** Persist the grid layout for all widgets in one round-trip (debounced caller). */
@@ -265,18 +176,8 @@ export async function saveLayout(input: {
   dashboardId: string;
   layouts: { id: string; x: number; y: number; w: number; h: number }[];
 }): Promise<ActionResult<{ saved: number }>> {
-  const parsed = saveLayoutSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { error } = await supabase.rpc("set_widget_layouts", {
-    p_dashboard_id: parsed.data.dashboardId,
-    p_layouts: parsed.data.layouts,
-  });
-  if (error) return fail(error.message);
-
-  return { ok: true, data: { saved: parsed.data.layouts.length } };
+  return saveLayoutCore(supabase, input);
 }
 
 /** A widget's resolved aggregate payload (success shape shared by the single +

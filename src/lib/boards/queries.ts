@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
-import type { Tables } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 
 export type Board = Tables<"boards">;
@@ -110,27 +111,45 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
   }));
 }
 
-/** The current user's effective access to a board (or null if none). */
-export async function getBoardAccess(
+/**
+ * The owner/editor/viewer answer for one board, on a caller-supplied client.
+ *
+ * SPLIT OUT OF `getBoardAccess` because that function reads BOTH `getUser()`
+ * and `createClient()` — two cookie dependencies an MCP request does not have.
+ * Ported naively, the MCP path would silently lose this guard, and the guard is
+ * not cosmetic: an RLS-filtered UPDATE that matches zero rows returns no error,
+ * so a non-owner's archive would report success while changing nothing. That is
+ * the "lying success" the explicit check exists to prevent (spec F4 / decision
+ * D5).
+ */
+export async function getBoardAccessCore(
+  supabase: SupabaseClient<Database>,
+  userId: string,
   boardId: string,
 ): Promise<"owner" | "editor" | "viewer" | null> {
-  const user = await getUser();
-  if (!user) return null;
-  const supabase = await createClient();
   const { data: board } = await supabase
     .from("boards")
     .select("created_by")
     .eq("id", boardId)
     .maybeSingle();
   if (!board) return null;
-  if (board.created_by === user.id) return "owner";
+  if (board.created_by === userId) return "owner";
   const { data: grant } = await supabase
     .from("board_members")
     .select("access_level")
     .eq("board_id", boardId)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
   return grant?.access_level ?? null;
+}
+
+/** The current user's effective access to a board (or null if none). */
+export async function getBoardAccess(
+  boardId: string,
+): Promise<"owner" | "editor" | "viewer" | null> {
+  const user = await getUser();
+  if (!user) return null;
+  return getBoardAccessCore(await createClient(), user.id, boardId);
 }
 
 /**

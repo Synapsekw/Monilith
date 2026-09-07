@@ -78,7 +78,7 @@ function CapabilityRow({
 }
 
 /**
- * The four capability toggles a personal agent can be granted, beyond the
+ * The eight capability toggles a personal agent can be granted, beyond the
  * read-only baseline every agent has today.
  *
  * A controlled list, not a form of its own: `value` is the agent's current

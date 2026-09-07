@@ -5,12 +5,19 @@ import type { Database } from "@/types/database.types";
 import type { ToolDescriptor, ToolScope } from "@/lib/mcp/tools/descriptor";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type { BoardScope } from "./agent-config";
-import { isBoardInScope, resolveTargetBoardId } from "./board-scope-guard";
+import {
+  isBoardInScope,
+  refusesUnscopedCreate,
+  resolveTargetBoardId,
+} from "./board-scope-guard";
 
 const BOARD_1 = "11111111-1111-4111-8111-111111111111";
 const BOARD_2 = "22222222-2222-4222-8222-222222222222";
 const ITEM = "33333333-3333-4333-8333-333333333333";
 const GROUP = "44444444-4444-4444-8444-444444444444";
+const COLUMN = "55555555-5555-4555-8555-555555555555";
+const VIEW = "77777777-7777-4777-8777-777777777777";
+const AUTOMATION = "66666666-6666-4666-8666-666666666666";
 
 function descriptor(scope: ToolScope): ToolDescriptor {
   return {
@@ -138,21 +145,83 @@ describe("resolveTargetBoardId", () => {
   });
 
   // Every catalog scope must be handled: a new ToolScope value would otherwise
-  // fall through to `null` and silently opt its tools out of board scope.
+  // fall through to `null` and silently opt its tools out of board scope. All
+  // catalog descriptors carry a scalar `scope` today, but the field is
+  // typed to also allow a per-action `Record` (Task 2), so this collects
+  // every LEAF value rather than assuming a scalar.
+  const scopes = new Set(
+    ALL_TOOL_DESCRIPTORS.flatMap((d) =>
+      typeof d.scope === "string" ? [d.scope] : Object.values(d.scope),
+    ),
+  );
   it("handles every scope the catalog actually uses", async () => {
-    const scopes = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.scope));
     for (const scope of scopes) {
       const c = client({
         items: { org_id: "o1", board_id: BOARD_1 },
         groups: { board_id: BOARD_1 },
+        columns: { board_id: BOARD_1 },
+        board_views: { board_id: BOARD_1 },
+        automations: { board_id: BOARD_1 },
       });
       await expect(
         resolveTargetBoardId(c, descriptor(scope), {
           boardId: BOARD_1,
           itemId: ITEM,
           groupId: GROUP,
+          columnId: COLUMN,
+          viewId: VIEW,
+          automationId: AUTOMATION,
         }),
       ).resolves.toBe(scope === "none" ? null : BOARD_1);
     }
+  });
+});
+
+describe("refusesUnscopedCreate", () => {
+  const d = {
+    unscopedCreateActions: ["create"],
+  } as unknown as ToolDescriptor;
+
+  it("refuses a create when the agent is scoped to a board list", () => {
+    expect(
+      refusesUnscopedCreate(
+        d,
+        { mode: "list", boardIds: ["b1"] },
+        {
+          action: "create",
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it("allows a create when the agent is scoped to all boards", () => {
+    expect(
+      refusesUnscopedCreate(d, { mode: "all" }, { action: "create" }),
+    ).toBe(false);
+  });
+
+  it("allows a non-create action under a narrowed scope", () => {
+    expect(
+      refusesUnscopedCreate(
+        d,
+        { mode: "list", boardIds: ["b1"] },
+        {
+          action: "rename",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("allows everything for a tool that declares no unscoped creates", () => {
+    expect(
+      refusesUnscopedCreate(
+        {} as ToolDescriptor,
+        {
+          mode: "list",
+          boardIds: ["b1"],
+        },
+        { action: "create" },
+      ),
+    ).toBe(false);
   });
 });

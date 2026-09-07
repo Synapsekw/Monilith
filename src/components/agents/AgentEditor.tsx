@@ -702,6 +702,10 @@ export function AgentEditor({
           >
             All boards you can see
           </p>
+          <p className="text-muted-foreground text-xs">
+            Limiting an agent to specific boards also stops it creating new
+            boards, dashboards, portfolios, goals or reports.
+          </p>
         </div>
 
         {/* `role="group"` + `aria-labelledby` complements — not substitutes

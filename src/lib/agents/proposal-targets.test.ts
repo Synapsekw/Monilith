@@ -15,6 +15,9 @@ const ITEM = "11111111-1111-4111-8111-111111111111";
 const OTHER_ITEM = "11111111-1111-4111-8111-111111111112";
 const BOARD = "22222222-2222-4222-8222-222222222222";
 const GROUP = "33333333-3333-4333-8333-333333333333";
+const COLUMN = "44444444-4444-4444-8444-444444444444";
+const OTHER_COLUMN = "44444444-4444-4444-8444-444444444445";
+const THIRD_COLUMN = "44444444-4444-4444-8444-444444444446";
 
 type Read = { table: string; ids: string[]; limit: number };
 
@@ -89,9 +92,12 @@ describe("withResolvedTargets", () => {
     });
     const [p] = await withResolvedTargets(client, [
       row({
-        toolName: "create_automation",
+        toolName: "manage_automation",
         capability: "automation.create",
-        input: { boardId: BOARD },
+        // `manage_automation` is a grouped-dispatch tool: its `scope` is a
+        // per-action Record, so `scopeFor` needs the row's own `action` to
+        // resolve `create` → `boardId`.
+        input: { action: "create", boardId: BOARD },
       }),
     ]);
     expect(p!.target).toEqual({ kind: "board", name: "Marketing" });
@@ -103,6 +109,60 @@ describe("withResolvedTargets", () => {
       row({ toolName: "create_item", input: { groupId: GROUP, name: "New" } }),
     ]);
     expect(p!.target).toEqual({ kind: "group", name: "Backlog" });
+  });
+
+  it("names the column a manage_column proposal targets", async () => {
+    const { client } = fakeClient({
+      columns: [{ id: COLUMN, name: "Status" }],
+    });
+    const [p] = await withResolvedTargets(client, [
+      row({
+        toolName: "manage_column",
+        input: { action: "rename", columnId: COLUMN, name: "New name" },
+      }),
+    ]);
+    expect(p!.target).toEqual({ kind: "column", name: "Status" });
+  });
+
+  // The scope of a dispatch tool depends on its action: create takes a
+  // boardId, rename takes a columnId. Reading descriptor.scope directly
+  // would see a Record and resolve nothing.
+  it("resolves the column target from the action, not the tool", async () => {
+    const { client } = fakeClient({ boards: [{ id: BOARD, name: "Roadmap" }] });
+    const [p] = await withResolvedTargets(client, [
+      row({
+        toolName: "manage_column",
+        input: { action: "create", boardId: BOARD, name: "New col" },
+      }),
+    ]);
+    expect(p!.target).toEqual({ kind: "board", name: "Roadmap" });
+  });
+
+  // Working agreement #5: one bounded read per kind for a whole page of
+  // proposals, never one read per card.
+  it("issues one read for a page of manage_column proposals", async () => {
+    const { client, reads } = fakeClient({
+      columns: [
+        { id: COLUMN, name: "Status" },
+        { id: OTHER_COLUMN, name: "Owner" },
+        { id: THIRD_COLUMN, name: "Priority" },
+      ],
+    });
+    await withResolvedTargets(client, [
+      row({
+        toolName: "manage_column",
+        input: { action: "rename", columnId: COLUMN, name: "x" },
+      }),
+      row({
+        toolName: "manage_column",
+        input: { action: "delete", columnId: OTHER_COLUMN },
+      }),
+      row({
+        toolName: "manage_column",
+        input: { action: "resize", columnId: THIRD_COLUMN, width: 200 },
+      }),
+    ]);
+    expect(reads.filter((t) => t.table === "columns")).toHaveLength(1);
   });
 
   // The whole point of resolving on the READ side: one bounded read per kind
@@ -119,7 +179,10 @@ describe("withResolvedTargets", () => {
       row({ toolName: "update_item", input: { itemId: ITEM } }),
       row({ toolName: "attach_file", input: { itemId: OTHER_ITEM } }),
       row({ toolName: "create_file", input: { itemId: ITEM } }),
-      row({ toolName: "create_automation", input: { boardId: BOARD } }),
+      row({
+        toolName: "manage_automation",
+        input: { action: "create", boardId: BOARD },
+      }),
     ]);
     expect(reads).toHaveLength(2);
     expect(reads.map((r) => r.table).sort()).toEqual(["boards", "items"]);

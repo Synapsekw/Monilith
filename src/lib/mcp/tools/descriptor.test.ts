@@ -1,36 +1,77 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { ALL_TOOL_DESCRIPTORS } from "./catalog";
-import { TOOL_SCOPES } from "./descriptor";
+import {
+  TOOL_SCOPES,
+  capabilityFor,
+  scopeFor,
+  type ToolDescriptor,
+} from "./descriptor";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 
 describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
     const names = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.length).toBe(24);
+    expect(names.length).toBe(35);
   });
 
   it("classifies every tool with a legal capability and scope", () => {
+    // A single-purpose descriptor carries scalar `capability`/`scope`; a
+    // grouped-dispatch tool carries a per-action `Record`. This checks every
+    // LEAF value rather than assuming a scalar, so it covers both shapes.
     for (const d of ALL_TOOL_DESCRIPTORS) {
-      expect(
-        d.capability === null || AGENT_CAPABILITIES.includes(d.capability),
-      ).toBe(true);
-      expect(TOOL_SCOPES).toContain(d.scope);
+      const capabilities =
+        d.capability === null || typeof d.capability === "string"
+          ? [d.capability]
+          : Object.values(d.capability);
+      for (const c of capabilities) {
+        expect(c === null || AGENT_CAPABILITIES.includes(c)).toBe(true);
+      }
+      const scopes =
+        typeof d.scope === "string" ? [d.scope] : Object.values(d.scope);
+      for (const s of scopes) {
+        expect(TOOL_SCOPES).toContain(s);
+      }
     }
   });
 
   // The classification the consent screen and the grant gate both depend on.
-  it("marks exactly the five write tools with a capability", () => {
-    const writes = ALL_TOOL_DESCRIPTORS.filter((d) => d.capability !== null)
-      .map((d) => d.name)
-      .sort();
-    expect(writes).toEqual([
+  it("classifies exactly the write tools as writes", () => {
+    const writeTools = [
       "attach_file",
       "create_attachment_upload",
       "create_item",
       "log_time_allocation",
+      "manage_board",
+      "manage_column",
+      "manage_dashboard",
+      "manage_goal",
+      "manage_group",
+      "manage_item",
+      "manage_portfolio",
+      "manage_report",
+      "manage_view",
+      "manage_widget",
       "update_item",
-    ]);
+    ].sort();
+
+    const actualWrites = ALL_TOOL_DESCRIPTORS.filter((d) => {
+      const isAlwaysRead =
+        d.capability === null ||
+        (typeof d.capability === "object" &&
+          Object.values(d.capability).every((c) => c === null));
+      return !isAlwaysRead;
+    })
+      .map((d) => d.name)
+      .sort();
+
+    expect(actualWrites).toEqual(writeTools);
+  });
+
+  it("classifies describe_schema as a read", () => {
+    const byName = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
+    expect(byName.get("describe_schema")?.capability).toBeNull();
   });
 
   it("excludes create_attachment_upload from the agent surface", () => {
@@ -52,5 +93,124 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
     expect(byName.get("attach_file")?.scope).toBe("itemId");
     expect(byName.get("create_item")?.scope).toBe("groupId");
     expect(byName.get("list_boards")?.scope).toBe("none");
+  });
+
+  // Guards the fail-closed property in `mostRestrictive`: an empty map would
+  // make EVERY action on that tool resolve to its fallback rather than a
+  // declared grant, silently. A future descriptor must not ship one.
+  it("declares no empty capability map", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      if (d.capability !== null && typeof d.capability === "object") {
+        expect(Object.keys(d.capability).length, d.name).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  // F3 (final whole-branch review, spec §13): an action present in the
+  // handler's discriminated union but ABSENT from the descriptor's scope map
+  // resolves through `scopeFor` to `"none"` — RLS still holds, but the
+  // action silently escapes the owner's "only these boards" board-scope
+  // narrowing. Missing from the capability map is the same class of bug one
+  // layer up: `capabilityFor`'s `mostRestrictive` fallback masks it rather
+  // than surfacing it. Every dispatch tool is correct today; this is what
+  // stops the next one from shipping wrong. Reads the real `action` enum off
+  // each descriptor's `inputSchema` — the single source of truth the handler
+  // itself validates against — rather than a hand-maintained action list
+  // that could itself drift from the union.
+  it("gives every action in a dispatch tool's action enum an entry in both its capability map and its scope map", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      // Only grouped-dispatch tools (Record capability) have an `action`
+      // input at all; single-purpose tools carry a scalar capability/scope
+      // and are out of scope for this check.
+      if (d.capability === null || typeof d.capability !== "object") continue;
+
+      const actionSchema = d.inputSchema.action;
+      if (!(actionSchema instanceof z.ZodEnum)) continue;
+      const actions = actionSchema.options as readonly string[];
+
+      const capabilityMap = d.capability;
+      const scopeMap = typeof d.scope === "string" ? null : d.scope;
+
+      for (const action of actions) {
+        expect(
+          action in capabilityMap,
+          `${d.name}: action "${action}" is missing from the capability map`,
+        ).toBe(true);
+        expect(
+          scopeMap !== null && action in scopeMap,
+          `${d.name}: action "${action}" is missing from the scope map`,
+        ).toBe(true);
+      }
+    }
+  });
+});
+
+const mapped: ToolDescriptor = {
+  name: "fake_manage",
+  title: "Fake",
+  description: "Fake",
+  inputSchema: {},
+  capability: { create: "board.structure", archive: "board.destroy" },
+  scope: { create: "none", archive: "boardId" },
+  invoke: async () => ({ content: [{ type: "text", text: "" }] }),
+};
+
+describe("capabilityFor", () => {
+  it("reads the action's capability from a map", () => {
+    expect(capabilityFor(mapped, { action: "create" })).toBe("board.structure");
+    expect(capabilityFor(mapped, { action: "archive" })).toBe("board.destroy");
+  });
+
+  it("passes a scalar capability through unchanged", () => {
+    const scalar = { ...mapped, capability: "board.write" } as ToolDescriptor;
+    expect(capabilityFor(scalar, { action: "whatever" })).toBe("board.write");
+  });
+
+  // A genuine capability-free read (e.g. describe_schema) must still pass
+  // through as null — only the MAP path is hardened to fail closed.
+  it("passes a scalar null capability through unchanged", () => {
+    const scalar = { ...mapped, capability: null } as ToolDescriptor;
+    expect(capabilityFor(scalar, { action: "whatever" })).toBeNull();
+  });
+
+  // THE safety property. Returning null for an unknown action would classify
+  // it as a capability-free READ and let it execute ungated.
+  it("fails closed on an action absent from the map", () => {
+    expect(capabilityFor(mapped, { action: "nonsense" })).toBe("board.destroy");
+    expect(capabilityFor(mapped, {})).toBe("board.destroy");
+  });
+
+  // An empty or all-null map is a DECLARATION BUG (an action added to a
+  // handler's union without a matching capability entry), not a read. It
+  // must fail closed rather than let an unnamed action execute ungated.
+  it("fails closed on an all-null capability map", () => {
+    const allNull = {
+      ...mapped,
+      capability: { a: null, b: null },
+    } as ToolDescriptor;
+    expect(capabilityFor(allNull, { action: "nonsense" })).not.toBeNull();
+  });
+
+  it("fails closed on an empty capability map", () => {
+    const empty = { ...mapped, capability: {} } as ToolDescriptor;
+    expect(capabilityFor(empty, { action: "nonsense" })).not.toBeNull();
+  });
+});
+
+describe("scopeFor", () => {
+  it("reads the action's scope from a map", () => {
+    expect(scopeFor(mapped, { action: "archive" })).toBe("boardId");
+  });
+
+  it("passes a scalar scope through unchanged", () => {
+    const scalar = { ...mapped, scope: "itemId" } as ToolDescriptor;
+    expect(scopeFor(scalar, { action: "archive" })).toBe("itemId");
+  });
+
+  // "none" is the only safe default: it means board scope has nothing to say,
+  // and RLS remains the boundary. Guessing "boardId" would read a field that
+  // is not there and resolve to null anyway.
+  it("falls back to none on an unknown action", () => {
+    expect(scopeFor(mapped, { action: "nonsense" })).toBe("none");
   });
 });

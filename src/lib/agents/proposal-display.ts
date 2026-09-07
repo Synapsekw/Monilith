@@ -75,6 +75,9 @@ const TARGET_NOUN: Record<ProposalTargetKind, string> = {
   item: "Item",
   board: "Board",
   group: "Group",
+  column: "Column",
+  view: "View",
+  automation: "Automation",
 };
 
 export function proposalTargetLabel(target: ProposalTarget): string {
@@ -85,11 +88,7 @@ export function proposalTargetLabel(target: ProposalTarget): string {
 }
 
 export type ProposalDisplayState =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "failed"
-  | "expired";
+  "pending" | "approved" | "rejected" | "failed" | "expired";
 
 /** Just enough of a row to decide how it renders. */
 export type ProposalDisplayInput = { status: string; expiresAt: string };
