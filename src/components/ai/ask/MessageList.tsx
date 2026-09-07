@@ -19,6 +19,9 @@ export type UIMessage = {
   /** Parsed `ai_messages.tool_trace`. Carries a turn's proposed actions, or —
    *  on an outcome turn — which proposal it resolved. */
   trace?: AskToolTrace | null;
+  /** The agent this turn belongs to. Optional here — not yet rendered; carried
+   *  through so a later slice can show it without touching this type again. */
+  agentId?: string | null;
 };
 
 /** A single chat turn. User turns sit right in a muted bubble; assistant turns

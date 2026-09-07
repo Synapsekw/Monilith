@@ -105,6 +105,7 @@ describe("toThreadMessages", () => {
           role: "user",
           content: "create Ship v2",
           tool_trace: null,
+          agent_id: null,
           created_at: "2026-07-27T10:00:00Z",
         },
         {
@@ -112,16 +113,24 @@ describe("toThreadMessages", () => {
           role: "assistant",
           content: "I'll create that.",
           tool_trace: { boardsConsulted: ["b1"], proposedActions: [ACTION] },
+          agent_id: null,
           created_at: "2026-07-27T10:00:05Z",
         },
       ]),
     ).toEqual([
-      { id: "m1", role: "user", content: "create Ship v2", trace: null },
+      {
+        id: "m1",
+        role: "user",
+        content: "create Ship v2",
+        trace: null,
+        agentId: null,
+      },
       {
         id: "m2",
         role: "assistant",
         content: "I'll create that.",
         trace: { boardsConsulted: ["b1"], proposedActions: [ACTION] },
+        agentId: null,
       },
     ]);
   });
@@ -134,10 +143,69 @@ describe("toThreadMessages", () => {
           role: "assistant",
           content: "hi",
           tool_trace: { proposedActions: "not-an-array" },
+          agent_id: null,
           created_at: "2026-07-27T10:00:00Z",
         },
       ]),
-    ).toEqual([{ id: "m1", role: "assistant", content: "hi", trace: null }]);
+    ).toEqual([
+      {
+        id: "m1",
+        role: "assistant",
+        content: "hi",
+        trace: null,
+        agentId: null,
+      },
+    ]);
+  });
+});
+
+import { currentPersonaFrom } from "./conversations";
+
+describe("currentPersonaFrom", () => {
+  const row = (
+    role: "user" | "assistant",
+    agent_id: string | null,
+    created_at: string,
+  ) => ({
+    id: `m-${created_at}`,
+    role,
+    content: "x",
+    tool_trace: null,
+    agent_id,
+    created_at,
+  });
+
+  it("takes the LAST user turn's agent, not the conversation column", () => {
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", "a-ops", "2026-09-07T10:00:05Z"),
+      row("user", "a-fin", "2026-09-07T10:01:00Z"),
+    ];
+    expect(currentPersonaFrom(rows, "a-ops")).toBe("a-fin");
+  });
+
+  it("falls back to the conversation column when no user turn carries one", () => {
+    expect(currentPersonaFrom([row("user", null, "t")], "a-ops")).toBe("a-ops");
+  });
+
+  it("is null when neither has one", () => {
+    expect(currentPersonaFrom([], null)).toBeNull();
+  });
+});
+
+describe("toThreadMessages", () => {
+  it("carries the answering agent onto the render shape", () => {
+    const [m] = toThreadMessages([
+      {
+        id: "m1",
+        role: "assistant",
+        content: "hi",
+        tool_trace: null,
+        agent_id: "a-ops",
+        created_at: "2026-09-07T10:00:00Z",
+      },
+    ]);
+    expect(m.agentId).toBe("a-ops");
   });
 });
 

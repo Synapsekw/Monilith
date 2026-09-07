@@ -9,7 +9,7 @@ export type ConversationRow = Pick<
 >;
 export type MessageRow = Pick<
   Database["public"]["Tables"]["ai_messages"]["Row"],
-  "id" | "role" | "content" | "tool_trace" | "created_at"
+  "id" | "role" | "content" | "tool_trace" | "created_at" | "agent_id"
 >;
 
 /** Bounded hot-path reads (working agreement #5): the conversation list and a
@@ -70,7 +70,7 @@ export async function getMessages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_messages")
-    .select("id, role, content, tool_trace, created_at")
+    .select("id, role, content, tool_trace, created_at, agent_id")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(MESSAGES_LIMIT);
@@ -86,6 +86,10 @@ export type ThreadMessage = {
   role: "user" | "assistant";
   content: string;
   trace: AskToolTrace | null;
+  /** The agent this turn belongs to — who it was addressed to (user turn) or
+   *  who answered it (assistant turn). Null is the plain assistant, which is
+   *  every row written before per-message routing existed. */
+  agentId: string | null;
 };
 
 /**
@@ -102,5 +106,46 @@ export function toThreadMessages(rows: MessageRow[]): ThreadMessage[] {
     role: r.role as "user" | "assistant",
     content: r.content,
     trace: parseToolTrace(r.tool_trace),
+    agentId: r.agent_id,
   }));
+}
+
+/**
+ * Who is on duty in this thread.
+ *
+ * The LAST USER TURN wins over `ai_conversations.agent_id`: the column is
+ * rewritten by the same send that writes the message, so the two agree — but
+ * the message is the record of what was actually asked, and a persona that
+ * disagrees with the last question is the bug this whole slice removes. The
+ * column is the fallback for threads written before the column existed, and
+ * for a briefing thread whose only turn is the agent's own report.
+ */
+export function currentPersonaFrom(
+  rows: MessageRow[],
+  conversationAgentId: string | null,
+): string | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i]!;
+    if (r.role === "user" && r.agent_id) return r.agent_id;
+  }
+  return conversationAgentId;
+}
+
+/** The thread's persona column, for a surface that has the id but not the
+ *  rows. One indexed single-row read; degrades to null rather than throwing —
+ *  a thread that renders as the plain assistant beats a 500. */
+export async function getConversationPersona(
+  conversationId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_conversations")
+    .select("agent_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (error) {
+    console.error(`[ask] persona read failed for ${conversationId}`, error);
+    return null;
+  }
+  return data?.agent_id ?? null;
 }
