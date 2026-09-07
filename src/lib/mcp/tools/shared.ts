@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { upsertCellCore } from "@/lib/boards/actions/cell-core";
+import type { ActionResult } from "@/lib/actions/result";
 
 /**
  * Resolves the per-request, RLS-respecting Supabase client for the authenticated
@@ -63,4 +64,58 @@ export async function writeCellValue(
     actorId,
   );
   return res.ok ? null : res.error;
+}
+
+/**
+ * The one place an `ActionResult` becomes an MCP `ToolResult`.
+ *
+ * Every core function in this surface returns `ActionResult` — the repo's
+ * canonical shape — and every descriptor needs the `{content, isError}`
+ * envelope. Hand-rolling that per descriptor is how the two drift: a handler
+ * that forgets `isError` reports a refusal to the model as an ordinary success
+ * string, and the model then tells the owner the work is done.
+ */
+export function toToolResult<T>(r: ActionResult<T>): ToolResult {
+  if (!r.ok) {
+    return { content: [{ type: "text", text: r.error }], isError: true };
+  }
+  // `data: undefined` is the mutation-only shape. JSON.stringify(undefined)
+  // returns undefined, not a string, so an explicit marker goes in instead.
+  const text = r.data === undefined ? '{"ok":true}' : JSON.stringify(r.data);
+  return { content: [{ type: "text", text }] };
+}
+
+/**
+ * Validates a grouped-dispatch tool's input against its discriminated union.
+ *
+ * WHY THIS EXISTS RATHER THAN THE SDK DOING IT: `ToolDescriptor.inputSchema` is
+ * a `z.ZodRawShape` because that is what `McpServer.registerTool` takes, and a
+ * discriminated union is not a raw shape. So a dispatch tool declares a raw
+ * shape whose `action` is a `z.enum` — enough for the SDK and the AI SDK to
+ * reject a missing or misspelled action — and applies the real union HERE, as
+ * the first statement of `invoke`.
+ *
+ * The failure is returned as an ordinary tool result, not thrown: the model
+ * gets a message it can act on and the run continues.
+ */
+export function parseAction<T>(
+  schema: z.ZodType<T>,
+  input: Record<string, unknown>,
+): { ok: true; value: T } | { ok: false; result: ToolResult } {
+  const parsed = schema.safeParse(input);
+  if (parsed.success) return { ok: true, value: parsed.data };
+  const issue = parsed.error.issues[0];
+  const where = issue?.path.length ? ` at ${issue.path.join(".")}` : "";
+  return {
+    ok: false,
+    result: {
+      content: [
+        {
+          type: "text",
+          text: `Invalid input${where}: ${issue?.message ?? "unrecognised action"}`,
+        },
+      ],
+      isError: true,
+    },
+  };
 }
