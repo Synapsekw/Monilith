@@ -60,6 +60,24 @@ describe("ConversationRail surface model", () => {
     expect(screen.getByText(/briefings/i).textContent).toMatch(/1/);
   });
 
+  // The count and the list under it are one statement: a search that matches
+  // only a chat left the collapsed summary still claiming "Briefings (1)"
+  // while the section it summarised had been filtered to nothing.
+  it("counts what the briefings section will actually show", async () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    await userEvent.type(
+      screen.getByLabelText(/search conversations/i),
+      "hiring",
+    );
+    expect(screen.getByText(/briefings/i).textContent).toMatch(/\(0\)/);
+  });
+
+  it("keeps counting a briefing that the search does match", async () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    await userEvent.type(screen.getByLabelText(/search conversations/i), "ops");
+    expect(screen.getByText(/briefings/i).textContent).toMatch(/\(1\)/);
+  });
+
   it("filters the loaded rows as you type, with no server call", async () => {
     render(<ConversationRail chats={chats} briefings={briefings} />);
     await userEvent.type(
