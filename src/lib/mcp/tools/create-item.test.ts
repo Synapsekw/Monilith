@@ -11,6 +11,52 @@ import { createItemHandler } from "./create-item";
 
 const ACTOR = "99999999-9999-4999-8999-999999999999";
 
+/**
+ * A `create_item`-shaped fake whose `create_item` RPC echoes the caller's own
+ * `p_name`/`p_group_id` back as the created row (so a batch's items carry
+ * their own names, not a shared placeholder), and can be told to fail one
+ * entry (`failAt`, by call order) or every entry (`failAll`). Column/item
+ * reads for field writes always succeed — the batch tests below create items
+ * with no `fields`, so those reads are never exercised.
+ */
+function fakeCreateItemClient(
+  opts: { failAt?: number; failAll?: boolean } = {},
+) {
+  let call = 0;
+  const client = {
+    rpc: (_fn: string, args: { p_group_id: string; p_name: string }) => {
+      const index = call++;
+      if (opts.failAll || index === opts.failAt) {
+        return Promise.resolve({
+          data: null,
+          error: { message: `entry ${index} failed` },
+        });
+      }
+      return Promise.resolve({
+        data: { id: `i${index}`, name: args.p_name, group_id: args.p_group_id },
+        error: null,
+      });
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: { org_id: "o1", board_id: "b1", kind: "text" },
+              error: null,
+            }),
+        }),
+      }),
+      upsert: (row: unknown) => ({
+        select: () => ({
+          single: () => Promise.resolve({ data: row, error: null }),
+        }),
+      }),
+    }),
+  };
+  return { getClient: () => Promise.resolve(client as never) };
+}
+
 describe("createItemHandler", () => {
   it("creates an item via RPC, then writes any provided field values", async () => {
     const upserted: unknown[] = [];
@@ -267,5 +313,59 @@ describe("createItemHandler", () => {
         },
       ],
     ]);
+  });
+});
+
+describe("create_item batch form", () => {
+  it("still accepts the original single-item input unchanged", async () => {
+    const { getClient } = fakeCreateItemClient();
+    const r = await createItemHandler(
+      getClient,
+      { groupId: "g1", name: "One" },
+      "u1",
+    );
+    expect(r.isError).toBeUndefined();
+    expect(JSON.parse(r.content[0]!.text).item.name).toBe("One");
+  });
+
+  it("creates every item in a batch and reports per-entry errors", async () => {
+    const { getClient } = fakeCreateItemClient({ failAt: 1 });
+    const r = await createItemHandler(
+      getClient,
+      { groupId: "g1", items: [{ name: "A" }, { name: "B" }, { name: "C" }] },
+      "u1",
+    );
+    const payload = JSON.parse(r.content[0]!.text);
+    expect(payload.created).toHaveLength(2);
+    expect(payload.errors).toEqual([{ index: 1, error: expect.any(String) }]);
+  });
+
+  // Matches create_item's existing fieldErrors rule exactly. Only a total
+  // failure sets isError.
+  it("sets isError only when every entry fails", async () => {
+    const { getClient } = fakeCreateItemClient({ failAll: true });
+    const r = await createItemHandler(
+      getClient,
+      { groupId: "g1", items: [{ name: "A" }, { name: "B" }] },
+      "u1",
+    );
+    expect(r.isError).toBe(true);
+  });
+
+  it("rejects a batch over the cap of 50", async () => {
+    const { getClient } = fakeCreateItemClient();
+    const items = Array.from({ length: 51 }, (_, i) => ({ name: `I${i}` }));
+    const r = await createItemHandler(
+      getClient,
+      { groupId: "g1", items },
+      "u1",
+    );
+    expect(r.isError).toBe(true);
+  });
+
+  it("rejects a call that supplies neither name nor items", async () => {
+    const { getClient } = fakeCreateItemClient();
+    const r = await createItemHandler(getClient, { groupId: "g1" }, "u1");
+    expect(r.isError).toBe(true);
   });
 });
