@@ -144,4 +144,27 @@ describe("CapabilityToggles", () => {
       [...AGENT_CAPABILITIES].sort(),
     );
   });
+
+  it("offers the two structure capabilities with their copy", () => {
+    render(<Harness initial={[]} />);
+    expect(
+      screen.getByText("Build and change board structure"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Remove things")).toBeInTheDocument();
+  });
+
+  // The org clamp is what makes this ship inert: `agent_capability_ceiling`
+  // for every existing org predates these two strings, so both are denied
+  // at run time until an admin ticks them on. A capability the org has not
+  // opened must not be tickable here, or the owner grants something that
+  // can only ever be silently dropped at 07:00.
+  it("cannot grant a structure capability the org ceiling excludes", () => {
+    const ceiling: AgentCapability[] = AGENT_CAPABILITIES.filter(
+      (c) => c !== "board.structure" && c !== "board.destroy",
+    );
+    render(<Harness initial={[]} ceiling={ceiling} />);
+
+    expect(toggleFor(/build and change board structure/i)).toBeDisabled();
+    expect(toggleFor(/remove things/i)).toBeDisabled();
+  });
 });

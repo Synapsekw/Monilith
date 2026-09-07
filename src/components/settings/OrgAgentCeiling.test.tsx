@@ -123,6 +123,33 @@ describe("OrgAgentCeiling", () => {
     });
   });
 
+  // The admin side of the clamp: an org must be able to OPEN the two
+  // structure capabilities (they ship denied for every existing org, since
+  // `agent_capability_ceiling` predates these strings) or the feature stays
+  // permanently inert.
+  it("offers the two structure capabilities with their copy, and lets an admin open them", async () => {
+    setAgentCapabilityCeiling.mockResolvedValue({
+      ok: true,
+      data: { capabilities: ["board.structure"] },
+    });
+    render(<OrgAgentCeiling initial={[]} />);
+
+    expect(
+      screen.getByText("Build and change board structure"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Remove things")).toBeInTheDocument();
+    expect(toggleFor(/build and change board structure/i)).toHaveAttribute(
+      "data-state",
+      "unchecked",
+    );
+
+    await userEvent.click(toggleFor(/build and change board structure/i));
+
+    expect(setAgentCapabilityCeiling).toHaveBeenCalledWith({
+      capabilities: ["board.structure"],
+    });
+  });
+
   it("reverts and shows an error when the save is rejected", async () => {
     setAgentCapabilityCeiling.mockResolvedValue({
       ok: false,
