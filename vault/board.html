@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-05 13:14",
+  "updated": "2026-09-07 09:01",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -119,9 +119,9 @@
     },
     {
       "name": "AI & agents",
-      "pct": 95,
-      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, and now a personal reference-document library (Spec 2b) injected verbatim into the system prompt, keyed by a per-agent nonce against prompt-injection forgery, plus an AI usage dashboard and weekly-digest narrative.",
-      "left": "E6 Stripe; Spec 2c (agent memory) and Spec 3 (orchestration, @mentionable agents, per-agent principals)."
+      "pct": 98,
+      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library and agent memory — and now Spec 3: agents delegate to agents with depth and fan-out enforced in the claim RPC, @handle addresses an agent from an item update, from mentions and in Ask, run history shows a nested run tree with subtree token totals, and the bot label is a per-org assistant name.",
+      "left": "E6 Stripe. Agent memory (Spec 2c) is shipped but inert until an admin opens the org ceiling."
     },
     {
       "name": "Platform & craft",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "c90abb42",
+        "value": "b5aca95c",
         "tone": "ok",
-        "note": "Ahead of main by 4 from the heal watermark 6d2a0813: the Spec 3 design+plan and two changelog commits. No unpromoted feature work."
+        "note": "Even with main. b5aca95c is the -s ours heal commit that records main as an ancestor; unpromoted delta 0, no live worktrees."
       },
       {
         "name": "main",
-        "value": "24ad32b4",
+        "value": "dd11b086",
         "tone": "ok",
-        "note": "PR #109 merged 2026-09-05 — the Settings navigation hotfix. Preceded by PR #108 (Spec 2c agent memory, create_pdf, sidebar-folders hardening) on 2026-09-04."
+        "note": "PR #110 merged 2026-09-07, 33 commits — Spec 3 (agent delegation, @handle addressing, nested run tree, per-org assistant name) plus the native-client OAuth fix. Preceded by PR #109 (Settings hotfix) on 2026-09-05."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 24ad32b4. Verified live: Vercel state=success, main CI green, /settings returning 307 → /settings/profile → 307 /login → 200."
+        "note": "Serving dd11b086. Verified live: Vercel state=success, main CI green, and POST /api/oauth/register returning the post-fix error string the old build could not produce. Owner then connected a native client (Grok bot) end to end."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "6413 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #109 plus main CI were green.",
+        "note": "6437 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #110 plus main CI were green.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "152/152",
+        "value": "156/156",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at promotion time. No migrations in this batch.",
+        "note": "Verified by db:ledger-check at promotion time. The Spec 3 run-graph migrations were already applied to DEV, which the production deployment reads.",
         "label": "ledger"
       }
     ]
@@ -194,14 +194,6 @@
       "tags": [
         "owner",
         "agents"
-      ]
-    },
-    {
-      "title": "Land Spec 3 (orchestration and @handle addressing)",
-      "why": "Design and plan are on develop (0a7f5586) and four task worktrees are running the first batch in parallel. Nothing else is in flight, so the critical path is whichever of t1–t4 finishes last.",
-      "tags": [
-        "agents",
-        "spec3"
       ]
     },
     {
@@ -307,38 +299,17 @@
       "text": "Spec 2c is complete and merged, and does nothing: the org ceiling clamp denies every write and records no proposal, by owner ruling. Deliberate, not a defect — but it means the feature has never run end to end against a real model, and its RLS integration suite only executes with PULSE_TEST_DB set, so it did not run in any gate."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/spec3-t1-schema",
-      "head": "62c6a4b8",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t2-vocabulary",
-      "head": "ddf8ca13",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t3-execute-run",
-      "head": "2f06fa0b",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t4-mention-model",
-      "head": "66ef1149",
-      "note": "spec3"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-09-05-1314-settings-menu-blank-streaming-redirect",
-    "when": "2026-09-05 13:14",
-    "title": "Settings opened to nothing — a redirect thrown inside the streaming shell",
+    "id": "2026-09-07-0901-oauth-native-schemes-promote-110",
+    "when": "2026-09-07 09:01",
+    "title": "Native-client OAuth schemes, then PR #110 to production",
     "bullets": [
-      "Clicking the profile icon → Settings did nothing in production: the menu closed, the page stayed put, and no error was recorded anywhere.",
-      "/settings was a redirect-only page inside the (app) streaming shell, so redirect() was thrown from a streaming context — a meta refresh in the flushed HTML, and an inert NEXT_REDIRECT digest in the RSC payload the router never acted on.",
-      "A hard page load recovered after 1s; a client-side navigation — the path every user takes — rendered the settings layout with an empty content column.",
-      "Fixed at the routing layer with next.config.ts redirects(), the page deleted, guarded by a test. Promoted as PR #109 and verified live.",
-      "gotcha-99 records the two-transport probe a redirect fix has to pass: curl plain AND RSC: 1. A curl alone passes the broken version."
+      "Cursor could not connect: /api/oauth/register rejected cursor:// with \"URL must be http or https\", so the connect flow died before a browser opened.",
+      "The rejecting rule was isHttpUrl — the board LINK-CELL stored-XSS guard — reused at an OAuth boundary where RFC 8252 §7.1 private-use schemes are required (gotcha-100).",
+      "New isAllowedRedirectUri, shared by register/authorize/token: http(s) always, other schemes only in hierarchical scheme:// form and never a script-bearing or local-resource scheme. 24 tests; isHttpUrl untouched.",
+      "Next 16 handles the cursor:// consent redirect as an external action redirect (location.replace client-side) — traced in the framework source rather than assumed, so no consent-route change was needed.",
+      "Promoted as PR #110 with the whole Spec 3 batch; the owner then connected Grok bot end to end."
     ]
   }
 }
