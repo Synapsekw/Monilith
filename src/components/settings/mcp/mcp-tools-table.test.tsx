@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpToolsTable, MCP_TOOLS_TABLE_ROWS } from "./mcp-tools-table";
 import { registerTools } from "@/lib/mcp/tools/register";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 
 /**
  * Structural stub of the one `McpServer` method `registerDescriptor` calls.
@@ -66,15 +67,41 @@ describe("McpToolsTable", () => {
       expect((row.what ?? "").length).toBeGreaterThan(0);
   });
 
-  it("classifies the original read tools as reads", () => {
-    // Deliberately loosened from an exact write-list assertion for the
-    // duration of the MCP write-surface plan
+  it("derives every tool's access from its capability, in both directions", () => {
+    // The exact write LIST is no longer pinned here — that would collide on
+    // every branch of the MCP write-surface plan
     // (docs/superpowers/plans/2026-09-07-mcp-write-surface.md), whose tasks
     // add tools to this catalog across several concurrent branches. Instead
-    // of pinning the full write list, this checks the property that
-    // actually matters: the five pre-existing write tools still render as
-    // "write", and a sample of pre-existing read tools still render as
-    // "read". The plan's Task 11 re-pins the full, exact write list.
+    // of freezing the list, this derives the expected classification
+    // independently from each descriptor's `capability` (`access` in
+    // `mcp-tools-table.tsx` is computed FROM `capability`, not hand-written)
+    // and asserts every row agrees: a descriptor whose capability is `null`,
+    // or whose capability map (a grouped-dispatch tool, keyed by action) has
+    // `null` for every action, must render as "read"; every other descriptor
+    // must render as "write". Looping over `ALL_TOOL_DESCRIPTORS` means this
+    // covers all 24 existing tools AND every tool the plan adds, needs no
+    // update when a tool is added, and catches misclassification in EITHER
+    // direction — which a frozen list only ever could for the tools already
+    // on it. Task 11 need only re-pin the tool count, not the list.
+    const byName = new Map(MCP_TOOLS_TABLE_ROWS.map((r) => [r.name, r]));
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      const isAlwaysRead =
+        d.capability === null ||
+        (typeof d.capability === "object" &&
+          Object.values(d.capability).every((v) => v === null));
+      const expected = isAlwaysRead ? "read" : "write";
+      expect(
+        byName.get(d.name)?.access,
+        `expected "${d.name}" to render as "${expected}"`,
+      ).toBe(expected);
+    }
+  });
+
+  it("classifies the original read tools as reads", () => {
+    // Second, independent check that pins the specific pre-existing
+    // classifications that were reasoned about by hand (the derived test
+    // above covers every tool structurally; this one is a cheap, targeted
+    // pin on top of it).
     const byName = new Map(MCP_TOOLS_TABLE_ROWS.map((r) => [r.name, r]));
 
     // `create_attachment_upload` inserts nothing itself, but it hands out a
