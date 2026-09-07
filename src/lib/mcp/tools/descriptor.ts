@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { GetClient, ToolResult } from "./shared";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 
@@ -44,8 +44,12 @@ export type ToolDescriptor = {
   name: string;
   title: string;
   description: string;
-  /** MCP's raw-shape form. The agent side wraps it with `z.object(...)`. */
-  inputSchema: z.ZodRawShape;
+  /** MCP's raw-shape form. The agent side wraps it with `z.object(...)`.
+   *  Spelled as `Record<string, z.ZodType>` rather than `z.ZodRawShape`
+   *  because that is the shape `registerTool` accepts: zod 4's own
+   *  `ZodRawShape` is the looser `Readonly<Record<string, $ZodType>>`, which
+   *  the MCP server SDK rejects. */
+  inputSchema: Record<string, z.ZodType>;
   /** `null` means an always-on read. The vocabulary lives in
    *  `@/lib/agents/capabilities` — one declaration, imported by both the
    *  descriptor layer and the agent editor.

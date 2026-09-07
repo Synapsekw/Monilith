@@ -1,5 +1,5 @@
 import "server-only";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { lookupTokenByAccessToken } from "@/lib/mcp/oauth/token-store";

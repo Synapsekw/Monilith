@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import { getRequestClient, mcpActorId } from "@/lib/mcp/context";
 import { registerDescriptor } from "./descriptor";
 import { ALL_TOOL_DESCRIPTORS } from "./catalog";
