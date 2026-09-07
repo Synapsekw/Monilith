@@ -4,6 +4,48 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-07",
+    kind: "new",
+    title: "Talk to a specific agent by name",
+    description:
+      "Start a message with @handle and that agent answers - and keeps answering the rest of the thread until you address someone else. Every answer is labelled with the agent behind it.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "new",
+    title: "Switch agents inside a conversation",
+    description:
+      "The thread header shows who is answering and lets you hand the conversation to a different agent, or back to the plain Monolith assistant, without starting over.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Agents bring their own knowledge into chat",
+    description:
+      "When an agent answers you directly, it now draws on the reference documents you attached to it and the notes it has learned, the same material it uses for its scheduled reports.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Daily reports no longer bury your chats",
+    description:
+      "Agent briefings moved into their own collapsed section of the sidebar, so a daily report can't push your conversations off the list.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Find an old conversation faster",
+    description:
+      "The conversation sidebar gained a search box and folds your history into Today, Last week, Two weeks ago and Older - each collapsible, with a count.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Ask AI is now Agents",
+    description:
+      "The sidebar entry and command palette now say Agents, and the settings page that configures them is Agent setup.",
+  },
+  {
     date: "2026-09-05",
     kind: "new",
     title: "Ask a specific agent by name",
