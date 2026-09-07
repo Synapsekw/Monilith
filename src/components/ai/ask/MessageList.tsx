@@ -11,6 +11,21 @@ import {
   resolveProposalStates,
   type AskToolTrace,
 } from "@/lib/ai/ask/tool-trace";
+import type {
+  AgentMentionTarget,
+  MentionTarget,
+} from "@/lib/collaboration/mentions";
+
+function isAgent(t: MentionTarget): t is AgentMentionTarget {
+  return t.kind === "agent";
+}
+
+/** What an assistant turn is called when it has no agent on record — a legacy
+ *  row, or a thread never handed to a persona. Distinct from `ThreadHeader`'s
+ *  "Monolith assistant" chip on purpose: that names WHO is on duty going
+ *  forward, this names WHO already answered — shorter reads better inline,
+ *  once per turn, than repeated in a transcript. */
+const PLAIN_ASSISTANT_NAME = "Monolith";
 
 export type UIMessage = {
   id: string;
@@ -25,13 +40,17 @@ export type UIMessage = {
 };
 
 /** A single chat turn. User turns sit right in a muted bubble; assistant turns
- *  sit left, full-width, chrome-neutral. */
+ *  sit left, full-width, chrome-neutral — named by a `Kicker` above the text
+ *  so the mark (gutter) and the name (label) each do one job. */
 function Bubble({
   role,
   content,
+  agentName,
 }: {
   role: UIMessage["role"];
   content: string;
+  /** Assistant turns only — who answered. Ignored for user turns. */
+  agentName?: string;
 }) {
   if (role === "user") {
     return (
@@ -47,8 +66,11 @@ function Bubble({
       <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
         <AskAiMark className="size-3.5" />
       </span>
-      <div className="min-w-0 flex-1 pt-0.5 text-sm leading-relaxed whitespace-pre-wrap">
-        {content}
+      <div className="min-w-0 flex-1 pt-0.5">
+        {agentName ? <Kicker className="mb-1 block">{agentName}</Kicker> : null}
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+          {content}
+        </div>
       </div>
     </div>
   );
@@ -72,6 +94,8 @@ export function MessageList({
   busyMessageId,
   dropState = "none",
   onRetryDrop,
+  agents = [],
+  streamingAgentId = null,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -81,6 +105,15 @@ export function MessageList({
   busyMessageId?: string | null;
   dropState?: DropState;
   onRetryDrop?: () => void;
+  /** The owner's agents — a pure lookup table for turn attribution, not a
+   *  fetch trigger. Also doubles as the empty state's "who you can ask"
+   *  list, so an owner with no agents yet gets the same empty state as
+   *  before rather than an offer to address nobody. */
+  agents?: readonly MentionTarget[];
+  /** Who is answering the LIVE turn (streaming bubble / thinking indicator).
+   *  Distinct from any message's `agentId` because the live turn has no
+   *  message row yet. */
+  streamingAgentId?: string | null;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -91,6 +124,18 @@ export function MessageList({
   // Pure derivation over the thread — a proposal is resolved by a LATER message
   // naming it, so reload and live-update render identically.
   const proposalStates = resolveProposalStates(messages);
+  // Pure lookup, once per render — no fetch, no per-message work beyond an
+  // array scan over a roster that's small by construction (an org's agents).
+  const nameOf = (id?: string | null) =>
+    agents.filter(isAgent).find((a) => a.agentId === id)?.name ??
+    PLAIN_ASSISTANT_NAME;
+  const agentHandles = agents.filter(isAgent);
+  // Unlike `nameOf`, no "Monolith" fallback: the thinking indicator's own
+  // generic label already covers "no agent on record" — this is only truthy
+  // when there is a real name to announce.
+  const streamingAgent = agentHandles.find(
+    (a) => a.agentId === streamingAgentId,
+  )?.name;
 
   return (
     <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
@@ -100,11 +145,28 @@ export function MessageList({
             <span className="bg-surface text-brand flex size-11 items-center justify-center rounded-lg border">
               <AskAiMark className="size-5" />
             </span>
-            <Kicker>Ask AI</Kicker>
+            <Kicker>Agents</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
-              Ask a question about your boards — what&apos;s overdue, who&apos;s
-              overloaded, what shipped this week. Answers are grounded in your
-              real data.
+              {agentHandles.length > 0 ? (
+                <>
+                  Start with{" "}
+                  {agentHandles.map((a, i) => (
+                    <span key={a.agentId}>
+                      <span className="text-foreground font-mono">
+                        @{a.handle}
+                      </span>
+                      {i < agentHandles.length - 1 ? ", " : ""}
+                    </span>
+                  ))}{" "}
+                  — or just ask.
+                </>
+              ) : (
+                <>
+                  Ask a question about your boards — what&apos;s overdue,
+                  who&apos;s overloaded, what shipped this week. Answers are
+                  grounded in your real data.
+                </>
+              )}
             </p>
           </div>
         ) : null}
@@ -115,7 +177,13 @@ export function MessageList({
           const proposalStatus = proposalStates.get(m.id);
           return (
             <div key={m.id} className="flex flex-col gap-3">
-              <Bubble role={m.role} content={m.content} />
+              <Bubble
+                role={m.role}
+                content={m.content}
+                agentName={
+                  m.role === "assistant" ? nameOf(m.agentId) : undefined
+                }
+              />
               {actions.length > 0 && proposalStatus ? (
                 // Indented to the assistant gutter (size-7 mark + gap-3), so the
                 // card hangs off the turn it belongs to.
@@ -146,11 +214,25 @@ export function MessageList({
 
         {/* Open, no tokens: the 25–42s stretch that used to render a static "…"
             and read as a hung page (gotcha-62). One live region, carrying the
-            freshest status — so the status is NOT also drawn below. */}
-        {streamingText === "" ? <ThinkingIndicator label={status} /> : null}
+            freshest status — so the status is NOT also drawn below. The label
+            names the answering agent once one is known; with no agent on the
+            turn, `ThinkingIndicator` falls back to its own generic label
+            rather than a hollow "Monolith is working…". */}
+        {streamingText === "" ? (
+          <ThinkingIndicator
+            label={
+              status ??
+              (streamingAgent ? `${streamingAgent} is working…` : null)
+            }
+          />
+        ) : null}
 
         {streamingText ? (
-          <Bubble role="assistant" content={streamingText} />
+          <Bubble
+            role="assistant"
+            content={streamingText}
+            agentName={nameOf(streamingAgentId)}
+          />
         ) : null}
 
         {status && streamingText !== "" ? (

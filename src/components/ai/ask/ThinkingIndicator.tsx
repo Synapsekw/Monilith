@@ -16,6 +16,13 @@ const DOT_DELAYS = [
 /**
  * The "Ask AI is working" state, from submit until the first token.
  *
+ * `label` is computed by the caller (`MessageList`), not here: once the turn
+ * is addressed to a known agent it becomes "`${agentName} is working…`", so
+ * the indicator names who is answering instead of a generic verb. With no
+ * agent on the turn, the caller passes `null`/`""` and this component falls
+ * back to `THINKING_FALLBACK_LABEL` below — this component stays agent-blind
+ * on purpose, since it has no roster to resolve a name from.
+ *
  * Ask Pulse runs its read tools with text buffered, so a turn's opening stretch
  * is routinely 25–42 SECONDS with nothing streaming. That used to render a
  * static "…" — indistinguishable from a hung page, which is exactly how users

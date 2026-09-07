@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { MessageList, type UIMessage } from "./MessageList";
+import type { MentionTarget } from "@/lib/collaboration/mentions";
 
 const ACTION = {
   kind: "create_item" as const,
@@ -155,5 +156,68 @@ describe("MessageList — pre-token working state (gotcha-62)", () => {
       screen.getByText("The AI assistant hit a snag."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+const agents: MentionTarget[] = [
+  { kind: "agent", agentId: "a-ops", handle: "ops", name: "Ops" },
+];
+
+describe("MessageList — per-turn attribution", () => {
+  it("names the agent that answered a turn", () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            id: "m1",
+            role: "user",
+            content: "@ops what slipped?",
+            agentId: "a-ops",
+          },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "Three items.",
+            agentId: "a-ops",
+          },
+        ]}
+        agents={agents}
+        streamingText={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Ops")).toBeInTheDocument();
+  });
+
+  it("labels an unattributed answer as the plain assistant", () => {
+    render(
+      <MessageList
+        messages={[
+          { id: "m1", role: "assistant", content: "Hi", agentId: null },
+        ]}
+        agents={agents}
+        streamingText={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Monolith")).toBeInTheDocument();
+  });
+
+  it("greets an owner with agents by offering them", () => {
+    render(
+      <MessageList
+        messages={[]}
+        agents={agents}
+        streamingText={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/@ops/)).toBeInTheDocument();
   });
 });
