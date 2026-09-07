@@ -1,7 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import type { ToolScope } from "@/lib/mcp/tools/descriptor";
+import {
+  scopeFor,
+  type ToolDescriptor,
+  type ToolScope,
+} from "@/lib/mcp/tools/descriptor";
 import { descriptorsFor } from "./tool-descriptors";
 import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
 import {
@@ -57,18 +61,19 @@ const TABLE_BY_KIND: Record<ProposalTargetKind, "items" | "boards" | "groups"> =
   };
 
 /**
- * The scope of every tool a proposal can name, keyed by tool name.
+ * The descriptor of every tool a proposal can name, keyed by tool name.
  *
  * Built from `descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS })` — the SAME
  * composition the run's tool set, its grant gate and the decide path derive
  * from, so a tool that can be proposed is a tool this can describe. Module
  * scope: the composition is static, and a duplicate name throws there.
+ *
+ * The descriptor itself is kept, not its `scope` field, because a
+ * grouped-dispatch tool's scope depends on the row's OWN `action` — resolved
+ * per row via `scopeFor`, the same resolver `board-scope-guard.ts` uses.
  */
-const SCOPE_BY_TOOL: Map<string, ToolScope> = new Map(
-  descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS }).map((d) => [
-    d.name,
-    d.scope,
-  ]),
+const DESCRIPTOR_BY_TOOL: Map<string, ToolDescriptor> = new Map(
+  descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS }).map((d) => [d.name, d]),
 );
 
 /** The kind and id one proposal addresses, or null when it addresses none —
@@ -77,8 +82,9 @@ const SCOPE_BY_TOOL: Map<string, ToolScope> = new Map(
 function targetIdOf(
   row: ProposalRow,
 ): { kind: ProposalTargetKind; id: string } | null {
-  const scope = SCOPE_BY_TOOL.get(row.toolName);
-  if (!scope) return null;
+  const descriptor = DESCRIPTOR_BY_TOOL.get(row.toolName);
+  if (!descriptor) return null;
+  const scope: ToolScope = scopeFor(descriptor, row.input);
   const kind = KIND_BY_SCOPE[scope];
   if (!kind) return null;
   // The descriptor contract: the input field is named after the scope.

@@ -51,6 +51,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   deriveBoardAccess,
   getBoardAccess,
+  getBoardAccessCore,
   listMyBoards,
   listSharedBoards,
 } from "./queries";
@@ -139,5 +140,70 @@ describe("deriveBoardAccess", () => {
     expect(deriveBoardAccess(board, grantsWithOwnerRow, "owner-1")).toBe(
       "owner",
     );
+  });
+});
+
+/**
+ * Structural fake for `getBoardAccessCore`'s Supabase surface, following the
+ * argument-aware style of `src/test/mcp-fake-client.ts`. It matches the exact
+ * call chain `getBoardAccessCore` issues (read at `./queries.ts:114-140`):
+ *   - `.from("boards").select("created_by").eq("id", boardId).maybeSingle()`
+ *   - `.from("board_members").select("access_level").eq("board_id", …).eq("user_id", …).maybeSingle()`
+ * The `eq(...).eq(...)` shape on `board_members` needs the intermediate link
+ * to expose BOTH `.eq()` and `.maybeSingle()`, since `boards`' single-`eq`
+ * chain terminates one level earlier.
+ */
+function fakeBoardAccessClient(opts: {
+  created_by: string | null;
+  grant: { role: "editor" | "viewer" } | null;
+}) {
+  return {
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: async () =>
+              table === "board_members"
+                ? {
+                    data: opts.grant ? { access_level: opts.grant.role } : null,
+                    error: null,
+                  }
+                : { data: null, error: null },
+          }),
+          maybeSingle: async () =>
+            table === "boards"
+              ? {
+                  data:
+                    opts.created_by !== null
+                      ? { created_by: opts.created_by }
+                      : null,
+                  error: null,
+                }
+              : { data: null, error: null },
+        }),
+      }),
+    }),
+  } as never;
+}
+
+describe("getBoardAccessCore", () => {
+  it("reports owner when the caller created the board", async () => {
+    const client = fakeBoardAccessClient({ created_by: "u1", grant: null });
+    await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe("owner");
+  });
+
+  it("reports the board_members role for a non-creator", async () => {
+    const client = fakeBoardAccessClient({
+      created_by: "u2",
+      grant: { role: "editor" },
+    });
+    await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+      "editor",
+    );
+  });
+
+  it("reports null for a board the caller cannot see", async () => {
+    const client = fakeBoardAccessClient({ created_by: null, grant: null });
+    await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBeNull();
   });
 });

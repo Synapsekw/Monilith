@@ -1,6 +1,6 @@
 import "server-only";
 import type { ToolApprovalStatus } from "ai";
-import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
+import { capabilityFor, type ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 import { descriptorsFor } from "./tool-descriptors";
 
@@ -71,27 +71,28 @@ export function makeGrantGate(args: {
     // `agentExcluded` one, or a tool added without a descriptor; none should
     // execute.
     if (!d) return { type: "denied" as const, reason: "Unknown tool." };
-    if (d.capability === null) return undefined;
+
+    const input = (toolCall.input ?? {}) as Record<string, unknown>;
+    const capability = capabilityFor(d, input);
+    if (capability === null) return undefined;
 
     // Ceiling BEFORE grant, and no proposal recorded: a proposal nobody in the
     // org is permitted to approve would render an approve button that can only
     // ever fail. An org admin lowering the ceiling silently clamps every agent
     // at once — that is what makes it the admin half of the two-key gate.
-    if (!ceiling.has(d.capability)) {
+    if (!ceiling.has(capability)) {
       return {
         type: "denied" as const,
-        reason: `${d.capability} is disabled for this organization.`,
+        reason: `${capability} is disabled for this organization.`,
       };
     }
-    if (granted.has(d.capability)) return undefined;
+    if (granted.has(capability)) return undefined;
 
     args.onPropose({
       toolCallId: toolCall.toolCallId,
       toolName: toolCall.toolName,
-      // The DESCRIPTOR's capability, never a caller-supplied one, so the
-      // approval UI and the gate cannot disagree about what a tool costs.
-      capability: d.capability,
-      input: (toolCall.input ?? {}) as Record<string, unknown>,
+      capability,
+      input,
     });
     return { type: "denied" as const, reason: UNGRANTED_REASON };
   };
