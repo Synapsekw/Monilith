@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { midpoint } from "@/lib/boards/position";
 import {
   createItemSchema,
   archiveItemSchema,
@@ -16,6 +15,13 @@ import {
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import type { Tables } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import {
+  addSubitemCore,
+  archiveItemCore,
+  restoreItemCore,
+  reorderItemCore,
+  moveItemCore,
+} from "@/lib/boards/core/item";
 
 /** Create an item via RPC (server derives org_id/board_id and position). Returns the full created item row. */
 export async function createItem(input: {
@@ -68,39 +74,7 @@ export async function addSubitem(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-
-  const { data: parent, error: parentErr } = await supabase
-    .from("items")
-    .select("org_id, board_id, group_id, parent_id")
-    .eq("id", parsed.data.parentId)
-    .maybeSingle();
-  if (parentErr || !parent) return fail("Parent item not found.");
-  if (parent.parent_id !== null) return fail("Subitems cannot be nested.");
-
-  const { data: last } = await supabase
-    .from("items")
-    .select("position")
-    .eq("parent_id", parsed.data.parentId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data, error } = await supabase
-    .from("items")
-    .insert({
-      org_id: parent.org_id,
-      board_id: parent.board_id,
-      group_id: parent.group_id,
-      parent_id: parsed.data.parentId,
-      name: parsed.data.name,
-      position: midpoint(last?.position ?? null, null),
-    })
-    .select("*")
-    .single();
-  if (error || !data)
-    return fail(error?.message ?? "Could not create subitem.");
-
-  return { ok: true, data: { item: data } };
+  return addSubitemCore(supabase, parsed.data);
 }
 
 /**
@@ -158,11 +132,7 @@ export async function archiveItem(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const supabase = await createClient();
-  const { error } = await supabase.rpc("archive_item", {
-    p_item_id: parsed.data.itemId,
-  });
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return archiveItemCore(supabase, parsed.data);
 }
 
 /** Restore an item archived in the same batch (matching timestamp) via RPC. */
@@ -173,11 +143,7 @@ export async function restoreItem(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const supabase = await createClient();
-  const { error } = await supabase.rpc("restore_item", {
-    p_item_id: parsed.data.itemId,
-  });
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+  return restoreItemCore(supabase, parsed.data);
 }
 
 /**
@@ -228,15 +194,7 @@ export async function reorderItem(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("items")
-    .update({ position: parsed.data.position })
-    .eq("id", parsed.data.itemId)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail("Item not found.");
-  return { ok: true, data: undefined };
+  return reorderItemCore(supabase, parsed.data);
 }
 
 /**
@@ -260,70 +218,5 @@ export async function moveItem(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-
-  const { data: item, error: itemErr } = await supabase
-    .from("items")
-    .select("board_id, parent_id")
-    .eq("id", parsed.data.itemId)
-    .maybeSingle();
-  if (itemErr || !item) return fail("Item not found.");
-  if (item.parent_id !== null)
-    return fail("Subitems can't be moved between groups.");
-
-  const { data: group, error: groupErr } = await supabase
-    .from("groups")
-    .select("board_id")
-    .eq("id", parsed.data.groupId)
-    .maybeSingle();
-  if (groupErr || !group) return fail("Group not found.");
-  if (group.board_id !== item.board_id)
-    return fail("Group belongs to a different board.");
-
-  // Explicit position (drag-drop exact spot) wins; otherwise append after the
-  // target group's last top-level item (bulk move / collapsed-group drop).
-  let position = parsed.data.position;
-  if (position === undefined) {
-    const { data: last } = await supabase
-      .from("items")
-      .select("position")
-      .eq("group_id", parsed.data.groupId)
-      .is("parent_id", null)
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    position = midpoint(last?.position ?? null, null);
-  }
-
-  const { data: moved, error } = await supabase
-    .from("items")
-    .update({ group_id: parsed.data.groupId, position })
-    .eq("id", parsed.data.itemId)
-    // The whole row, not just the id: PostgREST returns it in the SAME request,
-    // so the caller can patch a mounted board without a refetch (gotcha-13).
-    .select("*")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  // A viewer can READ the board (both guards above pass) but not write it: the
-  // UPDATE then matches zero rows and returns null data with NO error. Read the
-  // row back so that silent no-op can't be reported as a successful move —
-  // same treatment renameItem gives its own RLS-hidden case.
-  if (!moved) return fail("You don't have permission to move this item.");
-
-  // Keep subitems co-located with their parent (their denormalized group_id
-  // must match). RLS-scoped; best-effort — the parent already moved. The
-  // returned ids let the caller patch a mounted board without a refetch; a
-  // failure here costs the caller nothing beyond a stale subitem row.
-  const { data: movedSubitems } = await supabase
-    .from("items")
-    .update({ group_id: parsed.data.groupId })
-    .eq("parent_id", parsed.data.itemId)
-    .select("id");
-
-  return {
-    ok: true,
-    data: {
-      item: moved,
-      subitemIds: (movedSubitems ?? []).map((s) => s.id),
-    },
-  };
+  return moveItemCore(supabase, parsed.data);
 }

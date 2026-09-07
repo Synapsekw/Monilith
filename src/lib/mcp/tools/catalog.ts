@@ -6,6 +6,7 @@ import { searchItemsDescriptor } from "./search-items";
 import { getItemDescriptor } from "./get-item";
 import { createItemDescriptor } from "./create-item";
 import { updateItemDescriptor } from "./update-item";
+import { manageItemDescriptor } from "./manage-item";
 import { createAttachmentUploadDescriptor } from "./create-attachment-upload";
 import { attachFileDescriptor } from "./attach-file";
 import { listOrganizationsDescriptor } from "./list-organizations";
@@ -47,6 +48,7 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   getItemDescriptor,
   createItemDescriptor,
   updateItemDescriptor,
+  manageItemDescriptor,
   createAttachmentUploadDescriptor,
   attachFileDescriptor,
   listOrganizationsDescriptor,
