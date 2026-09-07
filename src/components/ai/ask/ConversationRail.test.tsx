@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ConversationRail } from "./ConversationRail";
 import type { ConversationRow } from "@/lib/ai/ask/conversations";
 
@@ -15,8 +16,12 @@ vi.mock("@/lib/ai/ask/conversation-actions", () => ({
   renameConversation: vi.fn(),
 }));
 
-const conversations: ConversationRow[] = [
-  { id: "c1", title: "Sprint planning", updated_at: "2026-08-01T10:00:00Z" },
+const chats: ConversationRow[] = [
+  { id: "c1", title: "Q3 slippage", updated_at: new Date().toISOString() },
+  { id: "c2", title: "Hiring plan", updated_at: "2026-08-01T10:00:00Z" },
+];
+const briefings: ConversationRow[] = [
+  { id: "b1", title: "Ops — 2026-09-07", updated_at: "2026-09-07T06:00:00Z" },
 ];
 
 describe("ConversationRail surface model", () => {
@@ -34,10 +39,40 @@ describe("ConversationRail surface model", () => {
    * translucent.
    */
   it("does not paint an opaque New chat fill on the wash", () => {
-    render(<ConversationRail conversations={conversations} />);
+    render(<ConversationRail chats={chats} briefings={briefings} />);
     const button = screen.getByRole("button", { name: /new chat/i });
     expect(button.className).toContain("bg-transparent");
     expect(button.className).not.toMatch(/\bbg-background\b/);
     expect(button.className).toContain("dark:bg-input/30");
+  });
+
+  it("keeps briefings out of the chat list, in their own section", () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    const chatNav = screen.getByRole("navigation", { name: /chats/i });
+    expect(within(chatNav).queryByText(/Ops — 2026-09-07/)).toBeNull();
+    expect(
+      screen.getByRole("group", { name: /briefings/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("counts the briefings on the collapsed section", () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    expect(screen.getByText(/briefings/i).textContent).toMatch(/1/);
+  });
+
+  it("filters the loaded rows as you type, with no server call", async () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    await userEvent.type(
+      screen.getByLabelText(/search conversations/i),
+      "hiring",
+    );
+    expect(screen.queryByText("Q3 slippage")).toBeNull();
+    expect(screen.getByText("Hiring plan")).toBeInTheDocument();
+  });
+
+  it("groups today's chats under Today", () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    expect(screen.getByText(/^today$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^earlier$/i)).toBeInTheDocument();
   });
 });
