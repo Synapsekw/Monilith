@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   FAKE_ACTOR,
   FAKE_BOARD,
@@ -8,7 +8,13 @@ import {
   someTrigger,
   webhookAction,
 } from "@/test/automation-fake-client";
-import { createAutomationCore } from "./automation-core";
+import {
+  createAutomationCore,
+  updateAutomationCore,
+  deleteAutomationCore,
+} from "./automation-core";
+
+const FAKE_AUTOMATION = "55555555-5555-4555-8555-555555555555";
 
 describe("createAutomationCore — webhook admin guard", () => {
   // The guard is the thing most likely to be lost in an extraction
@@ -226,5 +232,178 @@ describe("createAutomationCore — boundary validation", () => {
       FAKE_ACTOR,
     );
     expect(r).toEqual({ ok: false, error: "Board not found." });
+  });
+});
+
+/** A minimal fake for `updateAutomationCore`/`deleteAutomationCore`'s own
+ *  surface: a `select("org_id")` read for the webhook admin-gate, an
+ *  `org_members` read `isOrgAdmin` performs, and the terminal
+ *  `update`/`delete` chain ending in `.select("board_id").maybeSingle()`. */
+function updateDeleteClient(opts: {
+  automation?: { org_id: string } | null;
+  role?: "owner" | "admin" | "member" | null;
+  mutateResult?: { data: unknown; error: unknown };
+  onMutate?: (kind: "update" | "delete", patch?: unknown) => void;
+}) {
+  const automation =
+    opts.automation === undefined ? { org_id: FAKE_ORG } : opts.automation;
+  const mutateResult = opts.mutateResult ?? {
+    data: { board_id: FAKE_BOARD },
+    error: null,
+  };
+
+  return (table: string) => {
+    if (table === "automations") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: automation, error: null }),
+          }),
+        }),
+        update: (patch: unknown) => {
+          opts.onMutate?.("update", patch);
+          return {
+            eq: () => ({
+              select: () => ({
+                maybeSingle: async () => mutateResult,
+              }),
+            }),
+          };
+        },
+        delete: () => {
+          opts.onMutate?.("delete");
+          return {
+            eq: () => ({
+              select: () => ({
+                maybeSingle: async () => mutateResult,
+              }),
+            }),
+          };
+        },
+      };
+    }
+    if (table === "org_members") {
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data:
+                  opts.role === null ? null : { role: opts.role ?? "member" },
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      };
+    }
+    return {} as never;
+  };
+}
+
+describe("updateAutomationCore", () => {
+  it("updates fields and reports the automation's board id", async () => {
+    const onMutate = vi.fn();
+    const client = { from: updateDeleteClient({ onMutate }) };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, name: "Renamed" },
+      FAKE_ACTOR,
+    );
+    expect(r).toEqual({ ok: true, data: { boardId: FAKE_BOARD } });
+    expect(onMutate).toHaveBeenCalledWith("update", { name: "Renamed" });
+  });
+
+  it("refuses to add a webhook action when the actor is not an org admin", async () => {
+    const onMutate = vi.fn();
+    const client = {
+      from: updateDeleteClient({ role: "member", onMutate }),
+    };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, actions: [webhookAction] },
+      FAKE_ACTOR,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toMatch(/organization admin/i);
+    expect(onMutate).not.toHaveBeenCalled();
+  });
+
+  it("allows adding a webhook action for an org admin", async () => {
+    const client = { from: updateDeleteClient({ role: "admin" }) };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, actions: [webhookAction] },
+      FAKE_ACTOR,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("does not look up org membership when actions are untouched", async () => {
+    const client = {
+      from: updateDeleteClient({ role: "member" }),
+    };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, name: "Renamed" },
+      FAKE_ACTOR,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("does not look up org membership for a non-webhook action patch", async () => {
+    const client = { from: updateDeleteClient({ role: "member" }) };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, actions: [notifyAction] },
+      FAKE_ACTOR,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("reports a missing automation when adding a webhook to an unknown id", async () => {
+    const client = { from: updateDeleteClient({ automation: null }) };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, actions: [webhookAction] },
+      FAKE_ACTOR,
+    );
+    expect(r).toEqual({ ok: false, error: "Automation not found." });
+  });
+});
+
+describe("deleteAutomationCore", () => {
+  it("deletes the automation and reports its board id", async () => {
+    const onMutate = vi.fn();
+    const client = { from: updateDeleteClient({ onMutate }) };
+    const r = await deleteAutomationCore(client as never, {
+      id: FAKE_AUTOMATION,
+    });
+    expect(r).toEqual({ ok: true, data: { boardId: FAKE_BOARD } });
+    expect(onMutate).toHaveBeenCalledWith("delete");
+  });
+
+  it("reports a null board id when the deleted row carries none", async () => {
+    const client = {
+      from: updateDeleteClient({
+        mutateResult: { data: { board_id: null }, error: null },
+      }),
+    };
+    const r = await deleteAutomationCore(client as never, {
+      id: FAKE_AUTOMATION,
+    });
+    expect(r).toEqual({ ok: true, data: { boardId: null } });
+  });
+
+  it("surfaces a delete error", async () => {
+    const client = {
+      from: updateDeleteClient({
+        mutateResult: { data: null, error: { message: "denied by RLS" } },
+      }),
+    };
+    const r = await deleteAutomationCore(client as never, {
+      id: FAKE_AUTOMATION,
+    });
+    expect(r).toEqual({ ok: false, error: "denied by RLS" });
   });
 });

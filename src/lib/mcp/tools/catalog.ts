@@ -28,6 +28,7 @@ import { describeSchemaDescriptor } from "./describe-schema";
 import { manageBoardDescriptor } from "./manage-board";
 import { manageGroupDescriptor } from "./manage-group";
 import { manageColumnDescriptor } from "./manage-column";
+import { manageViewDescriptor } from "./manage-view";
 
 /**
  * Every MCP tool's descriptor, deliberately kept OUT of `register.ts`:
@@ -70,4 +71,5 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   manageBoardDescriptor,
   manageGroupDescriptor,
   manageColumnDescriptor,
+  manageViewDescriptor,
 ];

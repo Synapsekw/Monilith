@@ -470,7 +470,7 @@ describe("the tool lookup", () => {
     });
   });
 
-  it("covers create_file and create_automation, which the catalog does NOT hold", async () => {
+  it("covers create_file and manage_automation, which the catalog does NOT hold", async () => {
     // The real composition, unmocked. A lookup built from `ALL_TOOL_DESCRIPTORS`
     // alone would make every create_file proposal permanently un-approvable —
     // and `create_attachment_upload` must stay absent, since an agent is never
@@ -484,7 +484,7 @@ describe("the tool lookup", () => {
       (d) => d.name,
     );
     expect(names).toContain("create_file");
-    expect(names).toContain("create_automation");
+    expect(names).toContain("manage_automation");
     expect(names).not.toContain("create_attachment_upload");
   });
 });

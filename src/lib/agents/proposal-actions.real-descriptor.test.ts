@@ -18,7 +18,7 @@ import {
  * seam between the decide path and the descriptors it executes is tested from
  * both sides and joined by nobody.
  *
- * This file joins it, on the highest-risk path in the branch: `create_automation`
+ * This file joins it, on the highest-risk path in the branch: `manage_automation`
  * files a rule that then fires for everyone on the board, forever, and its
  * stored input is a blob a LANGUAGE MODEL chose up to seven days earlier.
  * Nothing is mocked but the row store, the session and `next/cache`.
@@ -56,9 +56,12 @@ function automationProposal(actions: unknown[]) {
     orgId: "org-1",
     ownerId: FAKE_ACTOR,
     capability: "automation.create",
-    toolName: "create_automation",
+    toolName: "manage_automation",
     toolCallId: "call-1",
     input: {
+      // A stored grouped-dispatch call carries its own `action`, exactly as
+      // the model emitted it — re-validated at decide time against the union.
+      action: "create",
       boardId: FAKE_BOARD,
       name: "Nudge on done",
       trigger: someTrigger,
@@ -84,7 +87,7 @@ beforeEach(() => {
   client();
 });
 
-describe("decideProposal — a real create_automation descriptor", () => {
+describe("decideProposal — a real manage_automation descriptor", () => {
   it("executes the stored call as the approver and records the outcome", async () => {
     client({ role: "member" });
     getProposalForDecision.mockResolvedValue(
@@ -110,12 +113,23 @@ describe("decideProposal — a real create_automation descriptor", () => {
 
   /**
    * THE ONE THAT MATTERS. A proposal outlives the schema that produced it, and
-   * the agent tool has since stopped offering `call_webhook` at all. A stored
-   * row carrying one must be refused at step 5 — re-validation against the
-   * tool's CURRENT input schema — and never reach `createAutomationCore`, whose
-   * own guard would have waved it through for an org admin.
+   * `create` still does not offer `call_webhook` at all. A stored row carrying
+   * one must be refused, and must never reach `createAutomationCore`, whose own
+   * guard would have waved it through for an org admin.
+   *
+   * WHICH LAYER refuses it moved when `create_automation` became the
+   * grouped-dispatch `manage_automation`, and that move is deliberate. A
+   * dispatch tool's `inputSchema` is a FLAT raw shape — it cannot condition
+   * `actions` on `action`, so it carries the WIDER vocabulary on purpose (an
+   * org admin's legitimate `update` webhook edit must not be rejected there).
+   * So step 5's re-validation now passes and the narrowing is enforced one
+   * layer in, by `parseAction`'s discriminated union at the top of `invoke`.
+   * The security property is unchanged and is what this asserts: nothing is
+   * written, and the row ends terminally `failed` — only the claim now
+   * precedes the refusal, so the outcome is SETTLED failed rather than claimed
+   * failed.
    */
-  it("refuses a stored webhook action against the tool's CURRENT schema", async () => {
+  it("refuses a stored webhook action before it can reach the core", async () => {
     // An org ADMIN approving: the exact actor the core's guard admits.
     client({ role: "admin" });
     getProposalForDecision.mockResolvedValue(
@@ -125,13 +139,17 @@ describe("decideProposal — a real create_automation descriptor", () => {
     const r = await decideProposal({ id: PROPOSAL_ID, approve: true });
 
     expect(r.ok).toBe(false);
+    // The rule never landed — the whole point.
     expect(fake.inserts).toHaveLength(0);
     // Terminal, not left pending: the row is decided `failed` rather than
-    // offering an Approve button whose only possible outcome is failure.
+    // offering an Approve button whose only possible outcome is failure. The
+    // claim is to `failed` and the outcome settles `failed` too.
     expect(claimProposalDecision.mock.calls[0]?.[1]).toMatchObject({
       status: "failed",
     });
-    expect(settleProposalOutcome).not.toHaveBeenCalled();
+    expect(settleProposalOutcome.mock.calls[0]?.[1]).toMatchObject({
+      status: "failed",
+    });
   });
 
   it("surfaces a real core refusal as a failed decision", async () => {
