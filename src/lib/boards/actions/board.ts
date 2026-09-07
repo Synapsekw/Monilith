@@ -1,10 +1,9 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getUser } from "@/lib/auth/session";
-import { sharedBoardsTag } from "@/lib/cache/tags";
 import {
   createBoardSchema,
   createBoardFromTemplateSchema,
@@ -22,6 +21,13 @@ import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { invalidateMyBoards } from "@/lib/boards/actions/internal";
+import {
+  archiveBoardCore,
+  createBoardCore,
+  duplicateBoardCore,
+  renameBoardCore,
+  restoreBoardCore,
+} from "@/lib/boards/core/board";
 
 /** Create a board pre-populated from a built-in template via an atomic RPC. */
 export async function createBoardFromTemplate(input: {
@@ -63,15 +69,9 @@ export async function createBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_board", {
-    p_workspace_id: parsed.data.workspaceId,
-    p_name: parsed.data.name,
-  });
-  if (error || !data) return fail(error?.message ?? "Could not create board.");
-
-  await invalidateMyBoards();
-  return { ok: true, data: { boardId: data.id } };
+  const result = await createBoardCore(await createClient(), parsed.data);
+  if (result.ok) await invalidateMyBoards();
+  return result;
 }
 
 export async function renameBoard(input: {
@@ -82,28 +82,14 @@ export async function renameBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("boards")
-    .update({ name: parsed.data.name })
-    .eq("id", parsed.data.boardId);
-  if (error) return fail(error.message);
+  const result = await renameBoardCore(await createClient(), parsed.data);
+  if (!result.ok) return result;
 
   await invalidateMyBoards();
 
-  // Recipients read this board's name from their cached shared-boards list
-  // (`shared-boards:user:<id>`, served by listSharedBoardsCached). A rename must
-  // drop THEIR entry too, or they keep the stale name until the nav TTL expires.
-  // Fan out over every board_members grantee — this read is RLS-scoped to the
-  // board the owner can already read, and returns non-owner members.
-  const { data: members } = await supabase
-    .from("board_members")
-    .select("user_id")
-    .eq("board_id", parsed.data.boardId);
-  for (const m of members ?? []) updateTag(sharedBoardsTag(m.user_id));
-
   // The board name shows on the board page's own (uncached) header; the sidebar
-  // list is served from the `boards:user:<me>` cache the updateTag above expired.
+  // list is served from the `boards:user:<me>` cache invalidateMyBoards expired,
+  // and the recipients' shared-boards tags are expired inside renameBoardCore.
   revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: undefined };
 }
@@ -189,21 +175,16 @@ export async function duplicateBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  // Any member (owner/editor/viewer) may duplicate — they can already read
-  // the data. Non-members get the same message as a missing board so we
-  // don't leak existence (spec F4 / decision D5).
-  const access = await getBoardAccess(parsed.data.boardId);
-  if (!access) return fail("Board not found.");
+  const userId = (await getUser())?.id;
+  if (!userId) return fail("Board not found.");
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("duplicate_board_structure", {
-    p_board_id: parsed.data.boardId,
-  });
-  if (error || !data)
-    return fail(error?.message ?? "Could not duplicate board.");
-
-  await invalidateMyBoards();
-  return { ok: true, data: { boardId: data.id } };
+  const result = await duplicateBoardCore(
+    await createClient(),
+    userId,
+    parsed.data,
+  );
+  if (result.ok) await invalidateMyBoards();
+  return result;
 }
 
 /**
@@ -219,21 +200,17 @@ export async function archiveBoard(input: {
   const parsed = archiveBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const access = await getBoardAccess(parsed.data.boardId);
-  if (access !== "owner")
-    return fail("Only the board owner can delete this board.");
-  const supabase = await createClient();
-  const user = await getUser();
-  const { error } = await supabase
-    .from("boards")
-    .update({
-      archived_at: new Date().toISOString(),
-      archived_by: user?.id ?? null,
-    })
-    .eq("id", parsed.data.boardId);
-  if (error) return fail(error.message);
-  await invalidateMyBoards();
-  return { ok: true, data: undefined };
+
+  const userId = (await getUser())?.id;
+  if (!userId) return fail("Board not found.");
+
+  const result = await archiveBoardCore(
+    await createClient(),
+    userId,
+    parsed.data,
+  );
+  if (result.ok) await invalidateMyBoards();
+  return result;
 }
 
 /** Restore an archived board (clears the flag). Owner-only (mirrors archive). */
@@ -243,17 +220,17 @@ export async function restoreBoard(input: {
   const parsed = restoreBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const access = await getBoardAccess(parsed.data.boardId);
-  if (access !== "owner")
-    return fail("Only the board owner can restore this board.");
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("boards")
-    .update({ archived_at: null, archived_by: null })
-    .eq("id", parsed.data.boardId);
-  if (error) return fail(error.message);
-  await invalidateMyBoards();
-  return { ok: true, data: undefined };
+
+  const userId = (await getUser())?.id;
+  if (!userId) return fail("Board not found.");
+
+  const result = await restoreBoardCore(
+    await createClient(),
+    userId,
+    parsed.data,
+  );
+  if (result.ok) await invalidateMyBoards();
+  return result;
 }
 
 /**

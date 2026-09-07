@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { midpoint } from "@/lib/boards/position";
 import {
   createGroupSchema,
   deleteGroupSchema,
@@ -15,6 +14,14 @@ import {
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import type { Tables } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import {
+  archiveGroupCore,
+  createGroupsCore,
+  recolorGroupCore,
+  renameGroupCore,
+  reorderGroupCore,
+  restoreGroupCore,
+} from "@/lib/boards/core/group";
 
 // ── revalidatePath rule for within-board mutations ──────────────────────────
 // The board client hydrates ONCE from the server payload (initialData,
@@ -35,18 +42,15 @@ export async function renameGroup(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("groups")
-    .update({ name: parsed.data.name })
-    .eq("id", parsed.data.groupId)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail("Group not found.");
-  return { ok: true, data: undefined };
+  return renameGroupCore(await createClient(), parsed.data);
 }
 
+/**
+ * Create a single group. Delegates to the batched `createGroupsCore` with a
+ * one-element array and unwraps its `BatchResult` back to this action's
+ * long-standing `{ group }` shape — `useGroupMutations` and the AI write path
+ * (`execute.ts`) both depend on that exact shape.
+ */
 export async function createGroup(input: {
   boardId: string;
   name: string;
@@ -55,37 +59,16 @@ export async function createGroup(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
+  const result = await createGroupsCore(await createClient(), {
+    boardId: parsed.data.boardId,
+    groups: [{ name: parsed.data.name }],
+  });
+  if (!result.ok) return result;
 
-  // org_id is denormalized — read it from the board, then derive a position.
-  const { data: board, error: boardErr } = await supabase
-    .from("boards")
-    .select("org_id")
-    .eq("id", parsed.data.boardId)
-    .maybeSingle();
-  if (boardErr || !board) return fail("Board not found.");
-
-  const { data: last } = await supabase
-    .from("groups")
-    .select("position")
-    .eq("board_id", parsed.data.boardId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data, error } = await supabase
-    .from("groups")
-    .insert({
-      org_id: board.org_id,
-      board_id: parsed.data.boardId,
-      name: parsed.data.name,
-      position: midpoint(last?.position ?? null, null),
-    })
-    .select("*")
-    .single();
-  if (error || !data) return fail(error?.message ?? "Could not create group.");
-
-  return { ok: true, data: { group: data } };
+  const group = result.data.created[0];
+  if (!group)
+    return fail(result.data.errors[0]?.error ?? "Could not create group.");
+  return { ok: true, data: { group } };
 }
 
 export async function reorderGroup(input: {
@@ -96,16 +79,7 @@ export async function reorderGroup(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("groups")
-    .update({ position: parsed.data.position })
-    .eq("id", parsed.data.groupId)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail("Group not found.");
-  return { ok: true, data: undefined };
+  return reorderGroupCore(await createClient(), parsed.data);
 }
 
 export async function updateGroupColor(input: {
@@ -116,16 +90,7 @@ export async function updateGroupColor(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("groups")
-    .update({ color: parsed.data.color })
-    .eq("id", parsed.data.groupId)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail("Group not found.");
-  return { ok: true, data: undefined };
+  return recolorGroupCore(await createClient(), parsed.data);
 }
 
 export async function deleteGroup(input: {
@@ -155,12 +120,8 @@ export async function archiveGroup(input: {
   const parsed = archiveGroupSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("archive_group", {
-    p_group_id: parsed.data.groupId,
-  });
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+
+  return archiveGroupCore(await createClient(), parsed.data);
 }
 
 /** Restore a group + the items archived in the same batch via RPC. */
@@ -170,12 +131,8 @@ export async function restoreGroup(input: {
   const parsed = restoreGroupSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("restore_group", {
-    p_group_id: parsed.data.groupId,
-  });
-  if (error) return fail(error.message);
-  return { ok: true, data: undefined };
+
+  return restoreGroupCore(await createClient(), parsed.data);
 }
 
 /**
