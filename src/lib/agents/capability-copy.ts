@@ -42,4 +42,17 @@ export const CAPABILITY_COPY: Record<
       "run and use what they report back. Each of them acts under its own " +
       "permissions, never this one's.",
   },
+  "board.structure": {
+    label: "Build and change board structure",
+    consequence:
+      "This agent can create boards, and add or reconfigure their groups, " +
+      "columns, views, dashboards and reports.",
+  },
+  "board.destroy": {
+    label: "Remove things",
+    consequence:
+      "This agent can move boards, groups and items to Trash, and delete " +
+      "columns, views, widgets and reports outright. Anything in Trash can " +
+      "be restored by you.",
+  },
 };
