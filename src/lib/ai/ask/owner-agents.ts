@@ -42,3 +42,37 @@ export async function listOwnerAgentTargets(
     name: a.name,
   }));
 }
+
+/**
+ * Names for agents a thread's turns were ALREADY answered by — including agents
+ * that have since been disabled.
+ *
+ * Deliberately NOT filtered on `enabled`, and deliberately separate from
+ * `listOwnerAgentTargets`: routing and the switcher must only ever offer an
+ * enabled agent (spec §1), but disabling an agent must not silently re-label
+ * every answer it already gave as "Monolith". This is a lookup table for
+ * history, never a roster.
+ *
+ * Bounded and indexed (working agreement #5): the ids come from one thread's
+ * capped message page and are de-duplicated before the read, which is a
+ * primary-key `in` over at most `ASK_AGENTS_LIMIT` rows. RLS scopes it to
+ * the owner. Never throws — an unnamed turn falls back to "Monolith", which is
+ * exactly what it did before this read existed.
+ */
+export async function listAgentNamesByIds(
+  agentIds: readonly string[],
+): Promise<Record<string, string>> {
+  const ids = [...new Set(agentIds)].slice(0, ASK_AGENTS_LIMIT);
+  if (ids.length === 0) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_agents")
+    .select("id, name")
+    .in("id", ids)
+    .limit(ASK_AGENTS_LIMIT);
+  if (error) {
+    console.error("[ask] agent name read failed", error);
+    return {};
+  }
+  return Object.fromEntries((data ?? []).map((a) => [a.id, a.name]));
+}

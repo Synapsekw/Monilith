@@ -6,6 +6,7 @@ import {
   appendUserMessage,
   createConversation,
   recoverConversation,
+  setConversationAgent,
 } from "@/lib/ai/ask/conversation-actions";
 import {
   applyAskProposal,
@@ -16,6 +17,7 @@ import { useApplyBoardEffects } from "@/lib/boards/use-ai-effects";
 import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
+import { ThreadHeader } from "./ThreadHeader";
 import { ProposalCard } from "@/components/agents/ProposalCard";
 import type { PendingProposal } from "@/lib/agents/proposal-display";
 import type { DropState } from "./StreamDropNotice";
@@ -68,8 +70,12 @@ export function AskChat({
   initialMessages,
   boardId,
   agentId,
+  initialAgentId,
+  title,
   agents = NO_AGENTS,
+  agentNames,
   agentProposals = [],
+  readOnly = false,
   onStarted,
   onTurnComplete,
 }: {
@@ -83,15 +89,37 @@ export function AskChat({
   agentProposals?: PendingProposal[];
   /** Board this thread belongs to. Set by the dock; absent on /ask. */
   boardId?: string;
-  /** Persona for a NEW thread. Ignored once the thread exists — `/api/ask`
-   *  reads the persona off the conversation row, not off the client, so it is
-   *  deliberately NOT sent per turn. */
+  /** Persona for a thread that does not exist yet (the dock's chosen default
+   *  for a NEW board thread). Folded into the live persona state below on
+   *  mount — after that this prop is never read again, because the state (and
+   *  the header switcher, where one is rendered) is what decides. */
   agentId?: string;
-  /** The owner's agents, so a message can ADDRESS one by `@handle`. Loaded on
+  /** The thread's persona as of first paint, for an EXISTING conversation
+   *  (`getConversationHeader`). Absent for a brand-new thread. */
+  initialAgentId?: string | null;
+  /** The thread's title. `/ask` (new chat) passes the static "New chat"; the
+   *  existing-conversation page passes the real `ai_conversations.title` (also
+   *  via `getConversationHeader`). Absent only for a row whose title read came
+   *  back null (never true in practice — every row is created with a title —
+   *  but the read degrades rather than throwing), in which case `ThreadHeader`
+   *  falls back to a neutral placeholder rather than going titleless. */
+  title?: string;
+  /** The owner's agents, so a message can ADDRESS one by `@handle`, and so the
+   *  header switcher (when rendered) has something to switch to. Loaded on
    *  first paint and filtered in the composer — typing a handle costs no server
    *  round-trip (working agreement #5). A handle that leads the first message
-   *  wins over `agentId`: it is the more explicit of the two. */
+   *  wins over the current persona: it is the more explicit of the two. */
   agents?: readonly MentionTarget[];
+  /** Names for agents that already answered in this thread, including ones
+   *  since DISABLED. Kept separate from `agents` on purpose: the roster is
+   *  enabled-only (it drives the switcher and `@handle` addressing), but
+   *  disabling an agent must not relabel the answers it already gave. */
+  agentNames?: Readonly<Record<string, string>>;
+  /** This thread was shared to a board and the viewer does not own it. The
+   *  transcript reads; every write affordance — the switcher, the composer,
+   *  Approve/Cancel — is withheld, because RLS scopes all three to the owner
+   *  and a control that can only fail is worse than no control. */
+  readOnly?: boolean;
   /** Called with the new id instead of rewriting the URL to /ask/<id>. */
   onStarted?: (conversationId: string) => void;
   /** Called instead of router.refresh() when a turn completes. The dock uses
@@ -109,9 +137,15 @@ export function AskChat({
   const [activeId, setActiveId] = useState<string | null>(conversationId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [dropState, setDropState] = useState<DropState>("none");
-  // Raised when a handle addressed an agent in a thread that already has (or
-  // hasn't) a persona: the answer is "start a new one", not a silent no-op.
-  const [personaIgnored, setPersonaIgnored] = useState(false);
+  // The live persona — who is currently on duty. `initialAgentId` (an EXISTING
+  // thread's column) wins over `agentId` (a NEW thread's chosen default from
+  // the dock); the two are never both set. From here on this state is the
+  // single source of truth: the header switcher reads and writes it, `onSubmit`
+  // sends it to `createConversation`, and a successful send/switch is what
+  // moves it — never a prop, which only ever seeds it once, at mount.
+  const [personaId, setPersonaId] = useState<string | null>(
+    initialAgentId ?? agentId ?? null,
+  );
   const [, startTransition] = useTransition();
   const { streaming, send } = useAskStream();
   // Renders an approved write on a mounted board with no round-trip. A no-op
@@ -168,9 +202,6 @@ export function AskChat({
     setTurnBusy(true);
     try {
       let convId = activeId;
-      // An addressed handle is only ever honoured by the branch that MINTS the
-      // conversation; every send re-decides whether the hint is warranted.
-      setPersonaIgnored(!!convId && !!addressedAgentId);
       setDropState("none");
       setMessages((m) => [
         ...m,
@@ -183,10 +214,19 @@ export function AskChat({
       setStreamText("");
       setStatus(null);
 
+      // The turn's resolved persona — set from whichever branch below actually
+      // ran, so the `done` handler can stamp the assistant row with WHO
+      // answered instead of leaving `agentId` unset (which reads as
+      // "Monolith" the instant the turn lands, even when a real agent
+      // answered live — the streaming bubble already showed the right name).
+      let turnAgentId: string | null = null;
+
       if (!convId) {
-        // The typed handle beats the surface's default persona: the user said
-        // who to ask in this very message.
-        const persona = addressedAgentId ?? agentId;
+        // The typed handle beats the surface's default persona — chosen either
+        // from the dock's `agentId` prop or from the header switcher, both
+        // folded into `personaId` — because the user said who to ask in this
+        // very message.
+        const persona = addressedAgentId ?? personaId;
         const res = await createConversation({
           firstMessage: text,
           ...(boardId ? { boardId } : {}),
@@ -198,7 +238,9 @@ export function AskChat({
           return;
         }
         convId = res.data.conversationId;
+        turnAgentId = res.data.agentId;
         setActiveId(convId);
+        setPersonaId(res.data.agentId);
         if (onStarted) onStarted(convId);
         // Client nav — no RSC refetch (working agreement #5).
         else window.history.pushState(null, "", `/ask/${convId}`);
@@ -212,6 +254,8 @@ export function AskChat({
           setStatus(res.error);
           return;
         }
+        turnAgentId = res.data.agentId;
+        setPersonaId(res.data.agentId);
       }
 
       // Accumulate streamed tokens and any proposal in closure locals so the
@@ -242,6 +286,7 @@ export function AskChat({
                     proposedActions: proposed,
                   }
                 : null,
+              agentId: turnAgentId,
             },
           ]);
           setStreamText(null);
@@ -258,6 +303,31 @@ export function AskChat({
       turnInFlight.current = false;
       setTurnBusy(false);
     }
+  }
+
+  /**
+   * The header switcher's only entry point. Updates the chip immediately —
+   * the switch reads as instant — then, if there is a real conversation to
+   * write to, persists it with the ONE targeted Server Action
+   * `setConversationAgent` (working agreement #5: no navigation, no
+   * `router.refresh()`). A not-yet-minted chat has no row to write to, so the
+   * choice just sits in `personaId` until `onSubmit` hands it to
+   * `createConversation`.
+   */
+  function handleAgentChange(next: string | null) {
+    const previous = personaId;
+    setPersonaId(next);
+    if (!activeId) return;
+    startTransition(async () => {
+      const res = await setConversationAgent({
+        conversationId: activeId,
+        agentId: next,
+      });
+      if (!res.ok) {
+        setPersonaId(previous);
+        setStatus(res.error);
+      }
+    });
   }
 
   /** Approve or decline a proposal. Both append the server's outcome turn,
@@ -282,6 +352,11 @@ export function AskChat({
           role: "assistant",
           content: res.data.content,
           trace: res.data.trace,
+          // WHO the server actually stamped on the persisted row — never a
+          // second, client-side guess. `personaId` and the server's resolution
+          // disagree the moment the header switches between the proposal and
+          // the approval, and then a reload would silently relabel the turn.
+          agentId: res.data.agentId,
         },
       ]);
     });
@@ -289,6 +364,24 @@ export function AskChat({
 
   return (
     <div className="flex h-full flex-col">
+      {/* The board dock owns its own header (thread list + share toggle) and
+          renders this component inside a panel on someone else's page — a
+          title and a persona switcher here would be a second, conflicting
+          header. `boardId` is the reliable guard: the dock always sets it and
+          the two /ask surfaces never do, so this can never fire in the dock
+          regardless of agents or thread state. Beyond that, the switcher earns
+          its place on screen only once there is something to switch: the
+          owner has agents to offer, or a real thread already exists to name a
+          persona for. */}
+      {!boardId && (agents.length > 0 || activeId !== null) ? (
+        <ThreadHeader
+          title={title ?? "Conversation"}
+          agents={agents}
+          agentId={personaId}
+          onAgentChange={handleAgentChange}
+          readOnly={readOnly}
+        />
+      ) : null}
       <MessageList
         messages={messages}
         streamingText={streamText}
@@ -300,6 +393,10 @@ export function AskChat({
         onRetryDrop={() => {
           if (activeId) void recoverAfterDrop(activeId);
         }}
+        agents={agents}
+        agentNames={agentNames}
+        streamingAgentId={personaId}
+        readOnly={readOnly}
       />
       {/* The run's queued approvals, between the report and the composer: the
           owner reads what the agent did, then decides what it could not. */}
@@ -312,22 +409,24 @@ export function AskChat({
       ) : null}
       {/* Never stranded: the composer is dead only while a turn or a recovery
           check is genuinely in flight — but for ALL of a turn, `turnBusy`
-          covering the pre-stream round-trips that `streaming` misses. */}
-      <Composer
-        disabled={turnBusy || streaming || dropState === "checking"}
-        agents={agents}
-        onSubmit={onSubmit}
-      />
-      {/* `ai_messages` has no UPDATE policy and a live transcript cannot be
-          re-personified, so the handle is dropped rather than half-honoured —
-          and the composer says so instead of swallowing it. */}
-      {personaIgnored ? (
-        <div className="bg-background px-4 pb-3">
-          <p className="text-muted-foreground mx-auto max-w-3xl px-1 text-xs">
-            Start a new chat to ask a different agent.
-          </p>
-        </div>
-      ) : null}
+          covering the pre-stream round-trips that `streaming` misses. A viewer
+          of someone else's shared thread gets no composer at all: /api/ask
+          answers 403 for a turn on a thread the caller does not own, so a
+          field that only produces a refusal is a lie about what they can do
+          (the board dock says the same sentence, for the same reason). */}
+      {readOnly ? (
+        <p className="text-muted-foreground border-t px-4 py-3 text-sm">
+          This thread was shared with the board. You can read it, but only its
+          owner can reply.
+        </p>
+      ) : (
+        <Composer
+          disabled={turnBusy || streaming || dropState === "checking"}
+          agents={agents}
+          agentId={personaId}
+          onSubmit={onSubmit}
+        />
+      )}
     </div>
   );
 }

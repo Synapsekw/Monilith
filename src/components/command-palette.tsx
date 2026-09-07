@@ -182,7 +182,7 @@ export function CommandPalette({
             )}
             <CommandGroup heading={<Kicker>Ask</Kicker>}>
               <CommandItem onSelect={() => run(() => router.push("/ask"))}>
-                <AskAiMark className="size-4" /> Ask AI…
+                <AskAiMark className="size-4" /> Agents…
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading={<Kicker>Actions</Kicker>}>

@@ -98,17 +98,44 @@ vi.mock("@/lib/ai/ask/ask-stream", () => ({
 vi.mock("@/lib/profile/queries-cached", () => ({
   getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
 }));
-vi.mock("@/lib/ai/ask/conversations", () => ({
-  getMessages: vi.fn(async () => [
-    {
-      id: "m1",
-      role: "user",
-      content: "hi",
-      tool_trace: null,
-      created_at: "t",
+// Mutable so tests can shape the thread `currentPersonaFrom` reads — the real
+// implementation is kept (spread `actual`) so route.ts's own import of
+// `currentPersonaFrom` is the real function, not a stub.
+type FakeMessageRow = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  tool_trace: null;
+  created_at: string;
+  agent_id: string | null;
+};
+const { getMessagesRows, setMessagesRows } = vi.hoisted(() => {
+  let rows: FakeMessageRow[] = [];
+  return {
+    getMessagesRows: () => rows,
+    setMessagesRows: (r: FakeMessageRow[]) => {
+      rows = r;
     },
-  ]),
-}));
+  };
+});
+const defaultMessagesRows = (): FakeMessageRow[] => [
+  {
+    id: "m1",
+    role: "user",
+    content: "hi",
+    tool_trace: null,
+    created_at: "t",
+    agent_id: null,
+  },
+];
+vi.mock("@/lib/ai/ask/conversations", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/lib/ai/ask/conversations")>();
+  return {
+    ...actual,
+    getMessages: vi.fn(async () => getMessagesRows()),
+  };
+});
 vi.mock("@/lib/ai/ask/context", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/ai/ask/context")>();
   return {
@@ -121,7 +148,9 @@ vi.mock("@/lib/ai/ask/context", async (importActual) => {
 });
 
 // conversation fetch + assistant insert + title update via a chained mock client
-const single = vi.fn(async () => ({ data: { id: "a1" }, error: null }));
+const single = vi.fn<
+  () => Promise<{ data: { id: string } | null; error: unknown }>
+>(async () => ({ data: { id: "a1" }, error: null }));
 const insertSpy = vi.fn(() => ({ select: () => ({ single }) }));
 const updateSpy = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }));
 
@@ -145,14 +174,21 @@ let conversationRow: { data: ConversationRow | null; error: unknown } = {
   data: defaultConversationRow(),
   error: null,
 };
-let agentRow: {
-  data: { name: string; instructions: string } | null;
-  error: unknown;
-} = { data: null, error: null };
+type AgentRowData = {
+  id: string;
+  name: string;
+  instructions: string;
+  doc_nonce: string;
+};
+let agentRow: { data: AgentRowData | null; error: unknown } = {
+  data: null,
+  error: null,
+};
 let boardRow: { data: { id: string; name: string } | null; error: unknown } = {
   data: null,
   error: null,
 };
+const agentEqCalls: [string, unknown][] = [];
 
 /** Overrides the conversation row `ai_conversations` reads back for the next
  *  POST. `user_id` defaults to the caller so existing tests keep passing the
@@ -164,9 +200,27 @@ function mockConversationRow(overrides: Partial<ConversationRow>) {
   };
 }
 /** Overrides the `user_agents` row the route reads back for `agent_id`. Pass
- *  `null` to simulate a dangling/unreadable agent id. */
-function mockAgentRow(row: { name: string; instructions: string } | null) {
-  agentRow = { data: row, error: null };
+ *  `null` to simulate a dangling/unreadable agent id. `id`/`doc_nonce` default
+ *  so existing callers that only care about persona text need not supply them. */
+function mockAgentRow(
+  row: {
+    name: string;
+    instructions: string;
+    id?: string;
+    doc_nonce?: string;
+  } | null,
+) {
+  agentRow = row
+    ? {
+        data: {
+          id: row.id ?? "agent-1",
+          name: row.name,
+          instructions: row.instructions,
+          doc_nonce: row.doc_nonce ?? "nonce-1",
+        },
+        error: null,
+      }
+    : { data: null, error: null };
 }
 /** Overrides the `boards` row the route reads back for `board_id`. Pass
  *  `null` to simulate an RLS-invisible or dangling board id. */
@@ -202,7 +256,18 @@ vi.mock("@/lib/supabase/server", () => ({
       if (table === "user_agents") {
         return {
           select: () => ({
-            eq: () => ({ maybeSingle: vi.fn(async () => agentRow) }),
+            // Records the filter chain: the persona read is scoped to an
+            // ENABLED agent, and a test has to be able to see that.
+            eq: (col: string, val: unknown) => {
+              agentEqCalls.push([col, val]);
+              return {
+                eq: (col2: string, val2: unknown) => {
+                  agentEqCalls.push([col2, val2]);
+                  return { maybeSingle: vi.fn(async () => agentRow) };
+                },
+                maybeSingle: vi.fn(async () => agentRow),
+              };
+            },
           }),
         };
       }
@@ -216,11 +281,14 @@ import { runAi } from "@/lib/ai/gateway";
 import { OPENING_STATUS } from "@/lib/ai/ask/stream-protocol";
 
 const CONV_ID = "11111111-1111-4111-8111-111111111111";
-const makeReq = () =>
+// `agentId` (or any other extra key) is accepted here so a test can prove the
+// route ignores it — `bodySchema` has no such field and zod strips it silently.
+const request = (body: Record<string, unknown>) =>
   new Request("http://x/api/ask", {
     method: "POST",
-    body: JSON.stringify({ conversationId: CONV_ID }),
+    body: JSON.stringify(body),
   });
+const makeReq = () => request({ conversationId: CONV_ID });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -228,6 +296,9 @@ beforeEach(() => {
   conversationRow = { data: defaultConversationRow(), error: null };
   agentRow = { data: null, error: null };
   boardRow = { data: null, error: null };
+  agentEqCalls.length = 0;
+  single.mockResolvedValue({ data: { id: "a1" }, error: null });
+  setMessagesRows(defaultMessagesRows());
 });
 
 describe("POST /api/ask", () => {
@@ -459,13 +530,16 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
 
   it("composes the agent persona into the system prompt for an agent thread", async () => {
     mockConversationRow({ board_id: null, agent_id: AGENT_ID });
-    mockAgentRow({ name: "Morning Brief", instructions: "Focus on blockers." });
-    // The persona is composed before the turn's async work runs; draining the
-    // body is what synchronizes the test with that turn, same as the other
-    // assertions on askPulseStreamMock's calls in this file.
+    mockAgentRow({
+      id: AGENT_ID,
+      name: "Morning Brief",
+      instructions: "Focus on blockers.",
+    });
+    // The persona is composed INSIDE the runAi callback now (Task 6), so
+    // draining the body is still what synchronizes the test with the turn.
     await (await POST(makeReq())).text();
     const system = askPulseStreamMock.mock.calls[0][0].system as string;
-    expect(system).toContain("<agent_instructions>");
+    expect(system).toContain('personal agent "Morning Brief"');
     expect(system).toContain("Focus on blockers.");
   });
 
@@ -503,6 +577,202 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     mockAgentRow(null);
     await (await POST(makeReq())).text();
     const system = askPulseStreamMock.mock.calls[0][0].system as string;
-    expect(system).not.toContain("<agent_instructions>");
+    expect(system).not.toContain("personal agent");
+  });
+});
+
+// Task 6: the route answers as the agent the TURN addressed — the last user
+// message's `agent_id`, resolved via `currentPersonaFrom` — never the request
+// body, which carries no agent field at all.
+describe("POST /api/ask · answers as the agent the turn addressed", () => {
+  it("answers as the agent the LAST user turn addressed, not the request body", async () => {
+    setMessagesRows([
+      {
+        id: "m1",
+        role: "user",
+        content: "how are ops doing?",
+        tool_trace: null,
+        created_at: "t1",
+        agent_id: "a-ops",
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "ops is fine",
+        tool_trace: null,
+        created_at: "t2",
+        agent_id: "a-ops",
+      },
+      {
+        id: "m3",
+        role: "user",
+        content: "what about invoices?",
+        tool_trace: null,
+        created_at: "t3",
+        agent_id: "a-fin",
+      },
+    ]);
+    mockAgentRow({
+      id: "a-fin",
+      name: "Finance",
+      instructions: "Track overdue invoices.",
+    });
+    await (
+      await POST(request({ conversationId: CONV_ID, agentId: "a-attacker" }))
+    ).text();
+    const capturedSystem = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(capturedSystem).toContain('personal agent "Finance"');
+    expect(capturedSystem).not.toContain("a-attacker");
+  });
+
+  it("stamps the answering agent on the assistant row", async () => {
+    setMessagesRows([
+      {
+        id: "m1",
+        role: "user",
+        content: "what about invoices?",
+        tool_trace: null,
+        created_at: "t1",
+        agent_id: "a-fin",
+      },
+    ]);
+    mockAgentRow({
+      id: "a-fin",
+      name: "Finance",
+      instructions: "Track overdue invoices.",
+    });
+    await (await POST(request({ conversationId: CONV_ID }))).text();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "assistant", agent_id: "a-fin" }),
+    );
+  });
+
+  it("stays the plain assistant when no turn carries an agent", async () => {
+    // Default fixtures already have every row's (and the conversation's)
+    // agent_id null — this is the "ordinary chat" baseline this suite starts
+    // from in `beforeEach`.
+    await (await POST(request({ conversationId: CONV_ID }))).text();
+    const capturedSystem = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(capturedSystem).not.toContain("personal agent");
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "assistant", agent_id: null }),
+    );
+  });
+});
+
+// The BLOCKING regression: `setConversationAgent` writes only
+// `ai_conversations.agent_id`, so a rule that let the last user message's stamp
+// outrank it made the header switcher decorative — the chip moved and every
+// following turn still went to the old agent.
+describe("POST /api/ask · the conversation's agent is authoritative", () => {
+  const opsThenSwitched = () =>
+    setMessagesRows([
+      {
+        id: "m1",
+        role: "user",
+        content: "how are ops doing?",
+        tool_trace: null,
+        created_at: "t1",
+        agent_id: "a-ops",
+      },
+    ]);
+
+  it("answers as the agent the header switched to, not the last turn's", async () => {
+    opsThenSwitched();
+    mockConversationRow({ agent_id: "a-fin" });
+    mockAgentRow({
+      id: "a-fin",
+      name: "Finance",
+      instructions: "Track overdue invoices.",
+    });
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).toContain('personal agent "Finance"');
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "assistant", agent_id: "a-fin" }),
+    );
+  });
+
+  it("answers as the plain assistant once the persona is cleared", async () => {
+    // The escape hatch: the column is null and the newest user turn was
+    // stamped null by `appendUserMessage`. Nothing may reach back past it to
+    // the agent the owner just dismissed.
+    setMessagesRows([
+      {
+        id: "m1",
+        role: "user",
+        content: "how are ops doing?",
+        tool_trace: null,
+        created_at: "t1",
+        agent_id: "a-ops",
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "fine",
+        tool_trace: null,
+        created_at: "t2",
+        agent_id: "a-ops",
+      },
+      {
+        id: "m3",
+        role: "user",
+        content: "and now?",
+        tool_trace: null,
+        created_at: "t3",
+        agent_id: null,
+      },
+    ]);
+    mockConversationRow({ agent_id: null });
+    mockAgentRow({ id: "a-ops", name: "Ops", instructions: "Watch delivery." });
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).not.toContain("personal agent");
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "assistant", agent_id: null }),
+    );
+  });
+});
+
+// Spec §1: a persona is an ENABLED agent. The display paths already resolve
+// names against the enabled-only roster, so a disabled agent that kept
+// answering was a turn composed from its instructions, documents and memory
+// under a header and a kicker that both read "Monolith".
+describe("POST /api/ask · a disabled agent does not answer", () => {
+  it("scopes the persona read to an enabled agent", async () => {
+    mockConversationRow({ agent_id: "agent-1" });
+    mockAgentRow({ id: "agent-1", name: "Ops", instructions: "Watch." });
+    await (await POST(makeReq())).text();
+    expect(agentEqCalls).toContainEqual(["id", "agent-1"]);
+    expect(agentEqCalls).toContainEqual(["enabled", true]);
+  });
+
+  it("degrades to the plain assistant and stamps no agent when the read comes back empty", async () => {
+    // What a DISABLED (or deleted) agent looks like through that read. The row
+    // must not be stamped with an id we could not read: the FK rejects a
+    // deleted one outright, losing a fully-streamed, already-paid answer.
+    mockConversationRow({ agent_id: "agent-1" });
+    mockAgentRow(null);
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).not.toContain("personal agent");
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "assistant", agent_id: null }),
+    );
+  });
+});
+
+describe("POST /api/ask · a lost answer is not a completed turn", () => {
+  it("emits an error instead of a done when the assistant row cannot be saved", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    single.mockResolvedValue({
+      data: null,
+      error: { message: "insert or update violates foreign key constraint" },
+    });
+    const text = await (await POST(makeReq())).text();
+    expect(text).toContain('"type":"error"');
+    expect(text).not.toContain('"type":"done"');
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

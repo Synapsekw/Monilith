@@ -6,66 +6,44 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
-  listConversations,
+  listChats,
+  listBriefings,
   getMessages,
   getConversationRunId,
+  getConversationHeader,
   toThreadMessages,
+  currentPersonaFrom,
 } from "./conversations";
 
 beforeEach(() => from.mockReset());
 
-describe("listConversations", () => {
-  it("returns the user's conversations newest-first, bounded", async () => {
+describe("listChats / listBriefings", () => {
+  it("lists only threads with no run, bounded and newest-first", async () => {
     const limit = vi
       .fn()
-      .mockResolvedValue({ data: [{ id: "c1", title: "A" }], error: null });
+      .mockResolvedValue({ data: [{ id: "c1" }], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
+    const is = vi.fn().mockReturnValue({ order });
+    const eq = vi.fn().mockReturnValue({ is });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
-    const rows = await listConversations("user-1");
-    expect(rows).toEqual([{ id: "c1", title: "A" }]);
+    await listChats("user-1");
     expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(is).toHaveBeenCalledWith("run_id", null);
     expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
-    expect(limit).toHaveBeenCalledWith(100);
+    expect(limit).toHaveBeenCalledWith(50);
   });
 
-  it("throws when the query errors", async () => {
-    const limit = vi
-      .fn()
-      .mockResolvedValue({ data: null, error: { message: "boom" } });
+  it("lists only briefings", async () => {
+    const limit = vi.fn().mockResolvedValue({ data: [], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
+    const not = vi.fn().mockReturnValue({ order });
+    const eq = vi.fn().mockReturnValue({ not });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
-    await expect(listConversations("u")).rejects.toThrow("listConversations");
-  });
-
-  it("lists a board thread in the rail alongside plain /ask threads", async () => {
-    // Deliberate: a board thread is still the user's own conversation. The rail
-    // filters on user_id and nothing else, so scoping a thread to a board does
-    // not hide it from /ask. Do not add a `.is("board_id", null)` filter here.
-    const limit = vi.fn().mockResolvedValue({
-      data: [
-        { id: "c1", title: "Plain ask", updated_at: "2026-08-03T10:00:00Z" },
-        {
-          id: "c2",
-          title: "About the roadmap",
-          updated_at: "2026-08-03T09:00:00Z",
-        },
-      ],
-      error: null,
-    });
-    const order = vi.fn().mockReturnValue({ limit });
-    const eq = vi.fn().mockReturnValue({ order });
-    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
-
-    const rows = await listConversations("user-1");
-
-    expect(rows).toHaveLength(2);
-    // The only scoping filter is user_id — no board_id filter is applied.
-    expect(eq).toHaveBeenCalledTimes(1);
-    expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+    await listBriefings("user-1");
+    expect(not).toHaveBeenCalledWith("run_id", "is", null);
+    expect(limit).toHaveBeenCalledWith(50);
   });
 });
 
@@ -105,6 +83,7 @@ describe("toThreadMessages", () => {
           role: "user",
           content: "create Ship v2",
           tool_trace: null,
+          agent_id: null,
           created_at: "2026-07-27T10:00:00Z",
         },
         {
@@ -112,16 +91,24 @@ describe("toThreadMessages", () => {
           role: "assistant",
           content: "I'll create that.",
           tool_trace: { boardsConsulted: ["b1"], proposedActions: [ACTION] },
+          agent_id: null,
           created_at: "2026-07-27T10:00:05Z",
         },
       ]),
     ).toEqual([
-      { id: "m1", role: "user", content: "create Ship v2", trace: null },
+      {
+        id: "m1",
+        role: "user",
+        content: "create Ship v2",
+        trace: null,
+        agentId: null,
+      },
       {
         id: "m2",
         role: "assistant",
         content: "I'll create that.",
         trace: { boardsConsulted: ["b1"], proposedActions: [ACTION] },
+        agentId: null,
       },
     ]);
   });
@@ -134,10 +121,101 @@ describe("toThreadMessages", () => {
           role: "assistant",
           content: "hi",
           tool_trace: { proposedActions: "not-an-array" },
+          agent_id: null,
           created_at: "2026-07-27T10:00:00Z",
         },
       ]),
-    ).toEqual([{ id: "m1", role: "assistant", content: "hi", trace: null }]);
+    ).toEqual([
+      {
+        id: "m1",
+        role: "assistant",
+        content: "hi",
+        trace: null,
+        agentId: null,
+      },
+    ]);
+  });
+});
+
+describe("currentPersonaFrom", () => {
+  const row = (
+    role: "user" | "assistant",
+    agent_id: string | null,
+    created_at: string,
+  ) => ({
+    id: `m-${created_at}`,
+    role,
+    content: "x",
+    tool_trace: null,
+    agent_id,
+    created_at,
+  });
+
+  // Rewritten deliberately (2026-09-07): this used to pin the OPPOSITE
+  // precedence — the last user turn beating `ai_conversations.agent_id`. That
+  // rule made the header switcher a no-op on any thread with a stamped turn:
+  // `setConversationAgent` writes only the column, so the next turn kept
+  // routing to the old agent while the chip showed the new one.
+  it("takes the conversation column over the last user turn — the switcher is authoritative", () => {
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", "a-ops", "2026-09-07T10:00:05Z"),
+    ];
+    expect(currentPersonaFrom(rows, "a-fin")).toBe("a-fin");
+  });
+
+  it("falls back to the last user turn when the column carries nothing", () => {
+    // The repair path: `appendUserMessage` stamps the message first and only
+    // then best-effort-writes the column, so a lost write must not lose the
+    // agent the turn actually addressed.
+    expect(currentPersonaFrom([row("user", "a-ops", "t")], null)).toBe("a-ops");
+  });
+
+  it("still answers the column when no user turn carries one", () => {
+    expect(currentPersonaFrom([row("user", null, "t")], "a-ops")).toBe("a-ops");
+  });
+
+  it("is null when neither has one", () => {
+    expect(currentPersonaFrom([], null)).toBeNull();
+  });
+
+  // Rewritten deliberately (2026-09-07): this used to scan PAST a null user
+  // turn to an older stamped one, which was necessary only while the message
+  // beat the column. Now the column is read first, so a null on the newest
+  // user turn is meaningful: it is the thread that was handed back to the
+  // plain assistant from the header. Scanning past it would resurrect the old
+  // agent and make the escape hatch impossible — the exact bug this rule fixes.
+  it("keeps a cleared persona cleared: the newest user turn's null is the answer", () => {
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", "a-ops", "2026-09-07T10:00:05Z"),
+      row("user", null, "2026-09-07T10:01:00Z"),
+    ];
+    expect(currentPersonaFrom(rows, null)).toBeNull();
+  });
+
+  it("ignores assistant turns when falling back", () => {
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("assistant", null, "2026-09-07T10:00:05Z"),
+    ];
+    expect(currentPersonaFrom(rows, null)).toBe("a-ops");
+  });
+});
+
+describe("toThreadMessages", () => {
+  it("carries the answering agent onto the render shape", () => {
+    const [m] = toThreadMessages([
+      {
+        id: "m1",
+        role: "assistant",
+        content: "hi",
+        tool_trace: null,
+        agent_id: "a-ops",
+        created_at: "2026-09-07T10:00:00Z",
+      },
+    ]);
+    expect(m.agentId).toBe("a-ops");
   });
 });
 
@@ -165,5 +243,59 @@ describe("getConversationRunId", () => {
     // page. A failure here must never take the thread down with it.
     clientReturning(null, { message: "boom" });
     expect(await getConversationRunId("c1")).toBeNull();
+  });
+});
+
+describe("getConversationHeader", () => {
+  function clientReturning(data: unknown, error: unknown = null) {
+    const maybeSingle = vi.fn().mockResolvedValue({ data, error });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    from.mockReturnValue({ select });
+    return { eq, maybeSingle, select };
+  }
+
+  it("returns the row's title, agent_id and OWNER", async () => {
+    const { eq, select } = clientReturning({
+      title: "Q3 slippage",
+      agent_id: "a-ops",
+      user_id: "u-owner",
+    });
+    expect(await getConversationHeader("c1")).toEqual({
+      title: "Q3 slippage",
+      agentId: "a-ops",
+      ownerId: "u-owner",
+    });
+    expect(eq).toHaveBeenCalledWith("id", "c1");
+    // `user_id` rides along on the SAME single-row read — no second
+    // round-trip — because `ai_conversations_select_board_shared` lets any
+    // board member render this page, so "the page loaded" no longer means
+    // "this is my thread". Drop it from the select and the read-only guard on
+    // /ask/<id> silently starts offering a switcher that can never write.
+    expect(select).toHaveBeenCalledWith("title, agent_id, user_id");
+  });
+
+  it("returns nulls when the row has no title or agent_id", async () => {
+    clientReturning({ title: null, agent_id: null, user_id: "u-owner" });
+    expect(await getConversationHeader("c1")).toEqual({
+      title: null,
+      agentId: null,
+      ownerId: "u-owner",
+    });
+  });
+
+  it("degrades to nulls on a query error rather than throwing", async () => {
+    clientReturning(null, { message: "boom" });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // A degraded read must fail CLOSED on the write affordances: `ownerId`
+    // null matches no user, so the page renders read-only rather than handing
+    // a switcher and a composer to someone whose ownership we could not
+    // establish.
+    expect(await getConversationHeader("c1")).toEqual({
+      title: null,
+      agentId: null,
+      ownerId: null,
+    });
+    spy.mockRestore();
   });
 });

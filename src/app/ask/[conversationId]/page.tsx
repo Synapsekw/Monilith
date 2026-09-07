@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
 import {
+  getConversationHeader,
   getConversationRunId,
   getMessages,
   toThreadMessages,
 } from "@/lib/ai/ask/conversations";
+import {
+  listAgentNamesByIds,
+  listOwnerAgentTargets,
+} from "@/lib/ai/ask/owner-agents";
 import { createClient } from "@/lib/supabase/server";
 import {
   listPendingProposalsForRun,
@@ -24,6 +30,21 @@ import { AskChat } from "@/components/ai/ask/AskChat";
  * The read costs a round trip only for threads that HAVE a `run_id`, and
  * `listPendingProposalsForRun` already excludes expired rows — an Approve
  * button whose only outcome is failure is worse than no button.
+ *
+ * `agents` and `header` seed the thread header: the owner's roster (for the
+ * switcher dropdown) and the thread's real title + who is currently on duty
+ * (for the title and the chip), both read once here — `getConversationHeader`
+ * is a single indexed row read, not a second round-trip per field — on first
+ * paint; AskChat owns the live state and the header's Server Action from
+ * there.
+ *
+ * A shared board thread renders here for every MEMBER of that board
+ * (`ai_conversations_select_board_shared`), not only its owner — so the page
+ * decides who may WRITE. A non-owner gets the transcript and no switcher, no
+ * composer and no Approve/Cancel: every one of those is scoped to the owner by
+ * RLS, so offering them moved a chip and changed nothing. The header read
+ * carries `ownerId` for exactly this, and a degraded read (null) reads as
+ * "not mine", which fails closed on the write affordances rather than open.
  */
 export default async function AskConversationPage({
   params,
@@ -31,11 +52,24 @@ export default async function AskConversationPage({
   params: Promise<{ conversationId: string }>;
 }) {
   const { conversationId } = await params;
-  const [rows, runId] = await Promise.all([
+  const user = await requireUser();
+  const [rows, runId, agents, header] = await Promise.all([
     getMessages(conversationId),
     getConversationRunId(conversationId),
+    listOwnerAgentTargets(user.id),
+    getConversationHeader(conversationId),
   ]);
   if (rows.length === 0) notFound();
+  const readOnly = header.ownerId !== user.id;
+
+  // Names for the agents this thread's turns were ALREADY answered by,
+  // including any since disabled — `agents` above is enabled-only, so on its
+  // own it would relabel a disabled agent's past answers "Monolith". One
+  // bounded primary-key read over the ids this page has already loaded, and
+  // only when there are any.
+  const agentNames = await listAgentNamesByIds(
+    rows.map((r) => r.agent_id).filter((id): id is string => id !== null),
+  );
 
   let proposals: PendingProposal[] = [];
   if (runId) {
@@ -60,6 +94,11 @@ export default async function AskConversationPage({
       conversationId={conversationId}
       initialMessages={toThreadMessages(rows)}
       agentProposals={proposals}
+      agents={agents}
+      agentNames={agentNames}
+      initialAgentId={header.agentId}
+      title={header.title ?? undefined}
+      readOnly={readOnly}
     />
   );
 }

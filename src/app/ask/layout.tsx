@@ -6,7 +6,7 @@ import { Brand } from "@/components/brand/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
- * Layout B for the full-page Ask AI surface. `/ask` lives OUTSIDE the `(app)`
+ * Layout B for the full-page Agents surface. `/ask` lives OUTSIDE the `(app)`
  * route group on purpose: `(app)/layout.tsx` wraps every child in the
  * AuthenticatedShell (Monolith sidebar + header), but layout B needs the
  * conversation rail *in place of* that nav. So this layout owns the whole frame

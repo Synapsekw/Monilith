@@ -78,4 +78,42 @@ describe("Composer — addressing an agent by @handle", () => {
 
     expect(screen.getByText(/asking ops chaser/i)).toBeInTheDocument();
   });
+
+  it("says who answers when the persona is sticky and nothing was typed", () => {
+    render(
+      <Composer
+        disabled={false}
+        agents={AGENTS}
+        agentId="a1"
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/asking ops chaser/i)).toBeInTheDocument();
+  });
+
+  it("a typed handle overrides the sticky persona in the helper line", async () => {
+    render(
+      <Composer
+        disabled={false}
+        agents={AGENTS}
+        agentId="a1"
+        onSubmit={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText(/your question/i), "@scout hi");
+    expect(screen.getByText(/asking deal scout/i)).toBeInTheDocument();
+  });
+
+  it("inserts a handle when its chip is clicked", async () => {
+    render(
+      <Composer
+        disabled={false}
+        agents={AGENTS}
+        agentId={null}
+        onSubmit={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "@scout" }));
+    expect(screen.getByLabelText(/your question/i)).toHaveValue("@scout ");
+  });
 });
