@@ -3,7 +3,14 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,16 +184,35 @@ function RailSection({
   label,
   rows,
   activePath,
+  open,
+  onOpenChange,
 }: {
   label: string;
   rows: ConversationRow[];
   activePath: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <div>
-      <div className="px-3 pt-2 pb-1">
+    // `<details>`, not a hand-rolled disclosure: it is keyboard-operable and
+    // announced as expandable for free, and it is the same element the
+    // Briefings section below already uses — one folding idiom in one rail.
+    <details
+      open={open}
+      onToggle={(e) => onOpenChange(e.currentTarget.open)}
+      className="group/section"
+    >
+      <summary className="hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 px-3 pt-2 pb-1 transition-colors select-none">
+        {/* Rotates rather than swapping glyphs, so the marker cannot flash a
+            different width mid-toggle. */}
+        <ChevronRight className="text-kicker size-3 shrink-0 transition-transform group-open/section:rotate-90" />
         <Kicker>{label}</Kicker>
-      </div>
+        {/* The count is what a COLLAPSED section has instead of its rows —
+            without it, folding a group hides how much is in it. */}
+        <span className="text-kicker text-2xs font-mono tabular-nums">
+          {rows.length}
+        </span>
+      </summary>
       <ul className="flex flex-col gap-0.5">
         {rows.map((c) => (
           <RailRow
@@ -196,7 +222,7 @@ function RailSection({
           />
         ))}
       </ul>
-    </div>
+    </details>
   );
 }
 
@@ -224,10 +250,25 @@ export function ConversationRail({
   const [query, setQuery] = useState("");
 
   const filteredChats = useMemo(() => filterRows(chats, query), [chats, query]);
-  const { today, earlier } = useMemo(
+  const groups = useMemo(
     () => groupChats(filteredChats, new Date()),
     [filteredChats],
   );
+  /**
+   * Which sections the owner has opened. Only "Today" starts open — the rail's
+   * job on first paint is the conversation you are in the middle of, not a
+   * fortnight of history.
+   *
+   * A SEARCH overrides the fold: a query that matches only an old chat would
+   * otherwise render a rail of collapsed headings and no visible result. The
+   * override is display-only, so whatever was open before the search is still
+   * open after it is cleared.
+   */
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    today: true,
+  });
+  const searching = query.trim() !== "";
+  const [briefingsOpen, setBriefingsOpen] = useState(false);
   const filteredBriefings = useMemo(
     () => filterRows(briefings, query),
     [briefings, query],
@@ -272,18 +313,18 @@ export function ConversationRail({
         ) : filteredChats.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">No matches.</p>
         ) : (
-          <>
-            {today.length > 0 && (
-              <RailSection label="Today" rows={today} activePath={pathname} />
-            )}
-            {earlier.length > 0 && (
-              <RailSection
-                label="Earlier"
-                rows={earlier}
-                activePath={pathname}
-              />
-            )}
-          </>
+          groups.map((g) => (
+            <RailSection
+              key={g.key}
+              label={g.label}
+              rows={g.rows}
+              activePath={pathname}
+              open={searching || (openSections[g.key] ?? false)}
+              onOpenChange={(open) =>
+                setOpenSections((s) => ({ ...s, [g.key]: open }))
+              }
+            />
+          ))
         )}
       </nav>
 
@@ -294,6 +335,10 @@ export function ConversationRail({
         <details
           aria-label="Briefings"
           role="group"
+          // Same search override the chat sections use: a query that matches
+          // only a briefing must not leave its one result folded away.
+          open={searching || briefingsOpen}
+          onToggle={(e) => setBriefingsOpen(e.currentTarget.open)}
           className="border-border shrink-0 border-t px-2 pt-2 pb-3"
         >
           <summary className="text-kicker text-2xs cursor-pointer px-3 py-1 font-mono font-medium tracking-[0.12em] uppercase select-none">
