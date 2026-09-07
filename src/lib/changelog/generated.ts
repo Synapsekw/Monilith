@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-05",
+    kind: "fixed",
+    title: "Connect Monolith to your desktop AI tools",
+    description:
+      "Connecting an AI app such as Cursor used to fail the moment you clicked Connect, with an error about the callback address. Those apps can now sign in to Monolith normally and read and write your boards through the connection.",
+  },
+  {
+    date: "2026-09-05",
     kind: "new",
     title: "Summon an agent from a comment",
     description:
