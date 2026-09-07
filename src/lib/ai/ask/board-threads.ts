@@ -34,9 +34,10 @@ export const AGENT_THREADS_LIMIT = 5;
  * Threads on one board: the caller's own, plus any shared to the board by
  * someone else.
  *
- * Deliberately NOT filtered by `user_id` — unlike `listConversations`, whose
- * explicit filter both scopes and keeps the read on the (user_id, updated_at)
- * index. Here RLS is the scope: `ai_conversations_select_own` returns the
+ * Deliberately NOT filtered by `user_id` — unlike the rail's own reads
+ * (`listChats` / `listBriefings`), whose explicit filter both scopes and keeps
+ * the read on the (user_id, updated_at) index. Here RLS is the scope:
+ * `ai_conversations_select_own` returns the
  * caller's rows and `ai_conversations_select_board_shared` adds the shared
  * ones. Adding a user_id filter would silently hide every shared thread.
  */
