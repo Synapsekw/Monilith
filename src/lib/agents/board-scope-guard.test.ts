@@ -5,7 +5,11 @@ import type { Database } from "@/types/database.types";
 import type { ToolDescriptor, ToolScope } from "@/lib/mcp/tools/descriptor";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type { BoardScope } from "./agent-config";
-import { isBoardInScope, resolveTargetBoardId } from "./board-scope-guard";
+import {
+  isBoardInScope,
+  refusesUnscopedCreate,
+  resolveTargetBoardId,
+} from "./board-scope-guard";
 
 const BOARD_1 = "11111111-1111-4111-8111-111111111111";
 const BOARD_2 = "22222222-2222-4222-8222-222222222222";
@@ -138,9 +142,16 @@ describe("resolveTargetBoardId", () => {
   });
 
   // Every catalog scope must be handled: a new ToolScope value would otherwise
-  // fall through to `null` and silently opt its tools out of board scope.
+  // fall through to `null` and silently opt its tools out of board scope. All
+  // 24 catalog descriptors carry a scalar `scope` today, but the field is
+  // typed to also allow a per-action `Record` (Task 2), so this collects
+  // every LEAF value rather than assuming a scalar.
+  const scopes = new Set(
+    ALL_TOOL_DESCRIPTORS.flatMap((d) =>
+      typeof d.scope === "string" ? [d.scope] : Object.values(d.scope),
+    ),
+  );
   it("handles every scope the catalog actually uses", async () => {
-    const scopes = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.scope));
     for (const scope of scopes) {
       const c = client({
         items: { org_id: "o1", board_id: BOARD_1 },
@@ -154,5 +165,54 @@ describe("resolveTargetBoardId", () => {
         }),
       ).resolves.toBe(scope === "none" ? null : BOARD_1);
     }
+  });
+});
+
+describe("refusesUnscopedCreate", () => {
+  const d = {
+    unscopedCreateActions: ["create"],
+  } as unknown as ToolDescriptor;
+
+  it("refuses a create when the agent is scoped to a board list", () => {
+    expect(
+      refusesUnscopedCreate(
+        d,
+        { mode: "list", boardIds: ["b1"] },
+        {
+          action: "create",
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it("allows a create when the agent is scoped to all boards", () => {
+    expect(
+      refusesUnscopedCreate(d, { mode: "all" }, { action: "create" }),
+    ).toBe(false);
+  });
+
+  it("allows a non-create action under a narrowed scope", () => {
+    expect(
+      refusesUnscopedCreate(
+        d,
+        { mode: "list", boardIds: ["b1"] },
+        {
+          action: "rename",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("allows everything for a tool that declares no unscoped creates", () => {
+    expect(
+      refusesUnscopedCreate(
+        {} as ToolDescriptor,
+        {
+          mode: "list",
+          boardIds: ["b1"],
+        },
+        { action: "create" },
+      ),
+    ).toBe(false);
   });
 });

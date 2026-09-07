@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ALL_TOOL_DESCRIPTORS } from "./catalog";
-import { TOOL_SCOPES } from "./descriptor";
+import {
+  TOOL_SCOPES,
+  capabilityFor,
+  scopeFor,
+  type ToolDescriptor,
+} from "./descriptor";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 
 describe("ALL_TOOL_DESCRIPTORS", () => {
@@ -11,11 +16,22 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   });
 
   it("classifies every tool with a legal capability and scope", () => {
+    // All 24 catalog descriptors carry scalar `capability`/`scope` today, but
+    // the fields are typed to also allow a per-action `Record` (Task 2), so
+    // this checks every LEAF value rather than assuming a scalar.
     for (const d of ALL_TOOL_DESCRIPTORS) {
-      expect(
-        d.capability === null || AGENT_CAPABILITIES.includes(d.capability),
-      ).toBe(true);
-      expect(TOOL_SCOPES).toContain(d.scope);
+      const capabilities =
+        d.capability === null || typeof d.capability === "string"
+          ? [d.capability]
+          : Object.values(d.capability);
+      for (const c of capabilities) {
+        expect(c === null || AGENT_CAPABILITIES.includes(c)).toBe(true);
+      }
+      const scopes =
+        typeof d.scope === "string" ? [d.scope] : Object.values(d.scope);
+      for (const s of scopes) {
+        expect(TOOL_SCOPES).toContain(s);
+      }
     }
   });
 
@@ -52,5 +68,52 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
     expect(byName.get("attach_file")?.scope).toBe("itemId");
     expect(byName.get("create_item")?.scope).toBe("groupId");
     expect(byName.get("list_boards")?.scope).toBe("none");
+  });
+});
+
+const mapped: ToolDescriptor = {
+  name: "fake_manage",
+  title: "Fake",
+  description: "Fake",
+  inputSchema: {},
+  capability: { create: "board.structure", archive: "board.destroy" },
+  scope: { create: "none", archive: "boardId" },
+  invoke: async () => ({ content: [{ type: "text", text: "" }] }),
+};
+
+describe("capabilityFor", () => {
+  it("reads the action's capability from a map", () => {
+    expect(capabilityFor(mapped, { action: "create" })).toBe("board.structure");
+    expect(capabilityFor(mapped, { action: "archive" })).toBe("board.destroy");
+  });
+
+  it("passes a scalar capability through unchanged", () => {
+    const scalar = { ...mapped, capability: "board.write" } as ToolDescriptor;
+    expect(capabilityFor(scalar, { action: "whatever" })).toBe("board.write");
+  });
+
+  // THE safety property. Returning null for an unknown action would classify
+  // it as a capability-free READ and let it execute ungated.
+  it("fails closed on an action absent from the map", () => {
+    expect(capabilityFor(mapped, { action: "nonsense" })).toBe("board.destroy");
+    expect(capabilityFor(mapped, {})).toBe("board.destroy");
+  });
+});
+
+describe("scopeFor", () => {
+  it("reads the action's scope from a map", () => {
+    expect(scopeFor(mapped, { action: "archive" })).toBe("boardId");
+  });
+
+  it("passes a scalar scope through unchanged", () => {
+    const scalar = { ...mapped, scope: "itemId" } as ToolDescriptor;
+    expect(scopeFor(scalar, { action: "archive" })).toBe("itemId");
+  });
+
+  // "none" is the only safe default: it means board scope has nothing to say,
+  // and RLS remains the boundary. Guessing "boardId" would read a field that
+  // is not there and resolve to null anyway.
+  it("falls back to none on an unknown action", () => {
+    expect(scopeFor(mapped, { action: "nonsense" })).toBe("none");
   });
 });

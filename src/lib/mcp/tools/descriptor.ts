@@ -27,7 +27,15 @@ import type { AgentCapability } from "@/lib/agents/capabilities";
  * becomes an all-or-any question this design does not answer. The agent
  * editor's board-scope help text must therefore not overpromise (Task 8).
  */
-export const TOOL_SCOPES = ["none", "boardId", "itemId", "groupId"] as const;
+export const TOOL_SCOPES = [
+  "none",
+  "boardId",
+  "itemId",
+  "groupId",
+  "columnId",
+  "viewId",
+  "automationId",
+] as const;
 export type ToolScope = (typeof TOOL_SCOPES)[number];
 
 export type ToolInvokeContext = { getClient: GetClient; actorId: string };
@@ -40,9 +48,14 @@ export type ToolDescriptor = {
   inputSchema: z.ZodRawShape;
   /** `null` means an always-on read. The vocabulary lives in
    *  `@/lib/agents/capabilities` — one declaration, imported by both the
-   *  descriptor layer and the agent editor. */
-  capability: AgentCapability | null;
-  scope: ToolScope;
+   *  descriptor layer and the agent editor.
+   *  A scalar for a single-purpose tool; a per-action map for a
+   *  grouped-dispatch tool, keyed by the `action` input value. */
+  capability: AgentCapability | null | Record<string, AgentCapability | null>;
+  scope: ToolScope | Record<string, ToolScope>;
+  /** Actions that create a new top-level object, addressing no existing board.
+   *  Refused when the agent's board_scope is narrowed — see `buildAgentTools`. */
+  unscopedCreateActions?: readonly string[];
   /** Served over MCP but never offered to an agent. See create-attachment-upload. */
   agentExcluded?: true;
   /**
@@ -57,6 +70,65 @@ export type ToolDescriptor = {
     input: Record<string, unknown>,
   ) => Promise<ToolResult>;
 };
+
+/** The most restrictive capability in a map — the fail-closed answer for an
+ *  action the map does not name. `board.destroy` outranks `board.structure`
+ *  outranks everything else; a map with no non-null value yields the tool's
+ *  most restrictive stated grant, never `null`. */
+function mostRestrictive(
+  map: Record<string, AgentCapability | null>,
+): AgentCapability | null {
+  const values = Object.values(map).filter(
+    (v): v is AgentCapability => v !== null,
+  );
+  if (values.length === 0) return null;
+  if (values.includes("board.destroy")) return "board.destroy";
+  if (values.includes("board.structure")) return "board.structure";
+  return values[0]!;
+}
+
+/**
+ * The capability ONE call costs.
+ *
+ * Every consumer must route through this rather than reading `d.capability`:
+ * a grouped-dispatch tool's cost depends on its `action`, and a consumer that
+ * reads the field directly sees a `Record` where it expected a string.
+ *
+ * FAILS CLOSED. An action absent from the map cannot occur — the discriminated
+ * union in the handler rejects it first — but this must not depend on that.
+ * Returning `null` for an unknown action would classify it as a
+ * capability-free read and let it execute ungated, which is exactly the
+ * shadowing bug `descriptorsFor` exists to prevent, arriving by another route.
+ */
+export function capabilityFor(
+  d: ToolDescriptor,
+  input: Record<string, unknown>,
+): AgentCapability | null {
+  if (d.capability === null || typeof d.capability === "string")
+    return d.capability;
+  const action = input.action;
+  if (typeof action === "string" && action in d.capability)
+    return d.capability[action]!;
+  return mostRestrictive(d.capability);
+}
+
+/**
+ * Which id names the board this call addresses.
+ *
+ * `"none"` is the fallback rather than a guess: it means board scope has
+ * nothing to say about the call, leaving RLS as the boundary — which is the
+ * honest answer for an action nobody declared, and is what `resolveTargetBoardId`
+ * already does for genuinely board-less tools.
+ */
+export function scopeFor(
+  d: ToolDescriptor,
+  input: Record<string, unknown>,
+): ToolScope {
+  if (typeof d.scope === "string") return d.scope;
+  const action = input.action;
+  if (typeof action === "string" && action in d.scope) return d.scope[action]!;
+  return "none";
+}
 
 /** Registers one descriptor on the MCP server. Metadata must stay byte-identical
  *  to what the old per-tool `register…Tool` helpers passed — `mcp-tools-table.test.tsx`
