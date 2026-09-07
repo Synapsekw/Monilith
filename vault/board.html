@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-05 13:14",
+  "updated": "2026-09-07 09:31",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -26,7 +26,7 @@
   "stand": {
     "percent": 87,
     "fraction": "13 of 15 tracks complete",
-    "caption": "≈97% by slice — the two open tracks are nearly finished. What actually remains is E6 Stripe billing and Phase 6e Docs, which was deliberately deferred.",
+    "caption": "≈98% by slice. Phase 10 — the final phase — has no unblocked slice left, so the build is FEATURE-COMPLETE EXCEPT FOR BILLING. What actually remains is E6 Stripe, blocked on credentials, and Phase 6e Docs, deliberately deferred. The DEV→PROD cutover is gated on declaring feature-complete, so E6 is the last thing in front of it.",
     "meter": [
       {
         "label": "0 Setup",
@@ -88,7 +88,7 @@
       {
         "label": "10 AI",
         "state": "part",
-        "pct": 92
+        "pct": 95
       }
     ]
   },
@@ -119,9 +119,9 @@
     },
     {
       "name": "AI & agents",
-      "pct": 95,
-      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, and now a personal reference-document library (Spec 2b) injected verbatim into the system prompt, keyed by a per-agent nonce against prompt-injection forgery, plus an AI usage dashboard and weekly-digest narrative.",
-      "left": "E6 Stripe; Spec 2c (agent memory) and Spec 3 (orchestration, @mentionable agents, per-agent principals)."
+      "pct": 99,
+      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library and agent memory — and now Spec 3: agents delegate to agents with depth and fan-out enforced in the claim RPC, @handle addresses an agent from an item update, from mentions and in Ask, run history shows a nested run tree with subtree token totals, and the bot label is a per-org assistant name.",
+      "left": "E6 Stripe, blocked on a test-mode key. Agent memory (2c) and delegation (Spec 3) are both shipped but inert until an admin opens the org ceiling — verified 2026-09-07: 0 of 9 orgs carry either capability."
     },
     {
       "name": "Platform & craft",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "c90abb42",
+        "value": "b5aca95c",
         "tone": "ok",
-        "note": "Ahead of main by 4 from the heal watermark 6d2a0813: the Spec 3 design+plan and two changelog commits. No unpromoted feature work."
+        "note": "Even with main. b5aca95c is the -s ours heal commit that records main as an ancestor; unpromoted delta 0, no live worktrees."
       },
       {
         "name": "main",
-        "value": "24ad32b4",
+        "value": "dd11b086",
         "tone": "ok",
-        "note": "PR #109 merged 2026-09-05 — the Settings navigation hotfix. Preceded by PR #108 (Spec 2c agent memory, create_pdf, sidebar-folders hardening) on 2026-09-04."
+        "note": "PR #110 merged 2026-09-07, 33 commits — Spec 3 (agent delegation, @handle addressing, nested run tree, per-org assistant name) plus the native-client OAuth fix. Preceded by PR #109 (Settings hotfix) on 2026-09-05."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 24ad32b4. Verified live: Vercel state=success, main CI green, /settings returning 307 → /settings/profile → 307 /login → 200."
+        "note": "Serving dd11b086. Verified live: Vercel state=success, main CI green, and POST /api/oauth/register returning the post-fix error string the old build could not produce. Owner then connected a native client (Grok bot) end to end."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "6413 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #109 plus main CI were green.",
+        "note": "6437 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #110 plus main CI were green.",
         "label": "test"
       },
       {
@@ -180,28 +180,29 @@
       },
       {
         "name": "ledger",
-        "value": "152/152",
+        "value": "156/156",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at promotion time. No migrations in this batch.",
+        "note": "Verified by db:ledger-check at promotion time. The Spec 3 run-graph migrations were already applied to DEV, which the production deployment reads.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Open the org ceiling so agent memory does something",
-      "why": "Spec 2c is now live in production (PR #108) but ships installable-but-inert by the 2026-08-27 owner ruling: the ceiling backfill was deliberately not run, so every memory write is denied by the org clamp and no proposal is recorded. Nothing is broken — but until an admin opens it, the whole feature is invisible. Owner’s move, and it is why memory was not announced on /updates.",
+      "title": "E6 Stripe — the last thing before feature-complete",
+      "why": "With Spec 3 merged and promoted (PR #110), E6 is the only feature epic left in the final phase, and it is blocked on you rather than on code: `stripe` is still absent from package.json, and units B, C and E need at minimum a test-mode key to be verifiable. Units A (schema) and D (/pricing) shipped 2026-08-02. This is also what gates the DEV→PROD cutover, because that call waits on declaring feature-complete.",
       "tags": [
         "owner",
-        "agents"
+        "critical",
+        "billing"
       ]
     },
     {
-      "title": "Land Spec 3 (orchestration and @handle addressing)",
-      "why": "Design and plan are on develop (0a7f5586) and four task worktrees are running the first batch in parallel. Nothing else is in flight, so the critical path is whichever of t1–t4 finishes last.",
+      "title": "Open the org ceiling — two shipped features are dark",
+      "why": "Verified on DEV 2026-09-07: of 9 org_ai_settings rows, 0 carry memory.write and 0 carry agent.delegate. Agent memory (2c) and agent delegation (Spec 3) are both installed and inert by the 2026-08-27 owner ruling — the backfill was deliberately never run. Nothing is broken, but neither feature does anything until an admin opens it, which is why neither was announced on /updates. Mentions and @handle addressing work without it.",
       "tags": [
-        "agents",
-        "spec3"
+        "owner",
+        "agents"
       ]
     },
     {
@@ -218,13 +219,6 @@
       "tags": [
         "security",
         "critical"
-      ]
-    },
-    {
-      "title": "E6 Stripe — units B, C, E–H",
-      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. The long-repeated \"no migration needed\" claim is false — unit F needs a standalone notification_kind enum migration, G/H need is_platform_admin()-gated RPCs that do not exist, and there is no webhook idempotency store. The lockfile is clean for the stripe install.",
-      "tags": [
-        "billing"
       ]
     },
     {
@@ -303,42 +297,26 @@
     },
     {
       "sev": "open",
-      "title": "Agent memory is shipped but inert",
-      "text": "Spec 2c is complete and merged, and does nothing: the org ceiling clamp denies every write and records no proposal, by owner ruling. Deliberate, not a defect — but it means the feature has never run end to end against a real model, and its RLS integration suite only executes with PULSE_TEST_DB set, so it did not run in any gate."
+      "title": "Two shipped agent features have never run end to end",
+      "text": "Agent memory (2c) and delegation (Spec 3) are both merged, promoted and inert: the org ceiling clamp denies every write and every delegate call, by owner ruling — 0 of 9 orgs carry either capability. Deliberate, not a defect. But it means neither has run against a real model in production, and delegation's depth/fan-out/cooldown caps are proven only in a rolled-back transaction and a suite that needs PULSE_TEST_DB."
+    },
+    {
+      "sev": "open",
+      "title": "maxDuration 300 is the platform ceiling, not a chosen budget",
+      "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/spec3-t1-schema",
-      "head": "62c6a4b8",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t2-vocabulary",
-      "head": "ddf8ca13",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t3-execute-run",
-      "head": "2f06fa0b",
-      "note": "spec3"
-    },
-    {
-      "branch": "task/spec3-t4-mention-model",
-      "head": "66ef1149",
-      "note": "spec3"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-09-05-1314-settings-menu-blank-streaming-redirect",
-    "when": "2026-09-05 13:14",
-    "title": "Settings opened to nothing — a redirect thrown inside the streaming shell",
+    "id": "2026-09-07-0931-spec3-orchestration-eleven-task-build",
+    "when": "2026-09-07 09:31",
+    "title": "Spec 3 — orchestration and @handle addressing, scoped and built in eleven tasks",
     "bullets": [
-      "Clicking the profile icon → Settings did nothing in production: the menu closed, the page stayed put, and no error was recorded anywhere.",
-      "/settings was a redirect-only page inside the (app) streaming shell, so redirect() was thrown from a streaming context — a meta refresh in the flushed HTML, and an inert NEXT_REDIRECT digest in the RSC payload the router never acted on.",
-      "A hard page load recovered after 1s; a client-side navigation — the path every user takes — rendered the settings layout with an empty content column.",
-      "Fixed at the routing layer with next.config.ts redirects(), the page deleted, guarded by a test. Promoted as PR #109 and verified live.",
-      "gotcha-99 records the two-transport probe a redirect fix has to pass: curl plain AND RSC: 1. A curl alone passes the broken version."
+      "Scoped from /whats-next triage to a spec + plan, then built as 11 tasks across 4 worktree batches, each branch gated and merged one at a time.",
+      "Containment lives in the database: agent_run_claim is a SECURITY DEFINER RPC enforcing depth ≤1, fan-out ≤3, a 5-minute mention cooldown, the org daily cap and ownership under a row lock — the only path that may create a non-scheduled run.",
+      "One delegate tool taking {handle, task}, not one tool per agent: descriptorsFor throws on duplicate names, so per-agent tools would make the tool namespace a function of user text.",
+      "Four pre-existing defects fixed: handle NOT NULL with no default broke createAgent in the released code; the seed trigger granted EXECUTE to PUBLIC; finalizeRun updated two rows once runs shared a NULL hour; countRunsToday counted nested runs.",
+      "A supabase-dev MCP that was never approved for the project looked exactly like an agent stuck in a retry loop — the tool simply did not exist in the session."
     ]
   }
 }

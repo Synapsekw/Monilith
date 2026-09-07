@@ -4,15 +4,20 @@ Refresh `vault/board.html` (the visual plan board) from the project's canonical 
 it as a claude.ai Artifact at the permanent URL below. The board is a **DERIVED view** — it is
 never a source of truth; never edit project state here first.
 
-**Permanent URL (never mint a new one):** https://claude.ai/code/artifact/fc8327d9-8ff3-4461-a17d-7994ab32cd87
+**Permanent URL (never mint a new one):** https://claude.ai/code/artifact/eb984761-bee4-4d1a-b6ba-30c6bc05119c
 **Favicon (always the same):** 🗿
 
-> **URL re-minted 2026-08-27.** The previous artifact (`eb984761-bee4-4d1a-b6ba-30c6bc05119c`) was
-> **deleted from the owner's account** — `WebFetch` returned "artifact not found" and it was absent
-> from `Artifact action:"list"`, so a redeploy was impossible and the rule above could not be
-> honoured. Re-minted once, with the owner's explicit approval, and recorded here. The rule stands:
-> do not mint another. If this URL ever 404s again, confirm deletion with `action:"list"` **before**
-> re-minting, and say so in your report — a redeploy failure is not on its own proof of deletion.
+> **The 2026-08-27 re-mint was a mistake, corrected 2026-09-07.** This file recorded that
+> `eb984761-…` had been deleted and pointed at a re-minted `fc8327d9-…`. `Artifact action:"list"`
+> on 2026-09-07 shows the opposite: `eb984761-…` ("Monolith — Mission Control") is alive and was
+> being updated as recently as 2026-09-05, while `fc8327d9-…` does not exist in the account at all.
+> A `WebFetch` 404 and a failed redeploy were read as proof of deletion in 2026-08-27; they are not
+> — only the listing is. The URL above is restored to `eb984761-…`, which also matches
+> `vault/00-north-star.md` §6.
+>
+> The rule stands and is now cheap to honour: **before re-minting, run `Artifact action:"list"` and
+> confirm the artifact is absent from it.** If that call is blocked, stop and ask rather than
+> minting — a redeploy failure is not on its own proof of deletion.
 
 **Design spec:** `vault/decisions/2026-07-17-decision-28-mission-control-board.md`
 

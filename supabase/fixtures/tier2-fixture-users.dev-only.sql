@@ -16,13 +16,24 @@
 -- vacuous one. C owns nothing and holds no elevated role.
 --
 -- It lives in `supabase/fixtures/`, NOT `supabase/migrations/`, on purpose:
--- `supabase db push` and `/sync-prod` read `migrations/` only, so this file can
--- never be carried to PROD by the normal promotion path. Production must never
--- grow accounts whose password is committed to the repo. The companion
--- migrations (`*_seed_tier2_tenant_fixtures.sql`,
--- `*_seed_tier2_board_thread_fixtures.sql`) only ATTACH rows to accounts that
--- already exist, so they are a clean no-op wherever these three are absent —
--- the same pattern as 20260619210000_seed_platform_admin_info.sql.
+-- `supabase db push` reads `migrations/` only, so this FILE can never be carried
+-- to PROD by the SCHEMA path. Production must never grow accounts whose password
+-- is committed to the repo. The companion migrations
+-- (`*_seed_tier2_tenant_fixtures.sql`, `*_seed_tier2_board_thread_fixtures.sql`)
+-- only ATTACH rows to accounts that already exist, so they are a clean no-op
+-- wherever these three are absent — the same pattern as
+-- 20260619210000_seed_platform_admin_info.sql.
+--
+-- !! CORRECTED 2026-08-27 - THIS HEADER USED TO CLAIM `/sync-prod` COULD NEVER
+-- !! CARRY IT EITHER. THAT WAS FALSE, AND IT FAILED IN PRODUCTION.
+-- !! `/sync-prod` has TWO phases. The schema phase is `db push` and does read
+-- !! `migrations/` only - but the DATA phase is a pg_dump of DEV restored into
+-- !! PROD, and it dumps `auth.users` ROWS. File placement cannot stop that.
+-- !! All three accounts were found live in PROD (jzsyq...) with passwords set and
+-- !! were deleted on 2026-08-27 with their two fixture orgs. If you run a
+-- !! /sync-prod DATA phase, either exclude these accounts from the dump or
+-- !! re-check PROD for `pulse-tier2-fixture%` immediately afterwards.
+-- !! See vault/decisions/2026-07-27-decision-31-tier2-permanent-tenant-fixtures.md
 --
 -- Run it once, by hand, against DEV (supabase-dev MCP `execute_sql`), then apply
 -- the seed migration. Idempotent: re-running is a no-op.

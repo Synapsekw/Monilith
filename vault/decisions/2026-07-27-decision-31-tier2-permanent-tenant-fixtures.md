@@ -37,15 +37,27 @@ purge, no sacrificial project.
 - **Permanent corpus**: two users, two orgs sharing nothing, plus workspaces, boards, groups and
   Ask Monolith threads (one carrying a Phase-2 `proposedActions` trace). Deterministic UUIDs, seeded by
   `20260727094033_seed_tier2_tenant_fixtures.sql`.
-- **PROD-safe by construction**: the migration never creates an auth user. Every insert hangs off
-  `select id from auth.users where lower(email) = …`, the `20260619210000_seed_platform_admin_info`
-  pattern, so it is a clean no-op wherever the two accounts are absent. The accounts themselves come
-  from `supabase/fixtures/tier2-fixture-users.dev-only.sql`, deliberately **outside** `migrations/`
-  so `supabase db push` and `/sync-prod` can never carry it. Production must never grow a pair of
-  known-password accounts.
+- **PROD-safe against the SCHEMA path only** — ~~PROD-safe by construction~~. The migration never
+  creates an auth user. Every insert hangs off `select id from auth.users where lower(email) = …`,
+  the `20260619210000_seed_platform_admin_info` pattern, so it is a clean no-op wherever the three
+  accounts are absent. The accounts themselves come from
+  `supabase/fixtures/tier2-fixture-users.dev-only.sql`, deliberately **outside** `migrations/` so
+  **`supabase db push`** can never carry them.
+
+  > **CORRECTED 2026-08-27** ([[2026-08-27-1229-carryover-clear-batch-promote-101]]). This bullet
+  > used to read "`supabase db push` **and `/sync-prod`** can never carry it." That was **false and
+  > it failed in production.** `/sync-prod` has two phases: the schema phase is `db push` and reads
+  > `migrations/`, but the **data** phase is `pg_dump` of DEV → restore into PROD, and it dumps
+  > `auth.users` **rows** — which no `migrations/`-vs-`fixtures/` placement can prevent. All three
+  > accounts were found live in `jzsyq…` with `encrypted_password` set, carried by an earlier data
+  > sync; they were deleted on 2026-08-27 along with their two fixture orgs. Living outside
+  > `migrations/` protects against one path, not both. **The stated goal stands and is now
+  > load-bearing: production must never grow accounts whose password is committed.** Enforce it by
+  > excluding the fixtures from the dump, or by re-checking PROD after any data-phase sync — not by
+  > this file's location.
 - **DEV only, no override**: `allowsTier2Fixtures()` is the deliberate **inverse** of the Tier-1
   deny-list. DEV is denied to the destructive purge and is the only target Tier 2 may aim at.
-- **Non-privileged**: only the publishable anon key and two fixture passwords. A unit test fails if
+- **Non-privileged**: only the publishable anon key and the three fixture passwords. A unit test fails if
   the suite or its helper names a privileged key, the GoTrue admin API, or `.env.test`.
 
 **Part two of the same decision: `integration` leaves the default run.** `pnpm test` is now
@@ -93,7 +105,11 @@ Each policy was dropped afterwards, the stray rows deleted, and the suite verifi
 - **Three assertions are write attempts.** They are refused today, and each is followed by an
   integrity re-read. If the boundary ever breaks, the fixture gets polluted and needs the repair in
   `CONTRIBUTING.md` — that is the correct trade for actually testing the write path.
-- **DEV now hosts two accounts whose password is in the repo.** They hold no elevated role and RLS
-  confines them to their own fixture org; the DEV anon key needed to use them is not committed.
+- **DEV now hosts three accounts whose password is in the repo** (A and B from 2026-07-27, C added
+  2026-08-04 — this bullet said "two" until 2026-08-27). They hold no elevated role and RLS confines
+  them to their own fixture org; the DEV anon key needed to use them is not committed.
+- **They reached PROD once, via the data-phase sync, and were deleted on 2026-08-27.** See the
+  correction above. Any future `/sync-prod` **data** phase will carry them again unless the dump
+  excludes them — check `jzsyq…` for `pulse-tier2-fixture%` after every one.
 - **Tier 1 is now genuinely dormant.** If a future change makes a dedicated test project cheap, the
   path back is `.env.test` + `pnpm test:integration` — unchanged.
