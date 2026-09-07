@@ -9,8 +9,9 @@ import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
 import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { createClient } from "@/lib/supabase/server";
-import { composePersona, composeBoardScope } from "@/lib/ai/ask/persona";
-import { getMessages } from "@/lib/ai/ask/conversations";
+import { composeBoardScope } from "@/lib/ai/ask/persona";
+import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
+import { composeAgentChatSystem } from "@/lib/ai/ask/agent-knowledge";
 import { askPulseStream } from "@/lib/ai/ask/ask-stream";
 import {
   buildAskMessages,
@@ -122,9 +123,12 @@ export async function POST(req: Request) {
       { status: 403 },
     );
 
-  // Persona + board scope. Both reads go through the USER client, so RLS decides
-  // what is visible; a row that reads back null degrades to plain Ask rather than
-  // failing a turn whose history is still worth continuing.
+  // Board scope only, here. Persona composition moves to the per-turn agent
+  // read below (WHO ANSWERS) — the addressed agent is the LAST USER TURN's
+  // `agent_id`, not a pre-turn read of the conversation column. This read
+  // goes through the USER client, so RLS decides what is visible; a row that
+  // reads back null degrades to plain Ask rather than failing a turn whose
+  // history is still worth continuing.
   let system = buildSystem(todayIn(timezone), timezone);
 
   if (conv.data.board_id) {
@@ -134,15 +138,6 @@ export async function POST(req: Request) {
       .eq("id", conv.data.board_id)
       .maybeSingle();
     system = composeBoardScope(system, board ?? null);
-  }
-
-  if (conv.data.agent_id) {
-    const { data: agent } = await supabase
-      .from("user_agents")
-      .select("name, instructions")
-      .eq("id", conv.data.agent_id)
-      .maybeSingle();
-    system = composePersona(system, agent ?? null);
   }
 
   // The response body is a pure OBSERVER of the turn, never its host
@@ -188,6 +183,22 @@ export async function POST(req: Request) {
     emit({ type: "status", text: OPENING_STATUS });
     try {
       const allRows = await getMessages(conversationId);
+
+      // WHO ANSWERS. The last user turn's `agent_id` — written by
+      // appendUserMessage from the message text against an RLS-scoped roster —
+      // is the record of what was actually asked. The request body carries no
+      // agent field at all, so a client cannot select a persona here.
+      const personaAgentId = currentPersonaFrom(allRows, conv.data.agent_id);
+      const personaAgent = personaAgentId
+        ? (
+            await supabase
+              .from("user_agents")
+              .select("id, name, instructions, doc_nonce")
+              .eq("id", personaAgentId)
+              .maybeSingle()
+          ).data
+        : null;
+
       let summary = conv.data.summary;
       const isFirstExchange =
         allRows.length === 1 && allRows[0].role === "user";
@@ -231,6 +242,23 @@ export async function POST(req: Request) {
               .eq("id", conversationId);
           }
 
+          // Composed HERE, not above: `model.contextLength` is what the
+          // knowledge envelope is divided against, and it is only resolved
+          // inside this callback (execute-run.ts, same reason).
+          const turnSystem = personaAgent
+            ? await composeAgentChatSystem({
+                client: supabase,
+                preamble: system,
+                agent: {
+                  id: personaAgent.id,
+                  name: personaAgent.name,
+                  instructions: personaAgent.instructions,
+                  docNonce: personaAgent.doc_nonce,
+                },
+                contextLength: model.contextLength,
+              })
+            : system;
+
           const r = await askPulseStream({
             apiKey,
             model: askModel,
@@ -238,7 +266,7 @@ export async function POST(req: Request) {
             workspaceId,
             client,
             messages: buildAskMessages(recent),
-            system: composeSystem(system, summary),
+            system: composeSystem(turnSystem, summary),
             emit,
           });
           usage.inputTokens += r.usage.inputTokens;
@@ -292,6 +320,7 @@ export async function POST(req: Request) {
           role: "assistant",
           content: result.answer,
           tool_trace: trace as unknown as Json,
+          agent_id: personaAgentId,
         })
         .select("id")
         .single();
