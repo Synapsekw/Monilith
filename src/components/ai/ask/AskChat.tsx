@@ -399,6 +399,7 @@ export function AskChat({
       <Composer
         disabled={turnBusy || streaming || dropState === "checking"}
         agents={agents}
+        agentId={personaId}
         onSubmit={onSubmit}
       />
     </div>

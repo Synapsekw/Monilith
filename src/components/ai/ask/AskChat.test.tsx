@@ -789,9 +789,13 @@ describe("AskChat — @handle picks the persona", () => {
     expect(
       screen.queryByText(/start a new chat to ask a different agent/i),
     ).not.toBeInTheDocument();
-    // …and the header chip names who actually answered.
+    // …and the header chip names who actually answered. Exact name, not a
+    // substring match: Task 11 gave the composer its own "@ops" chip, which
+    // would otherwise also satisfy a loose /ops/i.
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("button", { name: "Ops Chaser" }),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -829,15 +833,20 @@ describe("AskChat — @handle picks the persona", () => {
     render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
     ask("@ops what is late?");
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("button", { name: "Ops Chaser" }),
+      ).toBeInTheDocument(),
     );
 
     ask("what about tomorrow?");
 
     await waitFor(() => expect(appendUserMessage).toHaveBeenCalledTimes(2));
     // Still Ops: a plain follow-up inherits the thread's persona — the header
-    // reflects what the server resolved, not a client guess.
-    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+    // reflects what the server resolved, not a client guess. Exact name: the
+    // composer's own "@ops" chip (Task 11) would also match a loose /ops/i.
+    expect(
+      screen.getByRole("button", { name: "Ops Chaser" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -875,7 +884,9 @@ describe("AskChat — the header agent switcher", () => {
       agentId: SWITCH_OPS_ID,
     });
     // Reads as instant — the chip updates without waiting on the action.
-    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+    // Exact name: the composer's own "@ops" chip (Task 11) would also
+    // satisfy a loose /ops/i.
+    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
     // No RSC navigation for an in-page switch (working agreement #5).
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -913,7 +924,9 @@ describe("AskChat — the header agent switcher", () => {
     });
     // ...and the chip already reads "Ops" while that call is still in
     // flight — the optimistic update this test exists to prove happened.
-    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+    // Exact name: the composer's own "@ops" chip (Task 11) would also
+    // satisfy a loose /ops/i.
+    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
 
     await act(async () => {
       settle({ ok: false, error: "Couldn't switch agent." });
