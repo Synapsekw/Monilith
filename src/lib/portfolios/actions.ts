@@ -4,36 +4,34 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { typedRpc } from "@/lib/supabase/typed-rpc";
 import {
   getBoardStatusColumns,
   type StatusColumn,
 } from "@/lib/portfolios/queries";
 import {
-  addBoardSchema,
-  createPortfolioSchema,
-  removePlacementSchema,
-  updatePlacementSchema,
-} from "@/lib/validations/portfolios";
-import type { Tables, TablesUpdate } from "@/types/database.types";
+  addBoardToPortfolioCore,
+  createPortfolioCore,
+  removePortfolioBoardCore,
+  updatePortfolioPlacementCore,
+} from "@/lib/portfolios/core";
+import type { Tables } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+
+/**
+ * Cookie-bound wrappers. Each supplies the request's RLS client to its core in
+ * `./core`, then revalidates — the one step a core must not take.
+ * `manage_portfolio` over MCP calls the same cores with a bridged client.
+ */
 
 export async function createPortfolio(input: {
   name: string;
 }): Promise<ActionResult<{ portfolio: Tables<"portfolios"> }>> {
-  const parsed = createPortfolioSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_portfolio", {
-    p_name: parsed.data.name,
-  });
-  if (error || !data)
-    return fail(error?.message ?? "Could not create portfolio.");
+  const res = await createPortfolioCore(supabase, input);
+  if (!res.ok) return res;
 
   revalidatePath("/portfolios");
-  return { ok: true, data: { portfolio: data as Tables<"portfolios"> } };
+  return res;
 }
 
 export async function addBoardToPortfolio(input: {
@@ -42,40 +40,24 @@ export async function addBoardToPortfolio(input: {
   doneColumnId: string | null;
   doneOptionIds: string[];
 }): Promise<ActionResult<{ placement: Tables<"portfolio_boards"> }>> {
-  const parsed = addBoardSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { data, error } = await typedRpc(supabase, "add_portfolio_board", {
-    p_portfolio_id: parsed.data.portfolioId,
-    p_board_id: parsed.data.boardId,
-    p_done_column_id: parsed.data.doneColumnId,
-    p_done_option_ids: parsed.data.doneOptionIds,
-  });
-  if (error || !data) return fail(error?.message ?? "Could not add board.");
+  const res = await addBoardToPortfolioCore(supabase, input);
+  if (!res.ok) return res;
 
-  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
-  return { ok: true, data: { placement: data as Tables<"portfolio_boards"> } };
+  revalidatePath(`/portfolios/${input.portfolioId}`);
+  return res;
 }
 
 export async function removePortfolioBoard(input: {
   placementId: string;
   portfolioId: string;
 }): Promise<ActionResult<null>> {
-  const parsed = removePlacementSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("portfolio_boards")
-    .delete()
-    .eq("id", parsed.data.placementId);
-  if (error) return fail(error.message);
+  const res = await removePortfolioBoardCore(supabase, input);
+  if (!res.ok) return res;
 
-  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
-  return { ok: true, data: null };
+  revalidatePath(`/portfolios/${input.portfolioId}`);
+  return res;
 }
 
 export async function updatePortfolioPlacement(input: {
@@ -87,27 +69,12 @@ export async function updatePortfolioPlacement(input: {
   healthOverride?: "on_track" | "at_risk" | "off_track" | null;
   statusNote?: string | null;
 }): Promise<ActionResult<null>> {
-  const parsed = updatePlacementSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const patch: TablesUpdate<"portfolio_boards"> = {};
-  if ("ownerUserId" in input) patch.owner_user_id = parsed.data.ownerUserId;
-  if ("priority" in input) patch.priority = parsed.data.priority;
-  if ("budget" in input) patch.budget = parsed.data.budget;
-  if ("healthOverride" in input)
-    patch.health_override = parsed.data.healthOverride;
-  if ("statusNote" in input) patch.status_note = parsed.data.statusNote;
-
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("portfolio_boards")
-    .update(patch)
-    .eq("id", parsed.data.placementId);
-  if (error) return fail(error.message);
+  const res = await updatePortfolioPlacementCore(supabase, input);
+  if (!res.ok) return res;
 
-  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
-  return { ok: true, data: null };
+  revalidatePath(`/portfolios/${input.portfolioId}`);
+  return res;
 }
 
 export async function getStatusColumnsForBoard(
