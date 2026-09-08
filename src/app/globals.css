@@ -198,12 +198,16 @@
   --muted: #f1f1f4;
   /* Tuned against the WASH, not against --background: the sidebar's muted nav
      labels sit on the gradient's dark end (light) and under the brand bloom
-     (dark), which is where the old #6b6b72 / #9a9aa2 fell to 3.87:1 and
-     3.54:1. Worst case is now 4.85:1 light / 4.70:1 dark at the bloom's full
-     22%. Both moves are AWAY from their background, so every other pairing in
-     the app gains contrast — see globals.contrast.test.ts. */
+     (dark). Worst case is 4.56:1 light (darkest wash stop) / 4.70:1 dark
+     (lightest wash stop, fully bloomed at 22% brand) — both clear AA 4.5 with
+     a thin margin. See globals.contrast.test.ts. */
   --muted-foreground: #5b5b62;
-  --kicker: #585861;
+  /* Kicker shares --muted-foreground's exact lightness in both themes: AA 4.5
+     on the wash leaves no dimmer gray to spend, so the old "kicker is dimmer
+     than muted" convention is retired. The eyebrow still reads as subordinate
+     through typeface (mono), case (uppercase), and size (11px), not weight of
+     color. */
+  --kicker: #5b5b62;
   --accent: #f1f1f4;
   --accent-foreground: #1a1a1f;
   --destructive: oklch(0.577 0.245 27.325);
@@ -352,7 +356,8 @@
   --secondary-foreground: #f4f4f6;
   --muted: #1c1c20;
   --muted-foreground: #b2b2ba;
-  --kicker: #b4b4bb;
+  /* Matches --muted-foreground exactly — see the :root comment above --kicker. */
+  --kicker: #b2b2ba;
   --accent: #1c1c20;
   --accent-foreground: #f4f4f6;
   --destructive: oklch(0.704 0.191 22.216);
