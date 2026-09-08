@@ -46,8 +46,11 @@ are forbidden in app code). Use the utility, not the CSS var, in JSX.
 | Status labels only                   | `bg-status-{gray,blue,green,yellow,orange,red,purple,teal}` | the only multicolor surface                    |
 
 Radius: `--radius` is **0.875rem (14px)** — `rounded-lg` for cards/panels; `rounded-sm`
-(~8px) for chips/pills. Shadows: `shadow-card` is `none`; `shadow-panel` is a soft large
-blur for floating panels only. Spacing: 4px grid. Icons: **lucide-react**, `size-4` (16px)
+(~8px) for chips/pills. The app-shell content card (`app-shell.tsx` / `ask/layout.tsx`) is
+the **only** `rounded-xl` surface in the app — everything else is `rounded-lg`. Shadows:
+`shadow-card` is `none`; `shadow-panel` is a soft large blur for floating panels only;
+`shadow-drag` is the named lift for a row/card actively being dragged — never a raw
+`shadow-sm/md/lg/xl`. Spacing: 4px grid. Icons: **lucide-react**, `size-4` (16px)
 inline, `size-3.5` in dense rows. `text-destructive` is allowed for danger actions/menu
 items (semantic token, not raw color) — the only non-status color beyond the brand.
 

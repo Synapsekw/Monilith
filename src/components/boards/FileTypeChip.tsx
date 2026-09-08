@@ -13,7 +13,7 @@ const SIZES = {
 
 /** Tone → fill. Written out rather than composed as `bg-file-${tone}` because
  *  Tailwind scans source statically and never sees an interpolated class. */
-const TONE_FILL: Record<FileTone, string> = {
+const FILE_TYPE_FILL: Record<FileTone, string> = {
   pdf: "bg-file-pdf",
   doc: "bg-file-doc",
   xls: "bg-file-xls",
@@ -37,6 +37,11 @@ const TONE_FILL: Record<FileTone, string> = {
  *
  * Colour is never the only channel — the label is always present — so the icon
  * still resolves for a colourblind or greyscale reader.
+ *
+ * The white label text here is intentional and AA-safe: these fills are the
+ * mid-tone file-type palette (oklch L 0.48–0.575), not the pale app-level
+ * status tones — white clears 4.75:1+ against every one of them in both
+ * themes. This palette is unrelated to `StatusPill`'s solid-fill tokens.
  */
 export function FileTypeChip({
   fileName,
@@ -56,7 +61,7 @@ export function FileTypeChip({
         // The clipped top-right corner is what reads as "document" rather than
         // "coloured box"; it is the whole silhouette at this size.
         "relative inline-flex shrink-0 items-end justify-center rounded-[3px] pb-0.5 font-mono leading-none font-semibold tracking-tight text-white uppercase [clip-path:polygon(0_0,68%_0,100%_26%,100%_100%,0_100%)]",
-        TONE_FILL[tone],
+        FILE_TYPE_FILL[tone],
         SIZES[size],
         className,
       )}

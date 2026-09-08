@@ -45,7 +45,7 @@ export default async function AdminOrganizations({
       {rows.length === 0 ? (
         <p className="text-muted-foreground text-sm">No organizations found.</p>
       ) : (
-        <div className="bg-surface overflow-hidden rounded-xl border">
+        <div className="bg-surface overflow-hidden rounded-lg border">
           <div className="text-muted-foreground grid grid-cols-[2fr_1.4fr_1fr_0.8fr_90px] gap-3 border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase">
             <span>Name</span>
             <span>Slug</span>

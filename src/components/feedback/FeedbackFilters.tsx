@@ -140,7 +140,7 @@ export function FeedbackFilters({ rows }: { rows: Row[] }) {
           No feedback matches the current filter.
         </p>
       ) : (
-        <div className="bg-surface overflow-hidden rounded-xl border">
+        <div className="bg-surface overflow-hidden rounded-lg border">
           <div className="text-muted-foreground grid grid-cols-[0.5fr_2fr_1fr_1fr_90px] gap-3 border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase">
             <span>Kind</span>
             <span>Title</span>

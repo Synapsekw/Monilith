@@ -16,6 +16,7 @@ import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import { isoToLocalDate, localDateToISO } from "@/lib/boards/iso-date";
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
+import { statusToneClasses } from "@/components/ui/status-pill";
 import {
   ClearOptionButton,
   StatusOptionList,
@@ -246,7 +247,7 @@ export function PriorityEditor({
       {
         level: "critical",
         label: "Critical",
-        pill: "bg-status-red text-white",
+        pill: statusToneClasses("red"),
       },
       {
         level: "normal",

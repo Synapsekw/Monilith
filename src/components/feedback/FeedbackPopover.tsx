@@ -24,7 +24,7 @@ export function FeedbackPopover() {
             className={cn(
               "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-0.5 text-xs font-medium transition-all",
               tab === "new"
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -36,7 +36,7 @@ export function FeedbackPopover() {
             className={cn(
               "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-0.5 text-xs font-medium transition-all",
               tab === "mine"
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

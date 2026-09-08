@@ -93,7 +93,7 @@ export function PdfPreview({
           const slot = document.createElement("div");
           slot.dataset.page = String(n);
           slot.className =
-            "bg-background relative mx-auto mb-2 w-full overflow-hidden rounded shadow-sm";
+            "bg-background relative mx-auto mb-2 w-full overflow-hidden rounded";
           // aspect-ratio keeps the placeholder the exact shape of the page it
           // will hold, so the canvas drops in with zero layout shift.
           slot.style.aspectRatio = `${base.width} / ${base.height}`;

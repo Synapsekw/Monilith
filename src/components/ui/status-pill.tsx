@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -116,13 +116,14 @@ export function StatusPill({
   variant = "solid",
   className,
   children,
+  ...props
 }: {
   color: StatusPillColor;
   /** `solid` = filled token pill (boards look); `soft` = 15% tint + colored text. */
   variant?: "solid" | "soft";
   className?: string;
   children: ReactNode;
-}) {
+} & Omit<ComponentPropsWithoutRef<"span">, "color" | "className" | "children">) {
   return (
     <span
       className={cn(
@@ -130,6 +131,7 @@ export function StatusPill({
         statusToneClasses(color, variant),
         className,
       )}
+      {...props}
     >
       {children}
     </span>

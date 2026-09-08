@@ -438,7 +438,7 @@ describe("GanttBoard — two-column spans + color", () => {
     // an opaque inline background fill.
     expect(bar.style.getPropertyValue("--pill")).toBe("#00c875");
     expect(bar.style.backgroundColor).toBe("");
-    // Sanctioned chip geometry + card elevation (not rounded-md/shadow-sm).
+    // Sanctioned chip geometry + card elevation (not rounded-md or a raw shadow utility).
     expect(bar.className).toContain("rounded-sm");
     expect(bar.className).toContain("shadow-card");
   });

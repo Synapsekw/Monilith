@@ -119,6 +119,7 @@
   /* Elevation — values set per theme in :root / .dark (see below) */
   --shadow-panel: var(--elevation-panel);
   --shadow-card: var(--elevation-card);
+  --shadow-drag: var(--shadow-drag);
 
   /* Signature motion (150–250ms, ease-out) — usable as animate-fadein / animate-slidein */
   --animate-fadein: fadein 0.15s ease-out;
@@ -301,6 +302,10 @@
   --radius: 0.875rem; /* 14px — Keystone cards/panels; radius-sm→~8px chips */
   --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
   --elevation-card: none;
+  /* Named drag-lift shadow — the one deliberate exception to "near-zero
+     shadows": a dragged row/card needs to visually separate from the list
+     it's being reordered within. */
+  --shadow-drag: 0 12px 32px -12px rgb(30 40 90 / 30%);
 
   --sidebar: transparent;
   --sidebar-foreground: #1a1a1f;
@@ -423,6 +428,7 @@
   --sidebar-ring: var(--brand);
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
+  --shadow-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
 }
 
 @layer base {

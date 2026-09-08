@@ -52,7 +52,7 @@ export function SubmitFeedbackForm({ submit, onDone }: Props) {
           className={cn(
             "flex-1 rounded-[calc(var(--radius-md)-2px)] px-3 py-1 text-xs font-medium transition-all",
             kind === "bug"
-              ? "bg-background text-foreground shadow-sm"
+              ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -64,7 +64,7 @@ export function SubmitFeedbackForm({ submit, onDone }: Props) {
           className={cn(
             "flex-1 rounded-[calc(var(--radius-md)-2px)] px-3 py-1 text-xs font-medium transition-all",
             kind === "feature_request"
-              ? "bg-background text-foreground shadow-sm"
+              ? "bg-background text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >

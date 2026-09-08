@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { DARK_FG } from "@/lib/boards/contrast";
 import {
   STATUS_BG,
@@ -102,5 +104,52 @@ describe("StatusPill", () => {
     expect(pill.className).not.toContain("px-2.5");
     expect(pill.className).toContain("text-3xs");
     expect(pill.className).not.toContain("text-xs");
+  });
+});
+
+/** Recursively list `.tsx` files under `dir`. */
+function listTsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) out.push(...listTsxFiles(full));
+    else if (entry.endsWith(".tsx")) out.push(full);
+  }
+  return out;
+}
+
+describe("hand-rolled bg-status-*/TONE_FILL + text-white guard", () => {
+  it("never pairs text-white with a status/tone fill outside status-pill.tsx", () => {
+    // The tests above only check statusToneClasses()'s own output — they
+    // can't catch a call site that hand-rolls `bg-status-* text-white` (or a
+    // local `TONE_FILL`-style map) directly in JSX instead of going through
+    // StatusPill/statusToneClasses. Walk src/components and flag any file
+    // where `text-white` sits within 80 chars of `bg-status-` or `TONE_FILL`.
+    // status-pill.tsx itself is exempt — its SOLID_TEXT map legitimately
+    // pairs `text-white` with light-mode purple.
+    const root = resolve(process.cwd(), "src/components");
+    const WINDOW = 80;
+    const offenders: string[] = [];
+    for (const file of listTsxFiles(root)) {
+      if (
+        file.endsWith("/ui/status-pill.tsx") ||
+        file.endsWith("/ui/status-pill.test.tsx")
+      )
+        continue;
+      const src = readFileSync(file, "utf8");
+      let idx = src.indexOf("text-white");
+      while (idx !== -1) {
+        const start = Math.max(0, idx - WINDOW);
+        const end = Math.min(src.length, idx + WINDOW);
+        const around = src.slice(start, end);
+        if (around.includes("bg-status-") || around.includes("TONE_FILL")) {
+          offenders.push(file);
+          break;
+        }
+        idx = src.indexOf("text-white", idx + 1);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

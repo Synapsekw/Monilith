@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 /**
  * Instant loading fallback for a feedback detail page. Mirrors the page's
  * `mx-auto max-w-2xl space-y-5` column — back link, header, then
- * AdminFeedbackDetail's two `rounded-xl border p-6` cards (the report, then the
+ * AdminFeedbackDetail's two `rounded-lg border p-6` cards (the report, then the
  * triage controls). Static Server Component — no data fetch.
  */
 export default function AdminFeedbackDetailLoading() {
@@ -24,7 +24,7 @@ export default function AdminFeedbackDetailLoading() {
       <div className="space-y-8">
         <div
           data-testid="report-card-skeleton"
-          className="bg-surface rounded-xl border p-6"
+          className="bg-surface rounded-lg border p-6"
         >
           <div className="mb-1 flex items-center gap-2">
             <Skeleton className="h-3 w-16" />
@@ -40,7 +40,7 @@ export default function AdminFeedbackDetailLoading() {
 
         <div
           data-testid="triage-card-skeleton"
-          className="bg-surface rounded-xl border p-6"
+          className="bg-surface rounded-lg border p-6"
         >
           <Skeleton className="mb-4 h-4 w-16" />
           <div className="mb-4">

@@ -95,7 +95,7 @@ export function AdminFeedbackDetail({ row, save }: Props) {
   return (
     <div className="space-y-8">
       {/* Report header */}
-      <div className="bg-surface rounded-xl border p-6">
+      <div className="bg-surface rounded-lg border p-6">
         <div className="mb-1 flex items-center gap-2">
           <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {KIND_LABELS[row.kind] ?? row.kind}
@@ -116,7 +116,7 @@ export function AdminFeedbackDetail({ row, save }: Props) {
       </div>
 
       {/* Triage controls */}
-      <div className="bg-surface rounded-xl border p-6">
+      <div className="bg-surface rounded-lg border p-6">
         <h3 className="text-foreground mb-4 text-sm font-semibold">Triage</h3>
 
         {/* Status picker */}
@@ -215,7 +215,7 @@ export function AdminFeedbackDetail({ row, save }: Props) {
 
       {/* Previous response (if any was already saved) */}
       {row.admin_response && (
-        <div className="bg-surface rounded-xl border p-6">
+        <div className="bg-surface rounded-lg border p-6">
           <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
             Previous response
           </p>
