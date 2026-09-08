@@ -122,3 +122,49 @@ describe("muted text clears WCAG AA on the wash — dark", () => {
     ).toBeGreaterThanOrEqual(AA);
   });
 });
+
+describe("kicker text clears WCAG AA on the wash — light", () => {
+  const fg = hex(declaration(":root", "--kicker"));
+  it.each(washStops(":root"))("clears AA on the %s stop", (stop) => {
+    expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
+  });
+});
+
+describe("kicker text clears WCAG AA on the wash — dark", () => {
+  const fg = hex(declaration(".dark", "--kicker"));
+  const brand = hex(declaration(".dark", "--brand"));
+  const bloomPeak = (() => {
+    const m = declaration(".dark", "--app-bloom").match(
+      /var\(--brand\)\s+(\d+)%/,
+    );
+    if (!m) throw new Error("could not read the dark bloom percentage");
+    return Number(m[1]) / 100;
+  })();
+  it.each(washStops(".dark"))(
+    "clears AA on the %s stop under the bloom",
+    (stop) => {
+      expect(
+        contrast(fg, over(brand, bloomPeak, hex(stop))),
+      ).toBeGreaterThanOrEqual(AA);
+    },
+  );
+});
+
+describe("light chrome separates from the content card", () => {
+  // The bloom source is `color-mix(in oklab, var(--brand) P%, white)` at alpha A
+  // over the FIRST wash stop (top-left is where the header band lives).
+  // Approximate the oklab mix with an sRGB mix — conservative for this check.
+  it("bloomed header band vs --content-surface ≥ 1.15:1", () => {
+    const bloom = declaration(":root", "--app-bloom");
+    const pm = bloom.match(/var\(--brand\)\s+(\d+)%,\s*white\)\s*\/?\s*(\d+)%/);
+    if (!pm)
+      throw new Error(
+        "light bloom must be color-mix(in oklab, var(--brand) P%, white) / A%",
+      );
+    const brand = hex(declaration(":root", "--brand"));
+    const src = over(brand, Number(pm[1]) / 100, [255, 255, 255]);
+    const band = over(src, Number(pm[2]) / 100, hex(washStops(":root")[0]));
+    const card = hex(declaration(":root", "--content-surface"));
+    expect(contrast(band, card)).toBeGreaterThanOrEqual(1.15);
+  });
+});

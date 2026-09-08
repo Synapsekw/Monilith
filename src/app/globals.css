@@ -202,8 +202,8 @@
      3.54:1. Worst case is now 4.85:1 light / 4.70:1 dark at the bloom's full
      22%. Both moves are AWAY from their background, so every other pairing in
      the app gains contrast — see globals.contrast.test.ts. */
-  --muted-foreground: #5c5c63;
-  --kicker: #9a9aa2;
+  --muted-foreground: #5b5b62;
+  --kicker: #585861;
   --accent: #f1f1f4;
   --accent-foreground: #1a1a1f;
   --destructive: oklch(0.577 0.245 27.325);
@@ -214,24 +214,30 @@
   --ring: var(--brand);
   --glow-primary: 0 0 30px -8px rgba(91, 111, 214, 0.35);
 
-  /* Periwinkle Dusk — light. Chrome only; content stays neutral. */
-  --app-wash: linear-gradient(168deg, #e3e7f6 0%, #dbe0f1 46%, #d3d8e9 100%);
-  /* Periwinkle-tinted, not white: a pure-white bloom bleached the chrome the
-     sidebar sits in back to near-#fff (#f9fafd), losing the blue cast dark
-     mode gets from its brand bloom. Tinted, the sidebar reads ~#e2e8f8. */
+  /* Periwinkle Dusk — light. Chrome only; content stays neutral. The first stop
+     sits slightly below the bloom so the bloom has visible range (the Aug 27
+     tint had collapsed the two onto the same value — a no-op bloom). */
+  --app-wash: linear-gradient(168deg, #dde2f2 0%, #d6dbee 46%, #cfd4e6 100%);
+  /* Brand-derived, lighter than every wash stop: raises contrast against dark
+     text (see globals.contrast.test.ts) and lets theme presets inherit it. */
   --app-bloom: radial-gradient(
     110% 85% at 8% -6%,
-    rgb(226 232 250 / 55%) 0%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
     transparent 58%
   );
   --content-surface: #ffffff;
-  --content-edge: rgb(0 0 0 / 7%);
+  --content-edge: rgb(0 0 0 / 12%);
   --content-lift:
     -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
 
   --state-hover: rgb(0 0 0 / 4%);
   --state-active: rgb(0 0 0 / 7%);
-  --state-selected: color-mix(in oklab, var(--brand) 12%, transparent);
+  --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
 
   /* Resting fill for chrome that sits ON the wash — switcher chips, the ⌘K
      kbd, and the shell's first-paint skeletons. Alpha-on-parent so the
@@ -346,7 +352,7 @@
   --secondary-foreground: #f4f4f6;
   --muted: #1c1c20;
   --muted-foreground: #b2b2ba;
-  --kicker: #6b6b72;
+  --kicker: #b4b4bb;
   --accent: #1c1c20;
   --accent-foreground: #f4f4f6;
   --destructive: oklch(0.704 0.191 22.216);

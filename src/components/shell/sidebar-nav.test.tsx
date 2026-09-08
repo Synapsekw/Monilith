@@ -180,8 +180,8 @@ describe("SidebarNav", () => {
   });
 
   it("marks the active nav item with the Keystone periwinkle wash", () => {
-    // Keystone active state = translucent periwinkle wash + tinted hairline
-    // (no longer the old solid `bg-primary/80`). Assert the semantic tokens.
+    // Keystone active state = --state-selected fill (brand-derived, tuned per
+    // theme for AA) + tinted hairline. Assert the semantic tokens.
     vi.mocked(usePathname).mockReturnValue("/my-work");
     renderNav(
       <SidebarNav
@@ -192,8 +192,8 @@ describe("SidebarNav", () => {
       />,
     );
     const active = screen.getByText("My Work").closest("a");
-    expect(active).toHaveClass("bg-primary/10");
-    expect(active).toHaveClass("border-primary/25");
+    expect(active).toHaveClass("bg-state-selected");
+    expect(active).toHaveClass("border-primary/40");
     expect(active?.className).toContain("text-foreground");
   });
 
