@@ -198,9 +198,11 @@
   --muted: #f1f1f4;
   /* Tuned against the WASH, not against --background: the sidebar's muted nav
      labels sit on the gradient's dark end (light) and under the brand bloom
-     (dark). Worst case is 4.56:1 light (darkest wash stop) / 4.70:1 dark
-     (lightest wash stop, fully bloomed at 22% brand) — both clear AA 4.5 with
-     a thin margin. See globals.contrast.test.ts. */
+     (dark). Worst case, computed with globals.contrast.test.ts's own over()
+     helper (per-channel Math.round of the alpha blend): 4.56:1 light
+     (darkest wash stop, #cfd4e6) / 4.70:1 dark (lightest wash stop #212540,
+     fully bloomed at 22% brand → composited rgb(57 65 102)) — both clear AA
+     4.5 with a thin margin. See globals.contrast.test.ts. */
   --muted-foreground: #5b5b62;
   /* Kicker shares --muted-foreground's exact lightness in both themes: AA 4.5
      on the wash leaves no dimmer gray to spend, so the old "kicker is dimmer
