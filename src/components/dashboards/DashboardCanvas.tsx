@@ -119,11 +119,15 @@ export function DashboardCanvas({
             className="h-8 max-w-md text-lg font-semibold"
           />
         ) : (
-          <h1 className="text-lg font-semibold">
+          // A rename-in-place control, not a static page title — PageHeader's
+          // static ReactNode title can't host the input/h1 swap above, so this
+          // adopts the shared type ramp's classes directly (same treatment as
+          // BoardHeader's dense toolbar row).
+          <h1 className="font-heading text-lg font-semibold tracking-tight">
             <button
               type="button"
               onClick={openRename}
-              className="hover:text-muted-foreground focus-visible:ring-ring rounded-sm text-left tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:text-muted-foreground focus-visible:ring-ring rounded-sm text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
               {dashboardName}
             </button>

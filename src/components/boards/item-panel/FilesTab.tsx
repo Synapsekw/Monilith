@@ -8,6 +8,7 @@ import { formatSize } from "@/lib/collaboration/attachments-format";
 import type { AttachmentsCache } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Kicker } from "@/components/ui/kicker";
 import { AttachmentCard } from "./AttachmentCard";
 import { AttachmentRow } from "./AttachmentRow";
 import { FilePreviewLightbox } from "./FilePreviewLightbox";
@@ -69,10 +70,10 @@ export function FilesTab({
       }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
+        <Kicker size="xs">
           {attachments.length} file{attachments.length === 1 ? "" : "s"} ·{" "}
           {formatSize(totalBytes)}
-        </span>
+        </Kicker>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border">
             <Button

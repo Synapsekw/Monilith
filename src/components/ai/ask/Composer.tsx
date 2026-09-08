@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import { Textarea } from "@/components/ui/textarea";
 import {
   activeMentionQuery,
@@ -265,13 +266,13 @@ export function Composer({
           a slow turn look broken — and WHO it will reach, so both a typed
           handle and the thread's sticky persona are confirmed before the
           question is spent on the wrong agent. */}
-      <p className="text-kicker text-2xs mx-auto mt-1.5 max-w-3xl px-1 font-mono tracking-[0.12em] uppercase">
+      <Kicker className="mx-auto mt-1.5 block max-w-3xl px-1">
         {disabled
           ? "Working — one question at a time"
           : answering
             ? `Asking ${answering.name} — ⌘↵ to send`
             : "⌘↵ to send"}
-      </p>
+      </Kicker>
     </div>
   );
 }

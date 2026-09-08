@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Sparkles } from "lucide-react";
 import { summarizeThread } from "@/lib/ai/summarize/actions";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 /**
@@ -79,9 +80,7 @@ export function ThreadSummary({
         {summary && !isPending ? (
           <div className="bg-surface-muted border-border animate-fadein rounded-lg border p-3.5 text-sm">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
-                Thread summary
-              </span>
+              <Kicker size="xs">Thread summary</Kicker>
               <Button type="button" variant="ghost" size="sm" onClick={dismiss}>
                 Dismiss
               </Button>

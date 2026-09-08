@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { getArchivedBoards } from "@/lib/boards/trash-queries";
 import { ArchivedBoardsSection } from "@/components/boards/ArchivedBoardsSection";
+import { PageHeader } from "@/components/ui/page-header";
 
 /**
  * Index for the `/boards` route. Two responsibilities:
@@ -43,12 +44,10 @@ export default async function BoardsIndex() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-lg font-semibold">Boards</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Pick a board from the sidebar, or recover an archived one below.
-        </p>
-      </div>
+      <PageHeader
+        title="Boards"
+        description="Pick a board from the sidebar, or recover an archived one below."
+      />
 
       {hasLiveBoards ? (
         <section className="bg-surface rounded-md border">

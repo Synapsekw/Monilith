@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { applyColumnFill, classifyColumn } from "@/lib/ai/column-fill/actions";
+import { Kicker } from "@/components/ui/kicker";
 import type { CacheColumn } from "@/lib/boards/cache";
 import {
   SmartFillGrid,
@@ -122,8 +123,8 @@ export function SmartFillDialog({
             </div>
 
             <fieldset className="flex flex-col gap-1">
-              <legend className="text-kicker text-3xs mb-1.5 font-mono font-medium tracking-[0.12em] uppercase">
-                Fill into
+              <legend className="mb-1.5">
+                <Kicker size="xs">Fill into</Kicker>
               </legend>
               {pickable.length === 0 ? (
                 <p className="text-muted-foreground text-sm">

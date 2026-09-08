@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth/session";
 import { getMyWorkPageData } from "@/lib/my-work/queries";
 import { MyWorkList } from "@/components/my-work/MyWorkList";
+import { PageHeader } from "@/components/ui/page-header";
 
 /**
  * "My Work" — the primary persona's #1 job: everything assigned to me across
@@ -15,15 +16,11 @@ export default async function MyWorkPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-6 py-3">
-        <div>
-          <h1 className="text-lg font-semibold">My Work</h1>
-          <p className="text-muted-foreground text-xs">
-            Everything assigned to you across every board, by when it&apos;s
-            due.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        className="px-6 py-3"
+        title="My Work"
+        description="Everything assigned to you across every board, by when it's due."
+      />
       <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <MyWorkList groups={groups} today={today} />
       </div>

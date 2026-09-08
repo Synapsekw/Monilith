@@ -4,6 +4,8 @@ import { searchUsers } from "@/lib/platform/queries";
 import { partitionByAccountKind } from "@/lib/platform/test-accounts";
 import { Pager } from "@/components/platform/pager";
 import { USER_ROW_GRID, UserRow } from "@/components/admin/user-row";
+import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Platform admin · users" };
 const PAGE_SIZE = 25;
@@ -25,14 +27,11 @@ export default async function AdminUsers({
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
-          Users
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Every user across all organizations.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Platform"
+        title="Users"
+        description="Every user across all organizations."
+      />
 
       <Form action="/admin/users" className="flex gap-2">
         <input
@@ -58,12 +57,10 @@ export default async function AdminUsers({
 
       {people.length > 0 && (
         <div className="bg-surface overflow-hidden rounded-lg border">
-          <div
-            className={`${USER_ROW_GRID} text-muted-foreground border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase`}
-          >
-            <span>Email</span>
-            <span>Organizations</span>
-            <span>Status</span>
+          <div className={`${USER_ROW_GRID} border-b px-4 py-2.5`}>
+            <Kicker>Email</Kicker>
+            <Kicker>Organizations</Kicker>
+            <Kicker>Status</Kicker>
             <span />
           </div>
           {people.map((u) => (

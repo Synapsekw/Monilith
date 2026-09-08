@@ -2,6 +2,7 @@
 
 import type { ActivityDescriptor } from "@/lib/collaboration/activity";
 import { pillTextColor } from "@/lib/boards/contrast";
+import { Kicker } from "@/components/ui/kicker";
 
 function Chip({
   value,
@@ -37,9 +38,7 @@ export function ActivityRow({
     <li className="bg-surface-muted border-border flex flex-col gap-1 rounded-lg border p-3 text-sm">
       <div className="text-muted-foreground flex items-center gap-2 text-xs">
         <span className="text-foreground font-bold">{actorName}</span>
-        <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
-          {time}
-        </span>
+        <Kicker size="xs">{time}</Kicker>
       </div>
       <div className="flex items-center gap-2">
         {descriptor.kind === "item_created" && <span>created this item</span>}

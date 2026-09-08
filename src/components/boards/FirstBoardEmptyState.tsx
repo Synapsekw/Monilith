@@ -15,6 +15,7 @@ import { createBoardFromTemplate } from "@/lib/boards/actions";
 import { BOARD_TEMPLATES } from "@/lib/boards/templates";
 import { MonolithMark } from "@/components/brand/monolith-mark";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 
@@ -92,9 +93,9 @@ export function FirstBoardEmptyState({
 
         <div className="mt-8 flex items-center gap-3">
           <div className="border-border h-px flex-1 border-t" />
-          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          <Kicker className="text-muted-foreground">
             Or start from a template
-          </span>
+          </Kicker>
           <div className="border-border h-px flex-1 border-t" />
         </div>
 

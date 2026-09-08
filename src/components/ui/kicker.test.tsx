@@ -24,4 +24,16 @@ describe("Kicker", () => {
     render(<Kicker className="mb-2">Files</Kicker>);
     expect(screen.getByText("Files")).toHaveClass("mb-2");
   });
+
+  it("defaults to the sm (text-2xs) size", () => {
+    render(<Kicker>Updates</Kicker>);
+    expect(screen.getByText("Updates")).toHaveClass("text-2xs");
+  });
+
+  it("renders text-3xs for dense table/column labels when size is xs", () => {
+    render(<Kicker size="xs">Owner</Kicker>);
+    const el = screen.getByText("Owner");
+    expect(el).toHaveClass("text-3xs");
+    expect(el.className).not.toContain("text-2xs");
+  });
 });

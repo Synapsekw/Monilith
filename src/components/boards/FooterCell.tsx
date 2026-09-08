@@ -9,6 +9,7 @@ import type {
 } from "@/lib/validations/boards";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import { PercentBar } from "@/components/boards/cells";
+import { Kicker } from "@/components/ui/kicker";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -179,9 +180,9 @@ export function FooterCell({
   const body = (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       {label && result.kind !== "empty" && (
-        <span className="text-kicker text-3xs shrink-0 font-mono tracking-wide uppercase">
+        <Kicker size="xs" className="shrink-0">
           {label}
-        </span>
+        </Kicker>
       )}
       <FooterValue result={result} dirhamSign={dirhamSign} />
       {!current && canEdit && (

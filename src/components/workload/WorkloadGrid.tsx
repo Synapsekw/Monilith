@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Popover,
   PopoverContent,
@@ -242,99 +242,96 @@ export function WorkloadGrid({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div>
-          <Kicker>PLANNING</Kicker>
-          <h1 className="text-lg font-semibold">Workload</h1>
-          <p className="text-muted-foreground text-xs">
-            Assigned effort vs. capacity, by week. Edit a person&apos;s capacity
-            to recolor their row.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {workspaces.length > 0 ? (
+      <PageHeader
+        className="px-4 py-3"
+        title="Workload"
+        description="Assigned effort vs. capacity, by week. Edit a person's capacity to recolor their row."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {workspaces.length > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">Workspace</span>
+                <FilterSelect
+                  label="Filter by workspace"
+                  allLabel="All workspaces"
+                  value={wsId}
+                  options={workspaces.map((w) => ({
+                    value: w.id,
+                    label: w.name,
+                  }))}
+                  // Changing workspace clears any board selection (board scoping).
+                  onChange={(v) => setParam({ ws: v, board: null })}
+                />
+              </div>
+            ) : null}
+            {boards.length > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">Board</span>
+                <FilterSelect
+                  label="Filter by board"
+                  allLabel="All boards"
+                  value={boardId}
+                  options={boardOptions}
+                  onChange={(v) => setParam({ board: v })}
+                />
+              </div>
+            ) : null}
             <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground text-xs">Workspace</span>
-              <FilterSelect
-                label="Filter by workspace"
-                allLabel="All workspaces"
-                value={wsId}
-                options={workspaces.map((w) => ({
-                  value: w.id,
-                  label: w.name,
-                }))}
-                // Changing workspace clears any board selection (board scoping).
-                onChange={(v) => setParam({ ws: v, board: null })}
-              />
+              <span className="text-muted-foreground text-xs">Show</span>
+              <div className="flex gap-1">
+                {(
+                  ["planned", "actual", "both", "variance"] as WorkloadMetric[]
+                ).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={metric === m}
+                    onClick={() =>
+                      setParam({ metric: m === "planned" ? null : m })
+                    }
+                    className={cn(
+                      "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                      metric === m
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
+                    )}
+                  >
+                    {METRIC_LABEL[m]}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : null}
-          {boards.length > 0 ? (
             <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground text-xs">Board</span>
-              <FilterSelect
-                label="Filter by board"
-                allLabel="All boards"
-                value={boardId}
-                options={boardOptions}
-                onChange={(v) => setParam({ board: v })}
+              <span className="text-muted-foreground text-xs">Sort</span>
+              <div className="flex gap-1">
+                {(["name", "load"] as SortKey[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={sort === k}
+                    onClick={() => setParam({ sort: k })}
+                    className={cn(
+                      "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                      sort === k
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
+                    )}
+                  >
+                    {SORT_LABEL[k]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {isOrgAdmin ? (
+              <WorkloadDefaultsDialog
+                defaultHoursPerDay={defaults.hoursPerDay}
+                defaultPerItemHours={defaults.perItemHours}
+                defaultWorkingDays={defaults.workingDays}
               />
-            </div>
-          ) : null}
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted-foreground text-xs">Show</span>
-            <div className="flex gap-1">
-              {(
-                ["planned", "actual", "both", "variance"] as WorkloadMetric[]
-              ).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={metric === m}
-                  onClick={() =>
-                    setParam({ metric: m === "planned" ? null : m })
-                  }
-                  className={cn(
-                    "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                    metric === m
-                      ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
-                  )}
-                >
-                  {METRIC_LABEL[m]}
-                </button>
-              ))}
-            </div>
+            ) : null}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted-foreground text-xs">Sort</span>
-            <div className="flex gap-1">
-              {(["name", "load"] as SortKey[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={sort === k}
-                  onClick={() => setParam({ sort: k })}
-                  className={cn(
-                    "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                    sort === k
-                      ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
-                  )}
-                >
-                  {SORT_LABEL[k]}
-                </button>
-              ))}
-            </div>
-          </div>
-          {isOrgAdmin ? (
-            <WorkloadDefaultsDialog
-              defaultHoursPerDay={defaults.hoursPerDay}
-              defaultPerItemHours={defaults.perItemHours}
-              defaultWorkingDays={defaults.workingDays}
-            />
-          ) : null}
-        </div>
-      </div>
+        }
+      />
 
       <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">

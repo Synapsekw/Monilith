@@ -80,9 +80,12 @@ export default async function ReportsListPage({
                 </span>
               </Link>
               {r.scope === "board" ? null : (
-                <span className="text-kicker text-3xs shrink-0 rounded-sm border px-1.5 py-0.5 font-mono font-medium tracking-[0.1em] uppercase">
+                <Kicker
+                  size="xs"
+                  className="shrink-0 rounded-sm border px-1.5 py-0.5"
+                >
                   {scopeLabel(r.scope)}
-                </span>
+                </Kicker>
               )}
               <ReportRowActions reportId={r.id} reportName={r.name} />
             </li>
