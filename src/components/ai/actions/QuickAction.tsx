@@ -131,9 +131,7 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
         >
           {turns.map((t, i) => (
             <div key={i} className="flex flex-col gap-1 p-2.5">
-              <span className="text-kicker text-2xs font-mono tracking-[0.12em] uppercase">
-                {t.role === "you" ? "You" : "AI"}
-              </span>
+              <Kicker>{t.role === "you" ? "You" : "AI"}</Kicker>
               <p className="text-foreground text-sm whitespace-pre-wrap">
                 {t.text}
               </p>

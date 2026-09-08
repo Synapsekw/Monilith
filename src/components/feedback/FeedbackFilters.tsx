@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Tables } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+import { Kicker } from "@/components/ui/kicker";
 import {
   statusToneClasses,
   type StatusColor,
@@ -141,11 +142,11 @@ export function FeedbackFilters({ rows }: { rows: Row[] }) {
         </p>
       ) : (
         <div className="bg-surface overflow-hidden rounded-lg border">
-          <div className="text-muted-foreground grid grid-cols-[0.5fr_2fr_1fr_1fr_90px] gap-3 border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase">
-            <span>Kind</span>
-            <span>Title</span>
-            <span>Submitted</span>
-            <span>Status</span>
+          <div className="grid grid-cols-[0.5fr_2fr_1fr_1fr_90px] gap-3 border-b px-4 py-2.5">
+            <Kicker>Kind</Kicker>
+            <Kicker>Title</Kicker>
+            <Kicker>Submitted</Kicker>
+            <Kicker>Status</Kicker>
             <span />
           </div>
           {filtered.map((row) => (

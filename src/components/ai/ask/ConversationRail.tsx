@@ -341,12 +341,12 @@ export function ConversationRail({
           onToggle={(e) => setBriefingsOpen(e.currentTarget.open)}
           className="border-border shrink-0 border-t px-2 pt-2 pb-3"
         >
-          <summary className="text-kicker text-2xs cursor-pointer px-3 py-1 font-mono font-medium tracking-[0.12em] uppercase select-none">
+          <summary className="cursor-pointer px-3 py-1 select-none">
             {/* Counts what the section will SHOW, not what was loaded: a
                 search that matches only a briefing left the collapsed summary
                 claiming the pre-search total while the list under it had been
                 filtered to something else. */}
-            {`Briefings (${filteredBriefings.length})`}
+            <Kicker>{`Briefings (${filteredBriefings.length})`}</Kicker>
           </summary>
           <ul className="mt-1 flex flex-col gap-0.5">
             {filteredBriefings.map((c) => (

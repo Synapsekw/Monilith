@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import { formatHours } from "@/lib/time/hours";
 import { upsertTimeAllocation, deleteTimeAllocation } from "@/lib/time/actions";
@@ -179,38 +180,37 @@ export function TimeCard({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div>
-          <h1 className="text-lg font-semibold">My Time</h1>
-          <p className="text-muted-foreground text-xs">
-            Log hours per task or category, by day. Saved as you go.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Previous week"
-            onClick={() => gotoWeek(-1)}
-          >
-            <ChevronLeft aria-hidden />
-          </Button>
-          <span className="font-mono text-sm font-medium tabular-nums">
-            Week of {weekLabel(data.weekStart)}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Next week"
-            onClick={() => gotoWeek(1)}
-          >
-            <ChevronRight aria-hidden />
-          </Button>
-          <AddRowPicker categories={categories} onPick={addRow} />
-        </div>
-      </div>
+      <PageHeader
+        className="px-4 py-3"
+        title="My Time"
+        description="Log hours per task or category, by day. Saved as you go."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Previous week"
+              onClick={() => gotoWeek(-1)}
+            >
+              <ChevronLeft aria-hidden />
+            </Button>
+            <span className="font-mono text-sm font-medium tabular-nums">
+              Week of {weekLabel(data.weekStart)}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Next week"
+              onClick={() => gotoWeek(1)}
+            >
+              <ChevronRight aria-hidden />
+            </Button>
+            <AddRowPicker categories={categories} onPick={addRow} />
+          </div>
+        }
+      />
 
       <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
@@ -97,9 +98,9 @@ export function AdminFeedbackDetail({ row, save }: Props) {
       {/* Report header */}
       <div className="bg-surface rounded-lg border p-6">
         <div className="mb-1 flex items-center gap-2">
-          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          <Kicker className="text-muted-foreground">
             {KIND_LABELS[row.kind] ?? row.kind}
-          </span>
+          </Kicker>
           <span className="text-muted-foreground text-xs">·</span>
           <span className="text-muted-foreground text-xs">
             {new Date(row.created_at).toLocaleDateString(undefined, {
@@ -216,9 +217,9 @@ export function AdminFeedbackDetail({ row, save }: Props) {
       {/* Previous response (if any was already saved) */}
       {row.admin_response && (
         <div className="bg-surface rounded-lg border p-6">
-          <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+          <Kicker className="text-muted-foreground mb-1 block">
             Previous response
-          </p>
+          </Kicker>
           <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
             {row.admin_response}
           </p>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import Form from "next/form";
 import { listOrgsPage } from "@/lib/platform/queries";
 import { Pager } from "@/components/platform/pager";
+import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Platform admin · organizations" };
 const PAGE_SIZE = 25;
@@ -17,14 +19,11 @@ export default async function AdminOrganizations({
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
-          Organizations
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Every organization on the platform.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Platform"
+        title="Organizations"
+        description="Every organization on the platform."
+      />
 
       <Form action="/admin/organizations" className="flex gap-2">
         <input
@@ -46,11 +45,11 @@ export default async function AdminOrganizations({
         <p className="text-muted-foreground text-sm">No organizations found.</p>
       ) : (
         <div className="bg-surface overflow-hidden rounded-lg border">
-          <div className="text-muted-foreground grid grid-cols-[2fr_1.4fr_1fr_0.8fr_90px] gap-3 border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase">
-            <span>Name</span>
-            <span>Slug</span>
-            <span>Created</span>
-            <span>Members</span>
+          <div className="grid grid-cols-[2fr_1.4fr_1fr_0.8fr_90px] gap-3 border-b px-4 py-2.5">
+            <Kicker>Name</Kicker>
+            <Kicker>Slug</Kicker>
+            <Kicker>Created</Kicker>
+            <Kicker>Members</Kicker>
             <span />
           </div>
           {rows.map((o) => (

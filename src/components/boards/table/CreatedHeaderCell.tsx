@@ -1,6 +1,7 @@
 "use client";
 
 import { User } from "lucide-react";
+import { Kicker } from "@/components/ui/kicker";
 
 /** Read-only static header cell for the two virtual creation-metadata columns. */
 export function CreatedHeaderCell({
@@ -13,9 +14,9 @@ export function CreatedHeaderCell({
   return (
     <div className="text-kicker flex items-center gap-1.5 border-l px-3">
       <Icon className="size-3.5" />
-      <span className="text-3xs truncate font-mono font-medium tracking-[0.12em] uppercase">
+      <Kicker size="xs" className="truncate">
         {label}
-      </span>
+      </Kicker>
     </div>
   );
 }

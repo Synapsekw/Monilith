@@ -69,9 +69,9 @@ function Row({
             {shared && (
               // Said in words, not by colour alone — and it means one thing
               // for both owners: everyone on this board can read it.
-              <span className="text-kicker text-2xs shrink-0 rounded-sm border px-1 font-mono tracking-[0.12em] uppercase">
+              <Kicker className="shrink-0 rounded-sm border px-1">
                 Shared
-              </span>
+              </Kicker>
             )}
           </span>
         )}

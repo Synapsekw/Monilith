@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,18 +8,21 @@ import { cn } from "@/lib/utils";
  * states/indicators, not static label text. Decorative; keep it for section
  * labels, not body content. `size="xs"` (`text-3xs`) is for dense table/column
  * labels (board chrome); the default `"sm"` (`text-2xs`) is everywhere else.
+ * Remaining native `<span>` props (e.g. `aria-label`/`title` on a status
+ * badge) pass through untouched.
  */
 export function Kicker({
   index,
   size = "sm",
   className,
   children,
+  ...rest
 }: {
   index?: string;
   size?: "sm" | "xs";
   className?: string;
   children: ReactNode;
-}) {
+} & Omit<ComponentPropsWithoutRef<"span">, "className" | "children">) {
   return (
     <span
       className={cn(
@@ -27,6 +30,7 @@ export function Kicker({
         size === "xs" ? "text-3xs" : "text-2xs",
         className,
       )}
+      {...rest}
     >
       {index ? (
         <>

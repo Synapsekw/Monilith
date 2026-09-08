@@ -1,6 +1,7 @@
 import { platformAuditFeed } from "@/lib/platform/queries";
 import { ActivityFeed } from "@/components/settings/activity-feed";
 import { Pager } from "@/components/platform/pager";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Platform admin · audit log" };
 const PAGE_SIZE = 50;
@@ -19,14 +20,11 @@ export default async function AdminAudit({
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
-          Audit log
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Every privileged action across the platform.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Platform"
+        title="Audit log"
+        description="Every privileged action across the platform."
+      />
 
       <div className="bg-surface rounded-lg border p-4">
         <ActivityFeed rows={pageRows} />

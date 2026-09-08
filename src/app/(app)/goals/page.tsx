@@ -7,7 +7,7 @@ import {
 } from "@/lib/goals/queries";
 import { GoalsView } from "@/components/goals/GoalsView";
 import { NewGoalDialog } from "@/components/goals/NewGoalDialog";
-import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function GoalsIndex() {
   // Identity read OUTSIDE the cache scope (9.3 rule) — the user id keys the
@@ -25,16 +25,13 @@ export default async function GoalsIndex() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-6 py-3">
-        <div>
-          <Kicker>PLANNING</Kicker>
-          <h1 className="text-lg font-semibold">Goals</h1>
-          <p className="text-muted-foreground text-xs">
-            Measurable objectives that roll up across your org.
-          </p>
-        </div>
-        <NewGoalDialog members={members} />
-      </div>
+      <PageHeader
+        className="px-6 py-3"
+        kicker="Planning"
+        title="Goals"
+        description="Measurable objectives that roll up across your org."
+        actions={<NewGoalDialog members={members} />}
+      />
       <GoalsView
         tree={tree}
         members={members}

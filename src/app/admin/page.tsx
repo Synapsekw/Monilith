@@ -6,6 +6,7 @@ import {
 } from "@/lib/platform/queries";
 import { StatCard } from "@/components/platform/stat-card";
 import { ActivityFeed } from "@/components/settings/activity-feed";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Platform admin" };
 
@@ -18,14 +19,11 @@ export default async function AdminOverview() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-foreground font-heading text-2xl font-semibold tracking-tight">
-          Platform admin
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Cross-organization oversight for the whole application.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Platform"
+        title="Platform admin"
+        description="Cross-organization oversight for the whole application."
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Organizations" value={stats.orgs} />

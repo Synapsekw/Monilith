@@ -8,6 +8,7 @@ import { stripMarkdown } from "@/lib/boards/markdown";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
@@ -190,21 +191,17 @@ export function DateCell({
   });
   // Keystone: dates read as mono, uppercase, wide-tracked metadata.
   if (!overdue)
-    return (
-      <span className="text-muted-foreground text-2xs font-mono tracking-wide uppercase">
-        {formatted}
-      </span>
-    );
+    return <Kicker className="text-muted-foreground">{formatted}</Kicker>;
   // Negative margins cancel the padding so the date text does not shift when
   // the tint appears. aria-label/title carry the state — never color alone.
   return (
-    <span
+    <Kicker
       aria-label="Overdue"
       title="Overdue"
-      className="bg-status-red/10 text-status-red text-2xs -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5 font-mono tracking-wide uppercase"
+      className="bg-status-red/10 text-status-red -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5"
     >
       {formatted}
-    </span>
+    </Kicker>
   );
 }
 

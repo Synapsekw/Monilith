@@ -148,17 +148,17 @@ export function BoardHeader({
               }
             }}
             aria-label="Board name"
-            className="h-7 w-56 text-base font-bold"
+            className="font-heading h-7 w-56 text-lg font-semibold tracking-tight"
           />
         ) : isViewer ? (
-          <h1 className="flex h-7 items-center truncate text-base font-bold">
+          <h1 className="font-heading flex h-7 items-center truncate text-lg font-semibold tracking-tight">
             {boardName}
           </h1>
         ) : (
           <button
             type="button"
             onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-7 items-center truncate rounded-sm text-left text-base font-bold transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone font-heading flex h-7 items-center truncate rounded-sm text-left text-lg font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {boardName}
           </button>
