@@ -996,6 +996,57 @@ describe("AskChat — the header agent switcher", () => {
 // write on this surface — the switch, the send, the approval — is scoped to
 // the owner by RLS, so a viewer must be offered none of them: the switcher
 // used to report success on an update that matched zero rows.
+// The composer's alert/Retry surface (Track E). Distinct from the header
+// switcher's revert-on-failure test above: this is the SEND itself failing,
+// before any stream opens.
+describe("AskChat — composer error and retry", () => {
+  it("surfaces a failed send as a composer alert and resends the same message on retry", async () => {
+    (createConversation as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: false,
+        error: "Couldn't reach the server.",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { conversationId: "c1", agentId: null },
+      });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask("what's overdue?");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't reach the server.");
+    // The failed optimistic bubble is rolled back, not left orphaned.
+    expect(screen.queryByText("what's overdue?")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("what's overdue?")).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(createConversation).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears a stale alert the moment a fresh message is sent", async () => {
+    (createConversation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      error: "Couldn't reach the server.",
+    });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask("what's overdue?");
+    await screen.findByRole("alert");
+
+    ask("try again with a different question");
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("try again with a different question"),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
 describe("AskChat — a viewer of someone else's shared thread", () => {
   const OPS = {
     kind: "agent" as const,

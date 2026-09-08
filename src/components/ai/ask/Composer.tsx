@@ -40,6 +40,8 @@ export function Composer({
   disabled,
   agents = NO_AGENTS,
   agentId = null,
+  error = null,
+  onRetry,
   onSubmit,
 }: {
   disabled: boolean;
@@ -51,6 +53,17 @@ export function Composer({
    *  Named in the helper line when nothing typed overrides it — the same
    *  `resolveAddressedAgent` the server uses, so the two can never disagree. */
   agentId?: string | null;
+  /** The parent's last SEND failure (the `createConversation`/
+   *  `appendUserMessage` Server Action itself failing — not a mid-stream
+   *  error, which the transcript's own status line already carries), or null
+   *  when nothing is wrong. Rendered as an assertive `role="alert"` line below
+   *  the textarea, distinct from the helper line's `aria-live="polite"`
+   *  status text. */
+  error?: string | null;
+  /** Resends the exact (text, agentId) that failed. The parent owns what
+   *  "the last failed submission" means; this is just its retry trigger. Only
+   *  rendered when both `error` and `onRetry` are given. */
+  onRetry?: () => void;
   /** `agentId` is the persona a LEADING typed handle addressed, or null — the
    *  server re-resolves (and applies the sticky fallback) regardless. */
   onSubmit: (text: string, agentId: string | null) => void;
@@ -204,6 +217,28 @@ export function Composer({
             <ArrowUp className="size-4" />
           </Button>
         </form>
+        {/* The last send failure. Assertive (`role="alert"`) on purpose — this
+            is the composer refusing to have sent anything, not a narration of
+            an in-flight turn, so it interrupts the same way a form validation
+            error would. Retry resends the exact (text, agentId) the parent
+            held onto; a caller with nothing to resend just omits `onRetry`. */}
+        {error ? (
+          <div
+            role="alert"
+            className="text-destructive flex items-center gap-2 px-1 text-xs"
+          >
+            <span>{error}</span>
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="underline underline-offset-2"
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {/* One-tap addressing: a chip per agent inserts its handle exactly the
             way typing it would (`applyMention`), so this is a shortcut for the
             picker above, not a second interaction model. Hidden with the
