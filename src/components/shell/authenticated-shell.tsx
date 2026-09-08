@@ -9,7 +9,12 @@ import { CommandPaletteData } from "@/components/shell/command-palette-data";
 import { SidebarNavSkeleton } from "@/components/shell/sidebar-nav-skeleton";
 import { HeaderUserSkeleton } from "@/components/shell/header-user-skeleton";
 import { getUser } from "@/lib/auth/session";
-import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
+import {
+  getUserThemePresetCached,
+  getUserTimeZoneCached,
+} from "@/lib/profile/queries-cached";
+import { ThemePresetSync } from "@/components/theme-preset-sync";
+import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
 import {
   DEVICE_TZ_COOKIE,
@@ -28,6 +33,15 @@ import { Button } from "@/components/ui/button";
 function resolveUserTimeZone(): Promise<string | null> {
   return getUser().then((user) =>
     user ? getUserTimeZoneCached(user.id) : null,
+  );
+}
+
+/** Same unawaited-promise shape as the timezone above: ThemePresetSync is the
+ *  only thing that suspends on it, behind a null fallback, so the account's
+ *  preset corrects the device's localStorage without delaying any paint. */
+function resolveUserThemePreset(): Promise<ThemePresetId> {
+  return getUser().then((user) =>
+    user ? getUserThemePresetCached(user.id) : DEFAULT_THEME_PRESET,
   );
 }
 
@@ -86,6 +100,9 @@ export async function AuthenticatedShell({
         </Suspense>
       }
     >
+      <Suspense fallback={null}>
+        <ThemePresetSync preset={resolveUserThemePreset()} />
+      </Suspense>
       <DeviceTimeZoneProvider initial={deviceZone}>
         <TimeZoneProvider timeZone={resolveUserTimeZone()}>
           {children}

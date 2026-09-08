@@ -8,8 +8,10 @@ import { pathFromPublicUrl } from "@/lib/profile/avatar-path";
 import {
   updateProfileAvatarSchema,
   updateProfileFullNameSchema,
+  updateProfileThemePresetSchema,
   updateProfileTimezoneSchema,
 } from "@/lib/validations/profile";
+import type { ThemePresetId } from "@/lib/theme/presets";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 const AVATARS_BUCKET = "avatars";
@@ -41,6 +43,40 @@ export async function updateProfileTimezone(input: {
   // value on the next render of ANY route (not just /settings, which the old
   // path revalidate was scoped to). Both consumers read
   // `getUserTimeZoneCached(user.id)`.
+  updateTag(profileTag(user.id));
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Persist the signed-in user's theme preset. The client has ALREADY stamped the
+ * attribute and localStorage before this runs (the swatch must feel instant), so
+ * this call only makes the choice durable across devices; the caller reverts
+ * both on a failed result.
+ */
+export async function updateProfileThemePreset(input: {
+  themePreset: ThemePresetId;
+}): Promise<ActionResult> {
+  const parsed = updateProfileThemePresetSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // RLS ("profiles: update self") restricts the write to the caller's own row.
+  const { error } = await supabase
+    .from("profiles")
+    .update({ theme_preset: parsed.data.themePreset })
+    .eq("id", user.id);
+
+  if (error) return fail("Could not update theme.");
+
+  // Read-your-own-writes: the shell's ThemePresetSync reads
+  // `getUserThemePresetCached(user.id)` on every route, so expire the same tag
+  // the timezone write does rather than revalidating a path.
   updateTag(profileTag(user.id));
   return { ok: true, data: undefined };
 }

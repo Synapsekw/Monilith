@@ -2873,6 +2873,7 @@ export type Database = {
           full_name: string | null;
           id: string;
           is_agent: boolean;
+          theme_preset: string;
           timezone: string | null;
           updated_at: string;
         };
@@ -2885,6 +2886,7 @@ export type Database = {
           full_name?: string | null;
           id: string;
           is_agent?: boolean;
+          theme_preset?: string;
           timezone?: string | null;
           updated_at?: string;
         };
@@ -2897,6 +2899,7 @@ export type Database = {
           full_name?: string | null;
           id?: string;
           is_agent?: boolean;
+          theme_preset?: string;
           timezone?: string | null;
           updated_at?: string;
         };
