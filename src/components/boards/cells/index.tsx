@@ -7,6 +7,7 @@ import { percentBandColor } from "@/lib/boards/percent-color";
 import { stripMarkdown } from "@/lib/boards/markdown";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
+import { StatusPill } from "@/components/ui/status-pill";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
@@ -335,14 +336,16 @@ export function PriorityCell({
       ? `Critical (auto) — ${dependents} items depend on this`
       : "Critical";
     return (
-      <span
+      <StatusPill
+        color="red"
+        variant="solid"
         aria-label={label}
         title={label}
-        className="bg-status-red inline-flex max-w-full items-center gap-1 truncate rounded-sm px-2.5 py-0.5 text-xs font-medium text-white"
+        className="gap-1"
       >
         {auto && <Network className="size-3 shrink-0" aria-hidden />}
         Critical
-      </span>
+      </StatusPill>
     );
   }
   // Explicit Normal reads as quiet metadata; unset stays blank (no per-row noise).

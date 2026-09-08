@@ -74,7 +74,7 @@ export function AdminListSkeleton({
         </div>
       )}
 
-      <div className="bg-surface overflow-hidden rounded-xl border">
+      <div className="bg-surface overflow-hidden rounded-lg border">
         <div
           data-testid="skeleton-table-header"
           className={`${gridClass} border-b px-4 py-2.5`}

@@ -66,7 +66,7 @@ export function FirstBoardEmptyState({
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-10">
       <div className="w-full max-w-lg text-center">
-        <div className="bg-surface mx-auto flex size-12 items-center justify-center rounded-xl border">
+        <div className="bg-surface mx-auto flex size-12 items-center justify-center rounded-lg border">
           <MonolithMark className="text-foreground size-6" />
         </div>
         <h1 className="mt-4 text-xl font-semibold tracking-tight">

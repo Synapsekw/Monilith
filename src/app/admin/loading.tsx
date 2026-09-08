@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  * Instant loading fallback for the platform-admin overview.
  *
  * Mirrors AdminOverview's `space-y-8` column: header, the four-up StatCard
- * grid (`grid-cols-2 sm:grid-cols-4`, each card `rounded-xl border p-4`), then
+ * grid (`grid-cols-2 sm:grid-cols-4`, each card `rounded-lg border p-4`), then
  * the `lg:grid-cols-[1.3fr_1fr]` split of "Recent organizations" and "Recent
  * activity" panels. Static Server Component — no data fetch, so the whole
  * `/admin` tree stops blocking navigation on its Supabase reads.
@@ -27,7 +27,7 @@ export default function AdminOverviewLoading() {
           <div
             key={i}
             data-testid="stat-card-skeleton"
-            className="bg-surface rounded-xl border p-4"
+            className="bg-surface rounded-lg border p-4"
           >
             <Skeleton className="h-3 w-24" />
             <Skeleton className="mt-1.5 h-8 w-16" />
@@ -40,7 +40,7 @@ export default function AdminOverviewLoading() {
           <section
             key={s}
             data-testid="admin-panel-skeleton"
-            className="bg-surface rounded-xl border p-4"
+            className="bg-surface rounded-lg border p-4"
           >
             <div className="mb-3 flex items-center justify-between">
               <Skeleton className="h-4 w-40" />

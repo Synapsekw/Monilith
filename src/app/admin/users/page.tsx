@@ -57,7 +57,7 @@ export default async function AdminUsers({
       )}
 
       {people.length > 0 && (
-        <div className="bg-surface overflow-hidden rounded-xl border">
+        <div className="bg-surface overflow-hidden rounded-lg border">
           <div
             className={`${USER_ROW_GRID} text-muted-foreground border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase`}
           >
@@ -73,7 +73,7 @@ export default async function AdminUsers({
       )}
 
       {systemAndTest.length > 0 && (
-        <details className="bg-surface hover:border-border-hover group overflow-hidden rounded-xl border transition-colors">
+        <details className="bg-surface hover:border-border-hover group overflow-hidden rounded-lg border transition-colors">
           <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 px-4 py-3 marker:content-none focus-visible:ring-2 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
             <ChevronRight
               aria-hidden

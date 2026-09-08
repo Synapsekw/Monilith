@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Instant loading fallback for the platform audit log. Mirrors AdminAudit's
- * `space-y-5` column: header, one `rounded-xl border p-4` card wrapping the
+ * `space-y-5` column: header, one `rounded-lg border p-4` card wrapping the
  * ActivityFeed's `divide-y` rows (label left, timestamp right), then the pager.
  * Static Server Component — no data fetch.
  */
@@ -19,7 +19,7 @@ export default function AdminAuditLoading() {
         <Skeleton className="h-4 w-72" />
       </div>
 
-      <div className="bg-surface rounded-xl border p-4">
+      <div className="bg-surface rounded-lg border p-4">
         <ul className="divide-border divide-y">
           {Array.from({ length: 12 }).map((_, i) => (
             <li

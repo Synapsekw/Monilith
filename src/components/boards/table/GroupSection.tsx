@@ -180,7 +180,7 @@ export function GroupSection({
     <section
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("mb-6", isDragging && "relative z-20 shadow-lg")}
+      className={cn("mb-6", isDragging && "shadow-drag relative z-20")}
     >
       <GroupHeaderRow
         group={group}

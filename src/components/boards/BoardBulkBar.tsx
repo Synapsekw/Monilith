@@ -89,7 +89,7 @@ export function BoardBulkBar({
       aria-label={`${count} selected`}
       className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4"
     >
-      <div className="bg-surface pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-lg">
+      <div className="bg-surface shadow-panel pointer-events-auto flex items-center gap-1 rounded-lg border p-1">
         <span
           aria-live="polite"
           className="text-foreground px-2 text-sm font-medium tabular-nums"

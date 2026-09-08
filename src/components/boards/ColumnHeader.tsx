@@ -104,7 +104,7 @@ export function ColumnHeader({
       style={reorder?.style}
       className={cn(
         "group/col relative flex items-center gap-1 border-l px-3 py-1.5",
-        reorder?.isDragging && "bg-surface z-auto shadow-lg",
+        reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >
       {editing ? (

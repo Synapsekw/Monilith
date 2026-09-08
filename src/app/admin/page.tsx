@@ -35,7 +35,7 @@ export default async function AdminOverview() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <section className="bg-surface rounded-xl border p-4">
+        <section className="bg-surface rounded-lg border p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-foreground text-sm font-medium">
               Recent organizations
@@ -73,7 +73,7 @@ export default async function AdminOverview() {
           )}
         </section>
 
-        <section className="bg-surface rounded-xl border p-4">
+        <section className="bg-surface rounded-lg border p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-foreground text-sm font-medium">
               Recent activity

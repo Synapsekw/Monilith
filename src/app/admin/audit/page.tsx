@@ -28,7 +28,7 @@ export default async function AdminAudit({
         </p>
       </header>
 
-      <div className="bg-surface rounded-xl border p-4">
+      <div className="bg-surface rounded-lg border p-4">
         <ActivityFeed rows={pageRows} />
       </div>
 

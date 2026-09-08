@@ -67,6 +67,7 @@ describe("Keystone token contract", () => {
       "--color-content-surface:",
       "--color-content-edge:",
       "--shadow-content-lift:",
+      "--shadow-drag:",
       "--text-2xs:",
       "--text-3xs:",
     ]) {

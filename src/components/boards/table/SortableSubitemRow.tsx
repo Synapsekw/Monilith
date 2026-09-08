@@ -75,7 +75,7 @@ export function SortableSubitemRow({
       }}
       className={cn(
         "ease-keystone border-border hover:border-border-hover hover:bg-foreground/[0.025] grid w-full border-b transition-colors",
-        isDragging && "relative z-10 shadow-lg",
+        isDragging && "shadow-drag relative z-10",
       )}
     >
       <NameCell
