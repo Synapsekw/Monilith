@@ -13,9 +13,11 @@ import {
 import {
   insertItem,
   removeItem,
+  replaceItemId,
   type BoardCache,
   type CacheItem,
 } from "@/lib/boards/cache";
+import { isOptimisticId, newOptimisticId } from "@/lib/boards/optimistic-id";
 import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import type {
   AddItemVars,
@@ -24,6 +26,54 @@ import type {
   RenameItemVars,
 } from "./shared";
 import { assertOnline } from "@/lib/offline/online-status";
+
+/** Context carried from an optimistic add's `onMutate` to its settle handlers. */
+type AddCtx = { tempId: string };
+
+/**
+ * Append position for a new row: one past the highest position among the rows
+ * it will sit with (a group's top-level rows, or a parent's subitems). Mirrors
+ * the server's own append semantics closely enough for the ~one round-trip the
+ * temp row is on screen; the server row's real position lands on reconcile.
+ */
+function nextPosition(
+  items: readonly CacheItem[],
+  sibling: (i: CacheItem) => boolean,
+): number {
+  return (
+    items.reduce((m, i) => (sibling(i) ? Math.max(m, i.position) : m), 0) + 1
+  );
+}
+
+/**
+ * Build the temp row an optimistic add paints immediately. Its id is a
+ * client-minted `optimistic-*` (see @/lib/boards/optimistic-id) — while it is
+ * on screen the row is READ-ONLY: no cell edit, rename, panel-open or bulk
+ * select, because every one of those writes is keyed by item id and the id is
+ * about to be replaced. The components enforcing that rule cite the same note.
+ */
+function tempItem(
+  cache: BoardCache,
+  tempId: string,
+  fields: Pick<CacheItem, "group_id" | "parent_id" | "name" | "position">,
+): CacheItem {
+  const now = new Date().toISOString();
+  return {
+    id: tempId,
+    org_id: cache.board.org_id,
+    board_id: cache.board.id,
+    archived_at: null,
+    archived_by: null,
+    // The mutation layer has no session, and `created_by` is stamped from
+    // auth.uid() server-side. For the one round-trip the row is temporary the
+    // Created-by cell renders its unknown-member dash; the reconciled server
+    // row carries the real author.
+    created_by: "",
+    created_at: now,
+    updated_at: now,
+    ...fields,
+  };
+}
 
 /** Item mutations: add/subitem/archive/restore/reorder/move/rename. */
 export function useItemMutations(ctx: BoardMutationCtx) {
@@ -37,15 +87,23 @@ export function useItemMutations(ctx: BoardMutationCtx) {
   } = ctx;
 
   /**
-   * Add a new item. Patch-on-success: we wait for the server to return the
-   * real item row (with server-assigned id/position), then insert it into the
-   * cache. The Realtime INSERT echo is idempotent via `insertItem`.
+   * Add a new item. OPTIMISTIC: `onMutate` paints a temp row (appended to the
+   * group) so the input can be cleared and re-typed at once instead of
+   * serialising on network latency; `onSuccess` swaps the temp id for the
+   * server row IN PLACE (no jump in the group), and `onError` removes it — the
+   * caller (AddItemRow) surfaces the failure inline and restores what was
+   * typed, so no toast fires here (no double feedback).
+   *
+   * Realtime echo: the `items` INSERT may arrive before the action resolves.
+   * `applyItem` in realtime-buffer reconciles such an echo onto the matching
+   * temp row, and `replaceItemId` is idempotent if the real row is already
+   * there — either way exactly one row survives.
    */
   const addItemMutation = useMutation<
     { item: CacheItem },
     Error,
     AddItemVars,
-    void
+    AddCtx
   >({
     mutationFn: async (vars) => {
       assertOnline();
@@ -53,19 +111,51 @@ export function useItemMutations(ctx: BoardMutationCtx) {
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
     },
-    onSuccess: ({ item }) => {
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const tempId = newOptimisticId();
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        qc.setQueryData<BoardCache>(
+          key,
+          insertItem(
+            previous,
+            tempItem(previous, tempId, {
+              group_id: vars.groupId,
+              parent_id: null,
+              name: vars.name,
+              position: nextPosition(
+                previous.items,
+                (i) => i.group_id === vars.groupId && i.parent_id === null,
+              ),
+            }),
+          ),
+        );
+      }
+      return { tempId };
+    },
+    onSuccess: ({ item }, _vars, ctx) => {
       qc.setQueryData<BoardCache>(key, (prev) =>
-        prev ? insertItem(prev, item) : prev,
+        prev ? replaceItemId(prev, ctx.tempId, item) : prev,
+      );
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? removeItem(prev, ctx.tempId) : prev,
       );
     },
   });
 
-  /** Add a subitem. Patch-on-success (mirrors addItem); Realtime echo idempotent. */
+  /** Add a subitem. Optimistic, mirroring addItem: the temp row is parented to
+   *  `parentId` and inherits the parent's (denormalized) group_id. A parent that
+   *  is itself still optimistic is skipped — its id would not resolve
+   *  server-side — leaving the row to appear on the server response. */
   const addSubitemMutation = useMutation<
     { item: CacheItem },
     Error,
     { parentId: string; name: string },
-    void
+    AddCtx
   >({
     mutationFn: async (vars) => {
       assertOnline();
@@ -73,9 +163,39 @@ export function useItemMutations(ctx: BoardMutationCtx) {
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
     },
-    onSuccess: ({ item }) => {
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const tempId = newOptimisticId();
+      const previous = qc.getQueryData<BoardCache>(key);
+      const parent = previous?.items.find((i) => i.id === vars.parentId);
+      if (previous && parent && !isOptimisticId(parent.id)) {
+        qc.setQueryData<BoardCache>(
+          key,
+          insertItem(
+            previous,
+            tempItem(previous, tempId, {
+              group_id: parent.group_id,
+              parent_id: parent.id,
+              name: vars.name,
+              position: nextPosition(
+                previous.items,
+                (i) => i.parent_id === parent.id,
+              ),
+            }),
+          ),
+        );
+      }
+      return { tempId };
+    },
+    onSuccess: ({ item }, _vars, ctx) => {
       qc.setQueryData<BoardCache>(key, (prev) =>
-        prev ? insertItem(prev, item) : prev,
+        prev ? replaceItemId(prev, ctx.tempId, item) : prev,
+      );
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? removeItem(prev, ctx.tempId) : prev,
       );
     },
   });

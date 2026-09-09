@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AddItemRow } from "./AddItemRow";
 import type { CellControls } from "./shared";
@@ -28,5 +29,87 @@ describe("AddItemRow", () => {
     // getByLabel("Add item") has count 0.
     expect(screen.queryByLabelText("Add item")).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // ── Optimistic add ────────────────────────────────────────────────────────
+  // The row is painted by the mutation's `onMutate`, so the input must not wait
+  // for the round-trip: it clears, stays enabled and keeps focus at once.
+  it("clears the input and keeps it enabled + focused before the add resolves", async () => {
+    const user = userEvent.setup();
+    // Never invokes its callbacks — stands in for an in-flight round-trip.
+    const addItem = vi.fn();
+    render(
+      <AddItemRow
+        groupId="g1"
+        controls={{ addItem } as unknown as CellControls}
+        nameWidth={240}
+        canEdit
+      />,
+    );
+
+    const input = screen.getByLabelText("Add item");
+    await user.type(input, "Ship it{Enter}");
+
+    expect(addItem).toHaveBeenCalledWith(
+      { groupId: "g1", name: "Ship it" },
+      expect.anything(),
+    );
+    expect(input).toHaveValue("");
+    expect(input).toBeEnabled();
+    expect(input).toHaveFocus();
+  });
+
+  it("restores the typed text and shows the error when the add fails", async () => {
+    const user = userEvent.setup();
+    const addItem = vi.fn(
+      (
+        _vars: { groupId: string; name: string },
+        cbs?: { onError?: (e: Error) => void },
+      ) => cbs?.onError?.(new Error("Could not create item.")),
+    );
+    render(
+      <AddItemRow
+        groupId="g1"
+        controls={{ addItem } as unknown as CellControls}
+        nameWidth={240}
+        canEdit
+      />,
+    );
+
+    const input = screen.getByLabelText("Add item");
+    await user.type(input, "Ship it{Enter}");
+
+    expect(input).toHaveValue("Ship it");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not create item.",
+    );
+  });
+
+  it("does not clobber the next item the user already typed when the add fails", async () => {
+    const user = userEvent.setup();
+    let fail: (() => void) | null = null;
+    const addItem = vi.fn(
+      (
+        _vars: { groupId: string; name: string },
+        cbs?: { onError?: (e: Error) => void },
+      ) => {
+        fail = () => cbs?.onError?.(new Error("boom"));
+      },
+    );
+    render(
+      <AddItemRow
+        groupId="g1"
+        controls={{ addItem } as unknown as CellControls}
+        nameWidth={240}
+        canEdit
+      />,
+    );
+
+    const input = screen.getByLabelText("Add item");
+    await user.type(input, "First{Enter}");
+    await user.type(input, "Second");
+    await act(async () => fail!());
+
+    expect(input).toHaveValue("Second");
   });
 });

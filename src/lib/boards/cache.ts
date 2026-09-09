@@ -132,6 +132,41 @@ export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
   return { ...cache, items: [...cache.items, item] };
 }
 
+/**
+ * Reconcile an optimistically-added row: swap the temp id for the server row.
+ *
+ * The swap happens IN PLACE — same array index — so the new row does not jump
+ * within its group when the server response lands. Any cell values written
+ * against the temp id are re-keyed onto the real id (a temp row is read-only
+ * today, so in practice there are none; carrying them is what makes the helper
+ * safe if that rule ever relaxes).
+ *
+ * Two tolerated races:
+ *  • the temp row is already gone (an error rollback removed it, or a full
+ *    resync replaced the cache) → fall through to `insertItem`, which is
+ *    idempotent on the real id;
+ *  • the Realtime INSERT echo already added the real row → drop the temp row
+ *    rather than writing a second copy of the same id.
+ *
+ * Immutable.
+ */
+export function replaceItemId(
+  cache: BoardCache,
+  tempId: string,
+  item: CacheItem,
+): BoardCache {
+  const idx = cache.items.findIndex((i) => i.id === tempId);
+  if (idx === -1) return insertItem(cache, item);
+  const echoed = cache.items.some((i) => i.id === item.id);
+  const items = echoed
+    ? cache.items.filter((i) => i.id !== tempId)
+    : cache.items.map((i, n) => (n === idx ? item : i));
+  const cellValues = cache.cellValues.map((c) =>
+    c.item_id === tempId ? { ...c, item_id: item.id } : c,
+  );
+  return { ...cache, items, cellValues };
+}
+
 /** Insert a group, keeping position order. No-op if the id already exists. Immutable. */
 export function insertGroup(cache: BoardCache, group: CacheGroup): BoardCache {
   if (cache.groups.some((g) => g.id === group.id)) return cache;

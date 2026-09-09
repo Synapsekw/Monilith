@@ -191,6 +191,66 @@ describe("foldBoardEvents", () => {
     expect(next.items.find((i) => i.id === "i1")).toBeDefined();
   });
 
+  it("reconciles an own-write INSERT echo onto the matching optimistic row (no duplicate)", () => {
+    const prev = emptyCache({
+      items: [
+        {
+          id: "optimistic-abc",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          archived_at: null,
+        },
+      ] as never,
+    });
+    const ev: BoardRealtimeEvent = {
+      table: "items",
+      payload: {
+        eventType: "INSERT",
+        new: {
+          id: "srv1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          archived_at: null,
+        },
+        old: {},
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.items.map((i) => i.id)).toEqual(["srv1"]);
+  });
+
+  it("does not swallow a peer INSERT that matches no optimistic row", () => {
+    const prev = emptyCache({
+      items: [
+        {
+          id: "optimistic-abc",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          archived_at: null,
+        },
+      ] as never,
+    });
+    const ev: BoardRealtimeEvent = {
+      table: "items",
+      payload: {
+        eventType: "INSERT",
+        new: {
+          id: "srv2",
+          group_id: "g1",
+          parent_id: null,
+          name: "Peer row",
+          archived_at: null,
+        },
+        old: {},
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.items.map((i) => i.id)).toEqual(["optimistic-abc", "srv2"]);
+  });
+
   it("folds a group UPDATE with archived_at set as a removal (cascades to its items)", () => {
     const prev = emptyCache({
       groups: [{ id: "g1", position: 0, archived_at: null }] as never,

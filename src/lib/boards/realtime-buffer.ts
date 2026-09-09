@@ -12,6 +12,7 @@ import {
   replaceColumn,
   replaceGroup,
   replaceItem,
+  replaceItemId,
   upsertCellValue,
   type BoardCache,
   type CacheCellValue,
@@ -20,6 +21,7 @@ import {
   type CacheGroup,
   type CacheItem,
 } from "@/lib/boards/cache";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 
 export type BoardRealtimeEvent =
   | {
@@ -102,9 +104,21 @@ function applyItem(
   // null) falls through to insert-if-absent / replace-if-present, so a peer's
   // undo/restore reappears live.
   if (row.archived_at != null) return removeItem(prev, row.id);
-  return prev.items.some((i) => i.id === row.id)
-    ? replaceItem(prev, row)
-    : insertItem(prev, row);
+  if (prev.items.some((i) => i.id === row.id)) return replaceItem(prev, row);
+  // Own-write echo for an optimistic add: the INSERT can land BEFORE the server
+  // action's promise resolves, and appending it would show the same row twice
+  // until `onSuccess` reconciles. A temp row with the same parent/group/name is
+  // that row — swap it in place instead (the mutation's later `replaceItemId`
+  // is then a no-op: the real id is already present).
+  const temp = prev.items.find(
+    (i) =>
+      isOptimisticId(i.id) &&
+      i.name === row.name &&
+      i.group_id === row.group_id &&
+      i.parent_id === row.parent_id,
+  );
+  if (temp) return replaceItemId(prev, temp.id, row);
+  return insertItem(prev, row);
 }
 
 function applyDependency(

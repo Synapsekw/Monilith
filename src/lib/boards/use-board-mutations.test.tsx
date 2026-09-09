@@ -11,6 +11,7 @@ const updateGroupColor = vi.fn();
 const deleteGroup = vi.fn();
 const createColumn = vi.fn();
 const createItem = vi.fn();
+const addSubitemFn = vi.fn();
 const reorderColumn = vi.fn();
 const deleteItem = vi.fn();
 const renameItem = vi.fn();
@@ -28,6 +29,7 @@ vi.mock("@/lib/boards/actions", () => ({
   deleteGroup: (...a: unknown[]) => deleteGroup(...a),
   createColumn: (...a: unknown[]) => createColumn(...a),
   createItem: (...a: unknown[]) => createItem(...a),
+  addSubitem: (...a: unknown[]) => addSubitemFn(...a),
   reorderColumn: (...a: unknown[]) => reorderColumn(...a),
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   renameItem: (...a: unknown[]) => renameItem(...a),
@@ -1196,5 +1198,303 @@ describe("useBoardMutations targeted rollback", () => {
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: boardKey("b1") }),
     );
+  });
+});
+
+// ── Optimistic add (item + subitem) ─────────────────────────────────────────
+// The row must paint BEFORE the round-trip, then be reconciled in place with
+// the server row (id/position/timestamps) — order in the group must not jump.
+describe("useBoardMutations.addItem (optimistic)", () => {
+  beforeEach(() => {
+    createItem.mockReset();
+    toastError.mockReset();
+  });
+
+  function seedGroup(qc: QueryClient): void {
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1", org_id: "o1", name: "B" },
+      groups: [
+        { id: "g1", board_id: "b1", name: "G1", color: "#0073ea", position: 0 },
+      ],
+      columns: [],
+      items: [
+        {
+          id: "i1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "One",
+          position: 1,
+        },
+        {
+          id: "i2",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Two",
+          position: 2,
+        },
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [],
+      relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
+    } as never);
+  }
+
+  function readItems(qc: QueryClient) {
+    return qc.getQueryData<BoardCache>(boardKey("b1"))!.items;
+  }
+
+  it("inserts a temp row appended to the group before the server responds", async () => {
+    const qc = new QueryClient();
+    seedGroup(qc);
+    let resolve!: (v: unknown) => void;
+    createItem.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.addItem({ groupId: "g1", name: "Three" });
+    });
+
+    await waitFor(() => expect(readItems(qc)).toHaveLength(3));
+    const temp = readItems(qc)[2];
+    expect(temp.id.startsWith("optimistic-")).toBe(true);
+    expect(temp.name).toBe("Three");
+    expect(temp.group_id).toBe("g1");
+    expect(temp.parent_id).toBeNull();
+    expect(temp.position).toBe(3);
+    expect(temp.board_id).toBe("b1");
+    expect(temp.org_id).toBe("o1");
+
+    resolve({
+      ok: true,
+      data: {
+        item: {
+          id: "srv1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          position: 3,
+        },
+      },
+    });
+    await waitFor(() =>
+      expect(readItems(qc).map((i) => i.id)).toEqual(["i1", "i2", "srv1"]),
+    );
+  });
+
+  it("replaces the temp row in place on success (order does not jump)", async () => {
+    const qc = new QueryClient();
+    seedGroup(qc);
+    createItem.mockResolvedValue({
+      ok: true,
+      data: {
+        item: {
+          id: "srv1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          position: 3,
+        },
+      },
+    });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.addItem({ groupId: "g1", name: "Three" });
+    });
+
+    await waitFor(() => {
+      const items = readItems(qc);
+      expect(items.map((i) => i.id)).toEqual(["i1", "i2", "srv1"]);
+      expect(items.some((i) => i.id.startsWith("optimistic-"))).toBe(false);
+    });
+  });
+
+  it("removes the temp row on error and surfaces the error to the caller", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedGroup(qc);
+    createItem.mockResolvedValue({ ok: false, error: "boom" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    const onError = vi.fn();
+    await act(async () => {
+      result.current.addItem({ groupId: "g1", name: "Three" }, { onError });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(readItems(qc).map((i) => i.id)).toEqual(["i1", "i2"]);
+    // Inline FieldStatus is the feedback channel for add — no double toast.
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate the row when the realtime echo lands first", async () => {
+    const qc = new QueryClient();
+    seedGroup(qc);
+    const serverRow = {
+      id: "srv1",
+      board_id: "b1",
+      org_id: "o1",
+      group_id: "g1",
+      parent_id: null,
+      name: "Three",
+      position: 3,
+    };
+    let resolve!: (v: unknown) => void;
+    createItem.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.addItem({ groupId: "g1", name: "Three" });
+    });
+    await waitFor(() => expect(readItems(qc)).toHaveLength(3));
+
+    // Realtime INSERT echo arrives before the action's promise settles.
+    act(() => {
+      qc.setQueryData<BoardCache>(boardKey("b1"), (prev) =>
+        prev ? { ...prev, items: [...prev.items, serverRow as never] } : prev,
+      );
+    });
+
+    resolve({ ok: true, data: { item: serverRow } });
+    await waitFor(() =>
+      expect(readItems(qc).map((i) => i.id)).toEqual(["i1", "i2", "srv1"]),
+    );
+  });
+});
+
+describe("useBoardMutations.addSubitem (optimistic)", () => {
+  beforeEach(() => addSubitemFn.mockReset());
+
+  function seedParent(qc: QueryClient): void {
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1", org_id: "o1", name: "B" },
+      groups: [],
+      columns: [],
+      items: [
+        {
+          id: "p1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Parent",
+          position: 1,
+        },
+        {
+          id: "s1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: "p1",
+          name: "Sub one",
+          position: 1,
+        },
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [],
+      relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
+    } as never);
+  }
+
+  it("inserts a temp subitem under the parent before the server responds", async () => {
+    const qc = new QueryClient();
+    seedParent(qc);
+    let resolve!: (v: unknown) => void;
+    addSubitemFn.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.addSubitem("p1", "Sub two");
+    });
+
+    await waitFor(() => {
+      const items = qc.getQueryData<BoardCache>(boardKey("b1"))!.items;
+      expect(items).toHaveLength(3);
+      const temp = items[2];
+      expect(temp.id.startsWith("optimistic-")).toBe(true);
+      expect(temp.parent_id).toBe("p1");
+      expect(temp.group_id).toBe("g1");
+      expect(temp.position).toBe(2);
+    });
+
+    resolve({
+      ok: true,
+      data: {
+        item: {
+          id: "srv-sub",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: "p1",
+          name: "Sub two",
+          position: 2,
+        },
+      },
+    });
+    await waitFor(() =>
+      expect(
+        qc.getQueryData<BoardCache>(boardKey("b1"))!.items.map((i) => i.id),
+      ).toEqual(["p1", "s1", "srv-sub"]),
+    );
+  });
+
+  it("removes the temp subitem on error", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedParent(qc);
+    addSubitemFn.mockResolvedValue({ ok: false, error: "boom" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    const onError = vi.fn();
+    await act(async () => {
+      result.current.addSubitem("p1", "Sub two", { onError });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(
+      qc.getQueryData<BoardCache>(boardKey("b1"))!.items.map((i) => i.id),
+    ).toEqual(["p1", "s1"]);
   });
 });
