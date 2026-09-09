@@ -50,6 +50,8 @@ export function GroupSection({
   onSetColor,
   onDelete,
   childrenByParent,
+  collapsed,
+  onToggleCollapse,
   expanded,
   onToggleExpand,
   renamingItemId,
@@ -77,6 +79,9 @@ export function GroupSection({
   onSetColor: (color: string) => void;
   onDelete: () => void;
   childrenByParent: Map<string, Item[]>;
+  /** Owned by BoardTableInner so the whole set is addressable and persistable. */
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   expanded: Set<string>;
   onToggleExpand: (id: string) => void;
   renamingItemId: string | null;
@@ -85,7 +90,6 @@ export function GroupSection({
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   contentRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
   const [name, setName] = useState(group.name);
   const rowAreaRef = useRef<HTMLDivElement>(null);
@@ -193,7 +197,7 @@ export function GroupSection({
           ) : null
         }
         collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
+        onToggleCollapse={onToggleCollapse}
         renaming={renaming}
         name={name}
         onNameChange={setName}

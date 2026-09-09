@@ -1195,6 +1195,45 @@ export type Database = {
           },
         ];
       };
+      board_view_prefs: {
+        Row: {
+          board_id: string;
+          org_id: string;
+          state: Json;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          board_id: string;
+          org_id: string;
+          state?: Json;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          board_id?: string;
+          org_id?: string;
+          state?: Json;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_view_prefs_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_view_prefs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -4453,6 +4492,10 @@ export type Database = {
       };
       restore_group: { Args: { p_group_id: string }; Returns: number };
       restore_item: { Args: { p_item_id: string }; Returns: number };
+      save_board_view_prefs: {
+        Args: { p_board_id: string; p_state: Json };
+        Returns: undefined;
+      };
       search_items: {
         Args: { p_limit?: number; p_query: string };
         Returns: {

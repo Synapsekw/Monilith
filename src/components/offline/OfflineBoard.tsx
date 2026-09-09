@@ -9,6 +9,7 @@ import { OfflineBanner } from "@/components/offline/OfflineBanner";
 import { OfflineRenderProvider } from "@/lib/offline/offline-render-context";
 import { persistOptionsFor } from "@/lib/offline/persister";
 import { boardSnapshotKey, type BoardSnapshot } from "@/lib/offline/snapshot";
+import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
 
 /**
  * Renders a board with no server. This is the ONE place that restores the
@@ -136,6 +137,9 @@ export function OfflineBoard({
             currentUserId={snapshot.currentUserId}
             access="viewer"
             grants={[]}
+            /* Offline replay has no server read, so there is no saved
+               arrangement to seed from — render today's defaults. */
+            viewPrefs={EMPTY_BOARD_VIEW_PREFS}
           />
         </OfflineRenderProvider>
       </div>

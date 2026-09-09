@@ -65,6 +65,7 @@ import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import {
   buildItemPredicate,
   buildItemComparator,
@@ -124,6 +125,32 @@ export function BoardTableInner({
   );
   const { board, groups, columns, items, cellValues } = cache;
 
+  // Collapse + expansion are per-user, per-board arrangement, owned by the
+  // view-prefs provider so they survive a reload and follow the user across
+  // devices. Toggles are local-first; the provider debounces the write.
+  const {
+    collapsedGroups,
+    expandedItems: expanded,
+    toggleGroupCollapsed,
+    toggleItemExpanded,
+    pruneTo,
+  } = useBoardViewPrefs();
+
+  // Groups and items get deleted while their ids sit in a saved arrangement.
+  // Intersect against what the board actually holds, so a dead id has no effect
+  // and falls out of the stored row the first time the user opens the board.
+  const groupIdsKey = groups.map((g) => g.id).join(",");
+  const itemIdsKey = items.map((i) => i.id).join(",");
+  useEffect(() => {
+    pruneTo({
+      groupIds: groupIdsKey ? groupIdsKey.split(",") : [],
+      itemIds: itemIdsKey ? itemIdsKey.split(",") : [],
+    });
+    // Keyed on the joined id strings so this runs when the board's membership
+    // changes, not on every re-render that rebuilds the arrays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupIdsKey, itemIdsKey]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scrolledX, setScrolledX] = useState(false);
@@ -131,7 +158,6 @@ export function BoardTableInner({
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
   // "Change currency" dialog target (currency columns only).
   const [currencyFor, setCurrencyFor] = useState<CacheColumn | null>(null);
@@ -192,19 +218,7 @@ export function BoardTableInner({
     if (res.ok) window.open(res.data.url, "_blank", "noopener");
   }
 
-  const toggleExpand = useCallback(
-    (id: string) =>
-      setExpanded((prev) => {
-        const n = new Set(prev);
-        if (n.has(id)) {
-          n.delete(id);
-        } else {
-          n.add(id);
-        }
-        return n;
-      }),
-    [],
-  );
+  const toggleExpand = toggleItemExpanded;
   // Stable so the memoized ItemRow/SubitemBlock skip re-render on unrelated
   // parent updates (this is threaded down as onRenameSettled).
   const handleRenameItemSettled = useCallback(
@@ -702,6 +716,8 @@ export function BoardTableInner({
                     onSetColor={(color) => setGroupColor(group.id, color)}
                     onDelete={() => deleteGroup(group.id)}
                     childrenByParent={childrenByParent}
+                    collapsed={collapsedGroups.has(group.id)}
+                    onToggleCollapse={() => toggleGroupCollapsed(group.id)}
                     expanded={expanded}
                     onToggleExpand={toggleExpand}
                     renamingItemId={renamingItemId}
