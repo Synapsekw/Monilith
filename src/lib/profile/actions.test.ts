@@ -42,6 +42,7 @@ vi.mock("@/lib/supabase/service", () => ({
 import {
   removeProfileAvatar,
   updateProfileAvatar,
+  updateProfileThemePreset,
   updateProfileTimezone,
 } from "./actions";
 
@@ -202,6 +203,58 @@ describe("removeProfileAvatar", () => {
     getUser.mockResolvedValue({ data: { user: null } });
 
     const res = await removeProfileAvatar();
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateProfileThemePreset", () => {
+  it("writes the preset and expires the caller's profile cache tag", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const eq = vi.fn(async () => ({ error: null }));
+    update.mockReturnValue({ eq });
+
+    const res = await updateProfileThemePreset({ themePreset: "ocean" });
+
+    expect(res.ok).toBe(true);
+    expect(from).toHaveBeenCalledWith("profiles");
+    expect(update).toHaveBeenCalledWith({ theme_preset: "ocean" });
+    expect(eq).toHaveBeenCalledWith("id", "user-1");
+    expect(updateTag).toHaveBeenCalledWith("profile:user:user-1");
+  });
+
+  it("rejects an unknown preset id at the Zod boundary, before any write", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const res = await updateProfileThemePreset({
+      // Deliberately outside the union — this is the boundary the free-text DB
+      // column relies on.
+      themePreset: "chartreuse" as never,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate when the write fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    update.mockReturnValue({
+      eq: async () => ({ error: { message: "nope" } }),
+    });
+
+    const res = await updateProfileThemePreset({ themePreset: "forest" });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("Could not update theme.");
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await updateProfileThemePreset({ themePreset: "ember" });
 
     expect(res.ok).toBe(false);
     expect(update).not.toHaveBeenCalled();

@@ -4,6 +4,10 @@ import { ArrowLeft } from "lucide-react";
 import { AskRailData } from "@/components/ai/ask/AskRailData";
 import { Brand } from "@/components/brand/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemePresetSync } from "@/components/theme-preset-sync";
+import { getUser } from "@/lib/auth/session";
+import { getUserThemePresetCached } from "@/lib/profile/queries-cached";
+import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
 
 /**
  * Layout B for the full-page Agents surface. `/ask` lives OUTSIDE the `(app)`
@@ -44,9 +48,21 @@ import { ThemeToggle } from "@/components/theme-toggle";
  * per-user data and the page's thread both stream behind Suspense. Auth is
  * guarded by `requireUser()` inside the rail data component.
  */
+/** `/ask` owns its own frame, so it also mounts the preset sync the app shell
+ *  provides everywhere else. Unawaited and behind its own null fallback — see
+ *  AuthenticatedShell. */
+function resolveUserThemePreset(): Promise<ThemePresetId> {
+  return getUser().then((user) =>
+    user ? getUserThemePresetCached(user.id) : DEFAULT_THEME_PRESET,
+  );
+}
+
 export default function AskLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-wash flex h-svh w-full overflow-hidden">
+      <Suspense fallback={null}>
+        <ThemePresetSync preset={resolveUserThemePreset()} />
+      </Suspense>
       <aside className="flex w-60 shrink-0 flex-col">
         <div className="flex min-h-14 shrink-0 items-center gap-1 px-3 py-2">
           <Brand />

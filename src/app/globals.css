@@ -176,8 +176,11 @@
 }
 
 :root {
-  /* Keystone light — deepened periwinkle for AA on white */
-  --brand: #5b6fd6;
+  /* Keystone light — deepened periwinkle for AA on white. The last digit of
+     each channel is load-bearing: #5b6fd6 measured 4.48:1 against the white
+     button label, a hair UNDER AA. globals.contrast.test.ts now enforces the
+     4.5 floor on --brand-foreground vs --brand in every palette block. */
+  --brand: #5a6ed5;
   --brand-foreground: #ffffff;
 
   --background: #f6f6f8;
@@ -218,7 +221,7 @@
   --border-bright: rgba(0, 0, 0, 0.22);
   --input: rgba(0, 0, 0, 0.12);
   --ring: var(--brand);
-  --glow-primary: 0 0 30px -8px rgba(91, 111, 214, 0.35);
+  --glow-primary: 0 0 30px -8px rgba(90, 110, 213, 0.35);
 
   /* Periwinkle Dusk — light. Chrome only; content stays neutral. The first stop
      sits slightly below the bloom so the bloom has visible range (the Aug 27
@@ -442,6 +445,345 @@
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
   --shadow-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
+}
+
+/* ---------------------------------------------------------------------------
+   Theme presets — a per-user re-seed of the accent, the neutral tint and the
+   chrome wash, applied INSIDE the active mode via [data-theme-preset] on
+   <html>. The default preset (keystone) has no block on purpose: it IS :root /
+   .dark above, so it can never drift from the base palette.
+
+   Each block declares exactly the seed tokens and nothing else — alpha-based
+   tokens (--border, --state-*, --chrome-fill) and brand-derived ones
+   (--primary, --ring, --sidebar-*) follow on their own. src/lib/theme/presets.ts
+   is the id registry; presets.test.ts enforces the token set and
+   globals.contrast.test.ts re-runs every AA check against each block.
+   --------------------------------------------------------------------------- */
+
+/* Graphite — the accent stands down to a neutral steel; the wash is pure grey.
+   For people who want the chrome to disappear entirely.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="graphite"] {
+  --brand: #4b4b55;
+  --brand-foreground: #ffffff;
+  --background: #f5f5f6;
+  --foreground: #1a1a1e;
+  --surface: #ffffff;
+  --surface-muted: #eeeef0;
+  --surface-sunken: #eeeef0;
+  --card: #ffffff;
+  --card-foreground: #1a1a1e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1e;
+  --secondary: #eeeef0;
+  --secondary-foreground: #1a1a1e;
+  --muted: #eeeef0;
+  --muted-foreground: #595960;
+  --kicker: #595960;
+  --accent: #eeeef0;
+  --accent-foreground: #1a1a1e;
+  --glow-primary: 0 0 30px -8px rgba(75, 75, 85, 0.35);
+  --app-wash: linear-gradient(168deg, #e2e2e6 0%, #dadade 46%, #d1d1d6 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="graphite"] {
+  --brand: #c9c9d2;
+  --brand-foreground: #0e0e10;
+  --background: #0f0f10;
+  --foreground: #f4f4f6;
+  --surface: #171718;
+  --surface-muted: #1d1d1e;
+  --surface-sunken: #1d1d1e;
+  --card: #171718;
+  --card-foreground: #f4f4f6;
+  --popover: #1d1d1e;
+  --popover-foreground: #f4f4f6;
+  --secondary: #272728;
+  --secondary-foreground: #f4f4f6;
+  --muted: #1d1d1e;
+  --muted-foreground: #babac2;
+  --kicker: #babac2;
+  --accent: #1d1d1e;
+  --accent-foreground: #f4f4f6;
+  --app-wash: linear-gradient(168deg, #26262b 0%, #16161a 46%, #09090b 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0f0f10;
+}
+
+/* Ocean — cool teal accent over a blue-grey wash.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="ocean"] {
+  --brand: #1f7a8c;
+  --brand-foreground: #ffffff;
+  --background: #f4f7f8;
+  --foreground: #14191b;
+  --surface: #ffffff;
+  --surface-muted: #eaf0f2;
+  --surface-sunken: #eaf0f2;
+  --card: #ffffff;
+  --card-foreground: #14191b;
+  --popover: #ffffff;
+  --popover-foreground: #14191b;
+  --secondary: #eaf0f2;
+  --secondary-foreground: #14191b;
+  --muted: #eaf0f2;
+  --muted-foreground: #505f64;
+  --kicker: #505f64;
+  --accent: #eaf0f2;
+  --accent-foreground: #14191b;
+  --glow-primary: 0 0 30px -8px rgba(31, 122, 140, 0.35);
+  --app-wash: linear-gradient(168deg, #dbe9ee 0%, #d2e2e8 46%, #c8d9df 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="ocean"] {
+  --brand: #6fc6d6;
+  --brand-foreground: #0e0e10;
+  --background: #0e1112;
+  --foreground: #f1f5f6;
+  --surface: #16191a;
+  --surface-muted: #1c1f20;
+  --surface-sunken: #1c1f20;
+  --card: #16191a;
+  --card-foreground: #f1f5f6;
+  --popover: #1c1f20;
+  --popover-foreground: #f1f5f6;
+  --secondary: #26292a;
+  --secondary-foreground: #f1f5f6;
+  --muted: #1c1f20;
+  --muted-foreground: #b1c0c4;
+  --kicker: #b1c0c4;
+  --accent: #1c1f20;
+  --accent-foreground: #f1f5f6;
+  --app-wash: linear-gradient(168deg, #1b3037 0%, #121e23 46%, #080c0e 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0e1112;
+}
+
+/* Forest — muted green accent over a green-grey wash.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="forest"] {
+  --brand: #2f7a4f;
+  --brand-foreground: #ffffff;
+  --background: #f4f7f5;
+  --foreground: #151b17;
+  --surface: #ffffff;
+  --surface-muted: #eaf0ec;
+  --surface-sunken: #eaf0ec;
+  --card: #ffffff;
+  --card-foreground: #151b17;
+  --popover: #ffffff;
+  --popover-foreground: #151b17;
+  --secondary: #eaf0ec;
+  --secondary-foreground: #151b17;
+  --muted: #eaf0ec;
+  --muted-foreground: #525f56;
+  --kicker: #525f56;
+  --accent: #eaf0ec;
+  --accent-foreground: #151b17;
+  --glow-primary: 0 0 30px -8px rgba(47, 122, 79, 0.35);
+  --app-wash: linear-gradient(168deg, #dfeae2 0%, #d6e3da 46%, #ccd9d0 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="forest"] {
+  --brand: #7fcf9c;
+  --brand-foreground: #0e0e10;
+  --background: #0e110f;
+  --foreground: #f1f6f2;
+  --surface: #161917;
+  --surface-muted: #1c1f1d;
+  --surface-sunken: #1c1f1d;
+  --card: #161917;
+  --card-foreground: #f1f6f2;
+  --popover: #1c1f1d;
+  --popover-foreground: #f1f6f2;
+  --secondary: #262927;
+  --secondary-foreground: #f1f6f2;
+  --muted: #1c1f1d;
+  --muted-foreground: #b3c2b8;
+  --kicker: #b3c2b8;
+  --accent: #1c1f1d;
+  --accent-foreground: #f1f6f2;
+  --app-wash: linear-gradient(168deg, #1d3126 0%, #131f19 46%, #080d0a 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0e110f;
+}
+
+/* Ember — warm amber accent over a sand wash.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="ember"] {
+  --brand: #b4581a;
+  --brand-foreground: #ffffff;
+  --background: #f8f5f2;
+  --foreground: #1e1712;
+  --surface: #ffffff;
+  --surface-muted: #f1ece7;
+  --surface-sunken: #f1ece7;
+  --card: #ffffff;
+  --card-foreground: #1e1712;
+  --popover: #ffffff;
+  --popover-foreground: #1e1712;
+  --secondary: #f1ece7;
+  --secondary-foreground: #1e1712;
+  --muted: #f1ece7;
+  --muted-foreground: #66574b;
+  --kicker: #66574b;
+  --accent: #f1ece7;
+  --accent-foreground: #1e1712;
+  --glow-primary: 0 0 30px -8px rgba(180, 88, 26, 0.35);
+  --app-wash: linear-gradient(168deg, #f0e4da 0%, #e8dbcf 46%, #dfd1c4 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="ember"] {
+  --brand: #f0a868;
+  --brand-foreground: #0e0e10;
+  --background: #12100e;
+  --foreground: #f6f3f0;
+  --surface: #1a1816;
+  --surface-muted: #201e1c;
+  --surface-sunken: #201e1c;
+  --card: #1a1816;
+  --card-foreground: #f6f3f0;
+  --popover: #201e1c;
+  --popover-foreground: #f6f3f0;
+  --secondary: #2a2826;
+  --secondary-foreground: #f6f3f0;
+  --muted: #201e1c;
+  --muted-foreground: #c0b4a9;
+  --kicker: #c0b4a9;
+  --accent: #201e1c;
+  --accent-foreground: #f6f3f0;
+  --app-wash: linear-gradient(168deg, #332419 0%, #211711 46%, #0d0906 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #12100e;
+}
+
+/* Rose — magenta accent over a warm pink-grey wash.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="rose"] {
+  --brand: #b8375f;
+  --brand-foreground: #ffffff;
+  --background: #f8f4f6;
+  --foreground: #1e1418;
+  --surface: #ffffff;
+  --surface-muted: #f1eaee;
+  --surface-sunken: #f1eaee;
+  --card: #ffffff;
+  --card-foreground: #1e1418;
+  --popover: #ffffff;
+  --popover-foreground: #1e1418;
+  --secondary: #f1eaee;
+  --secondary-foreground: #1e1418;
+  --muted: #f1eaee;
+  --muted-foreground: #665058;
+  --kicker: #665058;
+  --accent: #f1eaee;
+  --accent-foreground: #1e1418;
+  --glow-primary: 0 0 30px -8px rgba(184, 55, 95, 0.35);
+  --app-wash: linear-gradient(168deg, #f0dfe5 0%, #e8d5dc 46%, #dfcad2 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="rose"] {
+  --brand: #f08fb0;
+  --brand-foreground: #0e0e10;
+  --background: #120f10;
+  --foreground: #f6f2f3;
+  --surface: #1a1718;
+  --surface-muted: #201d1e;
+  --surface-sunken: #201d1e;
+  --card: #1a1718;
+  --card-foreground: #f6f2f3;
+  --popover: #201d1e;
+  --popover-foreground: #f6f2f3;
+  --secondary: #2a2728;
+  --secondary-foreground: #f6f2f3;
+  --muted: #201d1e;
+  --muted-foreground: #bfabb2;
+  --kicker: #bfabb2;
+  --accent: #201d1e;
+  --accent-foreground: #f6f2f3;
+  --app-wash: linear-gradient(168deg, #33202a 0%, #21151b 46%, #0d080b 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #120f10;
 }
 
 @layer base {
