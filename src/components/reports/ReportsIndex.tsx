@@ -85,6 +85,7 @@ export function ReportsIndex({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <PageHeader
+        kicker="Planning"
         title="Reports"
         description={
           reports.length > 0
