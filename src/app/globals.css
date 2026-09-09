@@ -122,7 +122,7 @@
   /* Elevation — values set per theme in :root / .dark (see below) */
   --shadow-panel: var(--elevation-panel);
   --shadow-card: var(--elevation-card);
-  --shadow-drag: var(--shadow-drag);
+  --shadow-drag: var(--elevation-drag);
 
   /* Signature motion (150–250ms, ease-out) — usable as animate-fadein / animate-slidein */
   --animate-fadein: fadein 0.15s ease-out;
@@ -328,7 +328,7 @@
   /* Named drag-lift shadow — the one deliberate exception to "near-zero
      shadows": a dragged row/card needs to visually separate from the list
      it's being reordered within. */
-  --shadow-drag: 0 12px 32px -12px rgb(30 40 90 / 30%);
+  --elevation-drag: 0 12px 32px -12px rgb(30 40 90 / 30%);
 
   --sidebar: transparent;
   --sidebar-foreground: #1a1a1f;
@@ -457,7 +457,7 @@
   --sidebar-ring: var(--brand);
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
-  --shadow-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
+  --elevation-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
 }
 
 /* ---------------------------------------------------------------------------
@@ -468,7 +468,9 @@
 
    Each block declares exactly the seed tokens and nothing else — alpha-based
    tokens (--border, --state-*, --chrome-fill) and brand-derived ones
-   (--primary, --ring, --sidebar-*) follow on their own. src/lib/theme/presets.ts
+   (--primary, --ring) follow on their own, as do --sidebar-primary/
+   -primary-foreground/-ring (the only --sidebar-* tokens derived from the
+   brand — the rest of --sidebar-* stays neutral chrome). src/lib/theme/presets.ts
    is the id registry; presets.test.ts enforces the token set and
    globals.contrast.test.ts re-runs every AA check against each block.
    --------------------------------------------------------------------------- */

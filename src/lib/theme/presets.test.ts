@@ -81,7 +81,7 @@ describe("theme presets", () => {
 
   it("no CSS preset block without a TS entry", () => {
     const ids = new Set(
-      [...CSS.matchAll(/data-theme-preset="([a-z]+)"/g)].map((m) => m[1]),
+      [...CSS.matchAll(/data-theme-preset="([a-z0-9-]+)"/g)].map((m) => m[1]),
     );
     for (const id of ids) expect(isThemePresetId(id), id).toBe(true);
   });
