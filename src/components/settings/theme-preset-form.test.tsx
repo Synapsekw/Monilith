@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { THEME_PRESET_ATTR } from "@/lib/theme/presets";
@@ -80,5 +80,17 @@ describe("ThemePresetForm", () => {
       false,
     );
     expect(screen.getByRole("radio", { name: "Keystone" })).toBeChecked();
+  });
+
+  it("follows a preset change made elsewhere (e.g. the header toggle)", async () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+
+    act(() => {
+      document.documentElement.setAttribute(THEME_PRESET_ATTR, "ocean");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Ocean" })).toBeChecked();
+    });
   });
 });
