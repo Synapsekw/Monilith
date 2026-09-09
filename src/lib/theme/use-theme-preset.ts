@@ -46,12 +46,22 @@ export function useThemePreset(initial?: ThemePresetId): {
   setPreset: (id: ThemePresetId) => void;
   pending: boolean;
   error: string | null;
+  /** Re-reads `<html data-theme-preset>` into state. For a caller that renders
+   *  without an `initial` (nothing to hydrate-mismatch on), this catches the
+   *  DOM up if something else changed the attribute since mount — e.g. the
+   *  header dropdown calls it on `onOpenChange` so a value the settings tile
+   *  just wrote elsewhere on the page is reflected next time it opens. */
+  refresh: () => void;
 } {
   const [preset, setPresetState] = useState<ThemePresetId>(
     () => initial ?? attributePreset(),
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    setPresetState(attributePreset());
+  }, []);
 
   const setPreset = useCallback(
     (next: ThemePresetId) => {
@@ -76,5 +86,5 @@ export function useThemePreset(initial?: ThemePresetId): {
     [preset],
   );
 
-  return { preset, setPreset, pending, error };
+  return { preset, setPreset, pending, error, refresh };
 }
