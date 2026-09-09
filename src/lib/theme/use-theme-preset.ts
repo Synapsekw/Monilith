@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { updateProfileThemePreset } from "@/lib/profile/actions";
 import {
   applyThemePreset,
@@ -62,6 +62,27 @@ export function useThemePreset(initial?: ThemePresetId): {
   const refresh = useCallback(() => {
     setPresetState(attributePreset());
   }, []);
+
+  // Two independent renderers of the same DOM attribute (the header
+  // `ThemeToggle` radio group and this settings tile) can both mount at once.
+  // Without this, only the one that changed the attribute knows about the
+  // change until its own next open/mount — the other goes stale. Observe
+  // `<html data-theme-preset>` directly so either surface picks up a change
+  // made through the other, on the same tick it happens.
+  useEffect(() => {
+    if (
+      typeof document === "undefined" ||
+      typeof MutationObserver === "undefined"
+    ) {
+      return;
+    }
+    const observer = new MutationObserver(() => refresh());
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: [THEME_PRESET_ATTR],
+    });
+    return () => observer.disconnect();
+  }, [refresh]);
 
   const setPreset = useCallback(
     (next: ThemePresetId) => {

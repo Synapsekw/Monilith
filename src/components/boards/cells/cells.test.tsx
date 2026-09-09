@@ -237,7 +237,7 @@ describe("cell renderers (read-only, 2a)", () => {
     render(<DateCell value={{ date: "2026-06-15" }} settings={{}} overdue />);
     const el = screen.getByLabelText("Overdue");
     expect(el.className).toContain("text-status-red");
-    expect(el.className).toContain("bg-status-red/10");
+    expect(el.className).toContain("bg-status-red/15");
     expect(el).toHaveAttribute("title", "Overdue");
   });
 

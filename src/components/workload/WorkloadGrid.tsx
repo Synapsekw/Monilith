@@ -244,6 +244,7 @@ export function WorkloadGrid({
     <div className="flex h-full flex-col">
       <PageHeader
         className="px-4 py-3"
+        kicker="Planning"
         title="Workload"
         description="Assigned effort vs. capacity, by week. Edit a person's capacity to recolor their row."
         actions={

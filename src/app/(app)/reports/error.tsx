@@ -4,15 +4,15 @@ import { ErrorFallback } from "@/components/shell/error-fallback";
 
 export default function ReportsError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   return (
     <ErrorFallback
       error={error}
-      retry={unstable_retry}
+      retry={retry}
       title="Couldn't load reports"
       description="Something failed while loading your reports. Your data is safe — try again."
     />

@@ -8,6 +8,7 @@ import {
 } from "@/lib/reports/queries";
 import { formatDateTime } from "@/lib/datetime/format";
 import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { scopeLabel } from "@/components/reports/ReportsIndex";
 import { CreateReportButton } from "@/components/reports/CreateReportButton";
@@ -41,19 +42,19 @@ export default async function ReportsListPage({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div className="flex items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <Kicker>Reports</Kicker>
-          <h1 className="text-lg font-bold">
-            {reports.length === 0
-              ? "PDF reports"
-              : `${reports.length} ${reports.length === 1 ? "report" : "reports"}`}
-          </h1>
-        </div>
-        {reports.length > 0 ? (
-          <CreateReportButton boardId={boardId} templates={templateOptions} />
-        ) : null}
-      </div>
+      <PageHeader
+        kicker="Reports"
+        title={
+          reports.length === 0
+            ? "PDF reports"
+            : `${reports.length} ${reports.length === 1 ? "report" : "reports"}`
+        }
+        actions={
+          reports.length > 0 ? (
+            <CreateReportButton boardId={boardId} templates={templateOptions} />
+          ) : null
+        }
+      />
 
       {reports.length === 0 ? (
         <EmptyState className="flex flex-col items-center gap-4">

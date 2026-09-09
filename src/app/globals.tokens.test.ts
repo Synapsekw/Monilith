@@ -78,6 +78,21 @@ describe("Keystone token contract", () => {
     }
   });
 
+  it("backs --shadow-drag with a named --elevation-drag token, not itself", () => {
+    // A self-referential custom property (`--shadow-drag: var(--shadow-drag)`)
+    // resolves to nothing — mirrors the --shadow-panel/--elevation-panel split.
+    expect(CSS).toContain("--shadow-drag: var(--elevation-drag);");
+    expect(CSS).not.toContain("--shadow-drag: var(--shadow-drag);");
+    const root = tokensIn(":root");
+    const dark = tokensIn(".dark");
+    expect(root, "--elevation-drag missing from :root").toContain(
+      "--elevation-drag",
+    );
+    expect(dark, "--elevation-drag missing from .dark").toContain(
+      "--elevation-drag",
+    );
+  });
+
   it("declares the named motion scale", () => {
     for (const d of [
       "--duration-instant: 120ms",

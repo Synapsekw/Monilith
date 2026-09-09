@@ -58,8 +58,8 @@ export function Composer({
    *  `appendUserMessage` Server Action itself failing — not a mid-stream
    *  error, which the transcript's own status line already carries), or null
    *  when nothing is wrong. Rendered as an assertive `role="alert"` line below
-   *  the textarea, distinct from the helper line's `aria-live="polite"`
-   *  status text. */
+   *  the textarea, distinct from the helper line below it — a plain
+   *  (non-live-region) status `<Kicker>`, not announced on its own. */
   error?: string | null;
   /** Resends the exact (text, agentId) that failed. The parent owns what
    *  "the last failed submission" means; this is just its retry trigger. Only
