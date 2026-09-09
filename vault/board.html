@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-07 19:42",
+  "updated": "2026-09-09 10:02",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "f73e24ae",
+        "value": "86bfda38",
         "tone": "warn",
-        "note": "AHEAD of main by the dependency sweep — the first unpromoted delta since PR #115. Five dependabot PRs closed or merged, three majors (openai 7, framer-motion 13, jsdom 30) landed under gates, and mcp-handler went 1.1 to 2.1, which is a transport rewrite rather than a bump. No live worktrees."
+        "note": "AHEAD of main by two tracks: the UI polish + theme presets batch (light-chrome contrast fix, six presets in Settings and the header menu, PageHeader/Kicker ramp, AA pills, one card radius, skeletons and error boundaries, landing on tokens — 28 commits, seven worktrees, every value contrast-tested) and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
       },
       {
         "name": "main",
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "158/158",
+        "value": "159/159",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at promotion time. Includes ai_messages.agent_id plus the two partial rail indexes the split chats/briefings reads are served by.",
+        "note": "Verified by db:ledger-check after the theme-preset migration (20260908121511, additive with default 'keystone'). The MCP mis-stamped it again and reconcile-migration-version.sh repaired it — gotcha-55, eleventh time. PROD does not have it yet; carry it in the next /sync-prod.",
         "label": "ledger"
       }
     ]
@@ -198,9 +198,10 @@
       ]
     },
     {
-      "title": "Walk an MCP client against v2, then promote",
-      "why": "The mcp-handler 1.1 to 2.1 migration sits unpromoted on develop. All four gates pass, a new route test drives the real JSON-RPC transport, and a dev-server smoke test confirmed the 401 challenge and both .well-known documents — but no actual Claude Desktop or claude.ai session has run against it, and that is the surface external clients connect through. Reconnect the connector, confirm 35 tools, run one read and one write, then promote.",
+      "title": "Look at Light mode and the header theme menu, walk an MCP client against v2, then promote",
+      "why": "Two tracks wait on develop. The UI batch shipped with zero pixels seen — Chrome was not connected, so the light-chrome fix, the six presets and the header picker rest on token math and 199 contrast and guard tests; the 2026-09-09 session note carries the nine-step manual pass. The mcp-handler 1.1 to 2.1 migration passes its gates and a route test, but no actual Claude Desktop or claude.ai session has run against it. Do both checks, then promote once.",
       "tags": [
+        "ui",
         "mcp",
         "owner",
         "promote"
@@ -247,6 +248,11 @@
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A whole visual batch shipped without anyone seeing it",
+      "text": "Seven UI tasks and a fix wave landed on develop with the Chrome extension disconnected. Every colour claim is machine-checked — kicker, chrome-vs-card, brand-on-white, and all six presets in both modes — but skeleton fidelity, the header menu layout and whether Ember or Rose actually look good are eye judgements no test makes. The fifth whole-branch review in a row found a defect no task review saw: ten error boundaries had a dead Try again button because Next 16.3 renamed the retry prop. Assume the manual pass will find something too."
+    },
     {
       "sev": "amber",
       "title": "The MCP transport was swapped and no client has connected",
@@ -340,14 +346,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-07-1942-dependency-sweep-mcp-handler-v2",
-    "when": "2026-09-07 19:42",
-    "title": "Dependency sweep and the mcp-handler v2 transport migration",
+    "id": "2026-09-09-1002-ui-polish-and-theme-presets",
+    "when": "2026-09-09 10:02",
+    "title": "UI polish audit, light-mode nav fix, theme presets",
     "bullets": [
-      "Backlog cleared: PRs #104/#105/#106/#107 closed as superseded, #112 squash-merged, #33 closed as stale. No dependabot branches left on origin.",
-      "Three majors (openai 6 to 7, framer-motion 12 to 13, jsdom 29 to 30) landed together under all four gates rather than merged on their individually-green stale CI.",
-      "mcp-handler v2 is why #107 was red: server types moved to @modelcontextprotocol/server, createMcpHandler lost its third options argument, and registerTool no longer accepts zod 4 ZodRawShape.",
-      "The /api/mcp transport had never been tested. A route test now covers the auth challenge, the initialize handshake and tools/list; no real MCP client has connected against v2 yet."
+      "Light mode was washed out because the Aug 27 tint collapsed the bloom onto the first wash stop and --kicker sat at 2.5:1; the bloom is brand-derived now, kicker equals muted-foreground by ruling, and both are contrast-tested.",
+      "Six full theme presets (accent + neutral tint + wash) persist on profiles.theme_preset with a no-flash inline script; pick them in Settings or straight from the header sun/moon menu.",
+      "One PageHeader primitive replaced seven heading patterns, 39 hand-rolled kickers moved onto Kicker, cards unified on 14px, four AA pill failures fixed, and skeletons plus error boundaries cover board, ask, updates, auth and admin.",
+      "The final whole-branch review found ten error.tsx files destructuring unstable_retry, a prop Next 16.3 no longer passes — Try again was dead everywhere and the test encoded it."
     ]
   }
 }
