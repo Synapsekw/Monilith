@@ -95,6 +95,48 @@ describe("getBoardPayload error contract", () => {
     expect(limits["cell_values"]).toEqual([20000]);
   });
 
+  it("selects exactly the narrowed cell columns, ordered deterministically", async () => {
+    // Record every .select(...) and .order(...) call on cell_values so a
+    // regression (widening back to `*`, or dropping the PK order that makes
+    // truncation at the 20000 cap deterministic) is caught here instead of by
+    // a payload-size incident in prod. All-empty fixture ⇒ no mirror columns ⇒
+    // cell_values is read once (the board-scoped read), same as the .limit(...)
+    // test above.
+    const selects: Record<string, string[]> = {};
+    const orders: Record<string, [string, unknown][]> = {};
+    from.mockImplementation((table: string) => {
+      const result: Result =
+        table === "boards"
+          ? { data: BOARD_ROW, error: null }
+          : { data: [], error: null };
+      const chain: Record<string, unknown> = {};
+      for (const m of ["eq", "is", "limit", "not", "in"])
+        chain[m] = () => chain;
+      chain.select = (cols: string) => {
+        (selects[table] ??= []).push(cols);
+        return chain;
+      };
+      chain.order = (col: string, opts: unknown) => {
+        (orders[table] ??= []).push([col, opts]);
+        return chain;
+      };
+      chain.maybeSingle = async () => result;
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(result);
+      return chain;
+    });
+
+    await getBoardPayload("b8");
+
+    expect(selects["cell_values"]).toEqual([
+      "item_id, column_id, value, updated_at",
+    ]);
+    expect(orders["cell_values"]).toEqual([
+      ["item_id", { ascending: true }],
+      ["column_id", { ascending: true }],
+    ]);
+  });
+
   it("issues the head read and the 9 satellite reads concurrently (one batch)", async () => {
     // With the head read parallelized, a missing board no longer gates the
     // satellites: all 10 table reads fire even when boards resolves empty.
