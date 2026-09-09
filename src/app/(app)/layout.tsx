@@ -12,8 +12,21 @@ import { Toaster } from "@/components/ui/sonner";
  * palette mount once and stream their per-user data once per page load, not on
  * every section click.
  *
- * Cookie-bound page-load entry is dynamic; the static AppShell frame still
- * prerenders and per-user data streams behind Suspense.
+ * NOTHING in this layout or in `AuthenticatedShell` may await a request-time
+ * API (`cookies()`, `headers()`, …). Both render above every Suspense boundary
+ * in the group, so one await there makes the whole route dynamic and Next.js
+ * emits an EMPTY static shell — that is not theory: an `await cookies()` added
+ * to seed the device timezone left `.next/server/app/my-work.html`,
+ * `boards/[boardId].html` and every `settings/*.html` at 0 bytes while
+ * `/ask` (no cookie read in its layout) prerendered ~9 KB. `pnpm build` exits
+ * 0 either way and `loading.tsx` does not help a cold load, so the guard is
+ * `src/test/static-shell.test.ts` plus an `ls -la` on those files after a
+ * build. Request-time values are read UNAWAITED and the promise passed down to
+ * a consumer that already suspends behind a fallback.
+ *
+ * With that held, the AppShell frame, the four skeleton fallbacks and
+ * `{children}` are all in the static shell; per-user data streams behind
+ * Suspense.
  *
  * Instant navigation is OFF (`instant = false` — the export was `unstable_instant`
  * until Next 16.3 stabilized it; the old name is silently ignored now, which
