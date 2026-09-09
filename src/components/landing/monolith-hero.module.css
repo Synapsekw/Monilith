@@ -4,7 +4,7 @@
   flex-direction: column;
   min-height: 100dvh;
   isolation: isolate;
-  background: #06070c;
+  background: var(--background);
   /*
    * `overflow-x: clip`, never `hidden`. Both stop sideways overflow, but
    * `hidden` makes this a scroll container and silently kills `position:
@@ -41,49 +41,55 @@
     /* The ray cone, continued past the fold. */
     radial-gradient(
       46% 34% at 50% -2%,
-      rgba(142, 162, 235, 0.13),
+      color-mix(in oklab, var(--brand) 13%, transparent),
       transparent 72%
     ),
     radial-gradient(
       85% 22% at 76% 19%,
-      rgba(142, 162, 235, 0.06),
+      color-mix(in oklab, var(--brand) 6%, transparent),
       transparent 74%
     ),
     radial-gradient(
       85% 22% at 18% 37%,
-      rgba(142, 162, 235, 0.055),
+      color-mix(in oklab, var(--brand) 5.5%, transparent),
       transparent 74%
     ),
     radial-gradient(
       90% 22% at 82% 55%,
-      rgba(142, 162, 235, 0.05),
+      color-mix(in oklab, var(--brand) 5%, transparent),
       transparent 74%
     ),
     radial-gradient(
       85% 20% at 22% 73%,
-      rgba(142, 162, 235, 0.042),
+      color-mix(in oklab, var(--brand) 4.2%, transparent),
       transparent 74%
     ),
     /* Gathers again behind the closing CTA. */
     radial-gradient(
         115% 24% at 50% 101%,
-        rgba(142, 162, 235, 0.08),
+        color-mix(in oklab, var(--brand) 8%, transparent),
         transparent 74%
       ),
     /* Edge falloff, matching the hero vignette so the sides never read flat. */
     radial-gradient(
         150% 60% at 50% 0%,
         transparent 55%,
-        rgba(6, 7, 12, 0.5) 100%
+        color-mix(in oklab, var(--background) 50%, transparent) 100%
       ),
+    /*
+     * Base wash. Tiny per-stop lightening (a few percent toward white) rather
+     * than a flat fill — the same near-solid color banded visibly under the
+     * soft radial blooms above; the near-imperceptible variation dissolves it
+     * without introducing a second hardcoded palette.
+     */
     linear-gradient(
-      180deg,
-      #06070c 0%,
-      #080911 30%,
-      #090a13 58%,
-      #08090f 82%,
-      #06070c 100%
-    );
+        180deg,
+        var(--background) 0%,
+        color-mix(in oklab, var(--background) 97%, white) 30%,
+        color-mix(in oklab, var(--background) 94%, white) 58%,
+        color-mix(in oklab, var(--background) 96%, white) 82%,
+        var(--background) 100%
+      );
 }
 
 /*
@@ -110,8 +116,8 @@
   top: 0;
   z-index: 50;
   width: 100%;
-  border-bottom: 1px solid rgba(244, 244, 246, 0.08);
-  background: rgba(6, 7, 12, 0.72);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--background) 72%, transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -132,7 +138,7 @@
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.02em;
-  color: #f4f4f6;
+  color: var(--foreground);
 }
 
 .navLinks {
@@ -140,11 +146,11 @@
   align-items: center;
   gap: 1.75rem;
   font-size: 13.5px;
-  color: #a1a1aa;
+  color: var(--muted-foreground);
 }
 
 .navLinks a:hover {
-  color: #f4f4f6;
+  color: var(--foreground);
 }
 
 .navLinks a {
@@ -168,12 +174,12 @@
   padding: 0 0.75rem;
   font-size: 13.5px;
   font-weight: 500;
-  color: #a1a1aa;
+  color: var(--muted-foreground);
   transition: color 0.2s ease;
 }
 
 .navLink:hover {
-  color: #f4f4f6;
+  color: var(--foreground);
 }
 
 .navCta {
@@ -235,7 +241,7 @@
   filter: blur(50px);
   background: radial-gradient(
     ellipse at center,
-    rgba(142, 162, 235, 0.35),
+    color-mix(in oklab, var(--brand) 35%, transparent),
     transparent 70%
   );
 }
@@ -249,7 +255,7 @@
   background: radial-gradient(
     130% 100% at 50% 30%,
     transparent 40%,
-    rgba(6, 7, 12, 0.82) 100%
+    color-mix(in oklab, var(--background) 82%, transparent) 100%
   );
 }
 
@@ -265,14 +271,21 @@
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.02em;
-  color: #f4f4f6;
+  color: var(--foreground);
   text-shadow:
-    0 4px 60px rgba(142, 162, 235, 0.32),
-    0 4px 50px rgba(0, 0, 0, 0.6);
+    0 4px 60px color-mix(in oklab, var(--brand) 32%, transparent),
+    /* A grounding contact shadow, not a themed surface — always dark
+       regardless of mode, the same way a print drop-shadow would be. */
+    0 4px 50px color-mix(in oklab, black 60%, transparent);
   background-image: linear-gradient(
     100deg,
     transparent 35%,
-    rgba(174, 190, 240, 0.85) 50%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 72%, white) 85%,
+        transparent
+      )
+      50%,
     transparent 65%
   );
   background-size: 250% 100%;
@@ -297,7 +310,7 @@
   font-weight: 800;
   line-height: 1.08;
   letter-spacing: -0.02em;
-  color: #f4f4f6;
+  color: var(--foreground);
   text-align: center;
   text-wrap: balance;
 }
@@ -310,7 +323,7 @@
   font-size: clamp(0.95rem, 1.4vw, 1rem);
   line-height: 1.65;
   letter-spacing: 0.01em;
-  color: #a1a1aa;
+  color: var(--muted-foreground);
   text-align: center;
   text-wrap: pretty;
 }
@@ -346,8 +359,10 @@
   width: 100%;
   max-width: 1080px;
   margin-top: 3rem;
-  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+  /* Alpha mask, not a themed color — `black` is opaque source, `transparent`
+     is 0 alpha; the RGB channels are never painted. */
+  -webkit-mask-image: linear-gradient(to bottom, black 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 62%, transparent 100%);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -362,16 +377,16 @@
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
   font-size: 0.8rem;
-  color: #71717a;
+  color: var(--kicker);
 }
 
 .footerLink {
-  color: #a1a1aa;
+  color: var(--muted-foreground);
   transition: color 0.2s ease;
 }
 
 .footerLink:hover {
-  color: #f4f4f6;
+  color: var(--foreground);
 }
 
 @keyframes sweep {

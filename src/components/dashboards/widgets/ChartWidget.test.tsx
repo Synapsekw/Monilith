@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
+import { SPECTRUM_SOLID } from "@/components/dashboards/widgets/chart-theme";
 import type { SeriesData } from "@/lib/dashboards/series";
 
 const sample: SeriesData = {
@@ -84,7 +85,7 @@ describe("ChartWidget", () => {
     // Single-series, uncolored -> the synthetic "Value" series resolves to
     // the spectrum hero solid representative (SPECTRUM_SOLID).
     expect(container.innerHTML).toContain("--color-Value");
-    expect(container.innerHTML).toContain("#7c3aed");
+    expect(container.innerHTML).toContain(SPECTRUM_SOLID);
   });
 
   it("renders the spectrum hero gradient + glow defs for an uncolored single series", () => {

@@ -3,7 +3,9 @@
  * string escaped. Visual language matches `lib/digest/render.ts` and the
  * branded auth templates — dark ink on white, minimal chrome.
  *
- * Pure and dependency-free so it is trivially unit-testable.
+ * Pure and dependency-free so it is trivially unit-testable (the one
+ * dependency, KEYSTONE_BRAND_HEX, is a plain string constant with no
+ * further imports of its own).
  *
  * WHAT CHANGED WITH THE TOOL LOOP: there is no longer an item TABLE to render.
  * The agent no longer receives a pre-built briefing payload — it reads what it
@@ -12,6 +14,8 @@
  * `summary` is still untrusted (it is model output over item names authored by
  * other people) and is still escaped before it reaches the HTML.
  */
+
+import { KEYSTONE_BRAND_HEX } from "@/lib/theme/presets";
 
 export type BriefingEmailInput = {
   agentName: string;
@@ -80,7 +84,7 @@ export function renderBriefingHtml(input: BriefingEmailInput): string {
 
   const approval =
     proposalCount > 0
-      ? `\n  <p style="font-size:14px;color:#333;line-height:1.5;background:#f6f6fb;border-left:3px solid #5b6fd6;padding:10px 12px;margin:16px 0;"><strong>${escapeHtml(approvalHeadline(proposalCount))}</strong> ${escapeHtml(APPROVAL_CTA)}</p>`
+      ? `\n  <p style="font-size:14px;color:#333;line-height:1.5;background:#f6f6fb;border-left:3px solid ${KEYSTONE_BRAND_HEX.light};padding:10px 12px;margin:16px 0;"><strong>${escapeHtml(approvalHeadline(proposalCount))}</strong> ${escapeHtml(APPROVAL_CTA)}</p>`
       : "";
 
   return `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:640px;margin:0 auto;padding:24px;background:#fff;">
@@ -88,7 +92,7 @@ export function renderBriefingHtml(input: BriefingEmailInput): string {
   <h1 style="font-size:20px;margin:0 0 12px;color:#111;">Your briefing for ${escapeHtml(today)}</h1>
   <p style="font-size:14px;color:#333;line-height:1.5;">${escapeHtml(summary)}</p>${approval}
   <p style="margin-top:28px;font-size:12px;color:#888;">
-    ${threadUrl ? `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>\n    &middot; ` : ""}<a href="${appBaseUrl}/my-work" style="color:#5b6fd6;">Open My Work</a>
+    ${threadUrl ? `<a href="${threadUrl}" style="color:${KEYSTONE_BRAND_HEX.light};">Open this briefing</a>\n    &middot; ` : ""}<a href="${appBaseUrl}/my-work" style="color:${KEYSTONE_BRAND_HEX.light};">Open My Work</a>
     &middot; <a href="${unsubscribeUrl}" style="color:#888;">Unsubscribe from briefings</a>
   </p>
 </div>`;

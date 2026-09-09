@@ -75,7 +75,8 @@ export function MonolithScene({
       initial={reduce ? false : "hidden"}
       animate="show"
     >
-      <LightRays className={styles.rays} raysColor="#8ea2eb" />
+      {/* No raysColor passed: LightRays resolves the live --brand at mount. */}
+      <LightRays className={styles.rays} />
       <span className={styles.source} aria-hidden />
       <span className={styles.vignette} aria-hidden />
       <motion.span

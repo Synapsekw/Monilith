@@ -7,6 +7,10 @@ import { PreviewProgress } from "./PreviewProgress";
 
 type Status = "loading" | "ready" | "error";
 
+// The rendered document is a printed page — always white, regardless of the
+// app theme (unlike the wrapper around it, which follows the theme tokens).
+const PAPER_BACKGROUND = "#fff";
+
 /**
  * Client-only DOCX renderer. Mirrors PdfPreview: the bytes are fetched from a
  * short-lived signed URL and parsed in the browser, so the file never reaches
@@ -59,7 +63,7 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
         if (!doc) return;
         doc.body.replaceChildren();
         doc.body.style.margin = "0";
-        doc.body.style.background = "#fff";
+        doc.body.style.background = PAPER_BACKGROUND;
 
         await renderAsync(blob, doc.body, undefined, {
           className: "docx",
@@ -87,7 +91,7 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
   }
 
   return (
-    <div className="relative min-h-0 w-full">
+    <div className="bg-surface-muted relative min-h-0 w-full">
       {status === "loading" && (
         <div className="bg-popover absolute inset-0 grid place-items-center rounded">
           <PreviewProgress
