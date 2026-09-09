@@ -7,7 +7,7 @@ import { percentBandColor } from "@/lib/boards/percent-color";
 import { stripMarkdown } from "@/lib/boards/markdown";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
-import { StatusPill } from "@/components/ui/status-pill";
+import { StatusPill, statusToneClasses } from "@/components/ui/status-pill";
 import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
@@ -198,7 +198,10 @@ export function DateCell({
     <Kicker
       aria-label="Overdue"
       title="Overdue"
-      className="bg-status-red/10 text-status-red -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5"
+      className={cn(
+        statusToneClasses("red", "soft"),
+        "-mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5",
+      )}
     >
       {formatted}
     </Kicker>
