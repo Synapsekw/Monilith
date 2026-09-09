@@ -790,3 +790,27 @@ git commit -m "feat(theme): user-selectable theme presets"
 - Spec coverage: A→Task 1, B→Task 5, C→Task 2, D→Task 3, E→Task 4, F→Task 6. DAG matches spec.
 - Types: `ThemePresetId`, `THEME_PRESET_IDS`, `isThemePresetId`, `applyThemePreset`, `KEYSTONE_BRAND_HEX` consistent across Tasks 5/6. `PageHeader` `as` prop consistent. `--shadow-drag` named once.
 - Placeholders: preset hexes are explicit starting points with the test as arbiter, per spec.
+
+---
+
+### Task 7: Theme presets in the header ThemeToggle (Track B follow-up) — after Task 5 merges
+
+**Why:** owner feedback 2026-09-09: the preset picker is buried in Settings; it must live where the Light/Dark/System selector already is.
+
+**Worktree:** `scripts/start-task.sh header-theme-presets`
+
+**Files:**
+
+- Modify: `src/components/theme-toggle.tsx`, `src/lib/theme/use-theme-preset.ts`
+- Test: `src/components/theme-toggle.test.tsx` (create if absent)
+
+**Interfaces:**
+
+- Consumes: `useThemePreset`, `THEME_PRESETS`, `ThemePresetId` from `src/lib/theme/*`; shadcn `DropdownMenuSeparator`, `DropdownMenuLabel`, `DropdownMenuRadioGroup`, `DropdownMenuRadioItem`; `toast` from `sonner`.
+- Produces: `useThemePreset()` return gains `refresh(): void` (re-reads the `<html>` attribute into state — the dropdown calls it on open so a server-synced value is reflected).
+
+- [ ] **Step 1: Failing test** — `theme-toggle.test.tsx`: opening the menu shows the three mode items, a "Theme" label, and six radio items (`role="menuitemradio"`) with the current one `aria-checked="true"`; choosing "Ocean" sets `document.documentElement.dataset.themePreset === "ocean"` synchronously and calls the (mocked) `updateProfileThemePreset` with `{ themePreset: "ocean" }`; a failed action reverts and calls `toast.error` (mock `sonner`).
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** — in `theme-toggle.tsx`, after the System item: `<DropdownMenuSeparator />`, `<DropdownMenuLabel>Theme</DropdownMenuLabel>`, `<DropdownMenuRadioGroup value={preset} onValueChange={(v) => setPreset(v as ThemePresetId)}>` with one `<DropdownMenuRadioItem value={p.id}>` per `THEME_PRESETS` entry containing a `size-3 rounded-full` swatch span (`style={{ background: p.swatch.dark.accent }}` under `.dark`, light otherwise — or simply `background: p.swatch.<resolvedTheme>.accent` via `useTheme().resolvedTheme`; inline hex allowed: the swatch IS the data, `aria-hidden`) + label. `onOpenChange={(open) => open && refresh()}` on the `DropdownMenu`. On error from the hook: `toast.error(error)` in an effect keyed on `error`.
+- [ ] **Step 4: Tests pass** — `pnpm vitest run src/components/theme-toggle.test.tsx src/components/settings/theme-preset-form.test.tsx src/lib/theme`.
+- [ ] **Step 5: Commit + gate + finish** — `git commit -m "feat(theme): pick a theme preset from the header toggle"`.
