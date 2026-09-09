@@ -44,6 +44,57 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
+/** Which runtime APIs this source awaits, if any. */
+function awaitedRuntimeApis(source: string): string[] {
+  return RUNTIME_APIS.filter((api) =>
+    new RegExp(`await\\s+${api}\\s*\\(`).test(source),
+  );
+}
+
+/**
+ * Whether the source exports an async component, in either shape React
+ * components are written in here: `export [default] async function Foo` and
+ * `export const Foo = async (` (with or without a type annotation). A
+ * non-exported local async helper is fine — only what the layout renders
+ * matters.
+ */
+function declaresAsyncComponent(source: string): boolean {
+  return (
+    /export\s+(?:default\s+)?async\s+function/.test(source) ||
+    /export\s+const\s+\w+\s*(?::[^=]+)?=\s*async\s*[(<]/.test(source)
+  );
+}
+
+describe("the (app) static-shell detectors", () => {
+  it("catches an awaited runtime API", () => {
+    expect(awaitedRuntimeApis("const c = await cookies();")).toEqual([
+      "cookies",
+    ]);
+    expect(awaitedRuntimeApis("cookies().then((c) => c.get('x'));")).toEqual(
+      [],
+    );
+  });
+
+  it("catches every exported async component shape", () => {
+    expect(declaresAsyncComponent("export async function Foo() {}")).toBe(true);
+    expect(
+      declaresAsyncComponent("export default async function Foo() {}"),
+    ).toBe(true);
+    expect(declaresAsyncComponent("export const Foo = async () => {};")).toBe(
+      true,
+    );
+    expect(
+      declaresAsyncComponent("export const Foo: FC<P> = async () => {};"),
+    ).toBe(true);
+  });
+
+  it("does not flag synchronous components or local async helpers", () => {
+    expect(declaresAsyncComponent("export function Foo() {}")).toBe(false);
+    expect(declaresAsyncComponent("export const Foo = () => {};")).toBe(false);
+    expect(declaresAsyncComponent("const load = async () => {};")).toBe(false);
+  });
+});
+
 describe("(app) static shell", () => {
   for (const relative of SHELL_FILES) {
     const source = stripComments(
@@ -51,16 +102,13 @@ describe("(app) static shell", () => {
     );
 
     it(`${relative} awaits no request-time API`, () => {
-      const awaited = RUNTIME_APIS.filter((api) =>
-        new RegExp(`await\\s+${api}\\s*\\(`).test(source),
-      );
-      expect(awaited).toEqual([]);
+      expect(awaitedRuntimeApis(source)).toEqual([]);
     });
 
     it(`${relative} declares no async component`, () => {
       // A non-async component cannot await anything, which is the invariant
       // above stated structurally rather than by pattern-matching.
-      expect(source).not.toMatch(/export\s+(?:default\s+)?async\s+function/);
+      expect(declaresAsyncComponent(source)).toBe(false);
     });
   }
 });

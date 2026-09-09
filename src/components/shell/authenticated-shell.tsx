@@ -24,10 +24,14 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Resolve the user's timezone as a promise passed UNAWAITED into the client
- * provider so page content paints immediately — only the `DateTime` primitive
- * suspends on it (behind its own empty <time> fallback). Identity is read
- * OUTSIDE the cache (cookie-bound `getUser`) and threaded into the `use cache`
- * read, so the value is shared across routes and invalidated by
+ * provider, so nothing above the shell's Suspense boundaries ever suspends and
+ * page content paints immediately. NOTHING suspends on this one:
+ * `useResolvedTimeZone` (src/lib/datetime/timezone-context.tsx) resolves it in
+ * an effect and renders the device zone until it lands. The device-zone seed
+ * below is the single promise a consumer actually `use()`s.
+ *
+ * Identity is read OUTSIDE the cache (cookie-bound `getUser`) and threaded into
+ * the `use cache` read, so the value is shared across routes and invalidated by
  * `updateTag(profileTag(userId))` on save (Phase 9.3 rule).
  */
 function resolveUserTimeZone(): Promise<string | null> {

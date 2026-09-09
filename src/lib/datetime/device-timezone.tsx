@@ -29,12 +29,28 @@ function subscribe(): () => void {
   return () => {};
 }
 
-/** Client snapshot: the real device zone (a stable string → Object.is-safe). */
+/**
+ * Client snapshot: the real device zone (a stable string → Object.is-safe).
+ *
+ * Memoized at module scope because `useSyncExternalStore` calls this on EVERY
+ * render of EVERY consumer, and `detectDeviceTimeZone` builds an
+ * `Intl.DateTimeFormat`. That was once per mount while the store lived in the
+ * provider; now that it lives in the hook it is once per `DateTime` per render
+ * — 13 constructions for four consumers, measured. Caching is safe for exactly
+ * the reason {@link subscribe} is a no-op: a device's zone does not change
+ * mid-session, and a reload re-evaluates the module.
+ */
+let cachedDeviceZone: string | null = null;
 function getDeviceZone(): string {
-  return detectDeviceTimeZone();
+  return (cachedDeviceZone ??= detectDeviceTimeZone());
 }
 
-function isPending(seed: DeviceTimeZoneSeed): seed is Promise<string | null> {
+/**
+ * A thenable — which includes an ALREADY-RESOLVED promise, hence the name. The
+ * check is about the seed's shape, not whether it is still pending: React `use`
+ * returns synchronously for a settled promise.
+ */
+function isThenable(seed: DeviceTimeZoneSeed): seed is Promise<string | null> {
   return typeof seed === "object" && seed !== null && "then" in seed;
 }
 
@@ -96,10 +112,15 @@ export function DeviceTimeZoneProvider({
  * sole consumer, `DateTime`, renders inside route content that is streamed
  * behind a `loading.tsx` fallback), so the shell above it still prerenders.
  * `use` is the one hook React permits to run conditionally.
+ *
+ * On `router.refresh()` or a revalidation the layout re-renders and produces a
+ * NEW seed promise, so a `DateTime` mounting at that moment suspends again —
+ * to the route's `loading.tsx` boundary, contained by the React transition the
+ * refresh already runs in. Expected, not a bug.
  */
 export function useDeviceTimeZone(): string | null {
   const seed = useContext(DeviceTimeZoneContext);
-  const initial = isPending(seed) ? use(seed) : seed;
+  const initial = isThenable(seed) ? use(seed) : seed;
   return useSyncExternalStore<string | null>(
     subscribe,
     getDeviceZone,

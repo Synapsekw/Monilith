@@ -8,9 +8,10 @@ import {
   useDeviceTimeZone,
 } from "./device-timezone";
 
-vi.mock("@/lib/datetime/timezone", () => ({
-  detectDeviceTimeZone: () => "Asia/Kuwait",
+const { detectDeviceTimeZone } = vi.hoisted(() => ({
+  detectDeviceTimeZone: vi.fn(() => "Asia/Kuwait"),
 }));
+vi.mock("@/lib/datetime/timezone", () => ({ detectDeviceTimeZone }));
 
 function Probe() {
   return <span>zone:{useDeviceTimeZone() ?? "unknown"}</span>;
@@ -35,7 +36,7 @@ describe("DeviceTimeZoneProvider", () => {
     expect(screen.getByText("zone:Asia/Kuwait")).toBeInTheDocument();
   });
 
-  it("writes the cookie when the detected zone drifts from the seed", async () => {
+  it("writes the cookie when the detected zone drifts from the cookie jar", async () => {
     await act(async () => {
       render(
         <DeviceTimeZoneProvider initial="Europe/Belgrade">
@@ -44,6 +45,45 @@ describe("DeviceTimeZoneProvider", () => {
       );
     });
     expect(document.cookie).toContain(`${DEVICE_TZ_COOKIE}=Asia%2FKuwait`);
+  });
+
+  it("overwrites a stale zone already in the cookie jar", async () => {
+    // The jar — not the seed — is what the effect compares against, so a jar
+    // holding a zone the device has since moved away from must be corrected.
+    document.cookie = `${DEVICE_TZ_COOKIE}=Europe%2FBelgrade; path=/`;
+    await act(async () => {
+      render(
+        <DeviceTimeZoneProvider initial="Europe/Belgrade">
+          <Probe />
+        </DeviceTimeZoneProvider>,
+      );
+    });
+    expect(document.cookie).toContain(`${DEVICE_TZ_COOKIE}=Asia%2FKuwait`);
+    expect(document.cookie).not.toContain("Europe%2FBelgrade");
+  });
+
+  it("reads the device zone once, not on every consumer render", async () => {
+    // `useSyncExternalStore` calls the client snapshot on EVERY render of every
+    // consumer, and the snapshot builds an `Intl.DateTimeFormat`. Now that the
+    // store lives in the hook rather than the provider, that is once per
+    // `DateTime` per render — so the snapshot must be memoized at module scope.
+    const before = detectDeviceTimeZone.mock.calls.length;
+    await act(async () => {
+      render(
+        <DeviceTimeZoneProvider initial="Europe/Belgrade">
+          <Probe />
+          <Probe />
+          <Probe />
+          <Probe />
+        </DeviceTimeZoneProvider>,
+      );
+    });
+    // At most the provider's own cookie-refresh read plus one cache fill,
+    // however many consumers render. A delta keeps this independent of test
+    // order (the memo is module-scoped and survives across tests in this file).
+    expect(detectDeviceTimeZone.mock.calls.length - before).toBeLessThanOrEqual(
+      2,
+    );
   });
 
   it("leaves the cookie alone when it already holds the detected zone", async () => {
