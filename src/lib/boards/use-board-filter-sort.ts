@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import {
@@ -13,6 +13,7 @@ import {
   type BoardSort,
 } from "@/lib/boards/board-filter";
 import type { ListFilter } from "@/lib/validations/dashboards";
+import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 
 /**
  * Board filter/sort/search state, read from and written to the URL.
@@ -30,6 +31,24 @@ import type { ListFilter } from "@/lib/validations/dashboards";
 export function useBoardFilterSort() {
   const searchParams = useSearchParams();
 
+  const { initialFilterQuery, setFilterQuery } = useBoardViewPrefs();
+
+  // True once this session has written the filter URL even once. Load-bearing:
+  // clearing a filter empties the URL, which looks identical to a fresh visit,
+  // so a naive "empty URL means use the saved filter" rule would resurrect the
+  // filter the user just cleared. After the first write the URL is
+  // authoritative and an empty URL means an empty filter.
+  //
+  // State, not a ref: flipping it must re-render, because the render it
+  // invalidates is the one showing the seeded filter. Relying on
+  // `useSearchParams()` to re-render us after the History write would make
+  // "Clear all" depend on a second, unrelated mechanism firing — and a ref
+  // mutation would be invisible if it didn't. React bails out on the
+  // unchanged `true`, so only the first write costs a render.
+  const [hasWritten, setHasWritten] = useState(false);
+  const urlHasFilter = FILTER_PARAM_KEYS.some((k) => searchParams.get(k));
+  const useSaved = !hasWritten && !urlHasFilter && initialFilterQuery !== "";
+
   // Re-parse only when one of the filter params actually changes (identity is
   // stable across unrelated re-renders — e.g. presence heartbeats — so the
   // derived predicate/comparator memos in the views don't churn).
@@ -43,9 +62,12 @@ export function useBoardFilterSort() {
     "\u0000",
   );
   const state = useMemo<BoardFilterState>(
-    () => parseBoardFilter(searchParams),
+    () =>
+      useSaved
+        ? parseBoardFilter(new URLSearchParams(initialFilterQuery))
+        : parseBoardFilter(searchParams),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raw],
+    [raw, useSaved, initialFilterQuery],
   );
 
   // Write the given next-state to the URL. `replace` (search typing) avoids
@@ -53,6 +75,7 @@ export function useBoardFilterSort() {
   // the LIVE `window.location` so concurrent param writes (view/item) are kept.
   const write = useCallback(
     (next: BoardFilterState, opts?: { replace?: boolean }) => {
+      setHasWritten(true);
       const url = new URL(window.location.href);
       const updates = serializeBoardFilter(next);
       for (const [key, value] of Object.entries(updates)) {
@@ -61,9 +84,32 @@ export function useBoardFilterSort() {
       }
       if (opts?.replace) window.history.replaceState(null, "", url);
       else window.history.pushState(null, "", url);
+
+      // Remember the filter for the next visit. Only the filter params are
+      // stored — never `view` or `item`, which are navigation, not arrangement.
+      const keep = new URLSearchParams();
+      for (const key of FILTER_PARAM_KEYS) {
+        const value = url.searchParams.get(key);
+        if (value) keep.set(key, value);
+      }
+      setFilterQuery(keep.toString());
     },
-    [],
+    [setFilterQuery],
   );
+
+  // Reflect the seeded filter into the URL once, with replaceState so it does
+  // not add a back-stack entry. Runs only when the saved filter is what seeded
+  // this render.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !useSaved) return;
+    seeded.current = true;
+    const url = new URL(window.location.href);
+    for (const [key, value] of new URLSearchParams(initialFilterQuery)) {
+      url.searchParams.set(key, value);
+    }
+    window.history.replaceState(null, "", url);
+  }, [useSaved, initialFilterQuery]);
 
   // Quick-search typing must not write the URL (and rebuild the searchParams-
   // derived state → re-scan every row) on every keystroke. Debounce the write
