@@ -131,4 +131,49 @@ describe("BoardViewPrefsProvider", () => {
     });
     expect(result.current.collapsedGroups.has(GROUP_A)).toBe(true);
   });
+
+  // A board must render even when the arrangement it was handed is missing or
+  // half-shaped. Reading a field straight off the prop threw here and took the
+  // whole board down with it, which is the opposite of what this provider
+  // promises. The casts are the point: they stand in for a caller the compiler
+  // never saw — a stale bundle mid-HMR, or a payload from an older client.
+  it("renders with defaults when handed no arrangement at all", () => {
+    const NoInitial = ({ children }: { children: React.ReactNode }) => (
+      <BoardViewPrefsProvider
+        boardId={BOARD}
+        initial={undefined as unknown as typeof EMPTY_BOARD_VIEW_PREFS}
+      >
+        {children}
+      </BoardViewPrefsProvider>
+    );
+
+    const { result } = renderHook(() => useBoardViewPrefs(), {
+      wrapper: NoInitial,
+    });
+    expect(result.current.collapsedGroups.size).toBe(0);
+    expect(result.current.expandedItems.size).toBe(0);
+    expect(result.current.initialFilterQuery).toBe("");
+  });
+
+  it("fills the gaps when handed a partial arrangement", () => {
+    const Partial = ({ children }: { children: React.ReactNode }) => (
+      <BoardViewPrefsProvider
+        boardId={BOARD}
+        initial={
+          {
+            collapsedGroupIds: [GROUP_A],
+          } as unknown as typeof EMPTY_BOARD_VIEW_PREFS
+        }
+      >
+        {children}
+      </BoardViewPrefsProvider>
+    );
+
+    const { result } = renderHook(() => useBoardViewPrefs(), {
+      wrapper: Partial,
+    });
+    expect(result.current.collapsedGroups.has(GROUP_A)).toBe(true);
+    expect(result.current.expandedItems.size).toBe(0);
+    expect(result.current.initialFilterQuery).toBe("");
+  });
 });

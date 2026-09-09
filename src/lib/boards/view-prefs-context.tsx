@@ -11,6 +11,7 @@ import {
 } from "react";
 import { saveBoardViewPrefs } from "./view-prefs-actions";
 import {
+  EMPTY_BOARD_VIEW_PREFS,
   MAX_PREF_IDS,
   type BoardViewPrefsState,
   type ResolvedBoardViewPrefs,
@@ -118,18 +119,31 @@ export function BoardViewPrefsProvider({
   initial: ResolvedBoardViewPrefs;
   children: React.ReactNode;
 }) {
+  // Normalised seed. `initial` is a required prop and every call site passes
+  // it, but this provider's whole contract is that remembering an arrangement
+  // is a convenience whose absence must never break a board — and reading a
+  // field straight off the prop breaks that promise at the first render.
+  // Spreading over the empty arrangement absorbs both a missing prop (a stale
+  // bundle mid-HMR, a future call site added without it) and a partial object
+  // (a payload written by an older client version), instead of throwing and
+  // taking the whole board down with it.
+  const seed: ResolvedBoardViewPrefs = {
+    ...EMPTY_BOARD_VIEW_PREFS,
+    ...(initial ?? {}),
+  };
+
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(initial.collapsedGroupIds),
+    () => new Set(seed.collapsedGroupIds),
   );
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
-    () => new Set(initial.expandedItemIds),
+    () => new Set(seed.expandedItemIds),
   );
 
   // The view id and filter query are write-only from this provider's point of
   // view: the URL renders them, so holding them in state would just be a second
   // source of truth. Refs keep them out of the render path entirely.
-  const viewIdRef = useRef<string | null>(initial.viewId);
-  const filterQueryRef = useRef<string>(initial.filterQuery);
+  const viewIdRef = useRef<string | null>(seed.viewId);
+  const filterQueryRef = useRef<string>(seed.filterQuery);
 
   // Latest sets for the debounced writer, so the timer never closes over stale
   // state and never has to be re-created on every toggle.
@@ -241,7 +255,7 @@ export function BoardViewPrefsProvider({
     () => ({
       collapsedGroups,
       expandedItems,
-      initialFilterQuery: initial.filterQuery,
+      initialFilterQuery: seed.filterQuery,
       toggleGroupCollapsed,
       toggleItemExpanded,
       setActiveViewId,
@@ -251,7 +265,7 @@ export function BoardViewPrefsProvider({
     [
       collapsedGroups,
       expandedItems,
-      initial.filterQuery,
+      seed.filterQuery,
       toggleGroupCollapsed,
       toggleItemExpanded,
       setActiveViewId,
