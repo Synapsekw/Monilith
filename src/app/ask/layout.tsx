@@ -5,6 +5,7 @@ import { AskRailData } from "@/components/ai/ask/AskRailData";
 import { Brand } from "@/components/brand/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ThemePresetSync } from "@/components/theme-preset-sync";
+import { Toaster } from "@/components/ui/sonner";
 import { getUser } from "@/lib/auth/session";
 import { getUserThemePresetCached } from "@/lib/profile/queries-cached";
 import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
@@ -91,6 +92,11 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
           <Suspense fallback={null}>{children}</Suspense>
         </main>
       </div>
+      {/* `/ask` sits outside the `(app)` group, so it inherits nothing from
+          that group's layout — including the app-wide toaster. Without this
+          mount, the header ThemeToggle's `toast.error` for a reverted preset
+          renders into a toaster that is not on the page. Mirrors admin/layout.tsx. */}
+      <Toaster />
     </div>
   );
 }
