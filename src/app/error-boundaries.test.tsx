@@ -8,6 +8,8 @@ import PortfoliosError from "./(app)/portfolios/error";
 import ReportsError from "./(app)/reports/error";
 import GoalsError from "./(app)/goals/error";
 import TimeError from "./(app)/time/error";
+import AdminError from "./admin/error";
+import AskError from "./ask/error";
 import RootNotFound from "./not-found";
 import BoardNotFound from "./(app)/boards/[boardId]/not-found";
 import DashboardNotFound from "./(app)/dashboards/[dashboardId]/not-found";
@@ -24,7 +26,7 @@ describe("error boundaries", () => {
     string,
     React.ComponentType<{
       error: Error & { digest?: string };
-      unstable_retry: () => void;
+      retry: () => void;
     }>,
   ][] = [
     ["root", RootError],
@@ -35,9 +37,11 @@ describe("error boundaries", () => {
     ["reports", ReportsError],
     ["goals", GoalsError],
     ["time", TimeError],
+    ["admin", AdminError],
+    ["ask", AskError],
   ];
   it.each(cases)("%s renders a retry affordance", (_name, Comp) => {
-    render(<Comp error={err} unstable_retry={() => {}} />);
+    render(<Comp error={err} retry={() => {}} />);
     expect(
       screen.getByRole("button", { name: /try again/i }),
     ).toBeInTheDocument();

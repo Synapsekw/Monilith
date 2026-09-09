@@ -4,15 +4,15 @@ import { ErrorFallback } from "@/components/shell/error-fallback";
 
 export default function TimeError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   return (
     <ErrorFallback
       error={error}
-      retry={unstable_retry}
+      retry={retry}
       title="Couldn't load time tracking"
       description="Something failed while loading time data. Your data is safe — try again."
     />

@@ -7,10 +7,10 @@ import { ErrorFallback } from "@/components/shell/error-fallback";
  *  their own boundaries now (`src/app/admin/error.tsx`, `src/app/ask/error.tsx`). */
 export default function RootError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
-  return <ErrorFallback error={error} retry={unstable_retry} />;
+  return <ErrorFallback error={error} retry={retry} />;
 }
