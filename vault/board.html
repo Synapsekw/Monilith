@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-09 10:02",
+  "updated": "2026-09-09 11:31",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "86bfda38",
+        "value": "59a1dd1d",
         "tone": "warn",
-        "note": "AHEAD of main by two tracks: the UI polish + theme presets batch (light-chrome contrast fix, six presets in Settings and the header menu, PageHeader/Kicker ramp, AA pills, one card radius, skeletons and error boundaries, landing on tokens — 28 commits, seven worktrees, every value contrast-tested) and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
+        "note": "AHEAD of main by three tracks: per-user board view preferences (a board now remembers each person's collapsed groups, expanded rows, last view and last filter, in one row per user per board, read server-side so the first frame is already right), the UI polish + theme presets batch, and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on develop after the dependency sweep (CI run 34138976762). /api/mcp had no test at all before this session — the new route test drives the real JSON-RPC transport: auth challenge, initialize handshake, and tools/list returning exactly the catalog.",
+        "note": "7195 passing, 1 skipped, on develop. The anon-reachability conformance suite earned its runtime this session: it caught a brand-new RPC shipping callable by anon, which review had read past because the defect was an absent line.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "159/159",
+        "value": "161/161",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after the theme-preset migration (20260908121511, additive with default 'keystone'). The MCP mis-stamped it again and reconcile-migration-version.sh repaired it — gotcha-55, eleventh time. PROD does not have it yet; carry it in the next /sync-prod.",
+        "note": "Verified by db:ledger-check after both board-view-prefs migrations (20260909064520 creates the table and the save RPC; 20260909070508 revokes the PUBLIC execute grant Postgres hands every new function). gotcha-55 mis-stamped both and both were reconciled.",
         "label": "ledger"
       }
     ]
@@ -195,6 +195,15 @@
         "owner",
         "critical",
         "billing"
+      ]
+    },
+    {
+      "title": "Walk the board arrangement pass before promoting",
+      "why": "Board view preferences merged today and are not promoted. Seven steps in the 2026-09-09 11:31 session note: collapse a group and reload, expand sub-items and reload, switch to Timeline and revisit with a bare URL, apply a filter then clear it and reload again, and confirm a second user's arrangement is independent. The clear-then-reload step is the one that matters — it pins the rule that stops a cleared filter springing back.",
+      "tags": [
+        "boards",
+        "owner",
+        "promote"
       ]
     },
     {
@@ -346,18 +355,18 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-09-1002-ui-polish-and-theme-presets",
-    "when": "2026-09-09 10:02",
-    "title": "UI polish audit, light-mode nav fix, theme presets",
+    "id": "2026-09-09-1131-board-view-prefs",
+    "when": "2026-09-09 11:31",
+    "title": "Board view preferences persist per user",
     "bullets": [
-      "Light mode was washed out because the Aug 27 tint collapsed the bloom onto the first wash stop and --kicker sat at 2.5:1; the bloom is brand-derived now, kicker equals muted-foreground by ruling, and both are contrast-tested.",
-      "Six full theme presets (accent + neutral tint + wash) persist on profiles.theme_preset with a no-flash inline script; pick them in Settings or straight from the header sun/moon menu.",
-      "One PageHeader primitive replaced seven heading patterns, 39 hand-rolled kickers moved onto Kicker, cards unified on 14px, four AA pill failures fixed, and skeletons plus error boundaries cover board, ask, updates, auth and admin.",
-      "The final whole-branch review found ten error.tsx files destructuring unstable_retry, a prop Next 16.3 no longer passes — Try again was dead everywhere and the test encoded it."
+      "A board now remembers how each person left it — collapsed groups, expanded sub-item rows, the last view and the last filter — in a board_view_prefs row per user per board.",
+      "Group collapse had to be lifted out of GroupSection first: it lived as a separate useState in every group, so nothing in the tree knew the full set and nothing could persist it.",
+      "The read joins the page's existing Promise.all as a fourth entry, so the first painted frame is already correct; writes are debounced and deliberately do not revalidate.",
+      "The new RPC shipped callable by anon, because Postgres grants EXECUTE to PUBLIC on every new function. Caught by the conformance suite, not by reading."
     ]
   }
 }
-</script>
+    </script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
