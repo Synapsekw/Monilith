@@ -6,6 +6,7 @@ import {
   renderBriefingHtml,
   renderBriefingText,
 } from "./briefing-render";
+import { KEYSTONE_BRAND_HEX } from "@/lib/theme/presets";
 
 const input = {
   agentName: "Morning Brief",
@@ -69,7 +70,7 @@ describe("renderBriefingHtml", () => {
   it("renders an 'Open this briefing' link, before 'Open My Work' and separated by &middot;, when a threadUrl is given", () => {
     const html = renderBriefingHtml({ ...input, threadUrl });
 
-    const linkHtml = `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>`;
+    const linkHtml = `<a href="${threadUrl}" style="color:${KEYSTONE_BRAND_HEX.light};">Open this briefing</a>`;
     expect(html).toContain(linkHtml);
 
     // Placement: thread link, then a &middot; separator, then "Open My Work".
@@ -84,7 +85,7 @@ describe("renderBriefingHtml", () => {
   it("adding a threadUrl changes nothing else — removing the inserted link recovers the no-link output exactly", () => {
     const withLink = renderBriefingHtml({ ...input, threadUrl });
     const withoutLink = renderBriefingHtml(input);
-    const inserted = `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>\n    &middot; `;
+    const inserted = `<a href="${threadUrl}" style="color:${KEYSTONE_BRAND_HEX.light};">Open this briefing</a>\n    &middot; `;
 
     expect(withLink.replace(inserted, "")).toBe(withoutLink);
   });

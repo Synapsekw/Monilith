@@ -70,6 +70,9 @@ describe("Keystone token contract", () => {
       "--shadow-drag:",
       "--text-2xs:",
       "--text-3xs:",
+      "--color-chart-spectrum-1:",
+      "--color-chart-spectrum-2:",
+      "--color-chart-spectrum-3:",
     ]) {
       expect(CSS, `${entry} not registered in @theme`).toContain(entry);
     }

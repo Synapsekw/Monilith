@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 import { Mesh, Program, Renderer, Triangle } from "ogl";
+import { KEYSTONE_BRAND_HEX } from "@/lib/theme/presets";
 
 /**
  * WebGL volumetric "light rays" backdrop for the landing hero. Ported from
@@ -65,7 +66,14 @@ interface Uniforms {
   distortion: { value: number };
 }
 
-const DEFAULT_COLOR = "#8ea2eb";
+/*
+ * The GLSL uniform needs a real hex to convert to RGB — this is data for a
+ * WebGL shader, not app chrome, so the constant import is fine (no literal
+ * hex lives in this file). The live value is read from --brand at mount
+ * (below); this is only the SSR-agnostic fallback used before that resolves,
+ * or when no `--brand` custom property is present at all.
+ */
+const DEFAULT_COLOR = KEYSTONE_BRAND_HEX.dark;
 
 function hexToRgb(hex: string): Vec3 {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -207,7 +215,7 @@ void main() {
 
 export function LightRays({
   raysOrigin = "top-center",
-  raysColor = DEFAULT_COLOR,
+  raysColor,
   raysSpeed = 1.1,
   lightSpread = 0.62,
   rayLength = 2.6,
@@ -245,12 +253,23 @@ export function LightRays({
     gl.canvas.style.display = "block";
     container.appendChild(gl.canvas);
 
+    // Resolve the live theme color at mount rather than hardcoding one: reads
+    // whatever --brand currently is (base palette or an active preset), so
+    // the rays always match. Only reached client-side (inside this effect),
+    // so no SSR guard is needed beyond that.
+    const effectiveColor =
+      raysColor ||
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--brand")
+        .trim() ||
+      DEFAULT_COLOR;
+
     const uniforms: Uniforms = {
       iTime: { value: 0 },
       iResolution: { value: [1, 1] },
       rayPos: { value: [0, 0] },
       rayDir: { value: [0, 1] },
-      raysColor: { value: hexToRgb(raysColor) },
+      raysColor: { value: hexToRgb(effectiveColor) },
       raysSpeed: { value: raysSpeed },
       lightSpread: { value: lightSpread },
       rayLength: { value: rayLength },

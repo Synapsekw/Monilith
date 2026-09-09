@@ -4,6 +4,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { ReportDocument, type ReportDocumentProps } from "./ReportDocument";
 import { REPORT_CSS } from "@/lib/reports/report-css";
 
+// The rendered document is a printed page — always white, regardless of the
+// app theme (unlike the wrapper around it, which follows the theme tokens).
+const PAPER_BACKGROUND = "#fff";
+
 /**
  * Live preview of the printed report, rendered into an iframe so the document's
  * own print stylesheet (`REPORT_CSS`) cannot collide with the app's Tailwind.
@@ -47,10 +51,17 @@ export function PreviewPane(props: ReportDocumentProps) {
   });
 
   return (
-    <iframe
-      ref={iframeRef}
-      title="Report preview"
-      style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
-    />
+    <div className="bg-surface-muted h-full w-full">
+      <iframe
+        ref={iframeRef}
+        title="Report preview"
+        style={{
+          width: "100%",
+          height: "100%",
+          border: 0,
+          background: PAPER_BACKGROUND,
+        }}
+      />
+    </div>
   );
 }

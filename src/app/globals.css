@@ -92,6 +92,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-spectrum-1: var(--chart-spectrum-1);
+  --color-chart-spectrum-2: var(--chart-spectrum-2);
+  --color-chart-spectrum-3: var(--chart-spectrum-3);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -314,6 +317,11 @@
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
+  /* Spectrum hero gradient for a single uncolored metric — derived from
+     --brand so every theme preset gets a coherent 3-stop ramp for free. */
+  --chart-spectrum-1: color-mix(in oklab, var(--brand) 85%, black);
+  --chart-spectrum-2: var(--brand);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand) 60%, white);
   --radius: 0.875rem; /* 14px — Keystone cards/panels; radius-sm→~8px chips */
   --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
   --elevation-card: none;
@@ -433,6 +441,11 @@
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
+  /* Spectrum hero gradient — dark. Same derivation, lightened/darkened for
+     the near-black base rather than white. */
+  --chart-spectrum-1: color-mix(in oklab, var(--brand) 70%, white);
+  --chart-spectrum-2: var(--brand);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand) 55%, black);
 
   --sidebar: transparent;
   --sidebar-foreground: #f4f4f6;
