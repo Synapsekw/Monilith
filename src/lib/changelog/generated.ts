@@ -4,6 +4,47 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-09",
+    kind: "new",
+    title: "Theme picker in the header",
+    description:
+      "The sun/moon menu in the top bar now lists the six theme presets next to Light, Dark and System, so you can switch without opening Settings.",
+  },
+  {
+    date: "2026-09-09",
+    kind: "fixed",
+    title: '"Try again" on error pages works',
+    description: "The retry button on error pages now actually retries.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "fixed",
+    title: "Light mode is no longer washed out",
+    description:
+      "The sidebar and top bar in Light mode now have a visible tint and edge, section labels are readable, and the active page is clearly highlighted.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "new",
+    title: "Theme presets",
+    description:
+      "Pick one of six themes — Keystone, Graphite, Ocean, Forest, Ember or Rose — in Settings → Preferences. Each restyles the accent and the chrome in both Light and Dark, and follows you across devices.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "improved",
+    title: "Consistent page headings",
+    description:
+      "Every page now uses the same heading style and card corners, and status pills meet contrast guidelines in both themes.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "improved",
+    title: "Faster-feeling loading",
+    description:
+      "Boards, Ask, Updates, reports and sign-in pages show a skeleton while they load, and a failed message send in Ask shows an error with a Retry button.",
+  },
+  {
     date: "2026-09-07",
     kind: "new",
     title: "Talk to a specific agent by name",
