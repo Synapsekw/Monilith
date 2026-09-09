@@ -35,6 +35,15 @@ related:
 - Seven tasks, nine commits, merged as `59a1dd1d`. Ledger **161/161**. `gotcha-55` fired on both
   migrations — the tenth and eleventh consecutive `apply_migration` mis-stamp.
 - `/updates`: announced, three entries dated today.
+- **Post-merge fix (`1981a14f`): a missing arrangement crashed the board.** The owner hit
+  `Cannot read properties of undefined (reading 'collapsedGroupIds')` on a running dev server. The
+  proximate cause was a stale Turbopack module graph — `pnpm dev` was running across the merge, so
+  a new provider was paired with an older page that had no arrangement to hand it, and a restart
+  clears it. The real defect was mine: the provider read the field straight off its prop, which
+  breaks the contract stated three lines above it in the same file — remembering an arrangement is
+  a convenience whose absence must never break a board. The seed now spreads over
+  `EMPTY_BOARD_VIEW_PREFS`, absorbing a missing prop and a half-shaped one alike. Both new tests
+  were run against the unfixed code first and reproduce the reported TypeError exactly.
 
 ## Why
 
@@ -45,8 +54,9 @@ board-global and org-shared; there was no home at all for state that belongs to 
 
 ## How to test
 
-1. Pull `develop` and run `pnpm dev`. This is on `develop`, not yet promoted, so test locally
-   rather than on `www.monolith.works`.
+1. Pull `develop`, then **stop and restart `pnpm dev`** — a server left running across the merge
+   serves a stale Turbopack module graph and throws on the board page. This is on `develop`, not
+   yet promoted, so test locally rather than on `www.monolith.works`.
 2. Open any board with two or more groups. Collapse one group with the chevron beside its name.
    Reload the page. It should still be collapsed, and it should not flash open first.
 3. Expand a row that has sub-items. Reload. The sub-items should still be showing.
@@ -69,6 +79,9 @@ board-global and org-shared; there was no home at all for state that belongs to 
   migration.
 - The RLS suite skips like every other integration suite, since `integrationTargetReady()` refuses
   DEV by design. Its assertions were verified out-of-band against DEV before commit.
+- **Nothing in the manual pass has been walked yet.** Every claim above rests on the four gates and
+  the suite; no board was opened in a browser this session. The crash the owner hit is what a first
+  page load buys you and the gates could not.
 
 ## Next session entry point
 
