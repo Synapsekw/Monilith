@@ -1,17 +1,38 @@
 "use client";
 
 import { useEffect } from "react";
+import type { QueryCacheNotifyEvent } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  persistQueryClientSave,
-  persistQueryClientSubscribe,
-} from "@tanstack/react-query-persist-client";
+import { persistQueryClientSave } from "@tanstack/react-query-persist-client";
 import {
   enforceOfflineGrace,
   rememberIdentity,
 } from "@/lib/offline/entitlement";
 import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
-import { persistOptionsFor } from "@/lib/offline/persister";
+import { isPersistableKey, persistOptionsFor } from "@/lib/offline/persister";
+
+/**
+ * Whether a query-cache event is worth a persist write.
+ *
+ * `persistQueryClientSubscribe` (the library default this replaces) saves on
+ * EVERY query- and mutation-cache event — every optimistic cell edit, every
+ * realtime rAF flush — even though `shouldDehydrateQuery` in
+ * `persistOptionsFor` only ever admits `boardSnapshot` queries into the
+ * dehydrated payload. `useBoardSnapshot` (`snapshot.ts`) writes that query
+ * exactly once per board/view, so every other event triggered a save whose
+ * `persistClient` (an IDB read of the whole multi-board record, a structured
+ * clone, merge and write — `persister.ts`) produced byte-identical output.
+ * On a large board that is an IDB round trip per second of typing, for
+ * nothing. Filtering to `added`/`updated` boardSnapshot events only — the
+ * two event types that can carry new data into the cache — makes the
+ * persister fire exactly when there is something new to write.
+ */
+function isBoardSnapshotWrite(event: QueryCacheNotifyEvent): boolean {
+  return (
+    (event.type === "added" || event.type === "updated") &&
+    isPersistableKey(event.query.queryKey)
+  );
+}
 
 /**
  * Attaches the persister to the LIVE QueryClient without restructuring the
@@ -54,20 +75,32 @@ export function OfflinePersistence({ userId }: { userId: string }) {
     void enforceOfflineGrace(Date.now()).then((permitted) => {
       if (cancelled || !permitted) return;
       const options = { queryClient, ...persistOptionsFor(userId) };
-      unsubscribe = persistQueryClientSubscribe(options);
 
-      // `persistQueryClientSubscribe` performs NO initial save — it only calls
-      // `persistQueryClientSave` from a SUBSEQUENT query/mutation cache event
-      // (see `persist.ts` in @tanstack/query-persist-client-core). The board
-      // snapshot is written exactly once, by `useBoardSnapshot`'s effect, and
-      // that write has already happened by the time the grace check above
-      // resolves — so without this explicit first save there is no later event
-      // to trigger one, and nothing is ever written to disk. Measured against a
-      // production build before this line existed: the `keyval-store` database
-      // was never even created while online, and `/offline` reported a
-      // just-visited board as never visited. Do not remove it on the grounds
-      // that the subscription "already covers" persistence; it does not cover
-      // anything that entered the cache before it existed.
+      // Subscribed directly to the query cache (not
+      // `persistQueryClientSubscribe`, which also wires up the mutation cache
+      // and saves on every event of either) so the filter in
+      // `isBoardSnapshotWrite` above can gate the write. No mutation is ever
+      // persisted here — `shouldDehydrateQuery` in `persistOptionsFor` never
+      // admits mutations — so the mutation-cache subscription the library
+      // helper adds would only ever produce more byte-identical saves.
+      const querySubscription = queryClient
+        .getQueryCache()
+        .subscribe((event) => {
+          if (isBoardSnapshotWrite(event)) void persistQueryClientSave(options);
+        });
+      unsubscribe = querySubscription;
+
+      // The subscription above performs NO initial save — it only fires from a
+      // SUBSEQUENT query-cache event. The board snapshot is written exactly
+      // once, by `useBoardSnapshot`'s effect, and that write has already
+      // happened by the time the grace check above resolves — so without this
+      // explicit first save there is no later event to trigger one, and
+      // nothing is ever written to disk. Measured against a production build
+      // before this line existed: the `keyval-store` database was never even
+      // created while online, and `/offline` reported a just-visited board as
+      // never visited. Do not remove it on the grounds that the subscription
+      // "already covers" persistence; it does not cover anything that entered
+      // the cache before it existed.
       void persistQueryClientSave(options);
     });
 

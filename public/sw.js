@@ -20,7 +20,6 @@
 const CACHE_PREFIX = "monolith-offline";
 const CACHE = `${CACHE_PREFIX}-v2`;
 const OFFLINE_URL = "/offline";
-const NAV_TIMEOUT_MS = 3000;
 const STATIC_PREFIX = "/_next/static/";
 
 /**
@@ -167,12 +166,6 @@ function refreshShellOnce() {
     });
 }
 
-function timeout(ms) {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("timeout")), ms),
-  );
-}
-
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -199,8 +192,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigations: network-first with a short timeout, falling back to the
-  // offline shell. Never cache the real document.
+  // Navigations: network-first, falling back to the offline shell. Never
+  // cache the real document.
   if (request.mode === "navigate") {
     // Known-offline short circuit, BEFORE attempting the network.
     //
@@ -208,14 +201,13 @@ self.addEventListener("fetch", (event) => {
     // the browser's HTTP cache when it can be. A reload forces revalidation and
     // so fails offline, but a fresh navigation to a route whose shell is
     // cacheable (every Partial Prerender route here) is answered from cache
-    // while genuinely offline — the race below "succeeds", and the fallback that
-    // is this worker's entire purpose never runs. Measured: navigating offline
-    // to a never-opened board returned the real app shell with live sidebar data
-    // and "Board not found", instead of the offline shell.
+    // while genuinely offline — `fetch` below would "succeed", and the fallback
+    // that is this worker's entire purpose never runs. Measured: navigating
+    // offline to a never-opened board returned the real app shell with live
+    // sidebar data and "Board not found", instead of the offline shell.
     //
     // `navigator.onLine === false` is conclusive (`true` is not, which is why it
-    // is only used to skip the attempt, never to declare us online). It also
-    // removes a pointless NAV_TIMEOUT_MS stall on every offline navigation.
+    // is only used to skip the attempt, never to declare us online).
     if (!self.navigator.onLine) {
       event.respondWith(
         caches.match(OFFLINE_URL).then((hit) => hit || Response.error()),
@@ -223,8 +215,17 @@ self.addEventListener("fetch", (event) => {
       return;
     }
 
+    // No race against a timer here, deliberately. `fetch(request)` resolves
+    // only on response headers, so a fixed timeout races the network against
+    // the clock and can lose even when the network is fine — a cold Vercel
+    // function, a heavy board render, or slow mobile TTFB north of a few
+    // seconds served `/offline` to a user who was never actually offline, with
+    // no retry. The offline shell is a genuine fallback for a network that
+    // FAILS (fetch rejects: DNS error, connection refused, truly offline), not
+    // for a network that is merely slow. A late-but-successful response must
+    // always win, so we simply await `fetch` and only fall back on rejection.
     event.respondWith(
-      Promise.race([fetch(request), timeout(NAV_TIMEOUT_MS)])
+      fetch(request)
         .then((res) => {
           // We reached the network, so this is the moment to make sure the
           // offline shell matches the build now being served.
