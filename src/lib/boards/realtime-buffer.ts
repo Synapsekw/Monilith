@@ -109,15 +109,19 @@ function applyItem(
   // action's promise resolves, and appending it would show the same row twice
   // until `onSuccess` reconciles. A temp row with the same parent/group/name is
   // that row — swap it in place instead (the mutation's later `replaceItemId`
-  // is then a no-op: the real id is already present).
-  const temp = prev.items.find(
-    (i) =>
-      isOptimisticId(i.id) &&
-      i.name === row.name &&
-      i.group_id === row.group_id &&
-      i.parent_id === row.parent_id,
-  );
-  if (temp) return replaceItemId(prev, temp.id, row);
+  // is then a no-op: the real id is already present). INSERT only: an UPDATE for
+  // a row we don't hold is a peer's unarchive/restore, which must not consume
+  // an unrelated temp row that happens to share a name.
+  if (p.eventType === "INSERT") {
+    const temp = prev.items.find(
+      (i) =>
+        isOptimisticId(i.id) &&
+        i.name === row.name &&
+        i.group_id === row.group_id &&
+        i.parent_id === row.parent_id,
+    );
+    if (temp) return replaceItemId(prev, temp.id, row);
+  }
   return insertItem(prev, row);
 }
 

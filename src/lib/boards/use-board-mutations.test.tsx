@@ -1350,6 +1350,58 @@ describe("useBoardMutations.addItem (optimistic)", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("writes the intended cell onto the temp row (Kanban quick-add lands in its column)", async () => {
+    const qc = new QueryClient();
+    seedGroup(qc);
+    let resolve!: (v: unknown) => void;
+    createItem.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.addItem({
+        groupId: "g1",
+        name: "Three",
+        cell: { columnId: "status", value: { optionId: "o1" } },
+      });
+    });
+
+    // The temp row carries the cell immediately — no "No status" flash.
+    await waitFor(() => expect(readItems(qc)).toHaveLength(3));
+    const tempId = readItems(qc)[2].id;
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    const cell = cache.cellValues.find((c) => c.item_id === tempId);
+    expect(cell!.column_id).toBe("status");
+    expect(cell!.value).toEqual({ optionId: "o1" });
+    // The cell is client-only state — the create action never sees it.
+    expect(createItem).toHaveBeenCalledWith({ groupId: "g1", name: "Three" });
+
+    resolve({
+      ok: true,
+      data: {
+        item: {
+          id: "srv1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          position: 3,
+        },
+      },
+    });
+    // Reconciliation re-keys the cell onto the real id.
+    await waitFor(() => {
+      const after = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(after.cellValues.map((c) => c.item_id)).toEqual(["srv1"]);
+    });
+  });
+
   it("does not duplicate the row when the realtime echo lands first", async () => {
     const qc = new QueryClient();
     seedGroup(qc);
@@ -1496,5 +1548,55 @@ describe("useBoardMutations.addSubitem (optimistic)", () => {
     expect(
       qc.getQueryData<BoardCache>(boardKey("b1"))!.items.map((i) => i.id),
     ).toEqual(["p1", "s1"]);
+  });
+
+  // The "Add subitem to X" hover button is rendered on every childless row,
+  // including one that is still optimistic. Its id is not a uuid, so the server
+  // action's schema would reject it — silently, since that caller passes no
+  // onError. Refuse it up front, and toast so it can never be invisible.
+  it("refuses a subitem under a still-optimistic parent without hitting the server", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1", org_id: "o1", name: "B" },
+      groups: [],
+      columns: [],
+      items: [
+        {
+          id: "optimistic-p",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: null,
+          name: "Pending",
+          position: 1,
+        },
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [],
+      relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
+    } as never);
+    toastError.mockReset();
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    const onError = vi.fn();
+    await act(async () => {
+      result.current.addSubitem("optimistic-p", "Sub", { onError });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(addSubitemFn).not.toHaveBeenCalled();
+    // No phantom row left behind, and the refusal is visible.
+    expect(
+      qc.getQueryData<BoardCache>(boardKey("b1"))!.items.map((i) => i.id),
+    ).toEqual(["optimistic-p"]);
+    expect(toastError).toHaveBeenCalled();
   });
 });

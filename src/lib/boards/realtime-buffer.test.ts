@@ -251,6 +251,38 @@ describe("foldBoardEvents", () => {
     expect(next.items.map((i) => i.id)).toEqual(["optimistic-abc", "srv2"]);
   });
 
+  it("does not let an item UPDATE consume a same-name optimistic row", () => {
+    const prev = emptyCache({
+      items: [
+        {
+          id: "optimistic-abc",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          archived_at: null,
+        },
+      ] as never,
+    });
+    // A peer's unarchive/restore arrives as an UPDATE for a row not in cache —
+    // it is a different row that happens to share a name, not our own echo.
+    const ev: BoardRealtimeEvent = {
+      table: "items",
+      payload: {
+        eventType: "UPDATE",
+        new: {
+          id: "srv3",
+          group_id: "g1",
+          parent_id: null,
+          name: "Three",
+          archived_at: null,
+        },
+        old: { id: "srv3" },
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.items.map((i) => i.id)).toEqual(["optimistic-abc", "srv3"]);
+  });
+
   it("folds a group UPDATE with archived_at set as a removal (cascades to its items)", () => {
     const prev = emptyCache({
       groups: [{ id: "g1", position: 0, archived_at: null }] as never,

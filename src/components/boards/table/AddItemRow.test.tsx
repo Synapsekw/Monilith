@@ -80,8 +80,10 @@ describe("AddItemRow", () => {
     await user.type(input, "Ship it{Enter}");
 
     expect(input).toHaveValue("Ship it");
+    // The failed name is in the message, so it survives even when the text is
+    // not restored (see the next case).
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Could not create item.",
+      `Couldn't add "Ship it" — Could not create item.`,
     );
   });
 
@@ -111,5 +113,9 @@ describe("AddItemRow", () => {
     await act(async () => fail!());
 
     expect(input).toHaveValue("Second");
+    // The dropped name is still recoverable from the message.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      `Couldn't add "First" — boom`,
+    );
   });
 });

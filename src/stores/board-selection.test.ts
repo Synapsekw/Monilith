@@ -51,6 +51,37 @@ describe("board-selection store", () => {
     expect([...s().selectedIds]).toEqual(["c"]);
   });
 
+  // A row added optimistically carries a client-minted `optimistic-*` id (see
+  // @/lib/boards/optimistic-id). `bulkItemIds` is `z.array(uuid)`, so a SINGLE
+  // temp id in the selection fails the whole bulk archive/move/set-cell — the
+  // store is the choke point where every entry path (per-row checkbox, group
+  // select-all, shift-range) must drop them.
+  it("never selects an optimistic (not-yet-persisted) id via setSelected", () => {
+    s().setSelected(["a", "optimistic-abc", "b"], true);
+    expect([...s().selectedIds].sort()).toEqual(["a", "b"]);
+  });
+
+  it("still deselects an optimistic id (defensive: never strands one)", () => {
+    useBoardSelection.setState({
+      selectedIds: new Set(["a", "optimistic-abc"]),
+    });
+    s().setSelected(["optimistic-abc"], false);
+    expect([...s().selectedIds]).toEqual(["a"]);
+  });
+
+  it("skips an optimistic id swept up by a shift-click range", () => {
+    s().setOrderedIds(["a", "optimistic-abc", "c"]);
+    s().toggle("a");
+    s().toggle("c", true);
+    expect([...s().selectedIds].sort()).toEqual(["a", "c"]);
+  });
+
+  it("never selects an optimistic id via a plain toggle", () => {
+    s().toggle("optimistic-abc");
+    expect(s().selectedIds.size).toBe(0);
+    expect(s().anchorId).toBeNull();
+  });
+
   it("clear removes everything and drops the anchor", () => {
     s().setSelected(["a", "b"], true);
     s().clear();

@@ -44,9 +44,10 @@ export function AddItemRow({
       { groupId, name: trimmed },
       {
         onError: (err) => {
-          setError(err.message);
-          // Give the typed text back so nothing is lost — but only if the user
-          // hasn't already started typing the next item into the same input.
+          // Name the row that failed: the typed text is given back only if the
+          // user hasn't already started typing the next item into this input,
+          // so in that race the message is the only place it survives.
+          setError(`Couldn't add "${trimmed}" — ${err.message}`);
           setName((current) => (current === "" ? trimmed : current));
         },
       },

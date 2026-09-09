@@ -53,4 +53,25 @@ describe("AddSubitemRow", () => {
 
     expect(input).toHaveValue("Design");
   });
+
+  it("shows the failure inline, naming the subitem that failed", async () => {
+    const user = userEvent.setup();
+    const addSubitem = vi.fn(
+      (
+        _parentId: string,
+        _name: string,
+        cbs?: { onError?: (e: Error) => void },
+      ) => cbs?.onError?.(new Error("Could not create item.")),
+    );
+    const input = renderRow(
+      addSubitem as unknown as CellControls["addSubitem"],
+    );
+
+    await user.type(input, "Design{Enter}");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      `Couldn't add "Design" — Could not create item.`,
+    );
+    expect(input).toHaveAttribute("aria-invalid", "true");
+  });
 });

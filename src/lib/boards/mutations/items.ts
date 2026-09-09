@@ -14,7 +14,9 @@ import {
   insertItem,
   removeItem,
   replaceItemId,
+  upsertCellValue,
   type BoardCache,
+  type CacheCellValue,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { isOptimisticId, newOptimisticId } from "@/lib/boards/optimistic-id";
@@ -26,6 +28,15 @@ import type {
   RenameItemVars,
 } from "./shared";
 import { assertOnline } from "@/lib/offline/online-status";
+
+/**
+ * Refusal for a subitem whose parent row is itself still optimistic: the parent
+ * id is client-minted, so `addSubitemSchema` (a uuid) would reject it and the
+ * add would fail silently for callers that pass no `onError` (the "Add subitem
+ * to X" hover button is one). Caught in `onError` to guarantee a toast.
+ */
+const PARENT_NOT_READY =
+  "That item is still being created — try again in a moment.";
 
 /** Context carried from an optimistic add's `onMutate` to its settle handlers. */
 type AddCtx = { tempId: string };
@@ -107,7 +118,8 @@ export function useItemMutations(ctx: BoardMutationCtx) {
   >({
     mutationFn: async (vars) => {
       assertOnline();
-      const res = await createItem(vars);
+      // `cell` is client-only optimistic state — the action takes group + name.
+      const res = await createItem({ groupId: vars.groupId, name: vars.name });
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
     },
@@ -116,21 +128,32 @@ export function useItemMutations(ctx: BoardMutationCtx) {
       const tempId = newOptimisticId();
       const previous = qc.getQueryData<BoardCache>(key);
       if (previous) {
-        qc.setQueryData<BoardCache>(
-          key,
-          insertItem(
-            previous,
-            tempItem(previous, tempId, {
-              group_id: vars.groupId,
-              parent_id: null,
-              name: vars.name,
-              position: nextPosition(
-                previous.items,
-                (i) => i.group_id === vars.groupId && i.parent_id === null,
-              ),
-            }),
-          ),
+        let next = insertItem(
+          previous,
+          tempItem(previous, tempId, {
+            group_id: vars.groupId,
+            parent_id: null,
+            name: vars.name,
+            position: nextPosition(
+              previous.items,
+              (i) => i.group_id === vars.groupId && i.parent_id === null,
+            ),
+          }),
         );
+        // Kanban quick-add: paint the status the column represents on the temp
+        // row too, or the card lands in "No status" and jumps a column when the
+        // caller's `setCell` finally runs against the real id.
+        if (vars.cell) {
+          next = upsertCellValue(next, {
+            org_id: previous.board.org_id,
+            board_id: previous.board.id,
+            item_id: tempId,
+            column_id: vars.cell.columnId,
+            value: vars.cell.value as CacheCellValue["value"],
+            updated_at: new Date().toISOString(),
+          });
+        }
+        qc.setQueryData<BoardCache>(key, next);
       }
       return { tempId };
     },
@@ -149,8 +172,9 @@ export function useItemMutations(ctx: BoardMutationCtx) {
 
   /** Add a subitem. Optimistic, mirroring addItem: the temp row is parented to
    *  `parentId` and inherits the parent's (denormalized) group_id. A parent that
-   *  is itself still optimistic is skipped — its id would not resolve
-   *  server-side — leaving the row to appear on the server response. */
+   *  is itself still optimistic is REFUSED up front (see {@link PARENT_NOT_READY})
+   *  rather than sent — its id is not a uuid, so the action's schema would reject
+   *  it and, for the callers that pass no `onError`, fail invisibly. */
   const addSubitemMutation = useMutation<
     { item: CacheItem },
     Error,
@@ -159,6 +183,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
   >({
     mutationFn: async (vars) => {
       assertOnline();
+      if (isOptimisticId(vars.parentId)) throw new Error(PARENT_NOT_READY);
       const res = await addSubitem(vars);
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
@@ -192,11 +217,17 @@ export function useItemMutations(ctx: BoardMutationCtx) {
         prev ? replaceItemId(prev, ctx.tempId, item) : prev,
       );
     },
-    onError: (_err, _vars, ctx) => {
-      if (!ctx) return;
-      qc.setQueryData<BoardCache>(key, (prev) =>
-        prev ? removeItem(prev, ctx.tempId) : prev,
-      );
+    onError: (err, _vars, ctx) => {
+      if (ctx) {
+        qc.setQueryData<BoardCache>(key, (prev) =>
+          prev ? removeItem(prev, ctx.tempId) : prev,
+        );
+      }
+      // Server failures are surfaced inline by the caller (no double feedback),
+      // but the pre-flight refusal above can come from the "Add subitem to X"
+      // button, which passes no callbacks — that one must never be silent.
+      if (err.message === PARENT_NOT_READY)
+        showMutationError("Couldn't add the subitem.", err);
     },
   });
 
