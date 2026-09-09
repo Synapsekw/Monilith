@@ -5,6 +5,7 @@ import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveSelectedView } from "@/lib/boards/views";
+import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,8 +25,8 @@ export default async function BoardPage({
   // extra getBoardAccess call (a re-select of boards.created_by + a second,
   // narrower board_members lookup) — access is now derived below from data
   // already loaded here (see deriveBoardAccess).
-  const [payload, { data: grantRows }, { data: agentRows }] = await Promise.all(
-    [
+  const [payload, { data: grantRows }, { data: agentRows }, viewPrefs] =
+    await Promise.all([
       getBoardPayload(boardId),
       supabase
         .from("board_members")
@@ -39,12 +40,23 @@ export default async function BoardPage({
         .select("id, name")
         .eq("owner_id", user.id)
         .order("name"),
-    ],
-  );
+      // The caller's saved arrangement for this board. A point read on the
+      // (user_id, board_id) primary key, issued in parallel with work that is
+      // already slower, so it costs no measurable added latency. Resolving it
+      // server-side is what lets collapsed groups arrive already collapsed —
+      // no expand-then-collapse flash.
+      getBoardViewPrefs(supabase, boardId, user.id),
+    ]);
   if (!payload) notFound();
 
   const sp = await searchParams;
-  const selected = resolveSelectedView(payload.views, sp.view);
+  // The URL always wins: a link carrying ?view= opens that view, exactly as it
+  // does today. The saved view only fills the gap when the URL is silent, so
+  // persistence is invisible to anyone arriving by link.
+  const selected = resolveSelectedView(
+    payload.views,
+    sp.view ?? viewPrefs.viewId ?? undefined,
+  );
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
   const members = await listOrgMembersCached(payload.board.org_id);
@@ -73,6 +85,7 @@ export default async function BoardPage({
           currentUserId={user.id}
           access={access ?? "viewer"}
           grants={grants}
+          viewPrefs={viewPrefs}
         />
       </div>
       <BoardDock

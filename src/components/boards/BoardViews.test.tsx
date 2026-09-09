@@ -7,6 +7,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { BoardViews } from "@/components/boards/BoardViews";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
+
+// The view-prefs provider persists through a real Server Action, which cannot
+// run in jsdom (it reaches for next/headers). This routing test only needs the
+// provider's client state, so stub the write.
+vi.mock("@/lib/boards/view-prefs-actions", () => ({
+  saveBoardViewPrefs: vi.fn(async () => ({ ok: true, data: undefined })),
+}));
 
 // `useBoardSnapshot` (offline persistence) calls `useQueryClient()`, so
 // `BoardViews` now needs a provider above it — mirrors the wrapper pattern in
@@ -125,6 +133,7 @@ describe("BoardViews", () => {
         currentUserId="u1"
         access="owner"
         grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
       />,
     );
     expect(screen.getByTestId("table")).toHaveTextContent("table:v1");
@@ -141,6 +150,7 @@ describe("BoardViews", () => {
         currentUserId="u1"
         access="owner"
         grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
       />,
     );
     expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -157,6 +167,7 @@ describe("BoardViews", () => {
         currentUserId="u1"
         access="owner"
         grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
       />,
     );
     expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -172,6 +183,7 @@ describe("BoardViews", () => {
         currentUserId="u1"
         access="owner"
         grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
       />,
     );
     expect(await screen.findByTestId("calendar")).toHaveTextContent(
@@ -191,6 +203,7 @@ describe("BoardViews", () => {
         currentUserId="u1"
         access="owner"
         grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
       />,
     );
     expect(await screen.findByTestId("gantt")).toHaveTextContent("gantt:v4");
