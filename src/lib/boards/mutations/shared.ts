@@ -21,7 +21,19 @@ import { boardKey, patchBoardCache } from "@/lib/boards/use-board-cache";
 
 export type SetCellVars = { itemId: string; columnId: string; value: unknown };
 export type ClearCellVars = { itemId: string; columnId: string };
-export type AddItemVars = { groupId: string; name: string };
+export type AddItemVars = {
+  groupId: string;
+  name: string;
+  /**
+   * A cell to write on the new row at the same time (Kanban quick-add: the
+   * status the column represents). Applied OPTIMISTICALLY to the temp row in
+   * `addItemMutation.onMutate` so the card paints in the column the user added
+   * it to instead of flashing in "No status" and jumping a round-trip later;
+   * `replaceItemId` re-keys it onto the server id, and the caller persists it
+   * with its own `setCell` once the real id exists. Never sent to `createItem`.
+   */
+  cell?: { columnId: string; value: unknown };
+};
 export type RenameItemVars = { itemId: string; name: string };
 export type RenameGroupVars = { groupId: string; name: string };
 export type RenameBoardVars = { name: string };

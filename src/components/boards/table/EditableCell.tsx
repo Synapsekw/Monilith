@@ -19,6 +19,7 @@ import {
 import { listRelationCandidates } from "@/lib/boards/relation-candidates";
 import { type RelationLink } from "@/lib/boards/relations";
 import { CellEditor } from "@/components/boards/cells/editors";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import {
   filesForCell,
   timeEntriesForCell,
@@ -63,6 +64,30 @@ export const EditableCell = memo(function EditableCell({
   // hook clears it on blur/unmount. Called unconditionally (once per cell) so it
   // stays valid across the kind-specific early returns below.
   usePresenceFocus({ viewKind: "table", targetId: target }, isEditing);
+
+  // Temp-row rule (see @/lib/boards/optimistic-id): a row inserted
+  // optimistically carries a client-minted id, so every write keyed by it —
+  // a cell upsert included — would target a row the server doesn't have yet.
+  // Its cells are therefore READ-ONLY for the one round-trip, dimmed to say so,
+  // and turn back on the moment `replaceItemId` swaps in the server row.
+  if (isOptimisticId(item.id)) {
+    return (
+      <div
+        aria-label={accessibleName}
+        aria-disabled
+        className="flex h-full items-center truncate border-l px-3 opacity-50"
+      >
+        <CellRenderer
+          kind={column.kind}
+          value={value}
+          settings={settings}
+          members={members}
+          overdue={overdue}
+          dependents={dependents}
+        />
+      </div>
+    );
+  }
 
   // Files cells are not inline-edited like other kinds: they render a thumbnail
   // strip + upload affordance, and open a lightbox on click. Thumbnails use

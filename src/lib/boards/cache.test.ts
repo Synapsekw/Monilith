@@ -14,6 +14,7 @@ import {
   replaceColumn,
   replaceGroup,
   replaceItem,
+  replaceItemId,
   replaceBoard,
   upsertCellValue,
   prependColumnFile,
@@ -175,6 +176,80 @@ describe("insertItem", () => {
       name: "One",
     } as never);
     expect(next.items).toHaveLength(2);
+  });
+});
+
+describe("replaceItemId", () => {
+  function withTemp(): BoardCache {
+    const c = baseCache();
+    return {
+      ...c,
+      items: [
+        c.items[0],
+        {
+          id: "optimistic-x",
+          board_id: "b1",
+          group_id: "g1",
+          name: "Temp",
+        } as never,
+        c.items[1],
+      ],
+      cellValues: [
+        ...c.cellValues,
+        {
+          item_id: "optimistic-x",
+          column_id: "c1",
+          org_id: "o1",
+          board_id: "b1",
+          value: { text: "typed" },
+        } as never,
+      ],
+    };
+  }
+
+  const server = {
+    id: "srv1",
+    board_id: "b1",
+    group_id: "g1",
+    name: "Temp",
+    position: 3,
+  } as never as BoardCache["items"][number];
+
+  it("swaps the temp row for the server row IN PLACE (order preserved)", () => {
+    const next = replaceItemId(withTemp(), "optimistic-x", server);
+    expect(next.items.map((i) => i.id)).toEqual(["i1", "srv1", "i2"]);
+  });
+
+  it("re-keys the temp row's cell values onto the real id", () => {
+    const next = replaceItemId(withTemp(), "optimistic-x", server);
+    expect(next.cellValues.some((c) => c.item_id === "optimistic-x")).toBe(
+      false,
+    );
+    const carried = next.cellValues.find((c) => c.item_id === "srv1");
+    expect((carried!.value as { text: string }).text).toBe("typed");
+  });
+
+  it("appends the server row when the temp row is already gone (no-op swap)", () => {
+    const next = replaceItemId(baseCache(), "optimistic-gone", server);
+    expect(next.items.map((i) => i.id)).toEqual(["i1", "i2", "srv1"]);
+  });
+
+  it("is idempotent when the realtime echo already inserted the real row", () => {
+    const echoed = withTemp();
+    const withEcho: BoardCache = {
+      ...echoed,
+      items: [...echoed.items, server],
+    };
+    const next = replaceItemId(withEcho, "optimistic-x", server);
+    expect(next.items.filter((i) => i.id === "srv1")).toHaveLength(1);
+    expect(next.items.some((i) => i.id === "optimistic-x")).toBe(false);
+    expect(next.items.map((i) => i.id)).toEqual(["i1", "i2", "srv1"]);
+  });
+
+  it("does not mutate the input cache", () => {
+    const before = withTemp();
+    replaceItemId(before, "optimistic-x", server);
+    expect(before.items.map((i) => i.id)).toEqual(["i1", "optimistic-x", "i2"]);
   });
 });
 

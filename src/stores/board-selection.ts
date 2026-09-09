@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 
 /**
  * Ephemeral row-selection state for the board Table view. This is PURE CLIENT UI
@@ -13,6 +14,16 @@ import { create } from "zustand";
  * change / unmount (BoardTable owns that lifecycle). Only TOP-LEVEL items are
  * selectable (bulk move/delete operate on top-level rows; subitems follow their
  * parent), so callers pass top-level item ids exclusively.
+ *
+ * Optimistic rows are NEVER selectable. A row added optimistically carries a
+ * client-minted `optimistic-*` id (see @/lib/boards/optimistic-id) that the
+ * server does not have yet, and every bulk action validates its payload as
+ * `z.array(uuid)` — so ONE temp id in the set fails the entire bulk
+ * archive/move/set-cell. The per-row checkbox disables itself, but that is not
+ * the only entry path (group select-all passes raw visible ids, a shift-click
+ * range sweeps everything between two anchors), so the filter lives HERE, at
+ * the one choke point every path goes through. Deselection is deliberately not
+ * filtered: it must always be able to clear a stale id.
  */
 export interface BoardSelectionState {
   /** Currently-selected top-level item ids. */
@@ -51,12 +62,15 @@ export const useBoardSelection = create<BoardSelectionState>((set, get) => ({
       if (from !== -1 && to !== -1) {
         const [lo, hi] = from < to ? [from, to] : [to, from];
         const next = new Set(selectedIds);
-        for (let i = lo; i <= hi; i++) next.add(orderedIds[i]);
+        for (let i = lo; i <= hi; i++) {
+          if (!isOptimisticId(orderedIds[i])) next.add(orderedIds[i]);
+        }
         // Anchor stays put so the user can extend the range further.
         set({ selectedIds: next });
         return;
       }
     }
+    if (isOptimisticId(id)) return;
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -64,8 +78,11 @@ export const useBoardSelection = create<BoardSelectionState>((set, get) => ({
   },
   setSelected: (ids, selected) => {
     const next = new Set(get().selectedIds);
-    if (selected) for (const id of ids) next.add(id);
-    else for (const id of ids) next.delete(id);
+    if (selected) {
+      for (const id of ids) if (!isOptimisticId(id)) next.add(id);
+    } else {
+      for (const id of ids) next.delete(id);
+    }
     set({ selectedIds: next });
   },
   clear: () => set({ selectedIds: new Set<string>(), anchorId: null }),

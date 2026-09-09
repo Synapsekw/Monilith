@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import type { CellControls } from "./shared";
 
 export function AddItemRow({
@@ -25,31 +24,34 @@ export function AddItemRow({
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
   const status = useFieldStatus(error);
-  // The input disables ITSELF for the duration of the add, which drops focus to
-  // <body> — so the keyboard user who just pressed Enter can't type the next
-  // item. The row always stays mounted, so reclaiming focus here is safe.
-  const inputRef = useRestoreFocusAfterPending<HTMLInputElement>(isPending);
 
+  /**
+   * The add is OPTIMISTIC (see `addItemMutation` in `lib/boards/mutations/items`):
+   * the row is painted from `onMutate` before the round-trip, so this input has
+   * nothing to wait for. It therefore no longer disables itself mid-flight —
+   * which is what used to drop focus to `<body>` and forced
+   * `useRestoreFocusAfterPending` to claw it back. Keeping the input enabled
+   * gets the same outcome structurally: focus never leaves, and the next item
+   * can be typed immediately instead of serialising on network latency.
+   */
   function commit() {
     const trimmed = name.trim();
     if (!trimmed) return;
     setError(null);
-    startTransition(async () => {
-      controls.addItem(
-        { groupId, name: trimmed },
-        {
-          onSuccess: () => {
-            setName("");
-            setError(null);
-          },
-          onError: (err) => {
-            setError(err.message);
-          },
+    setName("");
+    controls.addItem(
+      { groupId, name: trimmed },
+      {
+        onError: (err) => {
+          // Name the row that failed: the typed text is given back only if the
+          // user hasn't already started typing the next item into this input,
+          // so in that race the message is the only place it survives.
+          setError(`Couldn't add "${trimmed}" — ${err.message}`);
+          setName((current) => (current === "" ? trimmed : current));
         },
-      );
-    });
+      },
+    );
   }
 
   // After the hooks (rules-of-hooks): the hook order is identical for viewers
@@ -64,7 +66,6 @@ export function AddItemRow({
       <div className="flex items-center gap-2">
         <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
         <input
-          ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -73,7 +74,6 @@ export function AddItemRow({
               commit();
             }
           }}
-          disabled={isPending}
           placeholder="Add Item"
           aria-label="Add item"
           className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
