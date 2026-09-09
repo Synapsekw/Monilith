@@ -106,7 +106,7 @@ function SortableBoardRow({
       style={{ transform: DndCSS.Translate.toString(transform), transition }}
       className={cn(
         "group/row flex items-center rounded-md pr-1 transition-colors",
-        isDragging && "relative z-20 shadow-lg",
+        isDragging && "shadow-drag relative z-20",
         isActive
           ? "bg-primary/80 text-foreground"
           : "text-muted-foreground hover:bg-state-hover hover:text-foreground",

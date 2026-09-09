@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { DEFAULT_THEME_PRESET, THEME_PRESET_IDS } from "@/lib/theme/presets";
 
 const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 
@@ -22,8 +23,26 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
  *     against dark text → worst case is the darkest stop, bloom ignored.
  *   - dark bloom is --brand, so it lightens the surface and LOWERS contrast
  *     against light text → worst case is the lightest stop at full bloom.
+ *
+ * Every describe below is parameterized over the theme-preset override blocks
+ * as well as the base palette: a preset re-seeds exactly the tokens these
+ * checks read, so a new preset that ships a too-pale grey fails here rather
+ * than in a user's eyes.
  */
 const AA = 4.5;
+
+const OVERRIDE_PRESETS = THEME_PRESET_IDS.filter(
+  (id) => id !== DEFAULT_THEME_PRESET,
+);
+/** `:root` (keystone) plus one selector per preset override block. */
+const LIGHT_SELECTORS = [
+  ":root",
+  ...OVERRIDE_PRESETS.map((id) => `:root[data-theme-preset="${id}"]`),
+];
+const DARK_SELECTORS = [
+  ".dark",
+  ...OVERRIDE_PRESETS.map((id) => `.dark[data-theme-preset="${id}"]`),
+];
 
 function blockOf(selector: string): string {
   const start = CSS.indexOf(`${selector} {`);
@@ -73,52 +92,152 @@ function washStops(selector: string): string[] {
   return stops;
 }
 
-describe("muted text clears WCAG AA on the wash — light", () => {
-  const fg = hex(declaration(":root", "--muted-foreground"));
-
-  it.each(washStops(":root"))("clears AA on the %s stop", (stop) => {
-    expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
-  });
-
-  it("clears AA on the content card and on --surface-muted", () => {
-    expect(
-      contrast(fg, hex(declaration(":root", "--content-surface"))),
-    ).toBeGreaterThanOrEqual(AA);
-    expect(
-      contrast(fg, hex(declaration(":root", "--surface-muted"))),
-    ).toBeGreaterThanOrEqual(AA);
-  });
-});
-
-describe("muted text clears WCAG AA on the wash — dark", () => {
-  const fg = hex(declaration(".dark", "--muted-foreground"));
-  const brand = hex(declaration(".dark", "--brand"));
-
-  // The declared peak of `color-mix(in oklab, var(--brand) N%, transparent)`.
-  const bloomPeak = (() => {
-    const m = declaration(".dark", "--app-bloom").match(
-      /var\(--brand\)\s+(\d+)%/,
-    );
-    if (!m) throw new Error("could not read the dark bloom percentage");
-    return Number(m[1]) / 100;
-  })();
-
-  it.each(washStops(".dark"))("clears AA on the %s stop, unbloomed", (stop) => {
-    expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
-  });
-
-  it.each(washStops(".dark"))(
-    "clears AA on the %s stop under the bloom at its declared peak",
-    (stop) => {
-      expect(
-        contrast(fg, over(brand, bloomPeak, hex(stop))),
-      ).toBeGreaterThanOrEqual(AA);
-    },
+/** The declared peak of `color-mix(in oklab, var(--brand) N%, transparent)`. */
+function darkBloomPeak(selector: string): number {
+  const m = declaration(selector, "--app-bloom").match(
+    /var\(--brand\)\s+(\d+)%/,
   );
+  if (!m) throw new Error(`could not read the bloom percentage in ${selector}`);
+  return Number(m[1]) / 100;
+}
 
-  it("clears AA on the content card", () => {
-    expect(
-      contrast(fg, hex(declaration(".dark", "--content-surface"))),
-    ).toBeGreaterThanOrEqual(AA);
-  });
-});
+describe.each(LIGHT_SELECTORS)(
+  "muted text clears WCAG AA on the wash — light %s",
+  (selector) => {
+    const fg = hex(declaration(selector, "--muted-foreground"));
+
+    it.each(washStops(selector))("clears AA on the %s stop", (stop) => {
+      expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
+    });
+
+    it("clears AA on the content card and on --surface-muted", () => {
+      expect(
+        contrast(fg, hex(declaration(selector, "--content-surface"))),
+      ).toBeGreaterThanOrEqual(AA);
+      expect(
+        contrast(fg, hex(declaration(selector, "--surface-muted"))),
+      ).toBeGreaterThanOrEqual(AA);
+    });
+  },
+);
+
+describe.each(DARK_SELECTORS)(
+  "muted text clears WCAG AA on the wash — dark %s",
+  (selector) => {
+    const fg = hex(declaration(selector, "--muted-foreground"));
+    const brand = hex(declaration(selector, "--brand"));
+    const bloomPeak = darkBloomPeak(selector);
+
+    it.each(washStops(selector))(
+      "clears AA on the %s stop, unbloomed",
+      (stop) => {
+        expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
+      },
+    );
+
+    it.each(washStops(selector))(
+      "clears AA on the %s stop under the bloom at its declared peak",
+      (stop) => {
+        expect(
+          contrast(fg, over(brand, bloomPeak, hex(stop))),
+        ).toBeGreaterThanOrEqual(AA);
+      },
+    );
+
+    it("clears AA on the content card", () => {
+      expect(
+        contrast(fg, hex(declaration(selector, "--content-surface"))),
+      ).toBeGreaterThanOrEqual(AA);
+    });
+  },
+);
+
+describe.each(LIGHT_SELECTORS)(
+  "kicker text clears WCAG AA on the wash — light %s",
+  (selector) => {
+    const fg = hex(declaration(selector, "--kicker"));
+    it.each(washStops(selector))("clears AA on the %s stop", (stop) => {
+      expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
+    });
+  },
+);
+
+describe.each(DARK_SELECTORS)(
+  "kicker text clears WCAG AA on the wash — dark %s",
+  (selector) => {
+    const fg = hex(declaration(selector, "--kicker"));
+    const brand = hex(declaration(selector, "--brand"));
+    const bloomPeak = darkBloomPeak(selector);
+    it.each(washStops(selector))(
+      "clears AA on the %s stop under the bloom",
+      (stop) => {
+        expect(
+          contrast(fg, over(brand, bloomPeak, hex(stop))),
+        ).toBeGreaterThanOrEqual(AA);
+      },
+    );
+  },
+);
+
+describe.each(LIGHT_SELECTORS)(
+  "light chrome separates from the content card — %s",
+  (selector) => {
+    // The bloom source is `color-mix(in oklab, var(--brand) P%, white)` at alpha A
+    // over the FIRST wash stop (top-left is where the header band lives).
+    // Approximate the oklab mix with an sRGB mix — conservative for this check.
+    it("bloomed header band vs --content-surface ≥ 1.15:1", () => {
+      const bloom = declaration(selector, "--app-bloom");
+      const pm = bloom.match(
+        /var\(--brand\)\s+(\d+)%,\s*white\)\s*\/?\s*(\d+)%/,
+      );
+      if (!pm)
+        throw new Error(
+          "light bloom must be color-mix(in oklab, var(--brand) P%, white) / A%",
+        );
+      const brand = hex(declaration(selector, "--brand"));
+      const src = over(brand, Number(pm[1]) / 100, [255, 255, 255]);
+      const band = over(src, Number(pm[2]) / 100, hex(washStops(selector)[0]));
+      const card = hex(declaration(selector, "--content-surface"));
+      expect(contrast(band, card)).toBeGreaterThanOrEqual(1.15);
+    });
+  },
+);
+
+/**
+ * Palette-wide floors that must hold in EVERY block, base or preset. These are
+ * what a hand-picked preset accent is most likely to break: a brand light
+ * enough to look pretty on the wash stops failing its own button label, or a
+ * body/surface pair that drifts below the AAA-ish floor the monochrome system
+ * relies on for dense board text.
+ */
+describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
+  "palette floors — %s",
+  (selector) => {
+    it("brand button label clears AA on the brand fill", () => {
+      expect(
+        contrast(
+          hex(declaration(selector, "--brand-foreground")),
+          hex(declaration(selector, "--brand")),
+        ),
+      ).toBeGreaterThanOrEqual(AA);
+    });
+
+    it("the brand is a visible non-text mark on the content card (≥3:1)", () => {
+      expect(
+        contrast(
+          hex(declaration(selector, "--brand")),
+          hex(declaration(selector, "--content-surface")),
+        ),
+      ).toBeGreaterThanOrEqual(3);
+    });
+
+    it("body text clears 7:1 on --surface", () => {
+      expect(
+        contrast(
+          hex(declaration(selector, "--foreground")),
+          hex(declaration(selector, "--surface")),
+        ),
+      ).toBeGreaterThanOrEqual(7);
+    });
+  },
+);

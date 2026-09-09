@@ -21,9 +21,15 @@ export const CATEGORICAL_PALETTE = [
   "var(--chart-cat-6)",
 ] as const;
 
-/** Spectrum hero gradient for a single uncolored metric. */
-export const SPECTRUM_STOPS = ["#4f46e5", "#7c3aed", "#db2777"] as const;
-export const SPECTRUM_SOLID = "#7c3aed";
+/** Spectrum hero gradient for a single uncolored metric. Theme-aware tokens,
+ * derived from `--brand` (see `--chart-spectrum-1..3` in globals.css) so
+ * every theme preset gets a coherent ramp for free. */
+export const SPECTRUM_STOPS = [
+  "var(--chart-spectrum-1)",
+  "var(--chart-spectrum-2)",
+  "var(--chart-spectrum-3)",
+] as const;
+export const SPECTRUM_SOLID = "var(--chart-spectrum-2)";
 
 /** Signature motion. */
 export const CHART_MOTION = { durationMs: 700, staggerMs: 90 } as const;

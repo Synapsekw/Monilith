@@ -156,7 +156,7 @@ export const ItemRow = memo(function ItemRow({
         selected
           ? "bg-primary/[0.08]"
           : "hover:bg-foreground/[0.025] hover:border-border-hover",
-        isDragging && "relative z-10 shadow-lg",
+        isDragging && "shadow-drag relative z-10",
       )}
       style={{
         height: ROW_HEIGHT,

@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Kicker } from "@/components/ui/kicker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,7 +105,7 @@ export function ColumnHeader({
       style={reorder?.style}
       className={cn(
         "group/col relative flex items-center gap-1 border-l px-3 py-1.5",
-        reorder?.isDragging && "bg-surface z-auto shadow-lg",
+        reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >
       {editing ? (
@@ -133,9 +134,9 @@ export function ColumnHeader({
               <GripVertical className="size-3.5" />
             </button>
           )}
-          <span className="text-kicker text-3xs truncate font-mono font-medium tracking-[0.12em] uppercase">
+          <Kicker size="xs" className="truncate">
             {column.name}
-          </span>
+          </Kicker>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

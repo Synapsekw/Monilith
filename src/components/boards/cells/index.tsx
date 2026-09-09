@@ -7,6 +7,8 @@ import { percentBandColor } from "@/lib/boards/percent-color";
 import { stripMarkdown } from "@/lib/boards/markdown";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
+import { StatusPill, statusToneClasses } from "@/components/ui/status-pill";
+import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
@@ -189,21 +191,20 @@ export function DateCell({
   });
   // Keystone: dates read as mono, uppercase, wide-tracked metadata.
   if (!overdue)
-    return (
-      <span className="text-muted-foreground text-2xs font-mono tracking-wide uppercase">
-        {formatted}
-      </span>
-    );
+    return <Kicker className="text-muted-foreground">{formatted}</Kicker>;
   // Negative margins cancel the padding so the date text does not shift when
   // the tint appears. aria-label/title carry the state — never color alone.
   return (
-    <span
+    <Kicker
       aria-label="Overdue"
       title="Overdue"
-      className="bg-status-red/10 text-status-red text-2xs -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5 font-mono tracking-wide uppercase"
+      className={cn(
+        statusToneClasses("red", "soft"),
+        "-mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5",
+      )}
     >
       {formatted}
-    </span>
+    </Kicker>
   );
 }
 
@@ -335,14 +336,16 @@ export function PriorityCell({
       ? `Critical (auto) — ${dependents} items depend on this`
       : "Critical";
     return (
-      <span
+      <StatusPill
+        color="red"
+        variant="solid"
         aria-label={label}
         title={label}
-        className="bg-status-red inline-flex max-w-full items-center gap-1 truncate rounded-sm px-2.5 py-0.5 text-xs font-medium text-white"
+        className="gap-1"
       >
         {auto && <Network className="size-3 shrink-0" aria-hidden />}
         Critical
-      </span>
+      </StatusPill>
     );
   }
   // Explicit Normal reads as quiet metadata; unset stays blank (no per-row noise).

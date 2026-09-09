@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ColorChip } from "@/components/ui/color-chip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { statusToneClasses } from "@/components/ui/status-pill";
+import { cn } from "@/lib/utils";
 
 /** A status/dropdown option, resolved from `columns.settings.options`. */
 export type TargetOption = { id: string; label: string; color: string };
@@ -108,7 +110,12 @@ export function SmartFillGrid({
   return (
     <div className="flex flex-col gap-3">
       {warnings.length > 0 ? (
-        <ul className="bg-status-yellow/15 text-status-yellow flex flex-col gap-1 rounded-md px-3 py-2 text-xs">
+        <ul
+          className={cn(
+            "flex flex-col gap-1 rounded-md px-3 py-2 text-xs",
+            statusToneClasses("yellow", "soft"),
+          )}
+        >
           {warnings.map((w, i) => (
             <li key={i}>{w}</li>
           ))}

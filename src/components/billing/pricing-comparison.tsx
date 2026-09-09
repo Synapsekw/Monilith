@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { Check, Minus } from "lucide-react";
 import { CREDITS_PER_SEAT } from "@/lib/billing/tiers";
+import { Kicker } from "@/components/ui/kicker";
 
 type Cell = boolean | string;
 type Row = { label: string; core: Cell; pulse: Cell; enterprise: Cell };
@@ -155,9 +156,9 @@ export function PricingComparison() {
                   <th
                     scope="colgroup"
                     colSpan={4}
-                    className="text-kicker text-3xs px-4 py-2 text-left font-mono tracking-[0.12em] uppercase"
+                    className="px-4 py-2 text-left"
                   >
-                    {g.group}
+                    <Kicker size="xs">{g.group}</Kicker>
                   </th>
                 </tr>
                 {g.rows.map((r) => (

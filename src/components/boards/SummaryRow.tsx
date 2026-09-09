@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { allowedAggregations } from "@/lib/boards/aggregation";
 import { FooterCell } from "@/components/boards/FooterCell";
+import { Kicker } from "@/components/ui/kicker";
 import { mirrorTargetColumnFor, mirrorFooterValues } from "@/lib/boards/mirror";
 import { cellKey, timeEntriesForCell } from "@/lib/boards/cache";
 import { trackedSeconds } from "@/lib/boards/time-format";
@@ -74,8 +75,7 @@ function footerColumnValues(
       trackedSecs: trackedSeconds(timeEntriesForCell(cache, id, col.id), nowMs),
       estimateSecs: (
         cellMap.get(cellKey(id, col.id)) as
-          | { estimateSeconds?: number }
-          | undefined
+          { estimateSeconds?: number } | undefined
       )?.estimateSeconds,
     }));
   }
@@ -153,7 +153,7 @@ export function SummaryRow({
     >
       <div
         className={cn(
-          "bg-surface-muted text-kicker text-3xs sticky left-0 z-10 flex items-center px-4 py-1.5 font-mono tracking-wide uppercase",
+          "bg-surface-muted sticky left-0 z-10 flex items-center px-4 py-1.5",
           NAME_FREEZE_EDGE,
         )}
         style={{
@@ -161,7 +161,7 @@ export function SummaryRow({
           ...(groupColor ? { boxShadow: `inset 3px 0 0 0 ${groupColor}` } : {}),
         }}
       >
-        {label}
+        <Kicker size="xs">{label}</Kicker>
       </div>
       {perColumn.map(({ col, meta, values, current }) => (
         <div key={col.id} className="flex min-w-0 items-center border-l py-1.5">

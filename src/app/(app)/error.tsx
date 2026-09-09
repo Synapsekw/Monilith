@@ -6,10 +6,10 @@ import { ErrorFallback } from "@/components/shell/error-fallback";
  *  covers settings/ and workload/, which have no segment boundary of their own. */
 export default function AppError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
-  return <ErrorFallback error={error} retry={unstable_retry} />;
+  return <ErrorFallback error={error} retry={retry} />;
 }

@@ -15,7 +15,7 @@ project-specific source of truth. Ground truth for every value: `src/app/globals
 ## Core principle
 
 **Chrome is strictly monochrome. Color is earned.** Navigation, surfaces, borders, and text
-use neutrals only. The single brand accent — periwinkle `#8ea2eb` in dark, deepened `#5b6fd6`
+use neutrals only. The single brand accent — periwinkle `#8ea2eb` in dark, deepened `#5a6ed5`
 in light for AA-on-white (`--brand` → `primary`/`ring`) — marks primary actions and focus.
 The status palette is the _one_ sanctioned multi-color set, and only for status/label pills —
 never for chrome. **Elevation is surface steps + hairlines, not shadows**
@@ -32,8 +32,8 @@ are forbidden in app code). Use the utility, not the CSS var, in JSX.
 | Raised surface (cards, panels)       | `bg-surface`                                                | `#161619` / `#fff`; `card`/`popover` map here  |
 | Elevated / muted surface step        | `bg-surface-muted`                                          | `#1c1c20` / `#f1f1f4`                          |
 | Sunken surface (summary rows, wells) | `bg-surface-sunken`                                         | same values as muted — semantic alias          |
-| Secondary text                       | `text-muted-foreground`                                     | `#9a9aa2` / `#6b6b72`                          |
-| Kicker / eyebrow text                | `text-kicker`                                               | dimmer than muted: `#6b6b72` / `#9a9aa2`       |
+| Secondary text                       | `text-muted-foreground`                                     | `#b2b2ba` / `#5b5b62` — AA on the wash         |
+| Kicker / eyebrow text                | `text-kicker`                                               | EQUALS muted-foreground; mono/caps carry it    |
 | Hairline divider / outline           | `border` (uses `--border`)                                  | `rgba(255,255,255,.10)` / `rgba(0,0,0,.08)`    |
 | Hairline on hover (brighten!)        | `hover:border-border-hover`                                 | `.16` / `.14` alpha                            |
 | Hairline, active/bright              | `border-border-bright`                                      | `.26` / `.22` alpha                            |
@@ -46,10 +46,31 @@ are forbidden in app code). Use the utility, not the CSS var, in JSX.
 | Status labels only                   | `bg-status-{gray,blue,green,yellow,orange,red,purple,teal}` | the only multicolor surface                    |
 
 Radius: `--radius` is **0.875rem (14px)** — `rounded-lg` for cards/panels; `rounded-sm`
-(~8px) for chips/pills. Shadows: `shadow-card` is `none`; `shadow-panel` is a soft large
-blur for floating panels only. Spacing: 4px grid. Icons: **lucide-react**, `size-4` (16px)
+(~8px) for chips/pills. The app-shell content card (`app-shell.tsx` / `ask/layout.tsx`) is
+the **only** `rounded-xl` surface in the app — everything else is `rounded-lg`. Shadows:
+`shadow-card` is `none`; `shadow-panel` is a soft large blur for floating panels only;
+`shadow-drag` is the named lift for a row/card actively being dragged — never a raw
+`shadow-sm/md/lg/xl`. Spacing: 4px grid. Icons: **lucide-react**, `size-4` (16px)
 inline, `size-3.5` in dense rows. `text-destructive` is allowed for danger actions/menu
 items (semantic token, not raw color) — the only non-status color beyond the brand.
+
+## Theme presets
+
+Users pick a preset in Settings → Preferences → Theme: `keystone` (default),
+`graphite`, `ocean`, `forest`, `ember`, `rose`. A preset is **not** a third mode
+— it re-seeds accent, neutral tint and chrome wash _inside_ light or dark, via
+`[data-theme-preset]` on `<html>`. Registry: `src/lib/theme/presets.ts`; CSS
+blocks live after `.dark` in `globals.css` (`keystone` has none — it IS
+`:root`/`.dark`).
+
+**Seed-token rule:** an override block declares ONLY the seed set (brand,
+surfaces, text, wash/bloom, `--content-surface`, plus `--glow-primary` in light).
+Never redeclare alpha tokens (`--border`, `--state-*`, `--chrome-fill`) or
+brand-derived ones (`--primary`, `--ring`) — they follow. Adding a preset means
+all three of: a `THEME_PRESETS` entry, both CSS blocks, and a green
+`globals.contrast.test.ts` (it re-runs every AA check per block; `presets.test.ts`
+enforces the exact token set). Component code never reads a preset — style with
+the same semantic tokens and every preset works for free.
 
 ## Typography
 

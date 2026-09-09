@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { statusToneClasses } from "@/components/ui/status-pill";
 import type { ColumnState, SheetState } from "./import-wizard-state";
 
 const MAX_VISIBLE_ROWS = 100;
@@ -207,13 +208,21 @@ export function MappingGrid({
                         />
                       </div>
                       {missingLabels.length > 0 ? (
-                        <span className="bg-status-blue/15 text-status-blue text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium">
+                        <span
+                          className={cn(
+                            "text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium",
+                            statusToneClasses("blue", "soft"),
+                          )}
+                        >
                           +{missingLabels.length} new options
                         </span>
                       ) : null}
                       {(invalidCountByColumn.get(col.sourceIndex) ?? 0) > 0 ? (
                         <span
-                          className="bg-status-yellow/15 text-status-yellow text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium"
+                          className={cn(
+                            "text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium",
+                            statusToneClasses("yellow", "soft"),
+                          )}
                           title={`These cells can't be parsed as ${effectiveKind} and will import empty`}
                         >
                           {invalidCountByColumn.get(col.sourceIndex)} won&apos;t
@@ -315,7 +324,7 @@ export function MappingGrid({
                         className={cn(
                           "text-foreground px-2 py-1.5 align-top",
                           !col.include && "opacity-50",
-                          isInvalid && "bg-status-yellow/15 text-status-yellow",
+                          isInvalid && statusToneClasses("yellow", "soft"),
                         )}
                       >
                         {row[col.sourceIndex]}

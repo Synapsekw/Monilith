@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { ModelTier } from "@/lib/ai/models/feed-parse";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import {
   Popover,
   PopoverContent,
@@ -261,10 +262,10 @@ export function ModelPicker({
                         )}
                       />
                       <span className="truncate">{m.label}</span>
-                      <span className="text-kicker text-2xs ml-auto shrink-0 pl-2 font-mono tracking-[0.12em] uppercase">
+                      <Kicker className="ml-auto shrink-0 pl-2">
                         {m.tier}
                         {!m.supportsTools && " · no tools"}
-                      </span>
+                      </Kicker>
                     </CommandItem>
                   ))}
                 </CommandGroup>

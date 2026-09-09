@@ -117,3 +117,45 @@ describe("Composer — addressing an agent by @handle", () => {
     expect(screen.getByLabelText(/your question/i)).toHaveValue("@scout ");
   });
 });
+
+describe("Composer — send failure and retry", () => {
+  it("shows the last failure as an alert and calls onRetry from its button", async () => {
+    const onRetry = vi.fn();
+    render(
+      <Composer
+        disabled={false}
+        agents={AGENTS}
+        onSubmit={vi.fn()}
+        error="Couldn't reach the server."
+        onRetry={onRetry}
+      />,
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't reach the server.");
+
+    await userEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders no alert and no retry button when there is no error", () => {
+    render(<Composer disabled={false} agents={AGENTS} onSubmit={vi.fn()} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  });
+
+  it("shows the error with no retry button when the parent gives no onRetry", () => {
+    render(
+      <Composer
+        disabled={false}
+        agents={AGENTS}
+        onSubmit={vi.fn()}
+        error="Couldn't reach the server."
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Couldn't reach the server.",
+    );
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  });
+});

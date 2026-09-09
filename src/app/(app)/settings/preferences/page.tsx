@@ -1,15 +1,22 @@
 import { requireUser } from "@/lib/auth/session";
-import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
+import {
+  getUserThemePresetCached,
+  getUserTimeZoneCached,
+} from "@/lib/profile/queries-cached";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
 import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
 import { AppearanceForm } from "@/components/settings/appearance-form";
+import { ThemePresetForm } from "@/components/settings/theme-preset-form";
 
 export const metadata = { title: "Preferences · Settings" };
 
 export default async function PreferencesSettingsPage() {
   const user = await requireUser();
-  const timeZone = await getUserTimeZoneCached(user.id);
+  const [timeZone, themePreset] = await Promise.all([
+    getUserTimeZoneCached(user.id),
+    getUserThemePresetCached(user.id),
+  ]);
 
   return (
     <SettingsSection
@@ -27,6 +34,12 @@ export default async function PreferencesSettingsPage() {
         description="Match your system or pick a theme."
       >
         <AppearanceForm />
+      </SettingRow>
+      <SettingRow
+        label="Theme"
+        description="Accent and surface tint. Applies to light and dark."
+      >
+        <ThemePresetForm currentPreset={themePreset} />
       </SettingRow>
     </SettingsSection>
   );

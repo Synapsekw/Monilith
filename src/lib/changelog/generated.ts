@@ -4,6 +4,89 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-09",
+    kind: "new",
+    title: "Theme picker in the header",
+    description:
+      "The sun/moon menu in the top bar now lists the six theme presets next to Light, Dark and System, so you can switch without opening Settings.",
+  },
+  {
+    date: "2026-09-09",
+    kind: "fixed",
+    title: '"Try again" on error pages works',
+    description: "The retry button on error pages now actually retries.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "fixed",
+    title: "Light mode is no longer washed out",
+    description:
+      "The sidebar and top bar in Light mode now have a visible tint and edge, section labels are readable, and the active page is clearly highlighted.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "new",
+    title: "Theme presets",
+    description:
+      "Pick one of six themes — Keystone, Graphite, Ocean, Forest, Ember or Rose — in Settings → Preferences. Each restyles the accent and the chrome in both Light and Dark, and follows you across devices.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "improved",
+    title: "Consistent page headings",
+    description:
+      "Every page now uses the same heading style and card corners, and status pills meet contrast guidelines in both themes.",
+  },
+  {
+    date: "2026-09-08",
+    kind: "improved",
+    title: "Faster-feeling loading",
+    description:
+      "Boards, Ask, Updates, reports and sign-in pages show a skeleton while they load, and a failed message send in Ask shows an error with a Retry button.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "new",
+    title: "Talk to a specific agent by name",
+    description:
+      "Start a message with @handle and that agent answers - and keeps answering the rest of the thread until you address someone else. Every answer is labelled with the agent behind it.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "new",
+    title: "Switch agents inside a conversation",
+    description:
+      "The thread header shows who is answering and lets you hand the conversation to a different agent, or back to the plain Monolith assistant, without starting over.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Agents bring their own knowledge into chat",
+    description:
+      "When an agent answers you directly, it now draws on the reference documents you attached to it and the notes it has learned, the same material it uses for its scheduled reports.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Daily reports no longer bury your chats",
+    description:
+      "Agent briefings moved into their own collapsed section of the sidebar, so a daily report can't push your conversations off the list.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Find an old conversation faster",
+    description:
+      "The conversation sidebar gained a search box and folds your history into Today, Last week, Two weeks ago and Older - each collapsible, with a count.",
+  },
+  {
+    date: "2026-09-07",
+    kind: "improved",
+    title: "Ask AI is now Agents",
+    description:
+      "The sidebar entry and command palette now say Agents, and the settings page that configures them is Agent setup.",
+  },
+  {
     date: "2026-09-05",
     kind: "new",
     title: "Ask a specific agent by name",

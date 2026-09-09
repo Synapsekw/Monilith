@@ -26,8 +26,7 @@ export function RollingOut({ children }: { children: ReactNode }) {
     <span className="border-border text-kicker text-3xs inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono tracking-[0.12em] uppercase">
       <span
         aria-hidden="true"
-        className="bg-primary size-1.5 flex-none rounded-full"
-        style={{ boxShadow: "0 0 8px 1px rgba(142, 162, 235, 0.85)" }}
+        className="bg-primary shadow-glow-primary size-1.5 flex-none rounded-full"
       />
       {children}
     </span>
@@ -279,9 +278,11 @@ export function BoardWithAgentDock() {
         <div
           className="border-border/70 min-w-0 lg:border-r"
           style={{
-            maskImage: "linear-gradient(to right, #000 88%, transparent 100%)",
+            // Alpha mask, not a themed color — `black` is opaque source,
+            // `transparent` is 0 alpha; the RGB channels are never painted.
+            maskImage: "linear-gradient(to right, black 88%, transparent 100%)",
             WebkitMaskImage:
-              "linear-gradient(to right, #000 88%, transparent 100%)",
+              "linear-gradient(to right, black 88%, transparent 100%)",
           }}
         >
           <BoardTableMock rows={SWITCHER_ROWS} />

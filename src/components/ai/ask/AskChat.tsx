@@ -168,6 +168,18 @@ export function AskChat({
   const turnInFlight = useRef(false);
   const [turnBusy, setTurnBusy] = useState(false);
 
+  // The composer's error surface: distinct from `status` above, which
+  // narrates an IN-FLIGHT turn (the muted line under the thinking indicator).
+  // This is the composer refusing to have sent anything — the
+  // `createConversation`/`appendUserMessage` Server Action itself failing,
+  // before any stream ever opened. `lastFailedSubmit` is a ref (not state)
+  // because it is read only from the retry handler, never rendered directly.
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const lastFailedSubmit = useRef<{
+    text: string;
+    agentId: string | null;
+  } | null>(null);
+
   /**
    * The stream died mid-turn. Re-read the thread: the assistant turn has very
    * often already been persisted, in which case the user gets their real answer
@@ -203,10 +215,11 @@ export function AskChat({
     try {
       let convId = activeId;
       setDropState("none");
-      setMessages((m) => [
-        ...m,
-        { id: `tmp-${Date.now()}`, role: "user", content: text },
-      ]);
+      // A new send attempt — including a retry — clears the previous one's
+      // alert immediately, whether or not this attempt also fails.
+      setComposerError(null);
+      const tmpId = `tmp-${Date.now()}`;
+      setMessages((m) => [...m, { id: tmpId, role: "user", content: text }]);
       // Open the working state NOW, not when the first byte arrives: minting
       // the conversation / appending the user turn are round-trips of their
       // own, and silence during them is the same lie as silence during the
@@ -234,7 +247,11 @@ export function AskChat({
         });
         if (!res.ok) {
           setStreamText(null);
-          setStatus(res.error);
+          // Nothing was sent — roll back the optimistic bubble rather than
+          // leaving an orphaned question with no answer in the transcript.
+          setMessages((m) => m.filter((msg) => msg.id !== tmpId));
+          lastFailedSubmit.current = { text, agentId: addressedAgentId };
+          setComposerError(res.error);
           return;
         }
         convId = res.data.conversationId;
@@ -251,7 +268,9 @@ export function AskChat({
         });
         if (!res.ok) {
           setStreamText(null);
-          setStatus(res.error);
+          setMessages((m) => m.filter((msg) => msg.id !== tmpId));
+          lastFailedSubmit.current = { text, agentId: addressedAgentId };
+          setComposerError(res.error);
           return;
         }
         turnAgentId = res.data.agentId;
@@ -303,6 +322,15 @@ export function AskChat({
       turnInFlight.current = false;
       setTurnBusy(false);
     }
+  }
+
+  /** Resends the exact (text, agentId) `onSubmit` last failed on — the
+   *  composer's Retry button. A no-op if nothing has failed (or a later send
+   *  already cleared it), so it is safe to hand to `Composer` unconditionally. */
+  function retryLastSend() {
+    const last = lastFailedSubmit.current;
+    if (!last) return;
+    void onSubmit(last.text, last.agentId);
   }
 
   /**
@@ -424,6 +452,8 @@ export function AskChat({
           disabled={turnBusy || streaming || dropState === "checking"}
           agents={agents}
           agentId={personaId}
+          error={composerError}
+          onRetry={retryLastSend}
           onSubmit={onSubmit}
         />
       )}

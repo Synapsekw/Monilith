@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { THEME_PRESET_INLINE_SCRIPT } from "@/lib/theme/theme-preset-script";
 
 const nunitoSans = Nunito_Sans({
   variable: "--font-nunito-sans",
@@ -46,6 +47,15 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${nunitoSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Stamps [data-theme-preset] on <html> from localStorage while the
+            document is still parsing, so a non-default preset never paints the
+            keystone chrome first. Sibling of next-themes' own class script (in
+            Providers); see src/lib/theme/theme-preset-script.ts. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: THEME_PRESET_INLINE_SCRIPT }}
+        />
+      </head>
       <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>
       </body>

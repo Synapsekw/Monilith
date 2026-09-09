@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { nunito } from "@/lib/fonts";
 import { ChangelogTimeline } from "@/components/changelog/changelog-timeline";
 import { CHANGELOG } from "@/lib/changelog/entries";
 
@@ -26,9 +25,11 @@ export default function UpdatesPage() {
         </Link>
 
         <header className="mb-12">
-          <h1
-            className={`${nunito.className} text-3xl font-bold tracking-tight`}
-          >
+          {/* Deliberately not <PageHeader>: this is the public marketing
+              hero, not app-shell chrome — text-3xl is the intended scale, a
+              size step up from PageHeader's text-lg app-page ramp. Type still
+              comes from the shared `font-heading` token. */}
+          <h1 className="font-heading text-3xl font-bold tracking-tight">
             What&apos;s new
           </h1>
           <p className="text-muted-foreground mt-3 text-sm text-pretty">

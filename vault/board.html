@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-07 17:26",
+  "updated": "2026-09-09 10:02",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -120,8 +120,8 @@
     {
       "name": "AI & agents",
       "pct": 99,
-      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library and agent memory — and now Spec 3: agents delegate to agents with depth and fan-out enforced in the claim RPC, @handle addresses an agent from an item update, from mentions and in Ask, run history shows a nested run tree with subtree token totals, and the bot label is a per-org assistant name.",
-      "left": "E6 Stripe, blocked on a test-mode key. Agent memory (2c) and delegation (Spec 3) are both shipped but inert until an admin opens the org ceiling — verified 2026-09-07: 0 of 9 orgs carry either capability."
+      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library, agent memory, agent-to-agent delegation with depth and fan-out enforced in the claim RPC — and now the Agents page: a leading @handle routes a turn and sticks, a header chip switches who is answering, every answer is attributed, and an agent brings its own documents and memory into a chat answer.",
+      "left": "E6 Stripe, blocked on a test-mode key. Agent memory (2c), delegation (Spec 3) and the MCP write surface are all shipped but inert until an admin opens the org ceiling — verified 2026-09-07: 0 of 9 orgs carry any of those capabilities. The Agents page is the exception: it is live for every user."
     },
     {
       "name": "Platform & craft",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "1a5073eb",
-        "tone": "ok",
-        "note": "Even with main. 1a5073eb is the -s ours heal commit recording main as an ancestor; unpromoted delta 0. task/agents-page is the only live worktree, on a separate track."
+        "value": "86bfda38",
+        "tone": "warn",
+        "note": "AHEAD of main by two tracks: the UI polish + theme presets batch (light-chrome contrast fix, six presets in Settings and the header menu, PageHeader/Kicker ramp, AA pills, one card radius, skeletons and error boundaries, landing on tokens — 28 commits, seven worktrees, every value contrast-tested) and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
       },
       {
         "name": "main",
-        "value": "7556df77",
+        "value": "4dba7aaa",
         "tone": "ok",
-        "note": "PR #114 merged 2026-09-07 — the MCP write surface, 39 commits, catalog 24 to 35 tools. Preceded by PR #113 (Smart Fill de-flake), PR #111 (docs/changelog only) and PR #110 (Spec 3 plus the native-client OAuth fix)."
+        "note": "PR #115 merged 2026-09-07 — the Agents page, 25 commits: sticky @handle routing, an agent switcher, per-turn attribution, agent documents and memory in chat, and a rail split into chats and briefings with collapsible age buckets. Nothing has been promoted since; the dependency sweep is waiting on an MCP client walkthrough."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 7556df77. Verified live: Vercel state=success, main CI green (run 34125939429). The new write surface is deployed but INERT — board.structure and board.destroy are in 0 of 9 org ceilings, so every structure write is denied until an admin opens it."
+        "note": "Serving 4dba7aaa. Verified live: Vercel state=success, www.monolith.works 200, /updates 200. Unlike the three promotions before it, this one is reachable by every user on arrival — no org ceiling gates it — so /updates carries six entries for it."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on develop, on PR #113 and on main. One flaky test (SmartFillDialog classify-error) turned main red after PR #111 and is now fixed at the source of the race: 15/15 consecutive passes under CPU load, mutation-checked against four component regressions.",
+        "note": "Green on develop after the dependency sweep (CI run 34138976762). /api/mcp had no test at all before this session — the new route test drives the real JSON-RPC transport: auth challenge, initialize handshake, and tools/list returning exactly the catalog.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "156/156",
+        "value": "159/159",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at promotion time. The Spec 3 run-graph migrations were already applied to DEV, which the production deployment reads.",
+        "note": "Verified by db:ledger-check after the theme-preset migration (20260908121511, additive with default 'keystone'). The MCP mis-stamped it again and reconcile-migration-version.sh repaired it — gotcha-55, eleventh time. PROD does not have it yet; carry it in the next /sync-prod.",
         "label": "ledger"
       }
     ]
@@ -195,6 +195,16 @@
         "owner",
         "critical",
         "billing"
+      ]
+    },
+    {
+      "title": "Look at Light mode and the header theme menu, walk an MCP client against v2, then promote",
+      "why": "Two tracks wait on develop. The UI batch shipped with zero pixels seen — Chrome was not connected, so the light-chrome fix, the six presets and the header picker rest on token math and 199 contrast and guard tests; the 2026-09-09 session note carries the nine-step manual pass. The mcp-handler 1.1 to 2.1 migration passes its gates and a route test, but no actual Claude Desktop or claude.ai session has run against it. Do both checks, then promote once.",
+      "tags": [
+        "ui",
+        "mcp",
+        "owner",
+        "promote"
       ]
     },
     {
@@ -238,6 +248,16 @@
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A whole visual batch shipped without anyone seeing it",
+      "text": "Seven UI tasks and a fix wave landed on develop with the Chrome extension disconnected. Every colour claim is machine-checked — kicker, chrome-vs-card, brand-on-white, and all six presets in both modes — but skeleton fidelity, the header menu layout and whether Ember or Rose actually look good are eye judgements no test makes. The fifth whole-branch review in a row found a defect no task review saw: ten error boundaries had a dead Try again button because Next 16.3 renamed the retry prop. Assume the manual pass will find something too."
+    },
+    {
+      "sev": "amber",
+      "title": "The MCP transport was swapped and no client has connected",
+      "text": "mcp-handler v2 rewrites the transport /api/mcp serves: no basePath, no SSE, a new server package, and a different registerTool contract. Gates and a new route test pass, and the OAuth challenge plus both .well-known documents were smoke-tested against a dev server, but a real Claude Desktop or claude.ai handshake is the one thing that has not happened. It is on develop only, so production is unaffected until promotion."
+    },
     {
       "sev": "amber",
       "title": "Three features are shipped, live, and completely inert",
@@ -324,22 +344,16 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/agents-page",
-      "head": "ed735c6b",
-      "note": "separate track, unmerged; its migration 20260907073911 is applied to DEV with no file on develop"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-09-07-1726-mcp-write-surface-35-tools",
-    "when": "2026-09-07 17:26",
-    "title": "MCP write surface — 35 tools, agents can build boards",
+    "id": "2026-09-09-1002-ui-polish-and-theme-presets",
+    "when": "2026-09-09 10:02",
+    "title": "UI polish audit, light-mode nav fix, theme presets",
     "bullets": [
-      "Spec, 13-task plan, three-wave build and promotion in one session: PR #114, main @ 7556df77, Vercel success, main CI green.",
-      "Catalog 24 to 35 tools. Ten grouped-dispatch manage_* tools plus describe_schema; six tool calls now build a whole board where forty-five were needed.",
-      "capability and scope resolve PER ACTION, so renaming a board and archiving one no longer cost the same grant. Containers are archive-only; purge stays human-only on both transports.",
-      "Ships installable-but-inert: board.structure and board.destroy joined both CHECK constraints with no ceiling backfill and no DEFAULT change. Nothing an agent can do changed on deploy."
+      "Light mode was washed out because the Aug 27 tint collapsed the bloom onto the first wash stop and --kicker sat at 2.5:1; the bloom is brand-derived now, kicker equals muted-foreground by ruling, and both are contrast-tested.",
+      "Six full theme presets (accent + neutral tint + wash) persist on profiles.theme_preset with a no-flash inline script; pick them in Settings or straight from the header sun/moon menu.",
+      "One PageHeader primitive replaced seven heading patterns, 39 hand-rolled kickers moved onto Kicker, cards unified on 14px, four AA pill failures fixed, and skeletons plus error boundaries cover board, ask, updates, auth and admin.",
+      "The final whole-branch review found ten error.tsx files destructuring unstable_retry, a prop Next 16.3 no longer passes — Try again was dead everywhere and the test encoded it."
     ]
   }
 }

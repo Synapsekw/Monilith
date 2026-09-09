@@ -4,6 +4,7 @@ import type { ReportRow, ReportScope } from "@/lib/reports/queries";
 import { formatDateTime } from "@/lib/datetime/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
+import { PageHeader } from "@/components/ui/page-header";
 
 /**
  * A row as the org index needs it: the query's `ReportRow`, plus an optional
@@ -35,9 +36,9 @@ export function scopeLabel(scope: ReportScope, boardCount?: number): string {
 /** Mono uppercase hairline chip — the Keystone kicker recipe, boxed. */
 function ScopeChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-kicker text-3xs shrink-0 rounded-sm border px-1.5 py-0.5 font-mono font-medium tracking-[0.1em] uppercase">
+    <Kicker size="xs" className="shrink-0 rounded-sm border px-1.5 py-0.5">
       {children}
-    </span>
+    </Kicker>
   );
 }
 
@@ -83,16 +84,15 @@ export function ReportsIndex({
 }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div className="flex flex-col gap-1">
-        <Kicker>Planning</Kicker>
-        <h1 className="text-lg font-bold">Reports</h1>
-        {reports.length > 0 ? (
-          <p className="text-muted-foreground text-xs">
-            {reports.length} {reports.length === 1 ? "report" : "reports"} in
-            this organization
-          </p>
-        ) : null}
-      </div>
+      <PageHeader
+        kicker="Planning"
+        title="Reports"
+        description={
+          reports.length > 0
+            ? `${reports.length} ${reports.length === 1 ? "report" : "reports"} in this organization`
+            : undefined
+        }
+      />
 
       {reports.length === 0 ? (
         <EmptyState className="flex flex-col items-center gap-2">

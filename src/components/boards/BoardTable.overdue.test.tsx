@@ -163,7 +163,7 @@ describe("BoardTable overdue date tint", () => {
     const tinted = screen.getAllByLabelText("Overdue");
     expect(tinted).toHaveLength(1);
     expect(tinted[0].className).toContain("text-status-red");
-    expect(tinted[0].className).toContain("bg-status-red/10");
+    expect(tinted[0].className).toContain("bg-status-red/15");
     // It lives in the overdue item's date cell (accessible cell name is
     // "<item name> <column name>").
     expect(

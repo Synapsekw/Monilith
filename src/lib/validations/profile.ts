@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidTimeZone } from "@/lib/validations/org";
+import { THEME_PRESET_IDS } from "@/lib/theme/presets";
 
 /**
  * Personal display timezone. A non-null value must be a runtime-valid IANA id;
@@ -56,4 +57,17 @@ export const updateProfileAvatarSchema = z.object({
 });
 export type UpdateProfileAvatarInput = z.infer<
   typeof updateProfileAvatarSchema
+>;
+
+/**
+ * Per-user theme preset. `THEME_PRESET_IDS` is the single source of truth for
+ * the id list — the DB column is deliberately free text bounded to 32 chars, so
+ * this enum IS the boundary. A preset added to `presets.ts` becomes writable
+ * here with no migration.
+ */
+export const updateProfileThemePresetSchema = z.object({
+  themePreset: z.enum(THEME_PRESET_IDS),
+});
+export type UpdateProfileThemePresetInput = z.infer<
+  typeof updateProfileThemePresetSchema
 >;

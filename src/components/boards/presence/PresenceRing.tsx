@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { cn } from "@/lib/utils";
+import { statusToneClasses } from "@/components/ui/status-pill";
 
 /**
  * An overlay indicator showing that other user(s) are currently focused on
@@ -48,9 +49,15 @@ export const PresenceRing = memo(function PresenceRing({
       style={{ boxShadow: `inset 0 0 0 2px ${first.color}` }}
     >
       {others.length > 1 ? (
+        // The overflow badge is an aggregate count ("+N"), not one user's
+        // presence — it does not carry `first.color`, so it gets the neutral
+        // solid-gray status treatment (AA text) instead of a hand-rolled
+        // `text-white` on an arbitrary inline fill.
         <span
-          className="text-3xs absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full font-semibold text-white tabular-nums shadow-sm"
-          style={{ backgroundColor: first.color }}
+          className={cn(
+            "text-3xs absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full font-semibold tabular-nums",
+            statusToneClasses("gray"),
+          )}
         >
           {others.length}
         </span>

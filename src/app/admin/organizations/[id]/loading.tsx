@@ -48,7 +48,7 @@ export default function AdminOrgLoading() {
 
       <div
         data-testid="ai-plan-card-skeleton"
-        className="bg-surface rounded-xl border p-6"
+        className="bg-surface rounded-lg border p-6"
       >
         <Skeleton className="h-5 w-20" />
         <Skeleton className="mt-2 h-4 w-full max-w-96" />

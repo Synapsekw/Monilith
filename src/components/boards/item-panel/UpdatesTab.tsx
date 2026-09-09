@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Kicker } from "@/components/ui/kicker";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
@@ -205,13 +206,16 @@ export function UpdatesTab({
                         "Someone"}
                     </span>
                     {bot && (
-                      <span className="text-kicker text-3xs border-border rounded border px-1 font-mono tracking-wide uppercase">
+                      <Kicker
+                        size="xs"
+                        className="border-border rounded border px-1"
+                      >
                         Agent
-                      </span>
+                      </Kicker>
                     )}
-                    <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
+                    <Kicker size="xs">
                       <DateTime value={u.created_at} />
-                    </span>
+                    </Kicker>
                   </span>
                   <RevealOnHover>
                     <Button

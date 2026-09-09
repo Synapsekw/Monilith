@@ -4,15 +4,15 @@ import { ErrorFallback } from "@/components/shell/error-fallback";
 
 export default function BoardsError({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  retry: () => void;
 }) {
   return (
     <ErrorFallback
       error={error}
-      retry={unstable_retry}
+      retry={retry}
       title="Couldn't load boards"
       description="Something failed while loading this board data. Your data is safe — try again."
     />

@@ -714,7 +714,7 @@ export function BoardTableInner({
               </SortableContext>
               <DragOverlay>
                 {activeDrag ? (
-                  <div className="bg-surface flex items-center border px-4 py-1.5 text-sm shadow-lg">
+                  <div className="bg-surface shadow-drag flex items-center border px-4 py-1.5 text-sm">
                     {activeDrag.name}
                   </div>
                 ) : null}

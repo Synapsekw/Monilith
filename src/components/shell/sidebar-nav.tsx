@@ -81,7 +81,7 @@ function ExpandedLink({ item, active }: { item: NavLink; active: boolean }) {
       className={cn(
         "flex items-center gap-2.5 rounded-md border border-transparent px-3 py-2 text-sm transition-colors duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
         active
-          ? "bg-primary/10 border-primary/25 text-foreground"
+          ? "bg-state-selected border-primary/40 text-foreground"
           : "text-muted-foreground hover:border-border hover:text-foreground",
       )}
     >
@@ -111,7 +111,7 @@ function CollapsedLink({
           className={cn(
             "flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md border border-transparent transition-colors duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5",
             active
-              ? "bg-primary/10 border-primary/25 text-foreground"
+              ? "bg-state-selected border-primary/40 text-foreground"
               : "text-muted-foreground hover:border-border hover:text-foreground",
           )}
         >
