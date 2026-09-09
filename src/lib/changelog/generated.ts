@@ -6,6 +6,27 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-09",
     kind: "new",
+    title: "Boards remember how you left them",
+    description:
+      "Collapse a group, expand sub-items, or switch to Timeline, and the board opens that way next time. Your arrangement is yours alone and follows you to any browser you sign in from.",
+  },
+  {
+    date: "2026-09-09",
+    kind: "new",
+    title: "Filters and sorts stick",
+    description:
+      "A filter you set on a board is still there when you come back. Clearing it clears it for good, and a shared link still carries whatever the link says.",
+  },
+  {
+    date: "2026-09-09",
+    kind: "improved",
+    title: "Expanded rows carry across views",
+    description:
+      "A row you expand in the table stays expanded on the timeline, instead of each view keeping its own separate idea of what is open.",
+  },
+  {
+    date: "2026-09-09",
+    kind: "new",
     title: "Theme picker in the header",
     description:
       "The sun/moon menu in the top bar now lists the six theme presets next to Light, Dark and System, so you can switch without opening Settings.",
