@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isItemComplete, isOverdue, localTodayISO } from "./overdue";
+import {
+  firstStatusColumn,
+  isItemComplete,
+  isOverdue,
+  isStatusValueComplete,
+  localTodayISO,
+} from "./overdue";
 
 describe("isOverdue", () => {
   it("is true strictly before today, false today/after/missing", () => {
@@ -95,4 +101,55 @@ describe("isItemComplete", () => {
 it("localTodayISO formats the local date", () => {
   expect(localTodayISO(new Date(2026, 6, 3, 23, 30))).toBe("2026-07-03");
   expect(localTodayISO(new Date(2026, 0, 5, 0, 1))).toBe("2026-01-05");
+});
+
+describe("firstStatusColumn", () => {
+  const a = { id: "c1", kind: "status", position: 3, settings: {} };
+  const b = { id: "c2", kind: "status", position: 1, settings: {} };
+  const text = { id: "c3", kind: "text", position: 0, settings: {} };
+
+  it("returns the lowest-position status column", () => {
+    expect(firstStatusColumn([text, a, b] as never)?.id).toBe("c2");
+  });
+
+  it("returns null when the board has no status column", () => {
+    expect(firstStatusColumn([text] as never)).toBeNull();
+    expect(firstStatusColumn([])).toBeNull();
+  });
+});
+
+describe("isStatusValueComplete", () => {
+  const statusCol = {
+    id: "c1",
+    kind: "status",
+    position: 0,
+    settings: {
+      options: [
+        { id: "o1", label: "Working on it", color: "#fdab3d" },
+        { id: "o2", label: "Done", color: "#00c875" },
+      ],
+    },
+  } as never;
+
+  it("is true only for a done-labeled option of that column", () => {
+    expect(isStatusValueComplete({ optionId: "o2" }, statusCol)).toBe(true);
+    expect(isStatusValueComplete({ optionId: "o1" }, statusCol)).toBe(false);
+    expect(isStatusValueComplete({ optionId: "nope" }, statusCol)).toBe(false);
+  });
+
+  it("is false for an empty value or a board with no status column", () => {
+    expect(isStatusValueComplete(null, statusCol)).toBe(false);
+    expect(isStatusValueComplete({ optionId: null }, statusCol)).toBe(false);
+    expect(isStatusValueComplete({ optionId: "o2" }, null)).toBe(false);
+  });
+
+  it("agrees with isItemComplete for the same board state", () => {
+    const cells = [
+      { item_id: "i1", column_id: "c1", value: { optionId: "o2" } },
+    ] as never[];
+    const col = firstStatusColumn([statusCol] as never);
+    expect(isStatusValueComplete({ optionId: "o2" }, col)).toBe(
+      isItemComplete("i1", [statusCol] as never, cells),
+    );
+  });
 });

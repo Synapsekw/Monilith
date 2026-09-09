@@ -16,33 +16,71 @@ export function localTodayISO(now: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** The status column a board's completeness is read from: lowest position wins. */
+type StatusColumn = Pick<CacheColumn, "id" | "kind" | "position" | "settings">;
+
+/**
+ * The board's FIRST status column (by position), or `null` when it has none.
+ *
+ * Hoisted out of {@link isItemComplete} so the table can resolve it ONCE per
+ * render (a `useMemo` over `columns`) instead of re-deriving it — filter + sort
+ * over every column — inside every visible date cell.
+ */
+export function firstStatusColumn<T extends StatusColumn>(
+  columns: readonly T[],
+): T | null {
+  let first: T | null = null;
+  for (const c of columns) {
+    if (c.kind !== "status") continue;
+    if (!first || c.position < first.position) first = c;
+  }
+  return first;
+}
+
+/**
+ * Complete ⇔ `value` — the item's cell value in `statusColumn` — holds an
+ * option whose label matches /done|complete/i. The O(1) form of
+ * {@link isItemComplete}: callers that already hold the cell (via the table's
+ * `cellMap`) and the resolved status column pass them straight in, instead of
+ * scanning every cell value on the board per date cell.
+ */
+export function isStatusValueComplete(
+  value: unknown,
+  statusColumn: Pick<CacheColumn, "settings"> | null,
+): boolean {
+  if (!statusColumn) return false;
+  const optionId =
+    typeof value === "object" && value !== null
+      ? (value as { optionId?: string | null }).optionId
+      : null;
+  if (!optionId) return false;
+  const options =
+    (statusColumn.settings as { options?: { id: string; label: string }[] })
+      ?.options ?? [];
+  const option = options.find((o) => o.id === optionId);
+  return option ? DONE_LABEL.test(option.label) : false;
+}
+
 /**
  * Complete ⇔ the item's cell in the board's FIRST status column (by position)
  * holds an option whose label matches /done|complete/i. No status column, no
  * cell, or a non-done option ⇒ incomplete.
+ *
+ * O(all cell values). Kept as the standalone predicate for callers that hold
+ * only a raw board payload; render hot paths use
+ * {@link firstStatusColumn} + {@link isStatusValueComplete} instead.
  */
 export function isItemComplete(
   itemId: string,
-  columns: Pick<CacheColumn, "id" | "kind" | "position" | "settings">[],
+  columns: StatusColumn[],
   cellValues: CacheCellValue[],
 ): boolean {
-  const statusCol = columns
-    .filter((c) => c.kind === "status")
-    .sort((a, b) => a.position - b.position)[0];
+  const statusCol = firstStatusColumn(columns);
   if (!statusCol) return false;
   const cell = cellValues.find(
     (v) => v.item_id === itemId && v.column_id === statusCol.id,
   );
-  const optionId =
-    cell && typeof cell.value === "object" && cell.value !== null
-      ? (cell.value as { optionId?: string | null }).optionId
-      : null;
-  if (!optionId) return false;
-  const options =
-    (statusCol.settings as { options?: { id: string; label: string }[] })
-      ?.options ?? [];
-  const option = options.find((o) => o.id === optionId);
-  return option ? DONE_LABEL.test(option.label) : false;
+  return isStatusValueComplete(cell?.value ?? null, statusCol);
 }
 
 /**
