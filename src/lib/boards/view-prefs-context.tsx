@@ -48,33 +48,65 @@ export type BoardViewPrefsApi = {
 
 const noop = () => {};
 
-/**
- * Inert default so a view rendered outside the provider (tests, Storybook-style
- * harnesses) degrades to today's behaviour instead of throwing. Remembering an
- * arrangement is a convenience; its absence must never break a board.
- */
-const INERT: BoardViewPrefsApi = {
-  collapsedGroups: new Set(),
-  expandedItems: new Set(),
-  initialFilterQuery: "",
-  toggleGroupCollapsed: noop,
-  toggleItemExpanded: noop,
-  setActiveViewId: noop,
-  setFilterQuery: noop,
-  pruneTo: noop,
-};
-
-const BoardViewPrefsContext = createContext<BoardViewPrefsApi>(INERT);
-
-export function useBoardViewPrefs(): BoardViewPrefsApi {
-  return useContext(BoardViewPrefsContext);
-}
+const BoardViewPrefsContext = createContext<BoardViewPrefsApi | null>(null);
 
 function toggleIn(set: Set<string>, id: string): Set<string> {
   const next = new Set(set);
   if (next.has(id)) next.delete(id);
   else next.add(id);
   return next;
+}
+
+/**
+ * Fallback used when a view is rendered outside the provider (tests,
+ * Storybook-style harnesses). Remembering an arrangement is a convenience, so
+ * its absence must never break a board — but a purely inert object would not
+ * "degrade to today's behaviour", it would FREEZE the UI: collapse and
+ * expansion are state, so no-op togglers leave every group permanently open and
+ * every sub-item permanently hidden. Real (unpersisted) local state is what
+ * today's behaviour actually is, so that is what the no-provider path returns.
+ *
+ * The write-only half stays inert: with nowhere to persist to, recording the
+ * active view or the filter query has no observable effect.
+ */
+function useLocalBoardViewPrefs(): BoardViewPrefsApi {
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const toggleGroupCollapsed = useCallback(
+    (groupId: string) => setCollapsedGroups((prev) => toggleIn(prev, groupId)),
+    [],
+  );
+  const toggleItemExpanded = useCallback(
+    (itemId: string) => setExpandedItems((prev) => toggleIn(prev, itemId)),
+    [],
+  );
+
+  return useMemo(
+    () => ({
+      collapsedGroups,
+      expandedItems,
+      initialFilterQuery: "",
+      toggleGroupCollapsed,
+      toggleItemExpanded,
+      setActiveViewId: noop,
+      setFilterQuery: noop,
+      pruneTo: noop,
+    }),
+    [collapsedGroups, expandedItems, toggleGroupCollapsed, toggleItemExpanded],
+  );
+}
+
+export function useBoardViewPrefs(): BoardViewPrefsApi {
+  const ctx = useContext(BoardViewPrefsContext);
+  // Called unconditionally (hook rules); the two useState cells are inert and
+  // never read when a provider is mounted, which is every production path.
+  const local = useLocalBoardViewPrefs();
+  return ctx ?? local;
 }
 
 export function BoardViewPrefsProvider({

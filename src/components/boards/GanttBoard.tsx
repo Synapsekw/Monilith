@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -22,6 +21,7 @@ import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import {
   buildGanttRows,
   detectViolations,
@@ -258,16 +258,13 @@ export function GanttBoard({
 
   // Sub-item nesting: parents collapsed by default so the timeline opens as a
   // compact top-level overview; expand a parent to reveal its scheduled
-  // sub-items. Local state (not persisted), mirroring the Table view.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const toggleExpand = useCallback((id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  // sub-items.
+  //
+  // Shared with the table view through the view-prefs provider: expanding a row
+  // here and switching to Table shows it expanded there too, and both survive a
+  // reload. (This replaces the local, deliberately-unpersisted copy.)
+  const { expandedItems: expanded, toggleItemExpanded: toggleExpand } =
+    useBoardViewPrefs();
   // The rows actually drawn on the timeline: every top-level row (incl. parent
   // headers), plus the sub-items of expanded parents. Virtualization, the
   // rows-area height, and dependency-arrow indexing all key off this list.
