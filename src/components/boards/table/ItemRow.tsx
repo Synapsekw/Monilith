@@ -49,6 +49,41 @@ type ItemRowProps = {
 };
 
 /**
+ * Every prop {@link itemRowPropsEqual} inspects, listed once so the comparator
+ * and the exhaustiveness assert below can't drift apart. `cellMap` and
+ * `controls` are named here but handled specially (see the comparator).
+ */
+const ITEM_ROW_PROPS = [
+  "item",
+  "columns",
+  "cellMap",
+  "template",
+  "controls",
+  "selectable",
+  "subitems",
+  "childCount",
+  "isExpanded",
+  "onToggleExpand",
+  "autoFocusRename",
+  "onRenameSettled",
+  "onSubitemAdded",
+] as const satisfies readonly (keyof ItemRowProps)[];
+
+/**
+ * Compile-time guard: a prop added to {@link ItemRowProps} but not to
+ * {@link ITEM_ROW_PROPS} would be silently ignored by the comparator — a row
+ * that renders stale. This makes that a BUILD error naming the missing prop.
+ */
+type UnhandledItemRowProp = Exclude<
+  keyof ItemRowProps,
+  (typeof ITEM_ROW_PROPS)[number]
+>;
+const _itemRowPropsExhaustive: [UnhandledItemRowProp] extends [never]
+  ? true
+  : UnhandledItemRowProp = true;
+void _itemRowPropsExhaustive;
+
+/**
  * Row-scoped props equality.
  *
  * `cellMap` and `controls.cache` are BOARD-wide: a single cell edit (typed by
@@ -65,23 +100,19 @@ export function itemRowPropsEqual(
   prev: ItemRowProps,
   next: ItemRowProps,
 ): boolean {
-  if (
-    prev.item !== next.item ||
-    prev.columns !== next.columns ||
-    prev.template !== next.template ||
-    prev.selectable !== next.selectable ||
-    prev.subitems !== next.subitems ||
-    prev.childCount !== next.childCount ||
-    prev.isExpanded !== next.isExpanded ||
-    prev.onToggleExpand !== next.onToggleExpand ||
-    prev.autoFocusRename !== next.autoFocusRename ||
-    prev.onRenameSettled !== next.onRenameSettled ||
-    prev.onSubitemAdded !== next.onSubitemAdded
-  ) {
-    return false;
+  for (const key of ITEM_ROW_PROPS) {
+    if (key === "cellMap" || key === "controls") continue;
+    if (!Object.is(prev[key], next[key])) return false;
   }
   if (!cellControlsEqual(prev.controls, next.controls)) return false;
-  const itemIds = [next.item.id, ...next.subitems.map((s) => s.id)];
+  // Subitem values are this row's business ONLY while it rolls them up (a
+  // collapsed parent). Expanded, each subitem is its own memoized row and owns
+  // its own values — comparing them here would re-render the parent for a
+  // child's edit.
+  const rollsUpSubitems = next.childCount > 0 && !next.isExpanded;
+  const itemIds = rollsUpSubitems
+    ? [next.item.id, ...next.subitems.map((s) => s.id)]
+    : [next.item.id];
   return rowCellsEqual(prev.cellMap, next.cellMap, itemIds, next.columns);
 }
 

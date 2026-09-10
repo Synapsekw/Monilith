@@ -171,12 +171,14 @@ export function BoardTableInner({
   // every visible cell a new bundle on each click (~300 re-renders to open one
   // editor, ~300 more to close it). See ./editing-store.
   const setEditing = useEditingCell((s) => s.setEditing);
-  // Edit mode is scoped to the mounted board: clear it on mount and unmount so
-  // it never bleeds into the next board (same contract as presence-focus-store).
+  // Edit mode is scoped to ONE board: clear it on mount, on unmount, and when
+  // this component is reused for a different board (the boards route keeps the
+  // table mounted across a board switch), so it never bleeds across boards.
+  // Same contract as presence-focus-store.
   useEffect(() => {
     setEditing(null);
     return () => setEditing(null);
-  }, [setEditing]);
+  }, [setEditing, payload.board.id]);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
@@ -425,6 +427,17 @@ export function BoardTableInner({
   const [liveNameWidth, setLiveNameWidth] = useState<number | null>(null);
   const nameWidth = liveNameWidth ?? board.name_column_width ?? autoFitWidth;
 
+  // TODO(perf-follow-up): `template` is the CSS grid-template string and it is
+  // threaded to every row as an inline style, so a live column resize
+  // (`liveWidths` ticking per pointer-move) re-renders EVERY visible row and
+  // cell — the one interaction the row memoization above cannot help with.
+  // The fix is to stop passing widths through React at all: set
+  // `--board-grid-template` as a custom property on the scroll container and
+  // have rows use `gridTemplateColumns: var(--board-grid-template)`, so a
+  // resize is a single style write on one element. It is deferred because it
+  // has to land in one go across every grid-row surface — the group header row,
+  // the item/subitem rows, the summary rows AND AddItemRow (owned by the
+  // optimistic-add work) — all of which read `template`/`nameWidth` today.
   const template = useMemo(
     () => gridTemplate(columns, liveWidths, nameWidth),
     [columns, liveWidths, nameWidth],

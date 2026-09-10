@@ -137,6 +137,9 @@ export function cellControlsEqual(a: CellControls, b: CellControls): boolean {
   const keys = Object.keys(a) as (keyof CellControls)[];
   if (keys.length !== Object.keys(b).length) return false;
   for (const key of keys) {
+    // Same count is not the same SET of keys — check membership, or a bundle
+    // that swapped one optional field for another would compare equal.
+    if (!(key in b)) return false;
     if (key === "cache") continue;
     if (!Object.is(a[key], b[key])) return false;
   }

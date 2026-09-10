@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { withSubitems } from "@/lib/boards/item-tree";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import type { Column, Group, Item } from "@/lib/boards/queries";
 import type { CacheCellValue } from "@/lib/boards/cache";
 import { SummaryRow, hasAssignedSummary } from "@/components/boards/SummaryRow";
@@ -195,6 +196,19 @@ export const GroupSection = memo(function GroupSection({
 
   const virtualRows = virtualizer.getVirtualItems();
 
+  // Temp-row rule (see @/lib/boards/optimistic-id): the selection store refuses
+  // optimistic ids, so a "select all visible" list containing one could never
+  // reach `selectedCount === visibleIds.length` — the header checkbox would
+  // latch unchecked and its second click would re-select instead of clearing.
+  // Selectable = the rows the store will actually take.
+  const selectableIds = useMemo(
+    () =>
+      itemIds.some(isOptimisticId)
+        ? itemIds.filter((id) => !isOptimisticId(id))
+        : itemIds,
+    [itemIds],
+  );
+
   // Ids of this group's rows AND their subitems — the summary row's scope.
   // Memoized so SummaryRow's own footer memo isn't invalidated every render.
   const summaryItemIds = useMemo(
@@ -230,8 +244,8 @@ export const GroupSection = memo(function GroupSection({
         columns={columns}
         template={template}
         selectAll={
-          selectable && items.length > 0 ? (
-            <GroupSelectAllCheckbox visibleIds={itemIds} />
+          selectable && selectableIds.length > 0 ? (
+            <GroupSelectAllCheckbox visibleIds={selectableIds} />
           ) : null
         }
         collapsed={collapsed}

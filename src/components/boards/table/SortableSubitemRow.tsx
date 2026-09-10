@@ -36,20 +36,45 @@ type SubitemRowProps = {
   onRenameSettled: () => void;
 };
 
+/**
+ * Every prop {@link subitemRowPropsEqual} inspects, listed once. `cellMap`,
+ * `controls` and `renamingItemId` are named here but handled specially.
+ */
+const SUBITEM_ROW_PROPS = [
+  "sub",
+  "columns",
+  "cellMap",
+  "template",
+  "controls",
+  "renamingItemId",
+  "onRenameSettled",
+] as const satisfies readonly (keyof SubitemRowProps)[];
+
+/** Compile-time guard — see the equivalent in ./ItemRow. */
+type UnhandledSubitemRowProp = Exclude<
+  keyof SubitemRowProps,
+  (typeof SUBITEM_ROW_PROPS)[number]
+>;
+const _subitemRowPropsExhaustive: [UnhandledSubitemRowProp] extends [never]
+  ? true
+  : UnhandledSubitemRowProp = true;
+void _subitemRowPropsExhaustive;
+
 /** Row-scoped props equality — see `itemRowPropsEqual` in ./ItemRow. */
 export function subitemRowPropsEqual(
   prev: SubitemRowProps,
   next: SubitemRowProps,
 ): boolean {
+  for (const key of SUBITEM_ROW_PROPS) {
+    if (key === "cellMap" || key === "controls" || key === "renamingItemId")
+      continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  // Only this row's rename flag matters; another row entering rename mode must
+  // not re-render it.
   if (
-    prev.sub !== next.sub ||
-    prev.columns !== next.columns ||
-    prev.template !== next.template ||
-    prev.onRenameSettled !== next.onRenameSettled ||
-    // Only this row's rename flag matters; another row entering rename mode
-    // must not re-render it.
     (prev.renamingItemId === next.sub.id) !==
-      (next.renamingItemId === next.sub.id)
+    (next.renamingItemId === next.sub.id)
   ) {
     return false;
   }
