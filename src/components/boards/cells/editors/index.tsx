@@ -54,6 +54,24 @@ type EditorProps<V> = {
   onClear?: () => void;
 };
 
+/**
+ * Column kinds whose editor holds a SET of values and commits once per toggle
+ * (see {@link DropdownEditor}, {@link PeopleEditor}). For these, a commit is a
+ * step in an ongoing selection, not the end of one — the caller must leave the
+ * editor mounted so the next pick lands in the same popover. Closing on the
+ * first commit is what made a People column read as single-assignee.
+ */
+export const MULTI_VALUE_KINDS: ReadonlySet<string> = new Set([
+  "people",
+  "dropdown",
+]);
+
+/** True when `kind`'s editor must stay open after `onCommit` — dismissal is the
+ *  user's job (Escape / outside click → `onCancel`). Clearing always closes. */
+export function commitKeepsEditorOpen(kind: string): boolean {
+  return MULTI_VALUE_KINDS.has(kind);
+}
+
 /** Shared key handling: Enter commits, Escape cancels. */
 function useCommitKeys(commit: () => void, cancel: () => void) {
   return (e: React.KeyboardEvent) => {

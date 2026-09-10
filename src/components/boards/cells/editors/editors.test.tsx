@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import {
   CellEditor,
   CheckboxEditor,
+  commitKeepsEditorOpen,
   DateEditor,
   DropdownEditor,
   LinkEditor,
@@ -265,6 +266,67 @@ describe("PeopleEditor", () => {
     );
     await userEvent.click(screen.getByText("Ada"));
     expect(onCommit).toHaveBeenCalledWith({ userIds: ["u1"] });
+  });
+
+  it("grows the committed list as further members are picked", async () => {
+    const onCommit = vi.fn();
+    render(
+      <PeopleEditor
+        value={{ userIds: [] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+          { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
+        ]}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByText("Ada"));
+    await userEvent.click(screen.getByText("Grace"));
+    expect(onCommit).toHaveBeenNthCalledWith(1, { userIds: ["u1"] });
+    expect(onCommit).toHaveBeenNthCalledWith(2, { userIds: ["u1", "u2"] });
+  });
+
+  it("commits the remainder when one of several members is toggled off", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u1", "u2"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+          { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
+        ]}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByText("Ada"));
+    expect(onCommit).toHaveBeenCalledWith({ userIds: ["u2"] });
+    expect(onClear).not.toHaveBeenCalled();
+  });
+
+  it("clears via onClear when the last member is toggled off", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u1"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+        ]}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByText("Ada"));
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it("routes the trailing Clear button through onClear", async () => {
@@ -605,5 +667,15 @@ describe("PriorityEditor", () => {
       />,
     );
     expect(screen.queryByText(/auto-critical/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("commitKeepsEditorOpen", () => {
+  it("keeps the editor open only for the set-valued kinds", () => {
+    expect(commitKeepsEditorOpen("people")).toBe(true);
+    expect(commitKeepsEditorOpen("dropdown")).toBe(true);
+    for (const kind of ["status", "priority", "date", "text", "numbers"]) {
+      expect(commitKeepsEditorOpen(kind)).toBe(false);
+    }
   });
 });
