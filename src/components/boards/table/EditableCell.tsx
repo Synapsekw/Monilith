@@ -18,7 +18,10 @@ import {
 } from "@/lib/boards/mirror";
 import { listRelationCandidates } from "@/lib/boards/relation-candidates";
 import { type RelationLink } from "@/lib/boards/relations";
-import { CellEditor } from "@/components/boards/cells/editors";
+import {
+  CellEditor,
+  commitKeepsEditorOpen,
+} from "@/components/boards/cells/editors";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import {
   filesForCell,
@@ -207,7 +210,10 @@ export const EditableCell = memo(function EditableCell({
           columnName={column.name}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
-            setEditing(null);
+            // Multi-value kinds (people, dropdown) commit once per toggle, so
+            // closing here would end the selection after one pick. They stay
+            // open until the user dismisses them (Escape / outside click).
+            if (!commitKeepsEditorOpen(column.kind)) setEditing(null);
           }}
           onClear={() => {
             clearCellValue({ itemId: item.id, columnId: column.id });
