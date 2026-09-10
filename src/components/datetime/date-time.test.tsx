@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { DateTime } from "./date-time";
 import { DeviceTimeZoneProvider } from "@/lib/datetime/device-timezone";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
+import { renderServerHtml } from "@/test/render-server-html";
 
 // Pin the client-detected device zone so the assertions are deterministic
 // regardless of the test runner's machine timezone. Matches the seed passed to
@@ -40,14 +42,42 @@ describe("DateTime", () => {
     expect(screen.getByRole("time")).toHaveTextContent(/Jun 21, 2026/);
   });
 
-  it("renders machine-readable-only when no zone is known (first-ever visit)", () => {
-    render(
-      <TimeZoneProvider timeZone={null}>
-        <DateTime value={ISO} />
-      </TimeZoneProvider>,
+  it("renders the seeded zone in the server-streamed HTML when the seed is still a promise", async () => {
+    // The shell hands the device zone down as an UNAWAITED cookie promise so
+    // the route keeps its static shell; the visitor must still get a real
+    // timestamp in the first streamed HTML, not a blank <time>.
+    const html = await renderServerHtml(
+      <DeviceTimeZoneProvider initial={Promise.resolve("America/New_York")}>
+        <TimeZoneProvider timeZone={null}>
+          <DateTime value={ISO} />
+        </TimeZoneProvider>
+      </DeviceTimeZoneProvider>,
     );
-    const el = screen.getByRole("time");
-    expect(el).toHaveAttribute("dateTime", new Date(ISO).toISOString());
-    expect(el).toHaveTextContent(""); // no human text, but not absent
+    expect(html).toMatch(/Jun 20, 2026/);
+  });
+
+  it("renders machine-readable-only in the server HTML when no zone is known (first-ever visit)", () => {
+    // A visitor with no `pulse_tz` cookie: the server has no zone to format in,
+    // so the first bytes carry the stable ISO attribute and no human text.
+    const html = renderToStaticMarkup(
+      <DeviceTimeZoneProvider initial={null}>
+        <TimeZoneProvider timeZone={null}>
+          <DateTime value={ISO} />
+        </TimeZoneProvider>
+      </DeviceTimeZoneProvider>,
+    );
+    expect(html).toContain(new Date(ISO).toISOString());
+    expect(html).not.toMatch(/Jun \d\d, 2026/);
+  });
+
+  it("fills in the detected device zone after mount when there was no seed", () => {
+    render(
+      <DeviceTimeZoneProvider initial={null}>
+        <TimeZoneProvider timeZone={null}>
+          <DateTime value={ISO} />
+        </TimeZoneProvider>
+      </DeviceTimeZoneProvider>,
+    );
+    expect(screen.getByRole("time")).toHaveTextContent(/Jun 20, 2026/);
   });
 });

@@ -21,7 +21,19 @@ import { boardKey, patchBoardCache } from "@/lib/boards/use-board-cache";
 
 export type SetCellVars = { itemId: string; columnId: string; value: unknown };
 export type ClearCellVars = { itemId: string; columnId: string };
-export type AddItemVars = { groupId: string; name: string };
+export type AddItemVars = {
+  groupId: string;
+  name: string;
+  /**
+   * A cell to write on the new row at the same time (Kanban quick-add: the
+   * status the column represents). Applied OPTIMISTICALLY to the temp row in
+   * `addItemMutation.onMutate` so the card paints in the column the user added
+   * it to instead of flashing in "No status" and jumping a round-trip later;
+   * `replaceItemId` re-keys it onto the server id, and the caller persists it
+   * with its own `setCell` once the real id exists. Never sent to `createItem`.
+   */
+  cell?: { columnId: string; value: unknown };
+};
 export type RenameItemVars = { itemId: string; name: string };
 export type RenameGroupVars = { groupId: string; name: string };
 export type RenameBoardVars = { name: string };
@@ -90,6 +102,14 @@ export function pickFields<T extends object>(
 export type BoardMutationCtx = {
   qc: QueryClient;
   boardId: string;
+  /**
+   * The signed-in user's id, used to author OPTIMISTIC temp rows. `created_by`
+   * is stamped from `auth.uid()` server-side, but until the real row arrives
+   * the temp one has to claim an author itself — `""` rendered "Unknown" in the
+   * Created-by cell for the whole round-trip. `""` remains the fallback for
+   * callers that have no session id to hand.
+   */
+  currentUserId: string;
   key: ReturnType<typeof boardKey>;
   rollback: (ctx: Ctx | undefined) => void;
   resyncOnError: () => void;
@@ -112,6 +132,7 @@ export type BoardMutationCtx = {
 export function createBoardMutationCtx(
   qc: QueryClient,
   boardId: string,
+  currentUserId = "",
 ): BoardMutationCtx {
   const key = boardKey(boardId);
 
@@ -255,6 +276,7 @@ export function createBoardMutationCtx(
   return {
     qc,
     boardId,
+    currentUserId,
     key,
     rollback,
     resyncOnError,

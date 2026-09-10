@@ -39,11 +39,12 @@ export { pickFields, stripOption } from "./mutations/shared";
  * the returned wrappers are fresh per render (no memoization was ever added
  * here — the referentially-stable layer lives in the consumers).
  */
-export function useBoardMutations(boardId: string) {
+export function useBoardMutations(boardId: string, currentUserId = "") {
   const qc = useQueryClient();
   // Per-render shared context (query key + targeted-rollback helpers) — the
   // exact functions that used to be declared inline in this hook's body.
-  const ctx = createBoardMutationCtx(qc, boardId);
+  // `currentUserId` authors OPTIMISTIC temp rows (see `BoardMutationCtx`).
+  const ctx = createBoardMutationCtx(qc, boardId, currentUserId);
 
   const { setCellMutation, clearCellMutation } = useCellMutations(ctx);
   const {

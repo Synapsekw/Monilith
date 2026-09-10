@@ -24,6 +24,8 @@ import {
 } from "@/lib/boards/presence-context";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
+import { BoardViewPrefsProvider } from "@/lib/boards/view-prefs-context";
+import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -96,6 +98,12 @@ vi.mock("./BoardHeader", () => ({
 // set so existing rows still render.
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
+}));
+
+// The view-prefs provider persists through a real Server Action, which cannot
+// run in jsdom. Stub it so mounting the provider stays inert.
+vi.mock("@/lib/boards/view-prefs-actions", () => ({
+  saveBoardViewPrefs: vi.fn(async () => ({ ok: true, data: undefined })),
 }));
 
 // Spy on the shared touch-aware sensor hook (still delegating to the real
@@ -525,6 +533,52 @@ describe("BoardTable add-subitem hover button", () => {
         screen.getByRole("button", { name: "Collapse Task One" }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("expands the parent immediately, not when the mutation resolves", async () => {
+    // A collapsed parent renders RollupValueCells over its children. The
+    // optimistic temp subitem lands at `onMutate` — so a parent that only
+    // expands in `onSuccess` spends the whole round-trip rolling up a
+    // value-less row, and its own cell values visibly blank out and come back.
+    let resolveAdd: (v: unknown) => void = () => {};
+    addSubitem.mockImplementation(
+      () => new Promise((resolve) => (resolveAdd = resolve)),
+    );
+
+    renderChildless();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add subitem to Task One" }),
+    );
+
+    // The optimistic temp subitem has landed (childCount 0→1) but the server
+    // has NOT answered yet — the exact window the bug lived in.
+    await waitFor(() => expect(addSubitem).toHaveBeenCalled());
+    // The parent is already expanded, so the temp subitem is its own row rather
+    // than a value-less child rolled up into the parent's cells.
+    expect(
+      screen.getByRole("button", { name: "Collapse Task One" }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      resolveAdd({
+        ok: true,
+        data: {
+          item: {
+            id: "new-s1",
+            board_id: "b1",
+            org_id: "o1",
+            group_id: "g1",
+            parent_id: "t1",
+            name: "New subitem",
+            position: 1,
+          },
+        },
+      });
+    });
+    // …and it does not toggle back shut when the mutation lands.
+    expect(
+      screen.getByRole("button", { name: "Collapse Task One" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -1532,5 +1586,45 @@ describe("BoardTable touch targets (coarse pointer)", () => {
     const subHandle = screen.getByRole("button", { name: "Reorder Design" });
     expect(subHandle.className).toContain("pointer-coarse:opacity-100");
     expect(subHandle.className).toContain("pointer-coarse:size-11");
+  });
+});
+
+describe("BoardTable saved arrangement", () => {
+  function renderWithPrefs(collapsedGroupIds: string[]) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <BoardViewPrefsProvider
+          boardId="b1"
+          initial={{ ...EMPTY_BOARD_VIEW_PREFS, collapsedGroupIds }}
+        >
+          <BoardTable payload={payloadFixture()} selectedViewId="v1" />
+        </BoardViewPrefsProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  // The chevron's aria-label flips with the state: "Expand <group>" while
+  // collapsed, "Collapse <group>" while expanded (see GroupHeaderRow).
+  it("renders a group collapsed when the saved arrangement says so", () => {
+    renderWithPrefs(["g1"]);
+    expect(screen.getByLabelText("Expand Group 1")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("renders the group expanded when nothing is saved", () => {
+    renderWithPrefs([]);
+    expect(screen.getByLabelText("Collapse Group 1")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("toggles a saved-collapsed group back open on click", () => {
+    renderWithPrefs(["g1"]);
+    fireEvent.click(screen.getByLabelText("Expand Group 1"));
+    expect(screen.getByLabelText("Collapse Group 1")).toBeInTheDocument();
   });
 });

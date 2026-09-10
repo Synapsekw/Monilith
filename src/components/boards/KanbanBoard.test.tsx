@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -514,7 +515,83 @@ describe("KanbanBoard Group-by (B3: instant regroup, background persist)", () =>
   });
 });
 
+describe("KanbanBoard quick-add (optimistic)", () => {
+  function quickAdd(label: string, text: string) {
+    renderKanban();
+    const input = screen.getByLabelText(`Add item to ${label}`);
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    return input;
+  }
+
+  it("passes the column's status as the add's optimistic cell, so the temp card paints in this column", () => {
+    const input = quickAdd("Working", "New card");
+    expect(addItem).toHaveBeenCalledWith(
+      {
+        groupId: "g1",
+        name: "New card",
+        cell: { columnId: "status", value: { optionId: "o1" } },
+      },
+      expect.anything(),
+    );
+    // Optimistic: nothing to wait for, so the input clears and stays usable.
+    expect(input).toHaveValue("");
+    expect(input).toBeEnabled();
+  });
+
+  it("still persists the status against the real id once the row reconciles", () => {
+    quickAdd("Working", "New card");
+    const callbacks = addItem.mock.calls[0][1] as {
+      onSuccess: (item: { id: string }) => void;
+    };
+    callbacks.onSuccess({ id: "srv1" });
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "srv1",
+      columnId: "status",
+      value: { optionId: "o1" },
+    });
+  });
+
+  it("sends no cell for the No-status column", () => {
+    quickAdd("No status", "Unsorted");
+    expect(addItem).toHaveBeenCalledWith(
+      { groupId: "g1", name: "Unsorted", cell: undefined },
+      expect.anything(),
+    );
+  });
+
+  it("names the failed card in the inline error and hands the text back", () => {
+    const input = quickAdd("Working", "New card");
+    const callbacks = addItem.mock.calls[0][1] as {
+      onError: (e: Error) => void;
+    };
+    act(() => callbacks.onError(new Error("boom")));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      `Couldn't add "New card" — boom`,
+    );
+    expect(input).toHaveValue("New card");
+  });
+});
+
 describe("onCardDropped", () => {
+  it("ignores a drop of a still-optimistic card", () => {
+    // Temp-row rule (@/lib/boards/optimistic-id): the id is not on the server
+    // yet, so the write 404s, rolls back and toasts — misleading the user about
+    // a drag that visually succeeded.
+    const setCellFn = vi.fn();
+    const clear = vi.fn();
+    onCardDropped(
+      "optimistic-11111111-1111-4111-8111-111111111111",
+      "__no_status__",
+      { id: "o2", optionId: "o2" } as never,
+      "status",
+      setCellFn,
+      clear,
+    );
+    expect(setCellFn).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
   it("drop on an option writes the status cell", () => {
     const setCellFn = vi.fn();
     const clear = vi.fn();

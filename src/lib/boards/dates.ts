@@ -43,8 +43,6 @@ export function syntheticDateCellValues(
       out.push({
         item_id: item.id,
         column_id: source,
-        board_id: item.board_id,
-        org_id: item.org_id,
         updated_at: item.updated_at,
         value: { date: ts.slice(0, 10) },
       });
@@ -96,8 +94,7 @@ export function resolveTimelineSpan(
     (c) => c.item_id === itemId && c.column_id === startColumnId,
   );
   const startVal = startCell?.value as
-    | { date?: string; end?: string }
-    | undefined;
+    { date?: string; end?: string } | undefined;
   const startDate = startVal?.date;
 
   let endDate: string | undefined;

@@ -177,8 +177,6 @@ export function useBulkMutations(boardId: string) {
       const next = itemIds.reduce((c, itemId) => {
         if (value === null) return removeCellValue(c, itemId, columnId);
         const cell: CacheCellValue = {
-          org_id: previous.board.org_id,
-          board_id: previous.board.id,
           item_id: itemId,
           column_id: columnId,
           value: value as CacheCellValue["value"],

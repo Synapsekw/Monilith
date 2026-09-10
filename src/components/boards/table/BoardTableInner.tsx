@@ -52,19 +52,17 @@ import {
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { type EditorMember } from "@/components/boards/cells/editors";
-import type {
-  BoardCache,
-  CacheAttachment,
-  CacheColumn,
-} from "@/lib/boards/cache";
+import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
+import { firstStatusColumn } from "@/lib/boards/overdue";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import {
   buildItemPredicate,
   buildItemComparator,
@@ -75,13 +73,23 @@ import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 import { AddGroupRow } from "./AddGroupRow";
 import { GroupSection } from "./GroupSection";
+import { useEditingCell } from "./editing-store";
 import {
   gridTemplate,
   type CellControls,
   type ColumnHeaderControls,
-  type EditingCell,
+  type GroupControls,
   type GroupSummaryControls,
 } from "./shared";
+
+/** Shared empty lists, so a group with no visible rows keeps stable props. */
+const NO_ITEMS: Item[] = [];
+const NO_IDS: string[] = [];
+// Default-parameter empty arrays MUST be module constants: `members = []` in
+// the signature allocates a fresh array on every render, which changes the
+// memoized `controls` bundle's identity and re-renders every visible cell.
+const NO_MEMBERS: EditorMember[] = [];
+const NO_GRANTS: HeaderGrant[] = [];
 
 // Lazy-load the Smart Fill dialog (and its AI action imports) only when a
 // text column's header menu opens it — matches the AskPulseHost pattern.
@@ -103,11 +111,11 @@ const SmartFillDialog = dynamic(
 // presence-focus-store.ts), so they still update per-cell without this re-render.
 export function BoardTableInner({
   payload,
-  members = [],
+  members = NO_MEMBERS,
   selectedViewId,
   currentUserId = "",
   access = "owner",
-  grants = [],
+  grants = NO_GRANTS,
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
@@ -118,20 +126,54 @@ export function BoardTableInner({
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
+  const { data: cache } = useBoardCache(payload.board.id, payload);
   const { board, groups, columns, items, cellValues } = cache;
+
+  // Collapse + expansion are per-user, per-board arrangement, owned by the
+  // view-prefs provider so they survive a reload and follow the user across
+  // devices. Toggles are local-first; the provider debounces the write.
+  const {
+    collapsedGroups,
+    expandedItems: expanded,
+    toggleGroupCollapsed,
+    toggleItemExpanded,
+    pruneTo,
+  } = useBoardViewPrefs();
+
+  // Groups and items get deleted while their ids sit in a saved arrangement.
+  // Intersect against what the board actually holds, so a dead id has no effect
+  // and falls out of the stored row the first time the user opens the board.
+  const groupIdsKey = groups.map((g) => g.id).join(",");
+  const itemIdsKey = items.map((i) => i.id).join(",");
+  useEffect(() => {
+    pruneTo({
+      groupIds: groupIdsKey ? groupIdsKey.split(",") : [],
+      itemIds: itemIdsKey ? itemIdsKey.split(",") : [],
+    });
+    // Keyed on the joined id strings so this runs when the board's membership
+    // changes, not on every re-render that rebuilds the arrays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupIdsKey, itemIdsKey]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scrolledX, setScrolledX] = useState(false);
 
-  const [editing, setEditing] = useState<EditingCell | null>(null);
+  // Edit mode lives in its own store, subscribed to per cell — NOT in this
+  // component's state and NOT in the `controls` bundle. Holding it here handed
+  // every visible cell a new bundle on each click (~300 re-renders to open one
+  // editor, ~300 more to close it). See ./editing-store.
+  const setEditing = useEditingCell((s) => s.setEditing);
+  // Edit mode is scoped to ONE board: clear it on mount, on unmount, and when
+  // this component is reused for a different board (the boards route keeps the
+  // table mounted across a board switch), so it never bleeds across boards.
+  // Same contract as presence-focus-store.
+  useEffect(() => {
+    setEditing(null);
+    return () => setEditing(null);
+  }, [setEditing, payload.board.id]);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
   // "Change currency" dialog target (currency columns only).
   const [currencyFor, setCurrencyFor] = useState<CacheColumn | null>(null);
@@ -192,19 +234,7 @@ export function BoardTableInner({
     if (res.ok) window.open(res.data.url, "_blank", "noopener");
   }
 
-  const toggleExpand = useCallback(
-    (id: string) =>
-      setExpanded((prev) => {
-        const n = new Set(prev);
-        if (n.has(id)) {
-          n.delete(id);
-        } else {
-          n.add(id);
-        }
-        return n;
-      }),
-    [],
-  );
+  const toggleExpand = toggleItemExpanded;
   // Stable so the memoized ItemRow/SubitemBlock skip re-render on unrelated
   // parent updates (this is threaded down as onRenameSettled).
   const handleRenameItemSettled = useCallback(
@@ -212,7 +242,7 @@ export function BoardTableInner({
     [],
   );
 
-  const mutations = useBoardMutations(payload.board.id);
+  const mutations = useBoardMutations(payload.board.id, currentUserId);
   // useBoardMutations returns a fresh object of fresh closures every render,
   // which would change `controls`' identity each render and defeat the row/cell
   // React.memo. Forward through a ref so the exposed methods keep a STABLE
@@ -241,15 +271,19 @@ export function BoardTableInner({
   // swallowed silently) surface as a dismissible banner. Mirrors AddItemRow's
   // inline role="alert" pattern; the project has no toast primitive yet.
   const [columnError, setColumnError] = useState<string | null>(null);
-  // Group-level mutations are used directly in the render body (not threaded
-  // through the memoized `controls`), so plain destructure is fine here. The
-  // cell/item mutations that DO go into `controls` come from the stable `m`
-  // proxy above so the bundle stays referentially stable.
-  const { renameGroup, addGroup, setGroupColor, deleteGroup, reorderGroup } =
-    mutations;
+  // Group mutations used directly in the render body (add-group row, the drag
+  // handler) — neither is a memoized prop, so a plain destructure is fine. The
+  // group actions that ARE threaded down go through the stable `m` proxy (see
+  // `groupControls`), as do the cell/item mutations inside `controls`.
+  const { addGroup, reorderGroup } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
+
+  // The board's first status column, resolved ONCE per render and threaded via
+  // `controls`. Date cells derive their overdue tint from it; deriving it inside
+  // each cell was a filter + sort of every column per cell, per render.
+  const statusColumn = useMemo(() => firstStatusColumn(columns), [columns]);
 
   // Direct-dependent counts for priority cells: one O(edges) pass for the whole
   // board, threaded down via `controls` (same pattern as cellMap) instead of
@@ -315,6 +349,28 @@ export function BoardTableInner({
     return { visibleItemsByGroup: out, visibleCount: count };
   }, [itemsByGroup, predicate, comparator]);
 
+  // Per-group id arrays for dnd-kit's SortableContext. Memoizing on
+  // `visibleItemsByGroup` is NOT enough to keep them referentially stable: its
+  // deps include `cellMap` (the filter predicate and the sort comparator read
+  // cell values), so a single-cell patch recomputes content-equal arrays. Each
+  // `GroupSection` therefore holds its own array's identity with `useStableIds`
+  // — per group, so one group's change doesn't churn the others' contexts.
+  const itemIdsByGroup = useMemo(() => {
+    const out = new Map<string, string[]>();
+    for (const [gid, list] of visibleItemsByGroup)
+      out.set(
+        gid,
+        list.map((i) => i.id),
+      );
+    return out;
+  }, [visibleItemsByGroup]);
+  const groupIds = useMemo(() => groups.map((g) => g.id), [groups]);
+  /** `{id, name}` for the header + bulk bar pickers (stable across re-renders). */
+  const groupOptions = useMemo(
+    () => groups.map((g) => ({ id: g.id, name: g.name })),
+    [groups],
+  );
+
   // Everything filtered away (a filter is active) → show a board-level empty
   // state instead of a wall of empty groups. Sort alone can't reduce the count,
   // so count 0 with items present means the predicate excluded them all.
@@ -367,6 +423,17 @@ export function BoardTableInner({
   const [liveNameWidth, setLiveNameWidth] = useState<number | null>(null);
   const nameWidth = liveNameWidth ?? board.name_column_width ?? autoFitWidth;
 
+  // TODO(perf-follow-up): `template` is the CSS grid-template string and it is
+  // threaded to every row as an inline style, so a live column resize
+  // (`liveWidths` ticking per pointer-move) re-renders EVERY visible row and
+  // cell — the one interaction the row memoization above cannot help with.
+  // The fix is to stop passing widths through React at all: set
+  // `--board-grid-template` as a custom property on the scroll container and
+  // have rows use `gridTemplateColumns: var(--board-grid-template)`, so a
+  // resize is a single style write on one element. It is deferred because it
+  // has to land in one go across every grid-row surface — the group header row,
+  // the item/subitem rows, the summary rows AND AddItemRow (owned by the
+  // optimistic-add work) — all of which read `template`/`nameWidth` today.
   const template = useMemo(
     () => gridTemplate(columns, liveWidths, nameWidth),
     [columns, liveWidths, nameWidth],
@@ -380,51 +447,76 @@ export function BoardTableInner({
 
   // Persist a column's chosen footer aggregation into columns.settings jsonb
   // (migration-free). The update action replaces settings wholesale, so merge.
-  function setColumnSummary(col: Column, agg: AggregationId | null) {
-    const next = { ...((col.settings as Record<string, unknown>) ?? {}) };
-    if (agg) next.summary_aggregation = agg;
-    else delete next.summary_aggregation;
-    mutations.updateColumnSettings(col.id, next);
-  }
+  // Stable (the mutation comes from the `m` proxy) so the bundles below are too.
+  const setColumnSummary = useCallback(
+    (col: Column, agg: AggregationId | null) => {
+      const next = { ...((col.settings as Record<string, unknown>) ?? {}) };
+      if (agg) next.summary_aggregation = agg;
+      else delete next.summary_aggregation;
+      m.updateColumnSettings(col.id, next);
+    },
+    [m],
+  );
 
   // One shared bundle for every group's summary row (see GroupSummaryControls).
-  const groupSummary: GroupSummaryControls = {
-    canEdit,
-    nowMs: footerNowMs,
-    onChange: setColumnSummary,
-  };
+  // Memoized: an object literal here changed identity every render and, through
+  // GroupSection, re-rendered every group (and so every row and cell).
+  const groupSummary: GroupSummaryControls = useMemo(
+    () => ({ canEdit, nowMs: footerNowMs, onChange: setColumnSummary }),
+    [canEdit, footerNowMs, setColumnSummary],
+  );
 
   // Board-level column-management surface shared by every group's header row
   // (columns are board-scoped). Width state stays here so a resize/add/rename
-  // from any group reflows all groups + the footer.
-  const columnControls: ColumnHeaderControls = {
-    nameWidth,
-    liveWidths,
-    setLiveWidths,
-    setLiveNameWidth,
-    renameColumn: mutations.renameColumn,
-    deleteColumn: mutations.deleteColumn,
-    resizeColumn: mutations.resizeColumn,
-    reorderColumn: mutations.reorderColumn,
-    resizeNameColumn: mutations.resizeNameColumn,
-    onAddColumn: (kind) => {
-      if (kind === "relation") {
-        setRelationTargetBoards([]);
-        setRelationConfigOpen(true);
-        listRelationTargetBoards().then(setRelationTargetBoards);
-      } else if (kind === "mirror") {
-        setMirrorConfigOpen(true);
-      } else {
-        setColumnError(null);
-        mutations.addColumn(kind, undefined, {
-          onError: (err) => setColumnError(err.message),
-        });
-      }
-    },
-    onEditOptions: (c) => setOptionsFor(c),
-    onEditCurrency: (c) => setCurrencyFor(c),
-    onSmartFill: (c) => setSmartFillFor(c),
-  };
+  // from any group reflows all groups + the footer. Memoized on the width state
+  // alone — every callback below is stable (the `m` proxy / setState setters) —
+  // so a dialog, a scroll or a cell edit no longer re-creates it.
+  const columnControls: ColumnHeaderControls = useMemo(
+    () => ({
+      nameWidth,
+      liveWidths,
+      setLiveWidths,
+      setLiveNameWidth,
+      renameColumn: m.renameColumn,
+      deleteColumn: m.deleteColumn,
+      resizeColumn: m.resizeColumn,
+      reorderColumn: m.reorderColumn,
+      resizeNameColumn: m.resizeNameColumn,
+      onAddColumn: (kind) => {
+        if (kind === "relation") {
+          setRelationTargetBoards([]);
+          setRelationConfigOpen(true);
+          listRelationTargetBoards().then(setRelationTargetBoards);
+        } else if (kind === "mirror") {
+          setMirrorConfigOpen(true);
+        } else {
+          setColumnError(null);
+          m.addColumn(kind, undefined, {
+            onError: (err) => setColumnError(err.message),
+          });
+        }
+      },
+      onEditOptions: (c) => setOptionsFor(c),
+      onEditCurrency: (c) => setCurrencyFor(c),
+      onSmartFill: (c) => setSmartFillFor(c),
+    }),
+    [nameWidth, liveWidths, m],
+  );
+
+  // Id-keyed group actions, built once for the whole board: the per-group
+  // closures these replace were rebuilt every render and defeated
+  // GroupSection's memo.
+  const clearRenameGroup = useCallback(() => setRenameGroupId(null), []);
+  const groupControls: GroupControls = useMemo(
+    () => ({
+      rename: m.renameGroup,
+      setColor: m.setGroupColor,
+      remove: m.deleteGroup,
+      toggleCollapsed: toggleGroupCollapsed,
+      onRenameSettled: clearRenameGroup,
+    }),
+    [m, toggleGroupCollapsed, clearRenameGroup],
+  );
 
   // Stable subitem-add wrapper (adapts the mutation's onSuccess(item) → id).
   const addSubitemControl = useCallback(
@@ -449,7 +541,6 @@ export function BoardTableInner({
   // toggle no longer re-creates `controls` and the row/cell React.memo can skip.
   const controls: CellControls = useMemo(
     () => ({
-      editing,
       setEditing,
       setCell: m.setCell,
       clearCellValue: m.clearCellValue,
@@ -464,6 +555,7 @@ export function BoardTableInner({
       moveItemToGroup: m.moveItemToGroup,
       cache,
       dependentsByItem,
+      statusColumn,
       uploadColumnFile: m.uploadColumnFile,
       openFilesLightbox,
       filesPreviewUrls,
@@ -477,7 +569,7 @@ export function BoardTableInner({
       setRelationLinks: m.setRelationLinks,
     }),
     [
-      editing,
+      setEditing,
       m,
       members,
       payload.board.id,
@@ -485,6 +577,7 @@ export function BoardTableInner({
       addSubitemControl,
       cache,
       dependentsByItem,
+      statusColumn,
       openFilesLightbox,
       filesPreviewUrls,
       filesThumbUrls,
@@ -614,7 +707,7 @@ export function BoardTableInner({
         selectedViewId={selectedViewId}
         columns={columns}
         members={members}
-        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+        groups={groupOptions}
         access={access}
         grants={grants}
         currentUserId={currentUserId}
@@ -679,7 +772,7 @@ export function BoardTableInner({
               onDragEnd={handleBoardDragEnd}
             >
               <SortableContext
-                items={groups.map((g) => g.id)}
+                items={groupIds}
                 strategy={verticalListSortingStrategy}
               >
                 {groups.map((group, groupIndex) => (
@@ -687,7 +780,8 @@ export function BoardTableInner({
                     key={group.id}
                     group={group}
                     groupIndex={groupIndex}
-                    items={visibleItemsByGroup.get(group.id) ?? []}
+                    items={visibleItemsByGroup.get(group.id) ?? NO_ITEMS}
+                    itemIds={itemIdsByGroup.get(group.id) ?? NO_IDS}
                     columns={columns}
                     selectable={canEdit}
                     col={columnControls}
@@ -695,13 +789,11 @@ export function BoardTableInner({
                     template={template}
                     controls={controls}
                     summary={groupSummary}
-                    onRenameGroup={(name) => renameGroup(group.id, name)}
+                    groupControls={groupControls}
                     nameWidth={nameWidth}
                     autoFocusRename={group.id === renameGroupId}
-                    onRenameSettled={() => setRenameGroupId(null)}
-                    onSetColor={(color) => setGroupColor(group.id, color)}
-                    onDelete={() => deleteGroup(group.id)}
                     childrenByParent={childrenByParent}
+                    collapsed={collapsedGroups.has(group.id)}
                     expanded={expanded}
                     onToggleExpand={toggleExpand}
                     renamingItemId={renamingItemId}
@@ -885,7 +977,7 @@ export function BoardTableInner({
       {canEdit && (
         <BoardBulkBar
           boardId={board.id}
-          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+          groups={groupOptions}
           columns={columns}
           members={members}
         />

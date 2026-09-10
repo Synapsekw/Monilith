@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import type { CellControls } from "./shared";
 
 /** Inline input row appended to the expanded subitem block. */
@@ -13,50 +14,56 @@ export function AddSubitemRow({
   controls: CellControls;
 }) {
   const [name, setName] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
-  // After a successful add, refocus this input so the user can type the next
-  // subitem and commit it with Enter alone. The input is disabled mid-flight
-  // (which blurs it), so we wait for the transition to settle before refocusing.
-  const refocusAfterAdd = useRef(false);
-  useEffect(() => {
-    if (!isPending && refocusAfterAdd.current) {
-      refocusAfterAdd.current = false;
-      inputRef.current?.focus();
-    }
-  }, [isPending]);
+  const [error, setError] = useState<string | null>(null);
+  const status = useFieldStatus(error);
+
+  /**
+   * Optimistic, exactly like {@link AddItemRow}: `addSubitemMutation.onMutate`
+   * paints the temp row, so the input clears immediately and never disables —
+   * the user can type the next subitem straight away and commit with Enter
+   * alone. (Before, the input disabled itself for the round-trip, which blurred
+   * it and needed an effect to refocus once the transition settled.)
+   *
+   * The name is already what the user typed, so the new row deliberately does
+   * NOT drop into rename mode — that required a second Enter to dismiss.
+   */
   function commit() {
     const trimmed = name.trim();
     if (!trimmed) return;
-    startTransition(() =>
-      controls.addSubitem(parentId, trimmed, {
-        onSuccess: () => {
-          // The name is already set from what the user typed — do NOT drop the
-          // new row into rename mode (that required a second Enter to dismiss).
-          setName("");
-          refocusAfterAdd.current = true;
-        },
-      }),
-    );
+    setError(null);
+    setName("");
+    controls.addSubitem(parentId, trimmed, {
+      onError: (err) => {
+        // Name the row that failed — the typed text is handed back only if the
+        // next subitem isn't already being typed, so in that race this message
+        // is the only place it survives. Inline (never a toast): same
+        // caller-surfaced contract as AddItemRow.
+        setError(`Couldn't add "${trimmed}" — ${err.message}`);
+        setName((current) => (current === "" ? trimmed : current));
+      },
+    });
   }
+
   return (
-    <div className="bg-surface-sunken sticky left-0 flex items-center gap-2 border-b py-1.5 pr-4 pl-12">
-      <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-      <input
-        ref={inputRef}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-          }
-        }}
-        disabled={isPending}
-        placeholder="Add subitem"
-        aria-label="Add subitem"
-        className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none disabled:opacity-50"
-      />
+    <div className="bg-surface-sunken sticky left-0 flex flex-col border-b py-1.5 pr-4 pl-12">
+      <div className="flex items-center gap-2">
+        <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          placeholder="Add subitem"
+          aria-label="Add subitem"
+          className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none disabled:opacity-50"
+          {...status.controlProps}
+        />
+      </div>
+      <FieldStatus field={status} />
     </div>
   );
 }

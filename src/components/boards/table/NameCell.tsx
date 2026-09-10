@@ -6,6 +6,7 @@ import type { Item } from "@/lib/boards/queries";
 import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import type { CellControls } from "./shared";
 
 /**
@@ -47,8 +48,14 @@ export const NameCell = memo(function NameCell({
   const [editing, setEditing] = useState(autoFocusRename);
   const [name, setName] = useState(item.name);
   const [isPending, startTransition] = useTransition();
+  // Temp-row rule (see @/lib/boards/optimistic-id): while the row's id is
+  // client-minted, a rename would PATCH an id the server doesn't have and
+  // `?item=<id>` would resolve to nothing — so neither affordance arms until
+  // the server row replaces it (one round-trip). Dimmed to say so.
+  const pending = isOptimisticId(item.id);
 
   function open() {
+    if (pending) return;
     setName(item.name);
     setEditing(true);
   }
@@ -128,7 +135,9 @@ export const NameCell = memo(function NameCell({
       {leading}
       <div
         role="button"
-        tabIndex={0}
+        // Temp-row rule: `open()` is a no-op while pending, so keeping this in
+        // the tab order would be a dead stop announcing itself as a button.
+        tabIndex={pending ? -1 : 0}
         aria-label={`${item.name} name`}
         onClick={open}
         onKeyDown={(e) => {
@@ -137,21 +146,25 @@ export const NameCell = memo(function NameCell({
             open();
           }
         }}
+        aria-disabled={pending || undefined}
         className={cn(
-          "focus-visible:ring-ring flex h-full min-w-0 flex-1 cursor-pointer items-center truncate text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          pending ? "cursor-default opacity-60" : "cursor-pointer",
           indented ? "pl-8" : "px-4",
         )}
       >
         {item.name}
       </div>
-      <button
-        type="button"
-        aria-label={`Open ${item.name}`}
-        onClick={() => openItemPanel(item.id)}
-        className="hover:bg-state-hover text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
-      >
-        <Maximize2 className="size-3.5" />
-      </button>
+      {!pending && (
+        <button
+          type="button"
+          aria-label={`Open ${item.name}`}
+          onClick={() => openItemPanel(item.id)}
+          className="hover:bg-state-hover text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
+        >
+          <Maximize2 className="size-3.5" />
+        </button>
+      )}
       {trailing}
     </div>
   );

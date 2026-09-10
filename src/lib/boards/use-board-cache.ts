@@ -26,7 +26,7 @@ export function useBoardCache(boardId: string, initialData: BoardCache) {
       // clobbering it with null. React Query preserves prior data on a thrown
       // background refetch, so the board stays usable until the user leaves.
       if (!payload) throw new Error("Board is no longer available");
-      return payload as unknown as BoardCache;
+      return payload;
     },
     initialData,
     staleTime: Infinity,

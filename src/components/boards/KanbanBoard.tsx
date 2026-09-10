@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
 import { Kicker } from "@/components/ui/kicker";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   selectCardColumns,
   isCardCellEmpty,
@@ -24,8 +23,8 @@ import {
 } from "@/lib/boards/kanban-card";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import type {
-  BoardCache,
   CacheCellValue,
   CacheColumn,
   CacheItem,
@@ -99,6 +98,10 @@ export function onCardDropped(
   setCell: SetCell,
   clearCellValue: ClearCell,
 ) {
+  // Temp-row rule (@/lib/boards/optimistic-id): the card's id is not on the
+  // server yet, so the status write would 404, roll back and toast — for a drag
+  // that looked like it landed.
+  if (isOptimisticId(itemId)) return;
   if (fromColId === toCol.id) return;
   if (toCol.optionId === null) {
     clearCellValue({ itemId, columnId: groupColumnId });
@@ -140,12 +143,10 @@ function KanbanBoardInner({
 }) {
   // Hydrate the shared ["board", boardId] cache + realtime exactly like
   // BoardTable so optimistic + realtime patches re-render this view too.
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
+  const { data: cache } = useBoardCache(payload.board.id, payload);
   const { setCell, clearCellValue, addItem } = useBoardMutations(
     payload.board.id,
+    currentUserId,
   );
 
   // The view config carries the persisted grouping column. We hold a local
@@ -383,7 +384,12 @@ function KanbanColumnView({
   /** Priority pills only: item id → direct-dependent count. */
   dependentsByItem: Map<string, number>;
   addItem: (
-    vars: { groupId: string; name: string },
+    vars: {
+      groupId: string;
+      name: string;
+      /** Written optimistically onto the new row (Kanban: this column's status). */
+      cell?: { columnId: string; value: unknown };
+    },
     callbacks?: {
       onSuccess?: (item: CacheItem) => void;
       onError?: (err: Error) => void;
@@ -503,8 +509,11 @@ const KanbanCard = memo(function KanbanCard({
   dependents?: number;
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
+  // Temp-row rule — a not-yet-persisted card can't be moved between columns
+  // (`onCardDropped` refuses it too; this stops the drag from starting at all).
+  const pending = isOptimisticId(item.id);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: item.id, data: dragData });
+    useDraggable({ id: item.id, disabled: pending, data: dragData });
 
   // The in-view presence signal for a Kanban card is "someone is dragging it":
   // two people grabbing the same card is a real collision. Broadcast focus
@@ -610,7 +619,12 @@ function AddCardInput({
   optionId: string | null;
   groupColumnId: string;
   addItem: (
-    vars: { groupId: string; name: string },
+    vars: {
+      groupId: string;
+      name: string;
+      /** Written optimistically onto the new row (Kanban: this column's status). */
+      cell?: { columnId: string; value: unknown };
+    },
     callbacks?: {
       onSuccess?: (item: CacheItem) => void;
       onError?: (err: Error) => void;
@@ -620,39 +634,54 @@ function AddCardInput({
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
   const status = useFieldStatus(error);
-  // Same trap as the table's AddItemRow: the quick-add input disables itself
-  // while the add is in flight, dropping focus to <body> mid-burst.
-  const inputRef = useRestoreFocusAfterPending<HTMLInputElement>(isPending);
 
+  /**
+   * The add is optimistic (see `addItemMutation`), so this input has nothing to
+   * wait for: it clears at once and never disables, which is also what keeps
+   * focus in it mid-burst (it used to disable itself, dropping focus to
+   * <body>, and needed `useRestoreFocusAfterPending` to claw it back).
+   *
+   * Quick-add creates the item in the first group and — for an option column —
+   * sets its status to that column's option so the card lands where the user
+   * added it. That status is passed as the add's `cell` so the TEMP card is
+   * already in this column (no "No status" flash, no jump when the real write
+   * lands); `setCell` on success is what actually persists it. The No-status
+   * column (optionId === null) leaves the status unset.
+   */
   function commit() {
     const trimmed = name.trim();
     if (!trimmed || !groupId) return;
     setError(null);
-    startTransition(() => {
-      // Quick-add creates the item in the first group, then — for an option
-      // column — sets its status to that column's option so the new card lands
-      // where the user added it. The No-status column (optionId === null) leaves
-      // the status unset.
-      addItem(
-        { groupId, name: trimmed },
-        {
-          onSuccess: (item) => {
-            if (optionId !== null) {
-              setCell({
-                itemId: item.id,
-                columnId: groupColumnId,
-                value: { optionId },
-              });
-            }
-            setName("");
-            setError(null);
-          },
-          onError: (err) => setError(err.message),
+    setName("");
+    addItem(
+      {
+        groupId,
+        name: trimmed,
+        cell:
+          optionId !== null
+            ? { columnId: groupColumnId, value: { optionId } }
+            : undefined,
+      },
+      {
+        onSuccess: (item) => {
+          if (optionId !== null) {
+            setCell({
+              itemId: item.id,
+              columnId: groupColumnId,
+              value: { optionId },
+            });
+          }
         },
-      );
-    });
+        onError: (err) => {
+          // Name the row that failed: by now the user may already be typing the
+          // next one, in which case their draft wins and the failed text is
+          // only recoverable from this message.
+          setError(`Couldn't add "${trimmed}" — ${err.message}`);
+          setName((current) => (current === "" ? trimmed : current));
+        },
+      },
+    );
   }
 
   return (
@@ -660,7 +689,6 @@ function AddCardInput({
       <div className="flex items-center gap-2 px-1">
         <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
         <input
-          ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -669,7 +697,7 @@ function AddCardInput({
               commit();
             }
           }}
-          disabled={isPending || !groupId}
+          disabled={!groupId}
           placeholder="Add item"
           aria-label={`Add item to ${columnLabel}`}
           className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50 pointer-coarse:min-h-11"

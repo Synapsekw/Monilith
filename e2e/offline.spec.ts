@@ -54,22 +54,25 @@ async function waitForServiceWorker(page: Page) {
 
 /**
  * The board snapshot is written to IndexedDB from a React effect
- * (`useBoardSnapshot` -> `OfflinePersistence`'s `persistQueryClientSubscribe`)
+ * (`useBoardSnapshot` -> `OfflinePersistence`'s query-cache subscription)
  * asynchronously after render — also not a single event. Poll the actual
  * IndexedDB record (idb-keyval's default `keyval-store` database / `keyval`
  * object store — see `src/lib/offline/persister.ts`) rather than a fixed
  * `waitForTimeout`.
  *
- * `persistQueryClientSubscribe` (see `@tanstack/query-persist-client-core`'s
- * `persist.ts`) re-persists the WHOLE client on every single query-cache
- * event, unthrottled — so the very first write can land before
- * `useBoardSnapshot`'s effect has set the `boardSnapshot` entry (e.g. it can
- * fire off the board's own data query being added). Checking only "a record
- * exists at this key" would resolve on that early, incomplete write and race
- * ahead of the real snapshot — so this inspects the persisted
- * `clientState.queries` (the exact shape `dehydrate()` produces, keyed by
- * `queryKey`/`queryHash`) for the specific `["boardSnapshot", boardId]` entry
- * this test is about to depend on, not merely "something" at the IDB key.
+ * `OfflinePersistence` re-persists the WHOLE client whenever the query cache
+ * emits an `added`/`updated` event for a `boardSnapshot` query (see
+ * `isBoardSnapshotWrite` in `OfflinePersistence.tsx` — task 4b narrowed this
+ * from re-persisting on EVERY query-cache event, unthrottled, which is what
+ * this comment originally described). Even scoped to `boardSnapshot` events,
+ * an explicit save can still fire before `useBoardSnapshot`'s effect has set
+ * the entry for THIS board (e.g. a different, already-open board's snapshot
+ * writes first). Checking only "a record exists at this key" would resolve on
+ * that early, unrelated write and race ahead of the real snapshot — so this
+ * inspects the persisted `clientState.queries` (the exact shape `dehydrate()`
+ * produces, keyed by `queryKey`/`queryHash`) for the specific
+ * `["boardSnapshot", boardId]` entry this test is about to depend on, not
+ * merely "something" at the IDB key.
  *
  * The poll must never CREATE or MUTATE the database it is observing. An earlier
  * version of this helper called `indexedDB.open("keyval-store")` unconditionally

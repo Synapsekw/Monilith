@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { useStableIds } from "@/lib/boards/stable-ids";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import type { Column, Item } from "@/lib/boards/queries";
 import type { CacheCellValue } from "@/lib/boards/cache";
@@ -36,6 +37,11 @@ export const SubitemBlock = memo(function SubitemBlock({
   onRenameSettled: () => void;
 }) {
   const subitemSensors = useTouchAwareSensors();
+  // Stable `items` identity for dnd-kit: this block re-renders on every
+  // board-wide `cellMap` change (it is a prop), and a fresh array would publish
+  // a new SortableContext value and re-render every subitem row body — see
+  // `@/lib/boards/stable-ids`.
+  const subitemIds = useStableIds(subitems.map((s) => s.id));
 
   function handleSubitemDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -59,7 +65,7 @@ export const SubitemBlock = memo(function SubitemBlock({
         onDragEnd={handleSubitemDragEnd}
       >
         <SortableContext
-          items={subitems.map((s) => s.id)}
+          items={subitemIds}
           strategy={verticalListSortingStrategy}
         >
           {subitems.map((sub) => (

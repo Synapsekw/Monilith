@@ -95,6 +95,106 @@ describe("getBoardPayload error contract", () => {
     expect(limits["cell_values"]).toEqual([20000]);
   });
 
+  it("selects exactly the narrowed cell columns, ordered deterministically", async () => {
+    // Record every .select(...) and .order(...) call on cell_values so a
+    // regression (widening back to `*`, or dropping the PK order that makes
+    // truncation at the 20000 cap deterministic) is caught here instead of by
+    // a payload-size incident in prod. All-empty fixture ⇒ no mirror columns ⇒
+    // cell_values is read once (the board-scoped read), same as the .limit(...)
+    // test above.
+    const selects: Record<string, string[]> = {};
+    const orders: Record<string, [string, unknown][]> = {};
+    from.mockImplementation((table: string) => {
+      const result: Result =
+        table === "boards"
+          ? { data: BOARD_ROW, error: null }
+          : { data: [], error: null };
+      const chain: Record<string, unknown> = {};
+      for (const m of ["eq", "is", "limit", "not", "in"])
+        chain[m] = () => chain;
+      chain.select = (cols: string) => {
+        (selects[table] ??= []).push(cols);
+        return chain;
+      };
+      chain.order = (col: string, opts: unknown) => {
+        (orders[table] ??= []).push([col, opts]);
+        return chain;
+      };
+      chain.maybeSingle = async () => result;
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(result);
+      return chain;
+    });
+
+    await getBoardPayload("b8");
+
+    expect(selects["cell_values"]).toEqual([
+      "item_id, column_id, value, updated_at",
+    ]);
+    expect(orders["cell_values"]).toEqual([
+      ["item_id", { ascending: true }],
+      ["column_id", { ascending: true }],
+    ]);
+  });
+
+  it("orders the mirror-target cell read by the same PK as the main read", async () => {
+    // The mirror read is capped at 4000 too, so without an explicit order its
+    // truncation is an arbitrary subset — the main read's problem, one function
+    // lower. Fire the mirror branch (one mirror column + one relation link) and
+    // assert BOTH cell_values reads carry the (item_id, column_id) order.
+    const MIRROR_COL = {
+      id: "mc1",
+      board_id: "b9",
+      org_id: "o1",
+      kind: "mirror",
+      name: "Mirror",
+      position: 0,
+      width: null,
+      settings: { target_column_id: "tc1", source_relation_column_id: "rc1" },
+    };
+    const LINK = {
+      id: "rl1",
+      item_id: "i1",
+      column_id: "rc1",
+      linked_item_id: "li1",
+      position: 0,
+    };
+    const orders: Record<string, [string, unknown][]> = {};
+    from.mockImplementation((table: string) => {
+      const data =
+        table === "boards"
+          ? BOARD_ROW
+          : table === "columns"
+            ? [MIRROR_COL]
+            : table === "relation_links"
+              ? [LINK]
+              : [];
+      const result: Result = { data, error: null };
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "is", "limit", "not", "in"])
+        chain[m] = () => chain;
+      chain.order = (col: string, opts: unknown) => {
+        (orders[table] ??= []).push([col, opts]);
+        return chain;
+      };
+      chain.maybeSingle = async () => result;
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(result);
+      return chain;
+    });
+
+    await getBoardPayload("b9");
+
+    // Two cell_values reads: the board-scoped one and the mirror-target one —
+    // each ordered by the (item_id, column_id) primary key.
+    expect(orders["cell_values"]).toEqual([
+      ["item_id", { ascending: true }],
+      ["column_id", { ascending: true }],
+      ["item_id", { ascending: true }],
+      ["column_id", { ascending: true }],
+    ]);
+  });
+
   it("issues the head read and the 9 satellite reads concurrently (one batch)", async () => {
     // With the head read parallelized, a missing board no longer gates the
     // satellites: all 10 table reads fire even when boards resolves empty.

@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-09 10:02",
+  "updated": "2026-09-10 10:33",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "86bfda38",
+        "value": "fdfa5bd6",
         "tone": "warn",
-        "note": "AHEAD of main by two tracks: the UI polish + theme presets batch (light-chrome contrast fix, six presets in Settings and the header menu, PageHeader/Kicker ramp, AA pills, one card radius, skeletons and error boundaries, landing on tokens — 28 commits, seven worktrees, every value contrast-tested) and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
+        "note": "AHEAD of main by four tracks: the final performance pass (the authenticated app shell prerenders again after two months at 0 bytes, the board table re-renders only the edited row, adding items is optimistic, the service worker no longer serves the offline page on slow online loads, cell payload a third smaller), per-user board view preferences, the UI polish + theme presets batch, and the dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on develop after the dependency sweep (CI run 34138976762). /api/mcp had no test at all before this session — the new route test drives the real JSON-RPC transport: auth challenge, initialize handshake, and tools/list returning exactly the catalog.",
+        "note": "7301 passing, 1 skipped, on develop. New guards this session: a static-shell source test (no awaited cookies() in the app shell), render-count budgets for the board table, exhaustiveness guards on the row memo comparators.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "159/159",
+        "value": "161/161",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after the theme-preset migration (20260908121511, additive with default 'keystone'). The MCP mis-stamped it again and reconcile-migration-version.sh repaired it — gotcha-55, eleventh time. PROD does not have it yet; carry it in the next /sync-prod.",
+        "note": "Verified by db:ledger-check after both board-view-prefs migrations (20260909064520 creates the table and the save RPC; 20260909070508 revokes the PUBLIC execute grant Postgres hands every new function). gotcha-55 mis-stamped both and both were reconciled.",
         "label": "ledger"
       }
     ]
@@ -195,6 +195,24 @@
         "owner",
         "critical",
         "billing"
+      ]
+    },
+    {
+      "title": "Walk the board arrangement pass before promoting",
+      "why": "Board view preferences merged today and are not promoted. Seven steps in the 2026-09-09 11:31 session note: collapse a group and reload, expand sub-items and reload, switch to Timeline and revisit with a bare URL, apply a filter then clear it and reload again, and confirm a second user's arrangement is independent. The clear-then-reload step is the one that matters — it pins the rule that stops a cleared filter springing back.",
+      "tags": [
+        "boards",
+        "owner",
+        "promote"
+      ]
+    },
+    {
+      "title": "Walk the perf-pass checks before promoting",
+      "why": "Six steps in the 2026-09-10 10:33 session note: hard-reload My Work on Slow 3G and see the sidebar frame paint before data; edit one cell with the Profiler on and confirm only that row re-renders; add items back-to-back without waiting; reload a board on a slow-but-online network and get the board, not the offline page; go offline and still get the offline page; open an item's Updates tab and see device-zone timestamps with no hydration warning.",
+      "tags": [
+        "perf",
+        "owner",
+        "promote"
       ]
     },
     {
@@ -224,14 +242,6 @@
       ]
     },
     {
-      "title": "Unblock the settings shell from three sequential reads",
-      "why": "settings/layout.tsx awaits requireUser(), resolveActiveOrg() and isOrgAdminCached() above the loading.tsx boundary — loading.tsx wraps a layout’s children, not the layout itself — so the dev overlay reports blocking-prerender-dynamic on /settings/*. Dev-only warning, gotcha-97’s shape, and it did not cause the blank page; but the shell does block on all three.",
-      "tags": [
-        "perf",
-        "nextjs"
-      ]
-    },
-    {
       "title": "Re-read every org-admin gate against an AI actor",
       "why": "gotcha-91: an org-admin gate authorises the actor, and a model’s actor is trusted by construction, so the gate was never a defence. Spec 2c found the sibling shape again — agent_remember refused to overwrite an owner note while nothing refused to DELETE one. Found twice now; nothing has swept the rest.",
       "tags": [
@@ -245,9 +255,22 @@
       "tags": [
         "desktop"
       ]
+    },
+    {
+      "title": "Perf follow-ups, none blocking",
+      "why": "settings/* and admin/* still ship 0-byte shells because their own layouts await the auth guard and redirect() above any boundary. Column resize still re-renders every cell (TODO in BoardTableInner: a CSS custom property for the grid template across all row kinds). Lower value: the dashboard page's unbounded workspace-columns read for the add-widget dialog, lazy board-header dialogs and date picker, page-shaped skeletons for six thin loading.tsx files. DB scaling only: readable_board_ids() scans every tenant's boards per statement; no GIN index for the My Work people-cell lookup.",
+      "tags": [
+        "perf",
+        "follow-up"
+      ]
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
+      "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
+    },
     {
       "sev": "amber",
       "title": "A whole visual batch shipped without anyone seeing it",
@@ -346,18 +369,18 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-09-1002-ui-polish-and-theme-presets",
-    "when": "2026-09-09 10:02",
-    "title": "UI polish audit, light-mode nav fix, theme presets",
+    "id": "2026-09-10-1033-final-performance-pass",
+    "when": "2026-09-10 10:33",
+    "title": "Final performance pass: static shell, table re-render, optimistic add",
     "bullets": [
-      "Light mode was washed out because the Aug 27 tint collapsed the bloom onto the first wash stop and --kicker sat at 2.5:1; the bloom is brand-derived now, kicker equals muted-foreground by ruling, and both are contrast-tested.",
-      "Six full theme presets (accent + neutral tint + wash) persist on profiles.theme_preset with a no-flash inline script; pick them in Settings or straight from the header sun/moon menu.",
-      "One PageHeader primitive replaced seven heading patterns, 39 hand-rolled kickers moved onto Kicker, cards unified on 14px, four AA pill failures fixed, and skeletons plus error boundaries cover board, ask, updates, auth and admin.",
-      "The final whole-branch review found ten error.tsx files destructuring unstable_retry, a prop Next 16.3 no longer passes — Try again was dead everywhere and the test encoded it."
+      "An evidence-first audit (build + Turbopack analyzer, DEV pg_stat_statements, three parallel read-only audits) found the DB fast and the bundle with nothing cheap to cut, and six real gaps.",
+      "Every (app) route had shipped a 0-byte static shell since July: one awaited cookies() above every Suspense boundary. Fixed by passing the cookie as an unawaited promise resolved in the one DateTime consumer; 24 routes are Partial Prerender again.",
+      "The board table's React.memo was defeated three ways at once (dnd-kit items array, sensor option literals, editing inside controls). Edit-mode entry now re-renders 1 cell instead of 18 on the fixture.",
+      "Add item and add subitem are optimistic with temp ids reconciled against the realtime echo; the service worker no longer serves the offline page on slow online loads; cell payload is a third smaller."
     ]
   }
 }
-</script>
+    </script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────

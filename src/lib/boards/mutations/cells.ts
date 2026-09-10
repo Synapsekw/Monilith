@@ -36,8 +36,6 @@ export function useCellMutations(ctx: BoardMutationCtx) {
         (c) => c.item_id === vars.itemId && c.column_id === vars.columnId,
       );
       const cell: CacheCellValue = {
-        org_id: previous.board.org_id,
-        board_id: previous.board.id,
         item_id: vars.itemId,
         column_id: vars.columnId,
         value: vars.value as CacheCellValue["value"],

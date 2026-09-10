@@ -10,12 +10,16 @@ import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlash
 import { OfflinePersistence } from "@/components/offline/OfflinePersistence";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
-import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
 import {
   BoardPresenceProvider,
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
+import {
+  BoardViewPrefsProvider,
+  useBoardViewPrefs,
+} from "@/lib/boards/view-prefs-context";
+import type { ResolvedBoardViewPrefs } from "@/lib/validations/view-prefs";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
 import { useBoardSnapshot } from "@/lib/offline/snapshot";
@@ -84,6 +88,7 @@ export function BoardViews({
   currentUserId,
   access,
   grants,
+  viewPrefs,
 }: {
   payload: BoardPayload;
   members: EditorMember[];
@@ -91,8 +96,10 @@ export function BoardViews({
   currentUserId: string;
   access: BoardAccess;
   grants: HeaderGrant[];
+  /** The caller's saved arrangement, read server-side so nothing flashes. */
+  viewPrefs: ResolvedBoardViewPrefs;
 }) {
-  useBoardCache(payload.board.id, payload as unknown as BoardCache);
+  useBoardCache(payload.board.id, payload);
 
   // True only when this tree is the `/offline` route's replay of a cached
   // board (see offline-render-context.tsx). Gates the pieces below that are
@@ -187,6 +194,7 @@ export function BoardViews({
         selectedViewId={activeViewId}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
       />
     ) : selected?.kind === "timeline" ? (
       <GanttBoard
@@ -195,6 +203,7 @@ export function BoardViews({
         selectedViewId={activeViewId}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
       />
     ) : (
       <BoardTable
@@ -208,26 +217,45 @@ export function BoardViews({
     );
 
   return (
-    <BoardPresenceProvider value={presenceValue}>
-      <OfflinePersistence userId={currentUserId} />
-      {view}
-      <PresenceFlashMessage message={flash.lastMessage} />
-      <ItemPanel
-        itemId={openItem?.id ?? null}
-        itemName={openItem?.name ?? ""}
-        orgId={payload.board.org_id}
-        boardId={payload.board.id}
-        currentUserId={currentUserId}
-        columns={payload.columns}
-        members={members.map((m) => ({
-          userId: m.userId,
-          fullName: m.fullName,
-          avatarUrl: m.avatarUrl,
-        }))}
-        createdBy={openItem?.created_by ?? null}
-        createdAt={openItem?.created_at ?? null}
-        onClose={closeItem}
-      />
-    </BoardPresenceProvider>
+    // OUTSIDE the presence provider so every view *and* the item panel can read
+    // the saved arrangement.
+    <BoardViewPrefsProvider boardId={payload.board.id} initial={viewPrefs}>
+      <ActiveViewRecorder viewId={activeViewId} />
+      <BoardPresenceProvider value={presenceValue}>
+        <OfflinePersistence userId={currentUserId} />
+        {view}
+        <PresenceFlashMessage message={flash.lastMessage} />
+        <ItemPanel
+          itemId={openItem?.id ?? null}
+          itemName={openItem?.name ?? ""}
+          orgId={payload.board.org_id}
+          boardId={payload.board.id}
+          currentUserId={currentUserId}
+          columns={payload.columns}
+          members={members.map((m) => ({
+            userId: m.userId,
+            fullName: m.fullName,
+            avatarUrl: m.avatarUrl,
+          }))}
+          createdBy={openItem?.created_by ?? null}
+          createdAt={openItem?.created_at ?? null}
+          onClose={closeItem}
+        />
+      </BoardPresenceProvider>
+    </BoardViewPrefsProvider>
   );
+}
+
+/**
+ * Records the active view whenever it changes. A separate component because it
+ * must sit INSIDE BoardViewPrefsProvider, which BoardViews itself renders.
+ * Renders nothing; `setActiveViewId` is a no-op when the value is unchanged, so
+ * the initial mount does not cause a write.
+ */
+function ActiveViewRecorder({ viewId }: { viewId: string }) {
+  const { setActiveViewId } = useBoardViewPrefs();
+  useEffect(() => {
+    if (viewId) setActiveViewId(viewId);
+  }, [viewId, setActiveViewId]);
+  return null;
 }

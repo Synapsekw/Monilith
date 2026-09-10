@@ -24,10 +24,14 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Resolve the user's timezone as a promise passed UNAWAITED into the client
- * provider so page content paints immediately — only the `DateTime` primitive
- * suspends on it (behind its own empty <time> fallback). Identity is read
- * OUTSIDE the cache (cookie-bound `getUser`) and threaded into the `use cache`
- * read, so the value is shared across routes and invalidated by
+ * provider, so nothing above the shell's Suspense boundaries ever suspends and
+ * page content paints immediately. NOTHING suspends on this one:
+ * `useResolvedTimeZone` (src/lib/datetime/timezone-context.tsx) resolves it in
+ * an effect and renders the device zone until it lands. The device-zone seed
+ * below is the single promise a consumer actually `use()`s.
+ *
+ * Identity is read OUTSIDE the cache (cookie-bound `getUser`) and threaded into
+ * the `use cache` read, so the value is shared across routes and invalidated by
  * `updateTag(profileTag(userId))` on save (Phase 9.3 rule).
  */
 function resolveUserTimeZone(): Promise<string | null> {
@@ -65,18 +69,31 @@ function MobileNavFallback() {
 }
 
 /**
+ * The device-zone cookie, read WITHOUT awaiting. This function runs above every
+ * Suspense boundary in the `(app)` group, so a single `await cookies()` here
+ * makes the whole route dynamic and the prerendered static shell EMPTY — that
+ * regression shipped and left `.next/server/app/my-work.html`,
+ * `boards/[boardId].html` and every `settings/*.html` at 0 bytes (a cold load
+ * then painted nothing until the server had rendered the layout;
+ * route-level `loading.tsx` only covers client navigation). The promise is
+ * handed to `DeviceTimeZoneProvider`, which stores it in context untouched and
+ * lets the `DateTime` consumer resolve it with React `use`. Same
+ * unawaited-promise shape as the timezone and theme preset above.
+ * `src/test/static-shell.test.ts` guards this.
+ */
+function resolveDeviceTimeZone(): Promise<string | null> {
+  return cookies().then((c) => c.get(DEVICE_TZ_COOKIE)?.value ?? null);
+}
+
+/**
  * The single composition every authenticated section layout shares. The frame
  * and skeleton fallbacks are static (prerendered into the Cache Components
- * shell); the three per-user data slots stream in. The timezone is streamed as
- * an unawaited promise so it never blocks the content area — see
- * resolveUserTimeZone above.
+ * shell); the three per-user data slots stream in. NOT async, and it must stay
+ * that way: nothing request-time may be awaited here or the static shell is
+ * gone. Timezone, theme preset and device zone are all streamed as unawaited
+ * promises so they never block the content area.
  */
-export async function AuthenticatedShell({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const deviceZone = (await cookies()).get(DEVICE_TZ_COOKIE)?.value ?? null;
+export function AuthenticatedShell({ children }: { children: ReactNode }) {
   return (
     <AppShell
       sidebarNav={
@@ -103,7 +120,7 @@ export async function AuthenticatedShell({
       <Suspense fallback={null}>
         <ThemePresetSync preset={resolveUserThemePreset()} />
       </Suspense>
-      <DeviceTimeZoneProvider initial={deviceZone}>
+      <DeviceTimeZoneProvider initial={resolveDeviceTimeZone()}>
         <TimeZoneProvider timeZone={resolveUserTimeZone()}>
           {children}
         </TimeZoneProvider>

@@ -118,13 +118,26 @@ describe("public/sw.js invariants", () => {
 
   it("short-circuits a navigation when the worker knows it is offline", () => {
     // `fetch()` is served from the browser's HTTP cache when it can be, so a
-    // network-first race is not a test of connectivity: a fresh navigation to a
-    // cacheable (Partial Prerender) route is answered from cache while offline
-    // and the fallback never runs. The offline check must come BEFORE the race.
-    const guardIndex = SW_SOURCE.indexOf("self.navigator.onLine");
-    const raceIndex = SW_SOURCE.indexOf("Promise.race([fetch(request)");
-    expect(guardIndex).toBeGreaterThan(-1);
-    expect(raceIndex).toBeGreaterThan(guardIndex);
+    // network-first attempt is not a test of connectivity: a fresh navigation
+    // to a cacheable (Partial Prerender) route is answered from cache while
+    // offline and the fallback never runs. The offline check must come BEFORE
+    // the network attempt.
+    // Matched structurally, NOT by exact source text: the old assertion pinned
+    // prettier's exact indentation of the `.then` chain, so a reformat of sw.js
+    // would have failed this test for a reason unrelated to the invariant.
+    expect(SW_SOURCE).toContain("self.navigator.onLine");
+    // …and it runs BEFORE the network attempt it guards.
+    expect(SW_SOURCE).toMatch(/onLine[\s\S]*?fetch\(request\)/);
+  });
+
+  it("falls back to the offline shell only when fetch rejects, never on a slow-but-successful response", () => {
+    // A fixed navigation timeout races the network against the clock: any
+    // document whose TTFB exceeds the timeout loses the race and serves
+    // `/offline` even though the network is fine. The fallback belongs to
+    // fetch's rejection branch only, and there must be no race/timeout
+    // wrapping the navigation fetch.
+    expect(SW_SOURCE).not.toContain("NAV_TIMEOUT_MS");
+    expect(SW_SOURCE).not.toContain("Promise.race");
   });
 
   it("refuses to cache a redirected offline document", () => {

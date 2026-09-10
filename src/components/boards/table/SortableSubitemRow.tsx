@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { GripVertical } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -9,24 +9,25 @@ import {
   CreatedByCell,
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
-import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
+import {
+  isOverdue,
+  isStatusValueComplete,
+  localTodayISO,
+} from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import { cn } from "@/lib/utils";
 import { EditableCell } from "./EditableCell";
 import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
-import { ROW_HEIGHT, type CellControls } from "./shared";
+import {
+  ROW_HEIGHT,
+  cellControlsEqual,
+  rowCellsEqual,
+  type CellControls,
+} from "./shared";
 
-/** A single sortable subitem row inside a `SubitemBlock`. */
-export function SortableSubitemRow({
-  sub,
-  columns,
-  cellMap,
-  template,
-  controls,
-  renamingItemId,
-  onRenameSettled,
-}: {
+type SubitemRowProps = {
   sub: Item;
   columns: Column[];
   cellMap: Map<string, CacheCellValue["value"]>;
@@ -34,13 +35,79 @@ export function SortableSubitemRow({
   controls: CellControls;
   renamingItemId: string | null;
   onRenameSettled: () => void;
-}) {
+};
+
+/**
+ * Every prop {@link subitemRowPropsEqual} inspects, listed once. `cellMap`,
+ * `controls` and `renamingItemId` are named here but handled specially.
+ */
+const SUBITEM_ROW_PROPS = [
+  "sub",
+  "columns",
+  "cellMap",
+  "template",
+  "controls",
+  "renamingItemId",
+  "onRenameSettled",
+] as const satisfies readonly (keyof SubitemRowProps)[];
+
+/** Compile-time guard — see the equivalent in ./ItemRow. */
+type UnhandledSubitemRowProp = Exclude<
+  keyof SubitemRowProps,
+  (typeof SUBITEM_ROW_PROPS)[number]
+>;
+const _subitemRowPropsExhaustive: [UnhandledSubitemRowProp] extends [never]
+  ? true
+  : UnhandledSubitemRowProp = true;
+void _subitemRowPropsExhaustive;
+
+/** Row-scoped props equality — see `itemRowPropsEqual` in ./ItemRow. */
+export function subitemRowPropsEqual(
+  prev: SubitemRowProps,
+  next: SubitemRowProps,
+): boolean {
+  for (const key of SUBITEM_ROW_PROPS) {
+    if (key === "cellMap" || key === "controls" || key === "renamingItemId")
+      continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  // Only this row's rename flag matters; another row entering rename mode must
+  // not re-render it.
+  if (
+    (prev.renamingItemId === next.sub.id) !==
+    (next.renamingItemId === next.sub.id)
+  ) {
+    return false;
+  }
+  if (!cellControlsEqual(prev.controls, next.controls)) return false;
+  return rowCellsEqual(prev.cellMap, next.cellMap, [next.sub.id], next.columns);
+}
+
+/** A single sortable subitem row inside a `SubitemBlock`. */
+export const SortableSubitemRow = memo(function SortableSubitemRow({
+  sub,
+  columns,
+  cellMap,
+  template,
+  controls,
+  renamingItemId,
+  onRenameSettled,
+}: SubitemRowProps) {
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
   const [todayISO] = useState(() => localTodayISO());
   // Priority cells only: direct-dependent counts, computed once for the whole
   // board in BoardTableInner and threaded via `controls` (see priority.ts).
   const dependentsByItem = controls.dependentsByItem;
+  // O(1) completeness for the overdue tint — see the note in ItemRow.
+  const complete = isStatusValueComplete(
+    controls.statusColumn
+      ? (cellMap.get(cellKey(sub.id, controls.statusColumn.id)) ?? null)
+      : null,
+    controls.statusColumn,
+  );
+  // Temp-row rule — see the equivalent note in ./ItemRow.
+  const pending = isOptimisticId(sub.id);
   const {
     setNodeRef,
     attributes,
@@ -48,11 +115,12 @@ export function SortableSubitemRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: sub.id });
+  } = useSortable({ id: sub.id, disabled: pending });
 
   const dragHandle = (
     <button
       type="button"
+      disabled={pending}
       aria-label={`Reorder ${sub.name}`}
       {...attributes}
       {...listeners}
@@ -89,6 +157,7 @@ export function SortableSubitemRow({
           <RowMenu
             label={sub.name}
             hasChildren={false}
+            disabled={pending}
             onDelete={() => controls.deleteItem(sub.id)}
           />
         }
@@ -103,9 +172,7 @@ export function SortableSubitemRow({
             value={value}
             controls={controls}
             overdue={
-              col.kind === "date" &&
-              isOverdue(value, todayISO) &&
-              !isItemComplete(sub.id, columns, controls.cache.cellValues)
+              col.kind === "date" && isOverdue(value, todayISO) && !complete
             }
             dependents={
               col.kind === "priority"
@@ -140,4 +207,4 @@ export function SortableSubitemRow({
       <div aria-hidden />
     </div>
   );
-}
+}, subitemRowPropsEqual);

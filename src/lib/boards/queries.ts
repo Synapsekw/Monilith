@@ -11,6 +11,22 @@ export type Group = Tables<"groups">;
 export type Item = Tables<"items">;
 export type Column = Tables<"columns">;
 export type CellValue = Tables<"cell_values">;
+/**
+ * The narrowed shape actually shipped in `BoardPayload`. `cell_values` has no
+ * `id` column (PK is `(item_id, column_id)`) — the full row also carries
+ * `board_id` and `org_id`, which are RLS/join plumbing no downstream consumer
+ * reads: the React Query cache (`cache.ts` `buildCellMap`/`upsertCellValue`)
+ * keys on `item_id`/`column_id` and stores `value`; the realtime last-writer-wins
+ * guard (`realtime-buffer.ts` `isStaleEcho`) compares `updated_at`. Dropping
+ * `board_id`/`org_id` removes ~2 UUIDs (~72 bytes + 2 JSON keys) per cell — the
+ * widest table in the payload (Task 5 perf brief). Consumers that need the full
+ * row (writes, other RLS-scoped reads) keep using `CellValue`/`Tables<"cell_values">`
+ * directly — this type is specifically the `getBoardPayload` read shape.
+ */
+export type BoardCellValue = Pick<
+  CellValue,
+  "item_id" | "column_id" | "value" | "updated_at"
+>;
 export type BoardView = Tables<"board_views">;
 export type ItemDependency = Tables<"item_dependencies">;
 export type Automation = Tables<"automations">;
@@ -22,14 +38,14 @@ export type BoardPayload = {
   groups: Group[];
   columns: Column[];
   items: Item[];
-  cellValues: CellValue[];
+  cellValues: BoardCellValue[];
   views: BoardView[];
   dependencies: ItemDependency[];
   attachments: Attachment[];
   timeEntries: TimeEntry[];
   relationLinks: RelationLink[];
   /** (linked item, target column) cell values for mirror columns, RLS-scoped. */
-  mirrorTargetCells: CellValue[];
+  mirrorTargetCells: BoardCellValue[];
   /** Render metadata for the columns referenced by mirror columns. */
   mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[];
 };
@@ -222,10 +238,17 @@ export const getBoardPayload = cache(
       // makes cell_values the widest table; 20000 is generous headroom while
       // capping the pathological case; server-side pagination is the documented
       // follow-up if a board exceeds this (matches attachments/time_entries).
+      // Select narrowed to the four columns any consumer reads (see
+      // `BoardCellValue`) — `board_id`/`org_id` are dropped. Ordered by the
+      // `(item_id, column_id)` PRIMARY KEY (`cell_values_pkey`, boards_core
+      // migration) so truncation at the cap is deterministic, not an arbitrary
+      // subset — the same key Postgres already indexes, so the sort is cheap.
       supabase
         .from("cell_values")
-        .select("*")
+        .select("item_id, column_id, value, updated_at")
         .eq("board_id", boardId)
+        .order("item_id", { ascending: true })
+        .order("column_id", { ascending: true })
         .limit(20000),
       supabase
         .from("board_views")
@@ -325,7 +348,7 @@ export const getBoardPayload = cache(
     // Two bounded queries; no N+1 / per-cell fetch.
     const cols = columnsRes.data ?? [];
     const mirrorCols = cols.filter((c) => c.kind === "mirror");
-    let mirrorTargetCells: CellValue[] = [];
+    let mirrorTargetCells: BoardCellValue[] = [];
     let mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[] = [];
     if (mirrorCols.length > 0) {
       const targetColumnIds = [
@@ -356,12 +379,19 @@ export const getBoardPayload = cache(
       ];
       if (targetColumnIds.length > 0 && linkedItemIds.length > 0) {
         const [cellsRes2, colsRes2] = await Promise.all([
-          // RLS-scoped, bounded over the (item_id, column_id) index.
+          // RLS-scoped, bounded over the (item_id, column_id) index. Narrowed
+          // to the same four columns as the main cell_values read above (see
+          // `BoardCellValue`) — `mirrorValuesForCell` (`mirror.ts`) only ever
+          // reads `item_id`/`column_id`/`value`. Ordered by the same
+          // `(item_id, column_id)` PRIMARY KEY for the same reason: this read is
+          // capped too, so without it truncation at 4000 is an arbitrary subset.
           supabase
             .from("cell_values")
-            .select("*")
+            .select("item_id, column_id, value, updated_at")
             .in("item_id", linkedItemIds)
             .in("column_id", targetColumnIds)
+            .order("item_id", { ascending: true })
+            .order("column_id", { ascending: true })
             .limit(4000),
           supabase
             .from("columns")
