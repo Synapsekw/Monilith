@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-09 11:31",
+  "updated": "2026-09-10 10:33",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "59a1dd1d",
+        "value": "fdfa5bd6",
         "tone": "warn",
-        "note": "AHEAD of main by three tracks: per-user board view preferences (a board now remembers each person's collapsed groups, expanded rows, last view and last filter, in one row per user per board, read server-side so the first frame is already right), the UI polish + theme presets batch, and the earlier dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
+        "note": "AHEAD of main by four tracks: the final performance pass (the authenticated app shell prerenders again after two months at 0 bytes, the board table re-renders only the edited row, adding items is optimistic, the service worker no longer serves the offline page on slow online loads, cell payload a third smaller), per-user board view preferences, the UI polish + theme presets batch, and the dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7195 passing, 1 skipped, on develop. The anon-reachability conformance suite earned its runtime this session: it caught a brand-new RPC shipping callable by anon, which review had read past because the defect was an absent line.",
+        "note": "7301 passing, 1 skipped, on develop. New guards this session: a static-shell source test (no awaited cookies() in the app shell), render-count budgets for the board table, exhaustiveness guards on the row memo comparators.",
         "label": "test"
       },
       {
@@ -207,6 +207,15 @@
       ]
     },
     {
+      "title": "Walk the perf-pass checks before promoting",
+      "why": "Six steps in the 2026-09-10 10:33 session note: hard-reload My Work on Slow 3G and see the sidebar frame paint before data; edit one cell with the Profiler on and confirm only that row re-renders; add items back-to-back without waiting; reload a board on a slow-but-online network and get the board, not the offline page; go offline and still get the offline page; open an item's Updates tab and see device-zone timestamps with no hydration warning.",
+      "tags": [
+        "perf",
+        "owner",
+        "promote"
+      ]
+    },
+    {
       "title": "Look at Light mode and the header theme menu, walk an MCP client against v2, then promote",
       "why": "Two tracks wait on develop. The UI batch shipped with zero pixels seen — Chrome was not connected, so the light-chrome fix, the six presets and the header picker rest on token math and 199 contrast and guard tests; the 2026-09-09 session note carries the nine-step manual pass. The mcp-handler 1.1 to 2.1 migration passes its gates and a route test, but no actual Claude Desktop or claude.ai session has run against it. Do both checks, then promote once.",
       "tags": [
@@ -233,14 +242,6 @@
       ]
     },
     {
-      "title": "Unblock the settings shell from three sequential reads",
-      "why": "settings/layout.tsx awaits requireUser(), resolveActiveOrg() and isOrgAdminCached() above the loading.tsx boundary — loading.tsx wraps a layout’s children, not the layout itself — so the dev overlay reports blocking-prerender-dynamic on /settings/*. Dev-only warning, gotcha-97’s shape, and it did not cause the blank page; but the shell does block on all three.",
-      "tags": [
-        "perf",
-        "nextjs"
-      ]
-    },
-    {
       "title": "Re-read every org-admin gate against an AI actor",
       "why": "gotcha-91: an org-admin gate authorises the actor, and a model’s actor is trusted by construction, so the gate was never a defence. Spec 2c found the sibling shape again — agent_remember refused to overwrite an owner note while nothing refused to DELETE one. Found twice now; nothing has swept the rest.",
       "tags": [
@@ -254,9 +255,22 @@
       "tags": [
         "desktop"
       ]
+    },
+    {
+      "title": "Perf follow-ups, none blocking",
+      "why": "settings/* and admin/* still ship 0-byte shells because their own layouts await the auth guard and redirect() above any boundary. Column resize still re-renders every cell (TODO in BoardTableInner: a CSS custom property for the grid template across all row kinds). Lower value: the dashboard page's unbounded workspace-columns read for the add-widget dialog, lazy board-header dialogs and date picker, page-shaped skeletons for six thin loading.tsx files. DB scaling only: readable_board_ids() scans every tenant's boards per statement; no GIN index for the My Work people-cell lookup.",
+      "tags": [
+        "perf",
+        "follow-up"
+      ]
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
+      "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
+    },
     {
       "sev": "amber",
       "title": "A whole visual batch shipped without anyone seeing it",
@@ -355,14 +369,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-09-1131-board-view-prefs",
-    "when": "2026-09-09 11:31",
-    "title": "Board view preferences persist per user",
+    "id": "2026-09-10-1033-final-performance-pass",
+    "when": "2026-09-10 10:33",
+    "title": "Final performance pass: static shell, table re-render, optimistic add",
     "bullets": [
-      "A board now remembers how each person left it — collapsed groups, expanded sub-item rows, the last view and the last filter — in a board_view_prefs row per user per board.",
-      "Group collapse had to be lifted out of GroupSection first: it lived as a separate useState in every group, so nothing in the tree knew the full set and nothing could persist it.",
-      "The read joins the page's existing Promise.all as a fourth entry, so the first painted frame is already correct; writes are debounced and deliberately do not revalidate.",
-      "The new RPC shipped callable by anon, because Postgres grants EXECUTE to PUBLIC on every new function. Caught by the conformance suite, not by reading."
+      "An evidence-first audit (build + Turbopack analyzer, DEV pg_stat_statements, three parallel read-only audits) found the DB fast and the bundle with nothing cheap to cut, and six real gaps.",
+      "Every (app) route had shipped a 0-byte static shell since July: one awaited cookies() above every Suspense boundary. Fixed by passing the cookie as an unawaited promise resolved in the one DateTime consumer; 24 routes are Partial Prerender again.",
+      "The board table's React.memo was defeated three ways at once (dnd-kit items array, sensor option literals, editing inside controls). Edit-mode entry now re-renders 1 cell instead of 18 on the fixture.",
+      "Add item and add subitem are optimistic with temp ids reconciled against the realtime echo; the service worker no longer serves the offline page on slow online loads; cell payload is a third smaller."
     ]
   }
 }
