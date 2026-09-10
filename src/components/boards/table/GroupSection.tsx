@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -10,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { withSubitems } from "@/lib/boards/item-tree";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import type { Column, Group, Item } from "@/lib/boards/queries";
 import type { CacheCellValue } from "@/lib/boards/cache";
 import { SummaryRow, hasAssignedSummary } from "@/components/boards/SummaryRow";
@@ -24,6 +32,7 @@ import {
   ROW_HEIGHT,
   type CellControls,
   type ColumnHeaderControls,
+  type GroupControls,
   type GroupSummaryControls,
 } from "./shared";
 
@@ -32,10 +41,24 @@ import {
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-export function GroupSection({
+/** Shared empty list: `?? []` per render would defeat the row memo below. */
+const NO_ITEMS: Item[] = [];
+
+/**
+ * One group: header row, its (virtualized) item rows, add-item row and summary.
+ *
+ * Memoized — a group that didn't change must not re-render, because every one
+ * of its rows and cells re-renders with it. That only holds if the props it
+ * receives are stable across unrelated board state (a dialog, a scroll, a cell
+ * entering edit mode), which is why the per-group handlers arrive as ONE
+ * id-keyed {@link GroupControls} bundle and the id arrays are memoized upstream
+ * rather than rebuilt inline here.
+ */
+export const GroupSection = memo(function GroupSection({
   group,
   groupIndex,
   items,
+  itemIds,
   columns,
   selectable,
   col,
@@ -43,15 +66,11 @@ export function GroupSection({
   template,
   controls,
   summary,
-  onRenameGroup,
+  groupControls,
   nameWidth,
   autoFocusRename,
-  onRenameSettled,
-  onSetColor,
-  onDelete,
   childrenByParent,
   collapsed,
-  onToggleCollapse,
   expanded,
   onToggleExpand,
   renamingItemId,
@@ -64,6 +83,10 @@ export function GroupSection({
   /** Zero-based position among visible groups — powers the Keystone head kicker. */
   groupIndex: number;
   items: Item[];
+  /** `items.map(i => i.id)`, memoized upstream: a fresh array here would give
+   *  dnd-kit's SortableContext a new context value every render, re-rendering
+   *  every `useSortable` row in the group. */
+  itemIds: string[];
   columns: Column[];
   /** Whether bulk row-selection checkboxes are shown (editors only, not viewers). */
   selectable: boolean;
@@ -72,16 +95,13 @@ export function GroupSection({
   template: string;
   controls: CellControls;
   summary: GroupSummaryControls;
-  onRenameGroup: (name: string) => void;
+  /** Id-keyed group actions, shared by every group (see GroupControls). */
+  groupControls: GroupControls;
   nameWidth: number;
   autoFocusRename: boolean;
-  onRenameSettled: () => void;
-  onSetColor: (color: string) => void;
-  onDelete: () => void;
   childrenByParent: Map<string, Item[]>;
   /** Owned by BoardTableInner so the whole set is addressable and persistable. */
   collapsed: boolean;
-  onToggleCollapse: () => void;
   expanded: Set<string>;
   onToggleExpand: (id: string) => void;
   renamingItemId: string | null;
@@ -109,8 +129,16 @@ export function GroupSection({
 
   // The group's row-area offset within the shared scroll content. Re-measured
   // whenever the content height changes (any group expand/collapse/add/remove)
-  // and on every render (covers DnD reorder, which shifts offsets without
-  // changing total height). Guarded setState avoids a layout-effect loop.
+  // — that's the ResizeObserver — and whenever something that can move THIS
+  // group without changing the total height happens: a group reorder
+  // (`groupIndex`), this group collapsing, its row count changing, or the
+  // scroll container finally attaching. Guarded setState avoids a
+  // layout-effect loop.
+  //
+  // The observer is created ONCE (deps are refs + those triggers), not on every
+  // render: it used to be a dep-less layout effect, so every render of every
+  // group did two getBoundingClientRect() reads and tore down/rebuilt a
+  // ResizeObserver — on every keystroke, scroll and presence beat.
   useIsoLayoutEffect(() => {
     const measure = () => {
       const area = rowAreaRef.current;
@@ -128,7 +156,14 @@ export function GroupSection({
     const ro = new ResizeObserver(measure);
     ro.observe(content);
     return () => ro.disconnect();
-  });
+  }, [
+    scrollContainerRef,
+    contentRef,
+    scrollReady,
+    groupIndex,
+    collapsed,
+    items.length,
+  ]);
 
   const {
     setNodeRef,
@@ -148,9 +183,6 @@ export function GroupSection({
     data: { type: "group-container", groupId: group.id },
   });
 
-  // React Compiler safely skips memoizing this component because useVirtualizer
-  // returns non-memoizable functions; that fallback is correct here.
-  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollContainerRef.current,
@@ -164,6 +196,26 @@ export function GroupSection({
 
   const virtualRows = virtualizer.getVirtualItems();
 
+  // Temp-row rule (see @/lib/boards/optimistic-id): the selection store refuses
+  // optimistic ids, so a "select all visible" list containing one could never
+  // reach `selectedCount === visibleIds.length` — the header checkbox would
+  // latch unchecked and its second click would re-select instead of clearing.
+  // Selectable = the rows the store will actually take.
+  const selectableIds = useMemo(
+    () =>
+      itemIds.some(isOptimisticId)
+        ? itemIds.filter((id) => !isOptimisticId(id))
+        : itemIds,
+    [itemIds],
+  );
+
+  // Ids of this group's rows AND their subitems — the summary row's scope.
+  // Memoized so SummaryRow's own footer memo isn't invalidated every render.
+  const summaryItemIds = useMemo(
+    () => withSubitems(itemIds, childrenByParent),
+    [itemIds, childrenByParent],
+  );
+
   function openRename() {
     setName(group.name);
     setRenaming(true);
@@ -172,9 +224,9 @@ export function GroupSection({
   function commitRename() {
     const trimmed = name.trim();
     setRenaming(false);
-    onRenameSettled();
+    groupControls.onRenameSettled();
     if (!trimmed || trimmed === group.name) return;
-    onRenameGroup(trimmed);
+    groupControls.rename(group.id, trimmed);
   }
 
   return (
@@ -192,26 +244,26 @@ export function GroupSection({
         columns={columns}
         template={template}
         selectAll={
-          selectable && items.length > 0 ? (
-            <GroupSelectAllCheckbox visibleIds={items.map((i) => i.id)} />
+          selectable && selectableIds.length > 0 ? (
+            <GroupSelectAllCheckbox visibleIds={selectableIds} />
           ) : null
         }
         collapsed={collapsed}
-        onToggleCollapse={onToggleCollapse}
+        onToggleCollapse={() => groupControls.toggleCollapsed(group.id)}
         renaming={renaming}
         name={name}
         onNameChange={setName}
         onCommitRename={commitRename}
         onCancelRename={() => {
           setRenaming(false);
-          onRenameSettled();
+          groupControls.onRenameSettled();
         }}
         onOpenRename={openRename}
         itemCount={items.length}
         dragAttributes={attributes}
         dragListeners={listeners}
-        onSetColor={onSetColor}
-        onDelete={onDelete}
+        onSetColor={(color) => groupControls.setColor(group.id, color)}
+        onDelete={() => groupControls.remove(group.id)}
         col={col}
       />
 
@@ -238,10 +290,7 @@ export function GroupSection({
                 label="Group Summary"
                 groupColor={group.color}
                 columns={columns}
-                itemIds={withSubitems(
-                  items.map((i) => i.id),
-                  childrenByParent,
-                )}
+                itemIds={summaryItemIds}
                 cellMap={cellMap}
                 cache={controls.cache}
                 template={template}
@@ -269,7 +318,7 @@ export function GroupSection({
               // BoardTableInner) so rows can be dragged across groups; this
               // group keeps only its own SortableContext for in-group ordering.
               <SortableContext
-                items={items.map((i) => i.id)}
+                items={itemIds}
                 strategy={verticalListSortingStrategy}
               >
                 <div
@@ -280,7 +329,7 @@ export function GroupSection({
                 >
                   {virtualRows.map((vr) => {
                     const item = items[vr.index];
-                    const children = childrenByParent.get(item.id) ?? [];
+                    const children = childrenByParent.get(item.id) ?? NO_ITEMS;
                     const isExpanded = expanded.has(item.id);
                     return (
                       <div
@@ -341,10 +390,7 @@ export function GroupSection({
                 label="Group Summary"
                 groupColor={group.color}
                 columns={columns}
-                itemIds={withSubitems(
-                  items.map((i) => i.id),
-                  childrenByParent,
-                )}
+                itemIds={summaryItemIds}
                 cellMap={cellMap}
                 cache={controls.cache}
                 template={template}
@@ -359,4 +405,4 @@ export function GroupSection({
       </div>
     </section>
   );
-}
+});

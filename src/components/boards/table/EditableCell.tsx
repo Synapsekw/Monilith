@@ -26,6 +26,7 @@ import {
   relationLinksForCell,
   type CacheCellValue,
 } from "@/lib/boards/cache";
+import { useIsCellEditing } from "./editing-store";
 import type { CellControls } from "./shared";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -54,9 +55,10 @@ export const EditableCell = memo(function EditableCell({
   /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
   dependents?: number;
 }) {
-  const { editing, setEditing, setCell, clearCellValue, members } = controls;
-  const isEditing =
-    editing?.itemId === item.id && editing.columnId === column.id;
+  const { setEditing, setCell, clearCellValue, members } = controls;
+  // Per-cell subscription (see ./editing-store): the ~300 cells that are NOT
+  // being edited select a stable `false` and never re-render on a click.
+  const isEditing = useIsCellEditing(item.id, column.id);
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
   const target = presenceTarget.cell(item.id, column.id);

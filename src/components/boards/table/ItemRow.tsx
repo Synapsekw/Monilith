@@ -9,7 +9,11 @@ import {
   CreatedByCell,
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
-import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
+import {
+  isOverdue,
+  isStatusValueComplete,
+  localTodayISO,
+} from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
@@ -18,24 +22,14 @@ import { EditableCell } from "./EditableCell";
 import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
 import { RowSelectCheckbox } from "./RowSelectCheckbox";
-import { ROW_HEIGHT, type CellControls } from "./shared";
+import {
+  ROW_HEIGHT,
+  cellControlsEqual,
+  rowCellsEqual,
+  type CellControls,
+} from "./shared";
 
-/** A single top-level item row: optional expand chevron, name, value cells. */
-export const ItemRow = memo(function ItemRow({
-  item,
-  columns,
-  cellMap,
-  template,
-  controls,
-  selectable,
-  subitems,
-  childCount,
-  isExpanded,
-  onToggleExpand,
-  autoFocusRename,
-  onRenameSettled,
-  onSubitemAdded,
-}: {
+type ItemRowProps = {
   item: Item;
   columns: Column[];
   cellMap: Map<string, CacheCellValue["value"]>;
@@ -52,7 +46,92 @@ export const ItemRow = memo(function ItemRow({
   autoFocusRename: boolean;
   onRenameSettled: () => void;
   onSubitemAdded?: (id: string) => void;
-}) {
+};
+
+/**
+ * Every prop {@link itemRowPropsEqual} inspects, listed once so the comparator
+ * and the exhaustiveness assert below can't drift apart. `cellMap` and
+ * `controls` are named here but handled specially (see the comparator).
+ */
+const ITEM_ROW_PROPS = [
+  "item",
+  "columns",
+  "cellMap",
+  "template",
+  "controls",
+  "selectable",
+  "subitems",
+  "childCount",
+  "isExpanded",
+  "onToggleExpand",
+  "autoFocusRename",
+  "onRenameSettled",
+  "onSubitemAdded",
+] as const satisfies readonly (keyof ItemRowProps)[];
+
+/**
+ * Compile-time guard: a prop added to {@link ItemRowProps} but not to
+ * {@link ITEM_ROW_PROPS} would be silently ignored by the comparator — a row
+ * that renders stale. This makes that a BUILD error naming the missing prop.
+ */
+type UnhandledItemRowProp = Exclude<
+  keyof ItemRowProps,
+  (typeof ITEM_ROW_PROPS)[number]
+>;
+const _itemRowPropsExhaustive: [UnhandledItemRowProp] extends [never]
+  ? true
+  : UnhandledItemRowProp = true;
+void _itemRowPropsExhaustive;
+
+/**
+ * Row-scoped props equality.
+ *
+ * `cellMap` and `controls.cache` are BOARD-wide: a single cell edit (typed by
+ * this user or arriving over realtime) replaces both, so default shallow memo
+ * reports "changed" for every visible row and the whole grid re-renders. This
+ * narrows the comparison to what the row actually renders — its own cells and
+ * its subitems' (for the collapsed rollup) — leaving foreign edits to the rows
+ * that own them.
+ *
+ * Invariant: nothing under this row may read `controls.cache.cellValues`; a
+ * row's values come from `cellMap`. See CACHE_SLICES in ./shared.
+ */
+export function itemRowPropsEqual(
+  prev: ItemRowProps,
+  next: ItemRowProps,
+): boolean {
+  for (const key of ITEM_ROW_PROPS) {
+    if (key === "cellMap" || key === "controls") continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  if (!cellControlsEqual(prev.controls, next.controls)) return false;
+  // Subitem values are this row's business ONLY while it rolls them up (a
+  // collapsed parent). Expanded, each subitem is its own memoized row and owns
+  // its own values — comparing them here would re-render the parent for a
+  // child's edit.
+  const rollsUpSubitems = next.childCount > 0 && !next.isExpanded;
+  const itemIds = rollsUpSubitems
+    ? [next.item.id, ...next.subitems.map((s) => s.id)]
+    : [next.item.id];
+  return rowCellsEqual(prev.cellMap, next.cellMap, itemIds, next.columns);
+}
+
+/** A single top-level item row: optional expand chevron, name, value cells. */
+export const ItemRow = memo(function ItemRow({
+  item,
+  columns,
+  cellMap,
+  template,
+  controls,
+  selectable,
+  subitems,
+  childCount,
+  isExpanded,
+  onToggleExpand,
+  autoFocusRename,
+  onRenameSettled,
+  onSubitemAdded,
+}: ItemRowProps) {
   // Collapsed-parent time rollup needs a "now" for any running child entry, but
   // a bare Date.now() in render violates react-hooks/purity. Snapshot it at mount
   // via a lazy initializer (same idiom as TimeTrackingCell): the Σ of a running
@@ -70,6 +149,16 @@ export const ItemRow = memo(function ItemRow({
   // board in BoardTableInner and threaded via `controls` (see priority.ts) —
   // not recomputed per visible row.
   const dependentsByItem = controls.dependentsByItem;
+  // Completeness for the overdue tint: one lookup of this item's cell in the
+  // board's first status column (resolved once per table render and threaded
+  // via `controls`), instead of a filter+sort of every column and a scan of
+  // every cell value on the board — per date cell, per render.
+  const complete = isStatusValueComplete(
+    controls.statusColumn
+      ? (cellMap.get(cellKey(item.id, controls.statusColumn.id)) ?? null)
+      : null,
+    controls.statusColumn,
+  );
   const {
     setNodeRef,
     attributes,
@@ -205,9 +294,7 @@ export const ItemRow = memo(function ItemRow({
             value={value}
             controls={controls}
             overdue={
-              col.kind === "date" &&
-              isOverdue(value, todayISO) &&
-              !isItemComplete(item.id, columns, controls.cache.cellValues)
+              col.kind === "date" && isOverdue(value, todayISO) && !complete
             }
             dependents={
               col.kind === "priority"
@@ -242,4 +329,4 @@ export const ItemRow = memo(function ItemRow({
       <div aria-hidden /> {/* add-column track spacer */}
     </div>
   );
-});
+}, itemRowPropsEqual);
