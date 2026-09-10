@@ -4,6 +4,41 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-10",
+    kind: "improved",
+    title: "Pages paint before data arrives",
+    description:
+      "The sidebar and page skeletons now show instantly on a cold load or reload of any board, My Work, Goals, Time, Workload, Dashboards or Reports page instead of waiting for the server.",
+  },
+  {
+    date: "2026-09-10",
+    kind: "improved",
+    title: "Smoother board editing",
+    description:
+      "Clicking into a cell, committing an edit, scrolling sideways or opening a dialog now updates only the affected row instead of every visible cell, so large boards feel snappier.",
+  },
+  {
+    date: "2026-09-10",
+    kind: "new",
+    title: "Add items without waiting",
+    description:
+      "New items and subitems appear the moment you press Enter and the input stays ready for the next one; Kanban quick-add lands in the right column immediately. If the save fails, your text comes back with the error.",
+  },
+  {
+    date: "2026-09-10",
+    kind: "fixed",
+    title: "No more offline page on slow connections",
+    description:
+      "A slow but working connection no longer flips a board reload to the offline screen after three seconds; the offline screen now appears only when the network is really unreachable.",
+  },
+  {
+    date: "2026-09-10",
+    kind: "improved",
+    title: "Faster board loads",
+    description:
+      "Boards send about a third less data on open, and typing on a large board no longer rewrites the offline cache on every keystroke.",
+  },
+  {
     date: "2026-09-09",
     kind: "new",
     title: "Boards remember how you left them",
