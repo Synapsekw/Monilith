@@ -574,6 +574,24 @@ describe("KanbanBoard quick-add (optimistic)", () => {
 });
 
 describe("onCardDropped", () => {
+  it("ignores a drop of a still-optimistic card", () => {
+    // Temp-row rule (@/lib/boards/optimistic-id): the id is not on the server
+    // yet, so the write 404s, rolls back and toasts — misleading the user about
+    // a drag that visually succeeded.
+    const setCellFn = vi.fn();
+    const clear = vi.fn();
+    onCardDropped(
+      "optimistic-11111111-1111-4111-8111-111111111111",
+      "__no_status__",
+      { id: "o2", optionId: "o2" } as never,
+      "status",
+      setCellFn,
+      clear,
+    );
+    expect(setCellFn).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
   it("drop on an option writes the status cell", () => {
     const setCellFn = vi.fn();
     const clear = vi.fn();

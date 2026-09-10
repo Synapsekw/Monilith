@@ -102,6 +102,14 @@ export function pickFields<T extends object>(
 export type BoardMutationCtx = {
   qc: QueryClient;
   boardId: string;
+  /**
+   * The signed-in user's id, used to author OPTIMISTIC temp rows. `created_by`
+   * is stamped from `auth.uid()` server-side, but until the real row arrives
+   * the temp one has to claim an author itself — `""` rendered "Unknown" in the
+   * Created-by cell for the whole round-trip. `""` remains the fallback for
+   * callers that have no session id to hand.
+   */
+  currentUserId: string;
   key: ReturnType<typeof boardKey>;
   rollback: (ctx: Ctx | undefined) => void;
   resyncOnError: () => void;
@@ -124,6 +132,7 @@ export type BoardMutationCtx = {
 export function createBoardMutationCtx(
   qc: QueryClient,
   boardId: string,
+  currentUserId = "",
 ): BoardMutationCtx {
   const key = boardKey(boardId);
 
@@ -267,6 +276,7 @@ export function createBoardMutationCtx(
   return {
     qc,
     boardId,
+    currentUserId,
     key,
     rollback,
     resyncOnError,

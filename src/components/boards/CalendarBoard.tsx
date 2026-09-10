@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 
 import type { BoardPayload } from "@/lib/boards/queries";
-import type { BoardCache } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
@@ -88,19 +87,20 @@ export function CalendarBoard({
   members = [],
   access = "owner",
   grants = [],
+  currentUserId = "",
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
   access?: BoardAccess;
   grants?: HeaderGrant[];
+  /** Authors optimistic temp rows (see `useBoardMutations`). */
+  currentUserId?: string;
 }) {
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
+  const { data: cache } = useBoardCache(payload.board.id, payload);
   const { setCell, clearCellValue, addItem } = useBoardMutations(
     payload.board.id,
+    currentUserId,
   );
   const [, startTransition] = useTransition();
 

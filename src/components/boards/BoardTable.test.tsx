@@ -534,6 +534,52 @@ describe("BoardTable add-subitem hover button", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("expands the parent immediately, not when the mutation resolves", async () => {
+    // A collapsed parent renders RollupValueCells over its children. The
+    // optimistic temp subitem lands at `onMutate` — so a parent that only
+    // expands in `onSuccess` spends the whole round-trip rolling up a
+    // value-less row, and its own cell values visibly blank out and come back.
+    let resolveAdd: (v: unknown) => void = () => {};
+    addSubitem.mockImplementation(
+      () => new Promise((resolve) => (resolveAdd = resolve)),
+    );
+
+    renderChildless();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add subitem to Task One" }),
+    );
+
+    // The optimistic temp subitem has landed (childCount 0→1) but the server
+    // has NOT answered yet — the exact window the bug lived in.
+    await waitFor(() => expect(addSubitem).toHaveBeenCalled());
+    // The parent is already expanded, so the temp subitem is its own row rather
+    // than a value-less child rolled up into the parent's cells.
+    expect(
+      screen.getByRole("button", { name: "Collapse Task One" }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      resolveAdd({
+        ok: true,
+        data: {
+          item: {
+            id: "new-s1",
+            board_id: "b1",
+            org_id: "o1",
+            group_id: "g1",
+            parent_id: "t1",
+            name: "New subitem",
+            position: 1,
+          },
+        },
+      });
+    });
+    // …and it does not toggle back shut when the mutation lands.
+    expect(
+      screen.getByRole("button", { name: "Collapse Task One" }),
+    ).toBeInTheDocument();
+  });
 });
 
 function rollupPayload() {

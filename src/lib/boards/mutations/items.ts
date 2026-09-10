@@ -66,6 +66,7 @@ function nextPosition(
 function tempItem(
   cache: BoardCache,
   tempId: string,
+  createdBy: string,
   fields: Pick<CacheItem, "group_id" | "parent_id" | "name" | "position">,
 ): CacheItem {
   const now = new Date().toISOString();
@@ -75,11 +76,12 @@ function tempItem(
     board_id: cache.board.id,
     archived_at: null,
     archived_by: null,
-    // The mutation layer has no session, and `created_by` is stamped from
-    // auth.uid() server-side. For the one round-trip the row is temporary the
-    // Created-by cell renders its unknown-member dash; the reconciled server
-    // row carries the real author.
-    created_by: "",
+    // `created_by` is stamped from auth.uid() server-side, but the temp row has
+    // to claim an author itself or the Created-by cell reads "Unknown" for the
+    // whole round-trip. The adder IS the author, so use the signed-in user's id
+    // threaded through the mutation context; `""` (unknown-member dash) is the
+    // fallback for a caller with no session id.
+    created_by: createdBy,
     created_at: now,
     updated_at: now,
     ...fields,
@@ -95,6 +97,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     resyncOnError,
     optimisticItemField,
     optimisticMoveItem,
+    currentUserId,
   } = ctx;
 
   /**
@@ -130,7 +133,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
       if (previous) {
         let next = insertItem(
           previous,
-          tempItem(previous, tempId, {
+          tempItem(previous, tempId, currentUserId, {
             group_id: vars.groupId,
             parent_id: null,
             name: vars.name,
@@ -145,8 +148,6 @@ export function useItemMutations(ctx: BoardMutationCtx) {
         // caller's `setCell` finally runs against the real id.
         if (vars.cell) {
           next = upsertCellValue(next, {
-            org_id: previous.board.org_id,
-            board_id: previous.board.id,
             item_id: tempId,
             column_id: vars.cell.columnId,
             value: vars.cell.value as CacheCellValue["value"],
@@ -198,7 +199,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
           key,
           insertItem(
             previous,
-            tempItem(previous, tempId, {
+            tempItem(previous, tempId, currentUserId, {
               group_id: parent.group_id,
               parent_id: parent.id,
               name: vars.name,

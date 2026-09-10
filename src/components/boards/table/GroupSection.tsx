@@ -22,6 +22,7 @@ import type { Column, Group, Item } from "@/lib/boards/queries";
 import type { CacheCellValue } from "@/lib/boards/cache";
 import { SummaryRow, hasAssignedSummary } from "@/components/boards/SummaryRow";
 import { cn } from "@/lib/utils";
+import { useStableIds } from "@/lib/boards/stable-ids";
 import { AddItemRow } from "./AddItemRow";
 import { GroupHeaderRow } from "./GroupHeaderRow";
 import { GroupRollupRow } from "./GroupRollupRow";
@@ -58,7 +59,7 @@ export const GroupSection = memo(function GroupSection({
   group,
   groupIndex,
   items,
-  itemIds,
+  itemIds: rawItemIds,
   columns,
   selectable,
   col,
@@ -83,9 +84,10 @@ export const GroupSection = memo(function GroupSection({
   /** Zero-based position among visible groups — powers the Keystone head kicker. */
   groupIndex: number;
   items: Item[];
-  /** `items.map(i => i.id)`, memoized upstream: a fresh array here would give
-   *  dnd-kit's SortableContext a new context value every render, re-rendering
-   *  every `useSortable` row in the group. */
+  /** `items.map(i => i.id)`. Held to a stable identity in the body (see
+   *  `useStableIds`): a fresh array would give dnd-kit's SortableContext a new
+   *  context value every render, re-rendering every `useSortable` row body in
+   *  the group. */
   itemIds: string[];
   columns: Column[];
   /** Whether bulk row-selection checkboxes are shown (editors only, not viewers). */
@@ -195,6 +197,13 @@ export const GroupSection = memo(function GroupSection({
   });
 
   const virtualRows = virtualizer.getVirtualItems();
+
+  // dnd-kit puts `items` in the SortableContext memo deps, so a content-equal
+  // but freshly-built array (the parent re-derives these from a memo that
+  // depends on `cellMap`) would publish a new sortable context and re-render
+  // EVERY row body in this group on every cell edit. Held per group so one
+  // group's change never churns another's context.
+  const itemIds = useStableIds(rawItemIds);
 
   // Temp-row rule (see @/lib/boards/optimistic-id): the selection store refuses
   // optimistic ids, so a "select all visible" list containing one could never

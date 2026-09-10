@@ -83,6 +83,15 @@ export function OfflinePersistence({ userId }: { userId: string }) {
       // persisted here — `shouldDehydrateQuery` in `persistOptionsFor` never
       // admits mutations — so the mutation-cache subscription the library
       // helper adds would only ever produce more byte-identical saves.
+      // Deliberately UNTHROTTLED. `persistQueryClientSave` dehydrates + writes
+      // synchronously-ish on each call, so an unthrottled save is only safe
+      // because `isBoardSnapshotWrite` narrows the trigger to a `boardSnapshot`
+      // key write — one per board/view visit, driven by `useBoardSnapshot`'s
+      // effect, NOT by cell edits or realtime traffic (those live under the
+      // `board` key, which the filter rejects). If that filter ever widens to a
+      // high-frequency key, reinstate a throttle here (the library's
+      // `persistQueryClientSubscribe` defaults to 1s) — the assumption, not the
+      // call, is what makes this cheap.
       const querySubscription = queryClient
         .getQueryCache()
         .subscribe((event) => {

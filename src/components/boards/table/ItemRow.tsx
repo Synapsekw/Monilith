@@ -15,6 +15,7 @@ import {
   localTodayISO,
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
 import { useBoardSelection } from "@/stores/board-selection";
@@ -159,6 +160,11 @@ export const ItemRow = memo(function ItemRow({
       : null,
     controls.statusColumn,
   );
+  // Temp-row rule (@/lib/boards/optimistic-id): until the server hands back a
+  // real id, no id-keyed write may fire. Reorder and delete both are — the
+  // server rejects them, the cache rolls back and the user gets a toast for a
+  // gesture that looked like it worked.
+  const pending = isOptimisticId(item.id);
   const {
     setNodeRef,
     attributes,
@@ -168,12 +174,14 @@ export const ItemRow = memo(function ItemRow({
     isDragging,
   } = useSortable({
     id: item.id,
+    disabled: pending,
     data: { type: "item", groupId: item.group_id },
   });
 
   const dragHandle = (
     <button
       type="button"
+      disabled={pending}
       aria-label={`Reorder ${item.name}`}
       {...attributes}
       {...listeners}
@@ -214,16 +222,18 @@ export const ItemRow = memo(function ItemRow({
         <button
           type="button"
           aria-label={`Add subitem to ${item.name}`}
-          onClick={() =>
+          onClick={() => {
+            // Expand FIRST, not in `onSuccess`: the optimistic temp subitem
+            // lands at `onMutate`, so `childCount` flips 0→1 immediately. A
+            // parent still collapsed at that moment swaps its own cells for
+            // RollupValueCells over a value-less temp row — its values visibly
+            // blank out and come back one round-trip later.
+            if (!isExpanded) onToggleExpand(item.id);
             controls.addSubitem(item.id, "New subitem", {
-              onSuccess: (id) => {
-                // Expand the parent so the new subitem is visible, then
-                // enter rename mode on it.
-                if (!isExpanded) onToggleExpand(item.id);
-                onSubitemAdded?.(id);
-              },
-            })
-          }
+              // Enter rename mode on the real row once the server answers.
+              onSuccess: (id) => onSubitemAdded?.(id),
+            });
+          }}
           className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <Plus className="size-3.5" />
@@ -232,6 +242,7 @@ export const ItemRow = memo(function ItemRow({
       <RowMenu
         label={item.name}
         hasChildren={childCount > 0}
+        disabled={pending}
         onDelete={() => controls.deleteItem(item.id)}
       />
     </>
