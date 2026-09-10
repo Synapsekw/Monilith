@@ -89,10 +89,9 @@ describe("stripOption", () => {
     return {
       item_id: "i1",
       column_id: "c1",
-      org_id: "o1",
-      board_id: "b1",
       value,
-    } as CacheCellValue;
+      updated_at: "2026-06-25T15:42:00Z",
+    };
   }
 
   it("clears a status cell referencing the removed option (→ null)", () => {
@@ -1260,7 +1259,7 @@ describe("useBoardMutations.addItem (optimistic)", () => {
         resolve = r;
       }),
     );
-    const { result } = renderHook(() => useBoardMutations("b1"), {
+    const { result } = renderHook(() => useBoardMutations("b1", "u-me"), {
       wrapper: wrapper(qc),
     });
 
@@ -1277,6 +1276,9 @@ describe("useBoardMutations.addItem (optimistic)", () => {
     expect(temp.position).toBe(3);
     expect(temp.board_id).toBe("b1");
     expect(temp.org_id).toBe("o1");
+    // M5: the signed-in user authors the row — a temp `created_by: ""` made
+    // the Created-by cell read "Unknown" for a whole round-trip.
+    expect(temp.created_by).toBe("u-me");
 
     resolve({
       ok: true,
@@ -1490,7 +1492,7 @@ describe("useBoardMutations.addSubitem (optimistic)", () => {
         resolve = r;
       }),
     );
-    const { result } = renderHook(() => useBoardMutations("b1"), {
+    const { result } = renderHook(() => useBoardMutations("b1", "u-me"), {
       wrapper: wrapper(qc),
     });
 
@@ -1506,6 +1508,8 @@ describe("useBoardMutations.addSubitem (optimistic)", () => {
       expect(temp.parent_id).toBe("p1");
       expect(temp.group_id).toBe("g1");
       expect(temp.position).toBe(2);
+      // M5 — see the equivalent assertion on the add-item path.
+      expect(temp.created_by).toBe("u-me");
     });
 
     resolve({

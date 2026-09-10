@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   KeyboardSensor,
   PointerSensor,
@@ -41,25 +42,35 @@ import {
  * `@dnd-kit/sortable`, and importing it would drag that package into the module
  * graph of all eight eager call sites.
  */
+const POINTER_OPTIONS = { activationConstraint: { distance: 6 } } as const;
+const TOUCH_OPTIONS = {
+  activationConstraint: { delay: 200, tolerance: 8 },
+} as const;
+
 export function useTouchAwareSensors(options?: {
   keyboardCoordinateGetter?: KeyboardCoordinateGetter;
 }) {
   const keyboard = options?.keyboardCoordinateGetter;
 
-  const pointer = useSensor(PointerSensor, {
-    activationConstraint: { distance: 6 },
-  });
-  const touch = useSensor(TouchSensor, {
-    activationConstraint: { delay: 200, tolerance: 8 },
-  });
+  // The options objects are module constants, and the keyboard one is memoized
+  // on the getter, because `useSensor` memoizes its descriptor on `[sensor,
+  // options]`. An inline literal here made a new descriptor every render →
+  // `useSensors` a new array → `DndContext`'s `activators` a new value → its
+  // INTERNAL context a new value — and every `useDraggable`/`useSortable` on
+  // the surface re-renders off that context, straight through `React.memo`.
+  // On the board table that was every visible row body on every cell edit.
+  const pointer = useSensor(PointerSensor, POINTER_OPTIONS);
+  const touch = useSensor(TouchSensor, TOUCH_OPTIONS);
   // Constructed unconditionally: `useSensor` is a hook, so a conditional call
   // would change the hook order between renders. `useSensors` filters nullish
   // entries (verified in @dnd-kit/core@6.3.1, core.cjs.development.js:205-212),
   // so passing `null` is the sanctioned way to leave a sensor out. The
   // conditionality belongs in the argument list, never at the call site.
-  const keyboardSensor = useSensor(KeyboardSensor, {
-    coordinateGetter: keyboard,
-  });
+  const keyboardOptions = useMemo(
+    () => ({ coordinateGetter: keyboard }),
+    [keyboard],
+  );
+  const keyboardSensor = useSensor(KeyboardSensor, keyboardOptions);
 
   return useSensors(pointer, touch, keyboard ? keyboardSensor : null);
 }

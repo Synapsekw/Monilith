@@ -382,12 +382,16 @@ export const getBoardPayload = cache(
           // RLS-scoped, bounded over the (item_id, column_id) index. Narrowed
           // to the same four columns as the main cell_values read above (see
           // `BoardCellValue`) — `mirrorValuesForCell` (`mirror.ts`) only ever
-          // reads `item_id`/`column_id`/`value`.
+          // reads `item_id`/`column_id`/`value`. Ordered by the same
+          // `(item_id, column_id)` PRIMARY KEY for the same reason: this read is
+          // capped too, so without it truncation at 4000 is an arbitrary subset.
           supabase
             .from("cell_values")
             .select("item_id, column_id, value, updated_at")
             .in("item_id", linkedItemIds)
             .in("column_id", targetColumnIds)
+            .order("item_id", { ascending: true })
+            .order("column_id", { ascending: true })
             .limit(4000),
           supabase
             .from("columns")

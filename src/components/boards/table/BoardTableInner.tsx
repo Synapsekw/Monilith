@@ -52,11 +52,7 @@ import {
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { type EditorMember } from "@/components/boards/cells/editors";
-import type {
-  BoardCache,
-  CacheAttachment,
-  CacheColumn,
-} from "@/lib/boards/cache";
+import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { firstStatusColumn } from "@/lib/boards/overdue";
@@ -130,10 +126,7 @@ export function BoardTableInner({
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
+  const { data: cache } = useBoardCache(payload.board.id, payload);
   const { board, groups, columns, items, cellValues } = cache;
 
   // Collapse + expansion are per-user, per-board arrangement, owned by the
@@ -249,7 +242,7 @@ export function BoardTableInner({
     [],
   );
 
-  const mutations = useBoardMutations(payload.board.id);
+  const mutations = useBoardMutations(payload.board.id, currentUserId);
   // useBoardMutations returns a fresh object of fresh closures every render,
   // which would change `controls`' identity each render and defeat the row/cell
   // React.memo. Forward through a ref so the exposed methods keep a STABLE
@@ -356,9 +349,12 @@ export function BoardTableInner({
     return { visibleItemsByGroup: out, visibleCount: count };
   }, [itemsByGroup, predicate, comparator]);
 
-  // Per-group id arrays, memoized alongside the rows they describe. dnd-kit's
-  // SortableContext puts `items` in its context memo deps, so a fresh array per
-  // render re-renders every `useSortable` consumer — i.e. every visible row.
+  // Per-group id arrays for dnd-kit's SortableContext. Memoizing on
+  // `visibleItemsByGroup` is NOT enough to keep them referentially stable: its
+  // deps include `cellMap` (the filter predicate and the sort comparator read
+  // cell values), so a single-cell patch recomputes content-equal arrays. Each
+  // `GroupSection` therefore holds its own array's identity with `useStableIds`
+  // — per group, so one group's change doesn't churn the others' contexts.
   const itemIdsByGroup = useMemo(() => {
     const out = new Map<string, string[]>();
     for (const [gid, list] of visibleItemsByGroup)

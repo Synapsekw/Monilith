@@ -135,7 +135,9 @@ export const NameCell = memo(function NameCell({
       {leading}
       <div
         role="button"
-        tabIndex={0}
+        // Temp-row rule: `open()` is a no-op while pending, so keeping this in
+        // the tab order would be a dead stop announcing itself as a button.
+        tabIndex={pending ? -1 : 0}
         aria-label={`${item.name} name`}
         onClick={open}
         onKeyDown={(e) => {

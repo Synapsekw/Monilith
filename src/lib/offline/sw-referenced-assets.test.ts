@@ -122,12 +122,12 @@ describe("public/sw.js invariants", () => {
     // to a cacheable (Partial Prerender) route is answered from cache while
     // offline and the fallback never runs. The offline check must come BEFORE
     // the network attempt.
-    const guardIndex = SW_SOURCE.indexOf("self.navigator.onLine");
-    const fetchIndex = SW_SOURCE.indexOf(
-      "fetch(request)\n        .then((res) => {",
-    );
-    expect(guardIndex).toBeGreaterThan(-1);
-    expect(fetchIndex).toBeGreaterThan(guardIndex);
+    // Matched structurally, NOT by exact source text: the old assertion pinned
+    // prettier's exact indentation of the `.then` chain, so a reformat of sw.js
+    // would have failed this test for a reason unrelated to the invariant.
+    expect(SW_SOURCE).toContain("self.navigator.onLine");
+    // …and it runs BEFORE the network attempt it guards.
+    expect(SW_SOURCE).toMatch(/onLine[\s\S]*?fetch\(request\)/);
   });
 
   it("falls back to the offline shell only when fetch rejects, never on a slow-but-successful response", () => {

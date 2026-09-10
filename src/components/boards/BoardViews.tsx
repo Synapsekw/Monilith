@@ -10,7 +10,6 @@ import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlash
 import { OfflinePersistence } from "@/components/offline/OfflinePersistence";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
-import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
 import {
   BoardPresenceProvider,
@@ -100,7 +99,7 @@ export function BoardViews({
   /** The caller's saved arrangement, read server-side so nothing flashes. */
   viewPrefs: ResolvedBoardViewPrefs;
 }) {
-  useBoardCache(payload.board.id, payload as unknown as BoardCache);
+  useBoardCache(payload.board.id, payload);
 
   // True only when this tree is the `/offline` route's replay of a cached
   // board (see offline-render-context.tsx). Gates the pieces below that are
@@ -195,6 +194,7 @@ export function BoardViews({
         selectedViewId={activeViewId}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
       />
     ) : selected?.kind === "timeline" ? (
       <GanttBoard
@@ -203,6 +203,7 @@ export function BoardViews({
         selectedViewId={activeViewId}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
       />
     ) : (
       <BoardTable

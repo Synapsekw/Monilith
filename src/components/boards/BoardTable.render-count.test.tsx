@@ -22,11 +22,29 @@ import { boardKey } from "@/lib/boards/use-board-cache";
  * re-renders driven from inside the cell (store subscriptions), which a mocked
  * `EditableCell` wrapper would miss.
  */
-const { cellRenders } = vi.hoisted(() => ({ cellRenders: [] as string[] }));
+const { cellRenders, rowBodyRenders } = vi.hoisted(() => ({
+  cellRenders: [] as string[],
+  rowBodyRenders: [] as string[],
+}));
 
 vi.mock("@/components/boards/presence/PresenceRing", () => ({
   PresenceRing: ({ target }: { target: string }) => {
     cellRenders.push(target);
+    return null;
+  },
+}));
+
+/**
+ * Row-BODY probe. `RowMenu` is a plain (non-memo) component rendered exactly
+ * once per `ItemRow` / `SortableSubitemRow`, so one push == one row-body
+ * re-render. The cell probe above can't see this: a row body can re-render
+ * (dnd-kit `useSortable` reading a fresh `SortableContext` value) while every
+ * memoized `EditableCell` under it bails out — which is precisely how the
+ * unstable `SortableContext` `items` array hid.
+ */
+vi.mock("./table/RowMenu", () => ({
+  RowMenu: ({ label }: { label: string }) => {
+    rowBodyRenders.push(label);
     return null;
   },
 }));
@@ -84,7 +102,22 @@ vi.mock("next/navigation", () => ({
 const ITEM_IDS = ["i1", "i2", "i3", "i4", "i5", "i6"] as const;
 const COLUMN_IDS = ["c1", "c2", "c3"] as const;
 
-function payloadFixture() {
+/** `subitemOf`: attach one subitem to that parent (exercises `SubitemBlock`). */
+function payloadFixture(opts: { subitemOf?: string } = {}) {
+  const subitem = opts.subitemOf
+    ? {
+        id: "s1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: opts.subitemOf,
+        name: "Sub 1",
+        position: 0,
+        created_by: null,
+        created_at: "2026-06-25T15:42:00Z",
+        updated_at: "2026-06-25T15:42:00Z",
+      }
+    : null;
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
     groups: [
@@ -107,19 +140,22 @@ function payloadFixture() {
       width: null,
       settings: {},
     })),
-    items: ITEM_IDS.map((id, i) => ({
-      id,
-      board_id: "b1",
-      org_id: "o1",
-      group_id: "g1",
-      parent_id: null,
-      name: `Item ${i + 1}`,
-      position: i,
-      created_by: null,
-      created_at: "2026-06-25T15:42:00Z",
-      updated_at: "2026-06-25T15:42:00Z",
-    })),
-    cellValues: ITEM_IDS.flatMap((itemId) =>
+    items: [
+      ...ITEM_IDS.map((id, i) => ({
+        id,
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: `Item ${i + 1}`,
+        position: i,
+        created_by: null,
+        created_at: "2026-06-25T15:42:00Z",
+        updated_at: "2026-06-25T15:42:00Z",
+      })),
+      ...(subitem ? [subitem] : []),
+    ],
+    cellValues: [...ITEM_IDS, ...(subitem ? ["s1"] : [])].flatMap((itemId) =>
       COLUMN_IDS.map((columnId) => ({
         item_id: itemId,
         column_id: columnId,
@@ -138,12 +174,12 @@ function payloadFixture() {
   } as never;
 }
 
-function renderBoard() {
+function renderBoard(opts: { subitemOf?: string } = {}) {
   const qc = new QueryClient();
   const view = render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <BoardTable payload={payloadFixture()} selectedViewId="v1" />
+        <BoardTable payload={payloadFixture(opts)} selectedViewId="v1" />
       </TooltipProvider>
     </QueryClientProvider>,
   );
@@ -155,9 +191,17 @@ function rowsRendered() {
   return [...new Set(cellRenders.map((t) => t.split(":")[1]))].sort();
 }
 
-beforeEach(() => {
+/** Distinct row bodies that re-rendered since the last reset. */
+function rowBodiesRendered() {
+  return [...new Set(rowBodyRenders)].sort();
+}
+
+function resetProbes() {
   cellRenders.length = 0;
-});
+  rowBodyRenders.length = 0;
+}
+
+beforeEach(resetProbes);
 
 describe("BoardTable render budget", () => {
   it("paints one cell per visible row × column on mount", () => {
@@ -234,5 +278,68 @@ describe("BoardTable render budget", () => {
     fireEvent.scroll(scroller);
 
     expect(cellRenders).toEqual([]);
+  });
+});
+
+/**
+ * Row-BODY budget. dnd-kit puts `items` in the `SortableContext` memo deps, so
+ * a per-render id array re-renders EVERY `useSortable` row body on the board —
+ * invisible to the cell probe, because the memoized cells under those bodies
+ * still bail out. These pin the id arrays as referentially stable across
+ * content-equal recomputes (top-level rows AND `SubitemBlock`'s subitems).
+ */
+describe("BoardTable row-body render budget", () => {
+  async function patchCell(
+    qc: QueryClient,
+    itemId: string,
+    columnId: string,
+    text: string,
+  ) {
+    await act(async () => {
+      qc.setQueryData<BoardCache>(boardKey("b1"), (prev) =>
+        prev
+          ? upsertCellValue(prev, {
+              item_id: itemId,
+              column_id: columnId,
+              value: { text },
+              updated_at: "2026-06-25T15:43:00Z",
+            } as never)
+          : prev,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  /** 6 top-level rows + one subitem under Item 6, expanded so it is mounted. */
+  function renderExpandedBoard() {
+    const view = renderBoard({ subitemOf: "i6" });
+    fireEvent.click(screen.getByRole("button", { name: "Expand Item 6" }));
+    expect(rowBodiesRendered()).toContain("Sub 1");
+    resetProbes();
+    return view;
+  }
+
+  it("a single-cell patch re-renders only the patched row's body", async () => {
+    const { qc } = renderExpandedBoard();
+
+    await patchCell(qc, "i3", "c1", "patched");
+
+    expect(
+      screen.getByRole("button", { name: "Item 3 Col 1" }).textContent,
+    ).toBe("patched");
+    expect(rowBodiesRendered()).toEqual(["Item 3"]);
+    expect(rowsRendered()).toEqual(["i3"]);
+  });
+
+  it("patching a subitem cell re-renders only the subitem's body", async () => {
+    const { qc } = renderExpandedBoard();
+
+    await patchCell(qc, "s1", "c2", "sub-patched");
+
+    expect(
+      screen.getByRole("button", { name: "Sub 1 Col 2" }).textContent,
+    ).toBe("sub-patched");
+    expect(rowBodiesRendered()).toEqual(["Sub 1"]);
+    expect(rowsRendered()).toEqual(["s1"]);
   });
 });

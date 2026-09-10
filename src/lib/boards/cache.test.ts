@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { CacheCellValue } from "@/lib/boards/cache";
+import type { BoardCellValue } from "@/lib/boards/queries";
 import {
   addDependency,
   buildCellMap,
@@ -250,6 +252,38 @@ describe("replaceItemId", () => {
     const before = withTemp();
     replaceItemId(before, "optimistic-x", server);
     expect(before.items.map((i) => i.id)).toEqual(["i1", "optimistic-x", "i2"]);
+  });
+
+  it("keeps one cell per (item, column) when the echo already wrote the same cell", () => {
+    // Kanban quick-add writes a status cell on the TEMP row; the realtime echo
+    // can insert the real row AND its cell before the action resolves. Re-keying
+    // the temp cell then produced two entries for (srv1, c1) — and the two
+    // readers disagree: `buildCellMap` is last-wins, `upsertCellValue`
+    // first-match, so a later edit patched the copy the grid doesn't read.
+    const echoed = withTemp();
+    const withEcho: BoardCache = {
+      ...echoed,
+      items: [...echoed.items, server],
+      cellValues: [
+        ...echoed.cellValues,
+        {
+          item_id: "srv1",
+          column_id: "c1",
+          value: { text: "from-echo" },
+          updated_at: "2026-06-25T15:42:00Z",
+        },
+      ],
+    };
+
+    const next = replaceItemId(withEcho, "optimistic-x", server);
+
+    const forCell = next.cellValues.filter(
+      (c) => c.item_id === "srv1" && c.column_id === "c1",
+    );
+    expect(forCell).toHaveLength(1);
+    // Last entry wins, matching `buildCellMap` — the echo is the server's own
+    // value and lands after the re-keyed temp cell.
+    expect((forCell[0].value as { text: string }).text).toBe("from-echo");
   });
 });
 
@@ -710,5 +744,22 @@ describe("moveItemToGroup position", () => {
     expect(moved.position).toBe(3);
     // subitems are dragged into the new group along with their parent
     expect(next.items.find((i) => i.id === "s1")!.group_id).toBe("g2");
+  });
+});
+
+describe("CacheCellValue", () => {
+  /**
+   * Compile-time guard. Task 5 narrowed the server payload's `cell_values`
+   * projection to `(item_id, column_id, value, updated_at)`, but the client
+   * cache type kept claiming the full row — so the five
+   * `payload as unknown as BoardCache` casts at the view boundaries laundered
+   * rows with no `board_id`/`org_id` into a type that promised them. Pin the
+   * two shapes together so they can't drift again.
+   */
+  type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+  const cacheCellMatchesPayload: Exact<CacheCellValue, BoardCellValue> = true;
+
+  it("is exactly the narrowed BoardPayload cell shape", () => {
+    expect(cacheCellMatchesPayload).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
-import type { BoardCache, CacheDependency } from "@/lib/boards/cache";
+import type { CacheDependency } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -81,18 +81,18 @@ export function GanttBoard({
   members = [],
   access = "owner",
   grants = [],
+  currentUserId = "",
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
   access?: BoardAccess;
   grants?: HeaderGrant[];
+  /** Authors optimistic temp rows (see `useBoardMutations`). */
+  currentUserId?: string;
 }) {
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
-  const mutations = useBoardMutations(payload.board.id);
+  const { data: cache } = useBoardCache(payload.board.id, payload);
+  const mutations = useBoardMutations(payload.board.id, currentUserId);
 
   const [, startTransition] = useTransition();
 

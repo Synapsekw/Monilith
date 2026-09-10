@@ -24,10 +24,13 @@ export function RowMenu({
   label,
   hasChildren,
   onDelete,
+  disabled = false,
 }: {
   label: string;
   hasChildren: boolean;
   onDelete: () => void;
+  /** Temp-row rule: an optimistic row can't be deleted (see @/lib/boards/optimistic-id). */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -37,6 +40,7 @@ export function RowMenu({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            disabled={disabled}
             aria-label={`${label} menu`}
             className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
           >

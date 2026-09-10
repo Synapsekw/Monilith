@@ -1,11 +1,20 @@
 import type { Tables } from "@/types/database.types";
+import type { BoardCellValue } from "@/lib/boards/queries";
 import type { RelationLink } from "@/lib/boards/relations";
 
 export type CacheBoard = Tables<"boards">;
 export type CacheGroup = Tables<"groups">;
 export type CacheItem = Tables<"items">;
 export type CacheColumn = Tables<"columns">;
-export type CacheCellValue = Tables<"cell_values">;
+/**
+ * The cell shape the cache actually holds — the SAME narrowed projection the
+ * server payload ships (`item_id, column_id, value, updated_at`), reused rather
+ * than restated so the two can never drift. `board_id`/`org_id` are RLS/join
+ * plumbing that `getBoardPayload` drops (see `BoardCellValue` in queries.ts);
+ * claiming the full row here made every `payload → BoardCache` hand-off a type
+ * lie. Type-only import, so `queries.ts`'s `server-only` guard is erased.
+ */
+export type CacheCellValue = BoardCellValue;
 export type CacheDependency = Tables<"item_dependencies">;
 export type CacheAttachment = Tables<"attachments">;
 export type CacheTimeEntry = Tables<"time_entries">;
@@ -137,16 +146,21 @@ export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
  *
  * The swap happens IN PLACE — same array index — so the new row does not jump
  * within its group when the server response lands. Any cell values written
- * against the temp id are re-keyed onto the real id (a temp row is read-only
- * today, so in practice there are none; carrying them is what makes the helper
- * safe if that rule ever relaxes).
+ * against the temp id are re-keyed onto the real id: a temp row's own cells are
+ * read-only, but Kanban quick-add DOES paint one on it (the status of the column
+ * the card was dropped into — see `AddItemVars.cell`), so this path is live, not
+ * just defensive.
  *
  * Two tolerated races:
  *  • the temp row is already gone (an error rollback removed it, or a full
  *    resync replaced the cache) → fall through to `insertItem`, which is
  *    idempotent on the real id;
  *  • the Realtime INSERT echo already added the real row → drop the temp row
- *    rather than writing a second copy of the same id.
+ *    rather than writing a second copy of the same id. The echo may have brought
+ *    the row's cells with it, so the re-keyed temp cells are de-duplicated by
+ *    `(item_id, column_id)` afterwards — two entries for one cell would be read
+ *    inconsistently (`buildCellMap` is last-wins, `upsertCellValue` first-match),
+ *    so a later edit would patch the copy the grid never reads.
  *
  * Immutable.
  */
@@ -161,9 +175,14 @@ export function replaceItemId(
   const items = echoed
     ? cache.items.filter((i) => i.id !== tempId)
     : cache.items.map((i, n) => (n === idx ? item : i));
-  const cellValues = cache.cellValues.map((c) =>
+  const rekeyed = cache.cellValues.map((c) =>
     c.item_id === tempId ? { ...c, item_id: item.id } : c,
   );
+  // Last entry per (item_id, column_id) wins, matching `buildCellMap`.
+  const byKey = new Map<string, CacheCellValue>();
+  for (const c of rekeyed) byKey.set(cellKey(c.item_id, c.column_id), c);
+  const cellValues =
+    byKey.size === rekeyed.length ? rekeyed : [...byKey.values()];
   return { ...cache, items, cellValues };
 }
 

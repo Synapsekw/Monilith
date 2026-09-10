@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Column, Item } from "@/lib/boards/queries";
 import { EditableCell } from "./EditableCell";
+import { ItemRow } from "./ItemRow";
 import { NameCell } from "./NameCell";
 import { RowSelectCheckbox } from "./RowSelectCheckbox";
+import { SortableSubitemRow } from "./SortableSubitemRow";
 import type { CellControls } from "./shared";
 
 /**
@@ -112,6 +114,24 @@ describe("temp-row read-only rule", () => {
     expect(screen.getByLabelText("Rename New task")).toBeInTheDocument();
   });
 
+  it("takes an optimistic row's name cell out of the tab order", () => {
+    // `open()` is a no-op while pending, so a focusable name cell is a dead
+    // tab stop that announces itself as a button.
+    render(<NameCell item={item(TEMP_ID)} controls={controls()} />);
+    expect(screen.getByLabelText("New task name")).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
+  });
+
+  it("keeps a reconciled row's name cell focusable", () => {
+    render(<NameCell item={item(REAL_ID)} controls={controls()} />);
+    expect(screen.getByLabelText("New task name")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+  });
+
   it("does not let an optimistic row be bulk-selected", () => {
     render(<RowSelectCheckbox itemId={TEMP_ID} name="New task" />);
     expect(screen.getByLabelText("Select New task")).toBeDisabled();
@@ -120,5 +140,89 @@ describe("temp-row read-only rule", () => {
   it("lets a reconciled row be bulk-selected", () => {
     render(<RowSelectCheckbox itemId={REAL_ID} name="New task" />);
     expect(screen.getByLabelText("Select New task")).toBeEnabled();
+  });
+});
+
+/** Row-level controls a whole `ItemRow` / `SortableSubitemRow` render touches. */
+function rowControls(over: Partial<CellControls> = {}): CellControls {
+  return controls({
+    dependentsByItem: new Map<string, number>(),
+    statusColumn: null,
+    cache: { cellValues: [], attachments: [], timeEntries: [] },
+    ...over,
+  } as Partial<CellControls>);
+}
+
+const rowProps = {
+  columns: [column],
+  cellMap: new Map(),
+  template: "1fr 1fr",
+  selectable: false,
+  onRenameSettled: vi.fn(),
+};
+
+describe("temp-row rule: row-level affordances", () => {
+  it("disables the drag handle and the row menu on an optimistic item row", () => {
+    render(
+      <ItemRow
+        {...rowProps}
+        item={item(TEMP_ID)}
+        controls={rowControls()}
+        subitems={[]}
+        childCount={0}
+        isExpanded={false}
+        onToggleExpand={vi.fn()}
+        autoFocusRename={false}
+      />,
+    );
+
+    expect(screen.getByLabelText("Reorder New task")).toBeDisabled();
+    expect(screen.getByLabelText("New task menu")).toBeDisabled();
+  });
+
+  it("leaves both enabled once the item row has a real id", () => {
+    render(
+      <ItemRow
+        {...rowProps}
+        item={item(REAL_ID)}
+        controls={rowControls()}
+        subitems={[]}
+        childCount={0}
+        isExpanded={false}
+        onToggleExpand={vi.fn()}
+        autoFocusRename={false}
+      />,
+    );
+
+    expect(screen.getByLabelText("Reorder New task")).toBeEnabled();
+    expect(screen.getByLabelText("New task menu")).toBeEnabled();
+  });
+
+  it("disables the drag handle and the row menu on an optimistic subitem row", () => {
+    render(
+      <SortableSubitemRow
+        {...rowProps}
+        sub={item(TEMP_ID)}
+        controls={rowControls()}
+        renamingItemId={null}
+      />,
+    );
+
+    expect(screen.getByLabelText("Reorder New task")).toBeDisabled();
+    expect(screen.getByLabelText("New task menu")).toBeDisabled();
+  });
+
+  it("leaves both enabled once the subitem row has a real id", () => {
+    render(
+      <SortableSubitemRow
+        {...rowProps}
+        sub={item(REAL_ID)}
+        controls={rowControls()}
+        renamingItemId={null}
+      />,
+    );
+
+    expect(screen.getByLabelText("Reorder New task")).toBeEnabled();
+    expect(screen.getByLabelText("New task menu")).toBeEnabled();
   });
 });

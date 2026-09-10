@@ -23,8 +23,8 @@ import {
 } from "@/lib/boards/kanban-card";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import type {
-  BoardCache,
   CacheCellValue,
   CacheColumn,
   CacheItem,
@@ -98,6 +98,10 @@ export function onCardDropped(
   setCell: SetCell,
   clearCellValue: ClearCell,
 ) {
+  // Temp-row rule (@/lib/boards/optimistic-id): the card's id is not on the
+  // server yet, so the status write would 404, roll back and toast — for a drag
+  // that looked like it landed.
+  if (isOptimisticId(itemId)) return;
   if (fromColId === toCol.id) return;
   if (toCol.optionId === null) {
     clearCellValue({ itemId, columnId: groupColumnId });
@@ -139,12 +143,10 @@ function KanbanBoardInner({
 }) {
   // Hydrate the shared ["board", boardId] cache + realtime exactly like
   // BoardTable so optimistic + realtime patches re-render this view too.
-  const { data: cache } = useBoardCache(
-    payload.board.id,
-    payload as unknown as BoardCache,
-  );
+  const { data: cache } = useBoardCache(payload.board.id, payload);
   const { setCell, clearCellValue, addItem } = useBoardMutations(
     payload.board.id,
+    currentUserId,
   );
 
   // The view config carries the persisted grouping column. We hold a local
@@ -507,8 +509,11 @@ const KanbanCard = memo(function KanbanCard({
   dependents?: number;
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
+  // Temp-row rule — a not-yet-persisted card can't be moved between columns
+  // (`onCardDropped` refuses it too; this stops the drag from starting at all).
+  const pending = isOptimisticId(item.id);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: item.id, data: dragData });
+    useDraggable({ id: item.id, disabled: pending, data: dragData });
 
   // The in-view presence signal for a Kanban card is "someone is dragging it":
   // two people grabbing the same card is a real collision. Broadcast focus

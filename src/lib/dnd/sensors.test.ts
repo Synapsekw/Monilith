@@ -62,3 +62,38 @@ test("adds a KeyboardSensor carrying the supplied coordinate getter", () => {
       .coordinateGetter,
   ).toBe(coordinateGetter);
 });
+
+/**
+ * Referential stability of the sensor descriptors.
+ *
+ * dnd-kit puts them in `DndContext`'s INTERNAL context memo (via `activators`),
+ * and every `useDraggable`/`useSortable` consumes that context. A fresh options
+ * object per render therefore publishes a new internal context on every parent
+ * render and re-renders EVERY draggable on the surface — every board row, every
+ * Kanban card — straight through `React.memo`, which compares props, not
+ * context. That is why the options objects are hoisted/memoized, not inline.
+ */
+test("returns the same sensor descriptors across re-renders", () => {
+  const { result, rerender } = renderHook(() => useTouchAwareSensors());
+  const first = result.current;
+
+  rerender();
+
+  expect(result.current).toBe(first);
+});
+
+test("stays stable when the same coordinate getter is passed again", () => {
+  const coordinateGetter = (() => ({
+    x: 0,
+    y: 0,
+  })) as unknown as KeyboardCoordinateGetter;
+  const { result, rerender } = renderHook(
+    ({ getter }) => useTouchAwareSensors({ keyboardCoordinateGetter: getter }),
+    { initialProps: { getter: coordinateGetter } },
+  );
+  const first = result.current;
+
+  rerender({ getter: coordinateGetter });
+
+  expect(result.current).toBe(first);
+});

@@ -15,6 +15,7 @@ import {
   localTodayISO,
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
+import { isOptimisticId } from "@/lib/boards/optimistic-id";
 import { cn } from "@/lib/utils";
 import { EditableCell } from "./EditableCell";
 import { NameCell } from "./NameCell";
@@ -105,6 +106,8 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
       : null,
     controls.statusColumn,
   );
+  // Temp-row rule — see the equivalent note in ./ItemRow.
+  const pending = isOptimisticId(sub.id);
   const {
     setNodeRef,
     attributes,
@@ -112,11 +115,12 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: sub.id });
+  } = useSortable({ id: sub.id, disabled: pending });
 
   const dragHandle = (
     <button
       type="button"
+      disabled={pending}
       aria-label={`Reorder ${sub.name}`}
       {...attributes}
       {...listeners}
@@ -153,6 +157,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
           <RowMenu
             label={sub.name}
             hasChildren={false}
+            disabled={pending}
             onDelete={() => controls.deleteItem(sub.id)}
           />
         }
