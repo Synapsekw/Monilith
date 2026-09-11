@@ -83,6 +83,7 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
 });
 
 import { BoardDock } from "./BoardDock";
+import { DOCK_MIN_WIDTH, DOCK_RAIL_WIDTH } from "./use-dock-state";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 
@@ -116,6 +117,24 @@ const rememberOpen = () =>
     "monolith.dock.b1",
     JSON.stringify({ open: true, width: 360 }),
   );
+
+/** Pretend the viewport is below `md`: `useNarrowViewport` reads exactly the
+ *  negated-md query, so only that query matches (a coarse pointer stays off). */
+function stubNarrow() {
+  const NARROW = "not all and (min-width: 48rem)";
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: query === NARROW,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
+}
+
+const aside = () =>
+  document.querySelector<HTMLElement>("aside[aria-label='Agent dock']");
 
 /** A run with two suggestions still open: one write, one browser-side filter. */
 const intelRun = (): BoardIntelligenceRun => ({
@@ -165,6 +184,7 @@ const intelRun = (): BoardIntelligenceRun => ({
 });
 
 beforeEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   window.localStorage.clear();
   window.history.replaceState(null, "", "/boards/b1");
@@ -186,13 +206,18 @@ type MountProps = {
 
 const mount = (props: MountProps = {}) =>
   render(
-    <BoardDock
-      boardId="b1"
-      agents={AGENTS}
-      currentUserId="me"
-      access={props.access ?? "editor"}
-      initialRun={props.initialRun ?? null}
-    />,
+    <>
+      {/* The static shell's slot (app-shell.tsx). On the wide surface the dock
+          portals its <aside> into it; with no slot it renders nothing. */}
+      <div id="app-dock-slot" className="flex shrink-0" />
+      <BoardDock
+        boardId="b1"
+        agents={AGENTS}
+        currentUserId="me"
+        access={props.access ?? "editor"}
+        initialRun={props.initialRun ?? null}
+      />
+    </>,
   );
 
 const openDock = () =>
@@ -711,5 +736,61 @@ describe("BoardDock — the strip asks for a brief", () => {
       screen.getByRole("button", { name: /open agent dock/i }),
     ).toBeInTheDocument();
     expect(runBoardIntelligence).not.toHaveBeenCalled();
+  });
+});
+
+// The dock is chrome, not content (spec §1): it leaves the board page's flex
+// row and renders through the static shell's slot, beside the card.
+describe("BoardDock — placement in the shell's dock slot", () => {
+  it("portals the wide dock into #app-dock-slot, closed and open", async () => {
+    mount();
+    const slot = document.getElementById("app-dock-slot")!;
+    await waitFor(() => expect(slot).not.toBeEmptyDOMElement());
+    expect(aside()!.closest("#app-dock-slot")).toBe(slot);
+    expect(aside()!.querySelector("[data-layer='mini']")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /open agent dock/i }).closest("aside"),
+    ).toBe(aside());
+
+    await openDock();
+    expect(aside()!.querySelector("[data-layer='full']")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: /close agent dock/i })
+        .closest("aside"),
+    ).toBe(aside());
+  });
+
+  it("renders nothing on the wide surface when the page has no slot", async () => {
+    render(<BoardDock boardId="b1" agents={AGENTS} currentUserId="me" />);
+    await act(async () => {});
+    expect(aside()).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /open agent dock/i }),
+    ).toBeNull();
+    expect(loadDockThreads).not.toHaveBeenCalled();
+  });
+
+  it("is DOCK_RAIL_WIDTH closed and the remembered width open", async () => {
+    mount();
+    await waitFor(() => expect(aside()).not.toBeNull());
+    expect(aside()!.style.width).toBe(`${DOCK_RAIL_WIDTH}px`);
+    expect(aside()).toHaveAttribute("data-open", "false");
+    await openDock();
+    expect(aside()!.style.width).toBe(`${DOCK_MIN_WIDTH}px`);
+    expect(aside()).toHaveAttribute("data-open", "true");
+  });
+
+  it("keeps the floating trigger and the Sheet below md — no portal there", async () => {
+    stubNarrow();
+    mount();
+    const trigger = screen.getByRole("button", { name: /open agent dock/i });
+    expect(trigger.closest("#app-dock-slot")).toBeNull();
+    expect(aside()).toBeNull();
+    await userEvent.click(trigger);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /close agent dock/i }),
+    ).toBeInTheDocument();
   });
 });

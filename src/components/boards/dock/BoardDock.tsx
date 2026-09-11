@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ import {
   useNarrowViewport,
   DOCK_MAX_WIDTH,
   DOCK_MIN_WIDTH,
+  DOCK_RAIL_WIDTH,
 } from "./use-dock-state";
 
 /** One arrow press of resize. Coarse enough to get somewhere, fine enough to aim. */
@@ -79,6 +81,11 @@ type Failure =
  * It never calls router.push or router.refresh: either would re-run the board
  * page's server query — getBoardPayload plus two more reads — to redisplay data
  * the client already holds (gotcha-09).
+ *
+ * Placement (spec §1): on the wide surface the <aside> is PORTALLED into the
+ * static shell's `#app-dock-slot`, so the dock sits on the wash beside the
+ * content card — chrome, like the sidebar — rather than inside the card. Below
+ * `md` the Sheet is unchanged.
  */
 export function BoardDock({
   boardId,
@@ -121,6 +128,22 @@ export function BoardDock({
   /** A `?thread=` link not yet honoured. Survives a failed load, so the retry
    *  still lands on the thread the user was sent to. */
   const deepLinkPending = useRef(true);
+
+  /**
+   * The shell's dock slot (`#app-dock-slot`, app-shell.tsx), looked up AFTER
+   * mount: effects run once the whole tree has committed, and the static shell
+   * sits above this page in that tree, so the slot always exists by then.
+   * State rather than a ref, so finding it re-renders the portal into place.
+   * The server render and the first client render both see `null` and render
+   * nothing — no hydration mismatch, and no dock on a page without a slot.
+   */
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // A post-mount DOM lookup is the one correct time to find a portal target;
+    // same exemption as the localStorage read in `useDockState`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSlot(document.getElementById("app-dock-slot"));
+  }, []);
 
   /* ── Intelligence: the run the page read, and the strip's open requests. ── */
 
@@ -390,27 +413,6 @@ export function BoardDock({
     [setWidth, width],
   );
 
-  if (!open) {
-    return (
-      // One trigger, two shapes: a floating button on a phone (where the board
-      // fills the screen and there is no rail to sit in), a hairline rail
-      // beside the board from `md` up.
-      <div className="fixed right-4 bottom-4 z-30 shrink-0 md:static md:z-auto md:border-l md:p-1.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Open agent dock"
-          className="bg-surface border-border shadow-panel md:border-transparent md:bg-transparent md:shadow-none"
-          // Opening is just state. The fetch hangs off `open` in an effect, so
-          // the click and a dock restored open from storage take one path.
-          onClick={() => setOpen(true)}
-        >
-          <PanelRightOpen className="size-4" />
-        </Button>
-      </div>
-    );
-  }
-
   const activeThread =
     boardThreads.find((t) => t.id === activeId) ??
     agentThreads.find((t) => t.id === activeId) ??
@@ -461,10 +463,28 @@ export function BoardDock({
   };
 
   if (narrow) {
+    if (!open) {
+      return (
+        // A phone has no rail to sit in: the trigger floats over the board.
+        <div className="fixed right-4 bottom-4 z-30">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open agent dock"
+            className="bg-surface border-border shadow-panel border"
+            // Opening is just state. The fetch hangs off `open` in an effect,
+            // so the click and a dock restored open from storage take one path.
+            onClick={() => setOpen(true)}
+          >
+            <PanelRightOpen className="size-4" />
+          </Button>
+        </div>
+      );
+    }
     return (
       <Sheet open onOpenChange={(next) => !next && setOpen(false)}>
         {/* `[&>button]:hidden` drops SheetContent's built-in X: the dock brings
-            its own close affordance and two of them in one header is noise. */}
+              its own close affordance and two of them in one header is noise. */}
         <SheetContent
           side="right"
           className="w-full max-w-none gap-0 p-0 [&>button]:hidden"
@@ -479,38 +499,68 @@ export function BoardDock({
     );
   }
 
-  return (
+  // The wide surface renders through the shell's slot, or not at all. `narrow`
+  // has already decided this is the wide surface — no second `hidden md:flex`
+  // breakpoint here, which is what used to open a band where neither surface
+  // rendered.
+  if (!slot) return null;
+
+  return createPortal(
     <aside
       aria-label="Agent dock"
-      // No `hidden md:flex`: `narrow` has already decided this is the wide
-      // surface, and a second, independently-computed breakpoint here is what
-      // opens a band where neither surface renders.
-      className="relative flex min-w-0 shrink-0 flex-col border-l"
-      style={{ width: shownWidth }}
+      data-open={open}
+      className="relative flex min-w-0 shrink-0 flex-col overflow-hidden"
+      style={{ width: open ? shownWidth : DOCK_RAIL_WIDTH }}
     >
-      {/* Hairlines brighten rather than thicken: the grip is invisible until you
-          reach for it, then it is the border going bright. */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize agent dock"
-        aria-valuenow={shownWidth}
-        aria-valuemin={DOCK_MIN_WIDTH}
-        aria-valuemax={DOCK_MAX_WIDTH}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") {
-            e.preventDefault();
-            setWidth(width + RESIZE_STEP);
-          } else if (e.key === "ArrowRight") {
-            e.preventDefault();
-            setWidth(width - RESIZE_STEP);
-          }
-        }}
-        className="hover:bg-border-hover focus-visible:bg-border-bright absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
-      />
-      <DockBody {...body} onClose={() => setOpen(false)} />
-    </aside>
+      {open ? (
+        // `left-1` is the dock's half of the 8px gutter: <main> drops to mr-1
+        // while the slot is filled (app-shell.tsx), this supplies the rest.
+        <div
+          data-layer="full"
+          className="absolute inset-y-0 right-0 left-1 flex flex-col"
+        >
+          {/* Hairlines brighten rather than thicken: the grip is invisible
+                until you reach for it, then it is the border going bright. */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize agent dock"
+            aria-valuenow={shownWidth}
+            aria-valuemin={DOCK_MIN_WIDTH}
+            aria-valuemax={DOCK_MAX_WIDTH}
+            tabIndex={0}
+            onPointerDown={startResize}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setWidth(width + RESIZE_STEP);
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setWidth(width - RESIZE_STEP);
+              }
+            }}
+            className="hover:bg-border-hover focus-visible:bg-border-bright absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
+          />
+          <DockBody {...body} onClose={() => setOpen(false)} />
+        </div>
+      ) : (
+        // The mini rail (spec §4). Task 4 puts the tiles under this button.
+        <div
+          data-layer="mini"
+          className="absolute inset-y-0 right-0 left-1 flex flex-col items-center gap-2.5 pt-3"
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open agent dock"
+            className="text-muted-foreground hover:text-foreground size-8 shrink-0"
+            onClick={() => setOpen(true)}
+          >
+            <PanelRightOpen className="size-4" />
+          </Button>
+        </div>
+      )}
+    </aside>,
+    slot,
   );
 }

@@ -70,3 +70,30 @@ describe("surface model", () => {
     expect(header.className).not.toMatch(/\bbg-/);
   });
 });
+
+describe("dock slot", () => {
+  it("renders an empty, static #app-dock-slot right after the header+main column", () => {
+    const { container } = renderShell();
+    const slot = container.querySelector(
+      "#app-dock-slot",
+    ) as HTMLElement | null;
+    expect(slot).not.toBeNull();
+    expect(slot).toBeEmptyDOMElement();
+    expect(slot).toHaveClass("flex");
+    expect(slot).toHaveClass("shrink-0");
+    // The column that holds the header and <main> is the slot's previous sibling,
+    // so the portalled dock lands beside the card — rail | card | dock.
+    const column = screen.getByRole("main").parentElement as HTMLElement;
+    expect(slot!.previousElementSibling).toBe(column);
+  });
+
+  it("collapses main's right gutter to mr-1 only while the slot is filled, in pure CSS", () => {
+    const { container } = renderShell();
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass(
+      "[&:has(#app-dock-slot:not(:empty))>div>main]:mr-1",
+    );
+    // The default gutter is untouched: the variant, not a prop, decides.
+    expect(screen.getByRole("main")).toHaveClass("mr-2");
+  });
+});
