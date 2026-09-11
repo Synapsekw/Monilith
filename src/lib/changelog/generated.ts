@@ -27,6 +27,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
     kind: "new",
+    title: "Board brief and suggestions",
+    description:
+      "Catch me up on any board: the dock's Intelligence tab writes a short brief of the last 7 days with up to five suggestions you can apply in one click and undo for eight seconds.",
+  },
+  {
+    date: "2026-09-11",
+    kind: "new",
     title: "Board intelligence strip",
     description:
       "Every board now shows overdue, blocked, overloaded, stalled and changed-since chips under its header; click a chip to focus the board on those rows.",
