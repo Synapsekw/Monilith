@@ -894,6 +894,31 @@
       transform: translateY(-4px);
     }
   }
+  /* Board Intelligence (Phase 1): while a strip chip is active the view frame
+     carries data-intel-tone; matching rows paint a 2px inset rule in that
+     status colour (inset so nothing shifts), non-matching rows dim. Rows only
+     know a boolean — the tone is resolved here, once. */
+  [data-intel-tone="red"] {
+    --intel-rule: var(--status-red);
+  }
+  [data-intel-tone="orange"] {
+    --intel-rule: var(--status-orange);
+  }
+  [data-intel-tone="yellow"] {
+    --intel-rule: var(--status-yellow);
+  }
+  [data-intel-tone="gray"] {
+    --intel-rule: var(--status-gray);
+  }
+  [data-intel-tone="accent"] {
+    --intel-rule: var(--primary);
+  }
+  .intel-match {
+    box-shadow: inset 2px 0 0 var(--intel-rule, transparent);
+  }
+  .intel-miss {
+    opacity: 0.35;
+  }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {
     *,

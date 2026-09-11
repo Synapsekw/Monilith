@@ -33,7 +33,10 @@ import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
-import { useIntelItemIds } from "@/lib/boards/intelligence/context";
+import {
+  useIntelItemIds,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
   buildItemPredicate,
@@ -515,6 +518,7 @@ const KanbanCard = memo(function KanbanCard({
   // Temp-row rule — a not-yet-persisted card can't be moved between columns
   // (`onCardDropped` refuses it too; this stops the drag from starting at all).
   const pending = isOptimisticId(item.id);
+  const intelMatch = useIntelMatch(item.id);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: item.id, disabled: pending, data: dragData });
 
@@ -548,6 +552,8 @@ const KanbanCard = memo(function KanbanCard({
       className={cn(
         "bg-surface focus-visible:ring-ring shadow-card card-lift border-border hover:border-border-hover relative cursor-grab rounded-lg border p-3 text-left focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
+        intelMatch === true && "intel-match",
+        intelMatch === false && "intel-miss",
       )}
     >
       <PresenceRing target={target} />
