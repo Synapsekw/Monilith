@@ -946,6 +946,19 @@
   .intel-match {
     box-shadow: inset 2px 0 0 var(--intel-rule, transparent);
   }
+  /* A dragged table row also carries `shadow-drag` (ItemRow/SortableSubitemRow
+     add it alongside the intel classes on the same element — Kanban/Gantt
+     use `opacity-50` for drag feedback instead, so they never hit this).
+     Unlike `--elevation-card` above, `--elevation-drag` is never the keyword
+     `none` (see globals.css tokens below), so it's safe to splice into a
+     list: compose both shadows here instead of letting `.intel-match` alone
+     (a plain `box-shadow` replace) erase the drag elevation. Higher
+     specificity (two classes) wins regardless of declaration order. */
+  .intel-match.shadow-drag {
+    box-shadow:
+      inset 2px 0 0 var(--intel-rule, transparent),
+      var(--shadow-drag);
+  }
   /* Same reasoning for opacity: Kanban/Calendar apply `opacity-50` while
      dragging on the same element as `.intel-miss`. Being later in this same
      layer, `.intel-miss` wins outright — a non-matching row stays dimmed

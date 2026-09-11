@@ -45,4 +45,21 @@ describe("Board Intelligence row rule wins the cascade", () => {
     expect(base).not.toMatch(/\.intel-match\s*\{/);
     expect(base).not.toMatch(/\.intel-miss\s*\{/);
   });
+
+  /**
+   * Second regression: ItemRow/SortableSubitemRow add `shadow-drag` (a real,
+   * non-`none` shadow) alongside the intel classes while dragging. Plain
+   * `.intel-match` fully REPLACES `box-shadow` (see the comment in
+   * globals.css on why it can't safely compose with `--shadow-card`), which
+   * would erase the drag elevation on a dragged matching row. `.intel-match`
+   * combined with `.shadow-drag` must compose both shadows instead.
+   */
+  it("composes the drag elevation with the tone rule for a dragged matching row", () => {
+    const utilities = extractLayerBlock("utilities");
+    const match = utilities.match(/\.intel-match\.shadow-drag\s*\{([^}]*)\}/);
+    expect(match).not.toBeNull();
+    const body = match![1];
+    expect(body).toMatch(/inset 2px 0 0 var\(--intel-rule, transparent\)/);
+    expect(body).toMatch(/var\(--shadow-drag\)/);
+  });
 });
