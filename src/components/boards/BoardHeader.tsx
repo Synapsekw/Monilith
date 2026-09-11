@@ -14,6 +14,7 @@ import {
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
+import { IntelligenceStrip } from "@/components/boards/IntelligenceStrip";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
@@ -128,158 +129,165 @@ export function BoardHeader({
   }
 
   return (
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2">
-      {/* Title — compact, editable in place (stable h-7 line box). */}
-      <div className="flex min-w-0 items-center gap-2">
-        {editing && !isViewer ? (
-          <Input
-            autoFocus
-            value={name}
-            disabled={isPending}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitRename();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setEditing(false);
-              }
-            }}
-            aria-label="Board name"
-            className="font-heading h-7 w-56 text-lg font-semibold tracking-tight"
-          />
-        ) : isViewer ? (
-          <h1 className="font-heading flex h-7 items-center truncate text-lg font-semibold tracking-tight">
-            {boardName}
-          </h1>
-        ) : (
-          <button
-            type="button"
-            onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone font-heading flex h-7 items-center truncate rounded-sm text-left text-lg font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {boardName}
-          </button>
-        )}
-        {isViewer ? (
-          <span className="bg-surface text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium">
-            <Eye className="size-3.5" />
-            View only
-          </span>
-        ) : null}
-      </div>
+    <>
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2">
+        {/* Title — compact, editable in place (stable h-7 line box). */}
+        <div className="flex min-w-0 items-center gap-2">
+          {editing && !isViewer ? (
+            <Input
+              autoFocus
+              value={name}
+              disabled={isPending}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setEditing(false);
+                }
+              }}
+              aria-label="Board name"
+              className="font-heading h-7 w-56 text-lg font-semibold tracking-tight"
+            />
+          ) : isViewer ? (
+            <h1 className="font-heading flex h-7 items-center truncate text-lg font-semibold tracking-tight">
+              {boardName}
+            </h1>
+          ) : (
+            <button
+              type="button"
+              onClick={openRename}
+              className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone font-heading flex h-7 items-center truncate rounded-sm text-left text-lg font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {boardName}
+            </button>
+          )}
+          {isViewer ? (
+            <span className="bg-surface text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium">
+              <Eye className="size-3.5" />
+              View only
+            </span>
+          ) : null}
+        </div>
 
-      {/* Divider + inline view tabs. */}
-      <span className="bg-border h-4 w-px shrink-0" aria-hidden />
-      <ViewSwitcher
-        boardId={boardId}
-        views={views}
-        selectedViewId={selectedViewId}
-      />
+        {/* Divider + inline view tabs. */}
+        <span className="bg-border h-4 w-px shrink-0" aria-hidden />
+        <ViewSwitcher
+          boardId={boardId}
+          views={views}
+          selectedViewId={selectedViewId}
+        />
 
-      {/* Right control cluster — filter/search toolbar, presence, primary Share,
+        {/* Right control cluster — filter/search toolbar, presence, primary Share,
           and an overflow menu for the low-frequency board actions. */}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-        {/* Filter / sort / search. In-page client state mirrored to the URL
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {/* Filter / sort / search. In-page client state mirrored to the URL
             (History API) — 0 server round-trips; Table + Kanban read the same
             URL state and narrow/order the loaded cache in memory. */}
-        {filterable ? (
-          <BoardToolbar
-            columns={columns}
-            members={members}
-            currentUserId={currentUserId}
-          />
-        ) : null}
-        <BoardPresenceBar />
-        {/* Export is a read — allowed for viewers. Icon-only to stay compact. */}
-        <ExportMenu boardId={boardId} iconOnly />
-        {/* Reports — a read surface (list + builder). Navigates to a real page,
+          {filterable ? (
+            <BoardToolbar
+              columns={columns}
+              members={members}
+              currentUserId={currentUserId}
+            />
+          ) : null}
+          <BoardPresenceBar />
+          {/* Export is a read — allowed for viewers. Icon-only to stay compact. */}
+          <ExportMenu boardId={boardId} iconOnly />
+          {/* Reports — a read surface (list + builder). Navigates to a real page,
             so a plain Link (not in-page state) is correct here. */}
-        <Button type="button" variant="ghost" size="sm" asChild>
-          <Link href={`/boards/${boardId}/reports`}>
-            <FileText className="size-3.5" /> Report
-          </Link>
-        </Button>
-        {isOwner ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Share board"
-            onClick={() => setShareOpen(true)}
-          >
-            <UserPlus className="size-3.5" /> Share
+          <Button type="button" variant="ghost" size="sm" asChild>
+            <Link href={`/boards/${boardId}/reports`}>
+              <FileText className="size-3.5" /> Report
+            </Link>
           </Button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          {isOwner ? (
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              aria-label="More board actions"
+              size="sm"
+              aria-label="Share board"
+              onClick={() => setShareOpen(true)}
             >
-              <MoreHorizontal className="size-4" />
+              <UserPlus className="size-3.5" /> Share
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setAutomationsOpen(true)}>
-              <Zap className="size-3.5" /> Automations
-            </DropdownMenuItem>
-            {/* Import/Trash are board writes — hidden from viewers (the RPCs
-                also reject them server-side). */}
-            {!isViewer ? (
-              <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-                <Upload className="size-3.5" /> Import
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="More board actions"
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setAutomationsOpen(true)}>
+                <Zap className="size-3.5" /> Automations
               </DropdownMenuItem>
-            ) : null}
-            {!isViewer ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setTrashOpen(true)}>
-                  <Trash2 className="size-3.5" /> Trash
+              {/* Import/Trash are board writes — hidden from viewers (the RPCs
+                also reject them server-side). */}
+              {!isViewer ? (
+                <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                  <Upload className="size-3.5" /> Import
                 </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <AutomationsDialog
-        boardId={boardId}
-        columns={columns}
-        members={members}
-        groups={groups}
-        open={automationsOpen}
-        onOpenChange={setAutomationsOpen}
-      />
-      <ImportWizard
-        destination={{
-          type: "existing",
-          boardId,
-          boardColumns: importBoardColumns,
-          groups,
-        }}
-        open={importOpen}
-        onOpenChange={setImportOpen}
-      />
-      {isOwner ? (
-        <ShareBoardDialog
+              ) : null}
+              {!isViewer ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setTrashOpen(true)}>
+                    <Trash2 className="size-3.5" /> Trash
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <AutomationsDialog
           boardId={boardId}
+          columns={columns}
           members={members}
-          grants={grants}
-          open={shareOpen}
-          onOpenChange={setShareOpen}
+          groups={groups}
+          open={automationsOpen}
+          onOpenChange={setAutomationsOpen}
         />
-      ) : null}
-      {!isViewer ? (
-        <BoardTrashDialog
-          boardId={boardId}
-          open={trashOpen}
-          onOpenChange={setTrashOpen}
+        <ImportWizard
+          destination={{
+            type: "existing",
+            boardId,
+            boardColumns: importBoardColumns,
+            groups,
+          }}
+          open={importOpen}
+          onOpenChange={setImportOpen}
         />
-      ) : null}
-    </header>
+        {isOwner ? (
+          <ShareBoardDialog
+            boardId={boardId}
+            members={members}
+            grants={grants}
+            open={shareOpen}
+            onOpenChange={setShareOpen}
+          />
+        ) : null}
+        {!isViewer ? (
+          <BoardTrashDialog
+            boardId={boardId}
+            open={trashOpen}
+            onOpenChange={setTrashOpen}
+          />
+        ) : null}
+      </header>
+      {/* Board Intelligence strip (spec §2.1): its own ~32px row between the
+          header and the view. Mounted HERE because every view renders its own
+          BoardHeader, so this is the one place that appears exactly once in
+          all four views. Renders nothing without a BoardIntelligenceProvider. */}
+      <IntelligenceStrip />
+    </>
   );
 }
