@@ -1,0 +1,271 @@
+import { describe, expect, it } from "vitest";
+import { buildBoardContext } from "./board-context";
+import { toAction, validateIntelligenceOutput } from "./validate";
+import type { BoardPayload } from "@/lib/boards/queries";
+
+// Minimal payload: one group, a status column with two options, a date column,
+// a people column, two items, one member. Cast through unknown — only the
+// fields buildBoardContext reads are present.
+const payload = {
+  board: { id: "b1", org_id: "o1", name: "Launch" },
+  groups: [{ id: "g1", name: "Sprint", position: 0 }],
+  columns: [
+    {
+      id: "c-status",
+      name: "Status",
+      kind: "status",
+      settings: {
+        options: [
+          { id: "o-done", label: "Done", color: "green" },
+          { id: "o-stuck", label: "Stuck", color: "red" },
+        ],
+      },
+    },
+    { id: "c-date", name: "Due", kind: "date", settings: {} },
+    { id: "c-people", name: "Owner", kind: "people", settings: {} },
+  ],
+  items: [
+    { id: "i1", name: "Ship", group_id: "g1", parent_id: null },
+    { id: "i2", name: "Test", group_id: "g1", parent_id: null },
+  ],
+  cellValues: [],
+  dependencies: [],
+  views: [],
+  attachments: [],
+  timeEntries: [],
+  relationLinks: [],
+  mirrorTargetCells: [],
+  mirrorTargetColumns: [],
+} as unknown as BoardPayload;
+const members = [
+  { userId: "u-ana", fullName: "Ana Lima" },
+  { userId: "u-bo", fullName: null },
+];
+const ctx = buildBoardContext(payload, members);
+const base = {
+  itemIds: null,
+  itemId: null,
+  columnId: null,
+  toUserId: null,
+  date: null,
+  optionId: null,
+  userId: null,
+  message: null,
+  signalKind: null,
+};
+
+describe("buildBoardContext", () => {
+  it("indexes items, columns with option labels, and member names", () => {
+    expect(ctx.items.get("i1")?.name).toBe("Ship");
+    expect(ctx.columns.get("c-status")?.options.get("o-stuck")).toBe("Stuck");
+    expect(ctx.members.get("u-ana")).toBe("Ana Lima");
+    expect(ctx.members.get("u-bo")).toBe("Someone");
+  });
+});
+
+describe("toAction", () => {
+  it("builds a labelled reassign when items, column kind and member all check out", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "reassign",
+          itemIds: ["i1", "i2"],
+          columnId: "c-people",
+          toUserId: "u-ana",
+        },
+        ctx,
+      ),
+    ).toEqual({
+      type: "reassign",
+      itemIds: ["i1", "i2"],
+      columnId: "c-people",
+      toUserId: "u-ana",
+      label: "Reassign 2 items to Ana Lima",
+    });
+  });
+  it("drops a reassign whose column is not a people column or whose user is off-board", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "reassign",
+          itemIds: ["i1"],
+          columnId: "c-status",
+          toUserId: "u-ana",
+        },
+        ctx,
+      ),
+    ).toBeNull();
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "reassign",
+          itemIds: ["i1"],
+          columnId: "c-people",
+          toUserId: "u-zed",
+        },
+        ctx,
+      ),
+    ).toBeNull();
+  });
+  it("drops an item id that is not on the board", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "set_due",
+          itemId: "i9",
+          columnId: "c-date",
+          date: "2026-09-20",
+        },
+        ctx,
+      ),
+    ).toBeNull();
+  });
+  it("checks status options against the column", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "set_status",
+          itemId: "i1",
+          columnId: "c-status",
+          optionId: "o-done",
+        },
+        ctx,
+      ),
+    ).toEqual({
+      type: "set_status",
+      itemId: "i1",
+      columnId: "c-status",
+      optionId: "o-done",
+      label: "Mark Ship as Done",
+    });
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "set_status",
+          itemId: "i1",
+          columnId: "c-status",
+          optionId: "o-nope",
+        },
+        ctx,
+      ),
+    ).toBeNull();
+  });
+  it("rejects a malformed date and an unknown signal kind", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "set_due",
+          itemId: "i1",
+          columnId: "c-date",
+          date: "next week",
+        },
+        ctx,
+      ),
+    ).toBeNull();
+    expect(
+      toAction({ ...base, type: "filter", signalKind: "urgent" }, ctx),
+    ).toBeNull();
+    expect(
+      toAction({ ...base, type: "filter", signalKind: "overdue" }, ctx),
+    ).toEqual({
+      type: "filter",
+      signalKind: "overdue",
+      label: "Show overdue rows",
+    });
+  });
+  it("sanitizes the nudge message and names the recipient", () => {
+    expect(
+      toAction(
+        {
+          ...base,
+          type: "nudge",
+          itemId: "i2",
+          userId: "u-ana",
+          message: "Ping <b>now</b>\nplease",
+        },
+        ctx,
+      ),
+    ).toEqual({
+      type: "nudge",
+      itemId: "i2",
+      userId: "u-ana",
+      message: "Ping bnow/b please",
+      label: "Nudge Ana Lima",
+    });
+  });
+});
+
+describe("validateIntelligenceOutput", () => {
+  const signals = [{ kind: "overdue" as const, count: 1, label: "overdue" }];
+  it("keeps the brief, drops suggestions with no valid action, mints ids, resolves evidence rows", () => {
+    const { payload: out, warnings } = validateIntelligenceOutput(
+      {
+        brief: "One item is late.",
+        suggestions: [
+          {
+            kind: "overdue",
+            title: "Push Ship",
+            evidence: "1 overdue",
+            body: "b",
+            evidenceItemIds: ["i1", "i9"],
+            actions: [
+              {
+                ...base,
+                type: "set_due",
+                itemId: "i1",
+                columnId: "c-date",
+                date: "2026-09-20",
+              },
+              {
+                ...base,
+                type: "set_due",
+                itemId: "i9",
+                columnId: "c-date",
+                date: "2026-09-20",
+              },
+            ],
+          },
+          {
+            kind: "other",
+            title: "Nonsense",
+            evidence: "",
+            body: "",
+            evidenceItemIds: [],
+            actions: [
+              {
+                ...base,
+                type: "reassign",
+                itemIds: ["i9"],
+                columnId: "c-people",
+                toUserId: "u-ana",
+              },
+            ],
+          },
+        ],
+      },
+      ctx,
+      signals,
+    );
+    expect(out.brief).toBe("One item is late.");
+    expect(out.suggestions).toHaveLength(1);
+    expect(out.suggestions[0]).toMatchObject({
+      id: "s1",
+      actions: [{ type: "set_due", itemId: "i1" }],
+      evidenceRows: [{ itemId: "i1", name: "Ship" }],
+    });
+    expect(out.signals).toEqual(signals);
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+  it("throws on a shape the raw schema rejects", () => {
+    expect(() =>
+      validateIntelligenceOutput({ brief: 1 }, ctx, signals),
+    ).toThrow();
+  });
+});

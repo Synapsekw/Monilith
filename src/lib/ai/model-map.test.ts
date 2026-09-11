@@ -47,8 +47,8 @@ describe("tierForFeature", () => {
       expect(["cheap", "standard", "strong"]).toContain(tierForFeature(f));
   });
 
-  it("still covers all 14 known features", () => {
-    expect(AI_FEATURES).toHaveLength(14);
+  it("still covers all 15 known features", () => {
+    expect(AI_FEATURES).toHaveLength(15);
   });
 });
 
