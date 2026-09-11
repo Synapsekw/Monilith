@@ -70,8 +70,10 @@ capabilities, distinct from built-in scheduled board agents and their proposal r
   new landing is not live on www.monolith.works until then.
 - The Chrome extension was not connected this session; Playwright stood in
   ([[playwright-screenshots-from-worktree]] in auto-memory).
-- Item-panel and agent-dock captures show the Keystone default theme (periwinkle), not the
-  founder's Ocean preset the prototype used — acceptable, on-brand; re-shoot if the owner prefers.
+- The first neutral re-shoot came out in the Keystone default preset (periwinkle); the owner wanted
+  the teal Ocean look of the originals, so all three captures were re-shot with
+  `profiles.theme_preset = 'ocean'` on a fresh throwaway org (deleted afterwards) and merged as
+  `20047380` (`task/landing-captures-ocean`).
 - PR #119 (readable assignees) was promoted by another session with no session note yet; the
   north-star's Branch/In-flight bullets were updated from git, not from a live verification.
 
