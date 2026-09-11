@@ -13,6 +13,9 @@ import type { DockTab } from "@/stores/board-intelligence";
 export const DOCK_MIN_WIDTH = 320;
 /** Wider than this and the dock is the page, not a dock. */
 export const DOCK_MAX_WIDTH = 640;
+/** The collapsed dock: a mini rail of the same tiles. Not part of the stored
+ *  range — `width` always remembers the OPEN width. */
+export const DOCK_RAIL_WIDTH = 48;
 
 type Stored = { open: boolean; width: number; tab: DockTab };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,18 +20,47 @@ import {
   type DockTab,
 } from "@/stores/board-intelligence";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
-import type { DockAgent } from "./AgentSwitcher";
 import { DockBody, type DockBodyProps } from "./DockBody";
+import { cn } from "@/lib/utils";
+import {
+  DockTiles,
+  type DockAgent,
+  type DockPresence,
+  type DockTile,
+} from "./DockTiles";
 import {
   clampDockWidth,
   useDockState,
   useNarrowViewport,
   DOCK_MAX_WIDTH,
   DOCK_MIN_WIDTH,
+  DOCK_RAIL_WIDTH,
 } from "./use-dock-state";
 
 /** One arrow press of resize. Coarse enough to get somewhere, fine enough to aim. */
 const RESIZE_STEP = 16;
+
+/** The open/close width transition (spec §5). The fallback timer that clears
+ *  `animating` runs a little after it, for a `transitionend` that never comes
+ *  (jsdom, or a width that did not actually change). */
+const DOCK_TRANSITION_MS = 360;
+
+/** Spec §5 layer choreography. Both wrappers stay mounted so the class flip
+ *  is a real transition from a real start state. Exits are the quick half —
+ *  the leaving layer is out of the way before the width settles; entrances
+ *  ride ease-keystone with a delay so they start once the other has gone.
+ *  Tailwind v4's translate utilities write the `translate` property. */
+const LAYER = "absolute inset-y-0 right-0 left-1 flex flex-col";
+const FULL_IN =
+  "ease-keystone translate-x-0 opacity-100 transition-[opacity,translate] duration-[220ms] delay-[80ms]";
+const FULL_OUT =
+  "pointer-events-none translate-x-6 opacity-0 [transition:opacity_140ms_ease,translate_200ms_ease-in]";
+const MINI_IN =
+  "ease-keystone translate-x-0 opacity-100 transition-[opacity,translate] duration-[220ms] delay-[140ms]";
+const MINI_OUT =
+  "pointer-events-none -translate-x-2 opacity-0 [transition:opacity_120ms_ease,translate_160ms_ease-in]";
+
+const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
 
 /**
  * Put the open thread in the URL, MERGING into whatever is already there.
@@ -79,6 +109,15 @@ type Failure =
  * It never calls router.push or router.refresh: either would re-run the board
  * page's server query — getBoardPayload plus two more reads — to redisplay data
  * the client already holds (gotcha-09).
+ *
+ * Placement (spec §1): on the wide surface the <aside> is PORTALLED into the
+ * static shell's `#app-dock-slot`, so the dock sits on the wash beside the
+ * content card — chrome, like the sidebar — rather than inside the card. Below
+ * `md` the Sheet is unchanged.
+ *
+ * Motion (spec §5) is CSS: the width transition is applied only while a
+ * toggle is in flight (`animating`), and the full/mini layers crossfade as
+ * always-mounted wrappers whose contents mount on demand.
  */
 export function BoardDock({
   boardId,
@@ -97,6 +136,51 @@ export function BoardDock({
 }) {
   const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
   const narrow = useNarrowViewport();
+
+  /**
+   * Open/close WITH the width transition. The transition class is applied
+   * only while a toggle is in flight, so a drag-resize — which also changes
+   * the width — stays instant (§5). Cleared on the aside's own
+   * `transitionend` for `width`, or by the fallback timer.
+   */
+  const [animating, setAnimating] = useState(false);
+  const animationFallback = useRef<number | null>(null);
+  const toggleOpen = useCallback(
+    (next: boolean) => {
+      setAnimating(true);
+      setOpen(next);
+      if (animationFallback.current !== null) {
+        window.clearTimeout(animationFallback.current);
+      }
+      animationFallback.current = window.setTimeout(
+        () => setAnimating(false),
+        DOCK_TRANSITION_MS + 40,
+      );
+    },
+    [setOpen],
+  );
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLElement>) => {
+    // Children's opacity/translate transitions bubble here too.
+    if (e.target !== e.currentTarget || e.propertyName !== "width") return;
+    if (animationFallback.current !== null) {
+      window.clearTimeout(animationFallback.current);
+      animationFallback.current = null;
+    }
+    setAnimating(false);
+  };
+  useEffect(
+    () => () => {
+      if (animationFallback.current !== null) {
+        window.clearTimeout(animationFallback.current);
+      }
+    },
+    [],
+  );
+
+  /** The persona whose turn is streaming, for the presence dot (§2, phase 1:
+   *  only the mounted chat's turn — scheduled runs are out of scope). */
+  const [streamingPersona, setStreamingPersona] = useState<string | null>(null);
+
   const [boardThreads, setBoardThreads] = useState<BoardThreadRow[]>([]);
   const [agentThreads, setAgentThreads] = useState<BoardThreadRow[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -121,6 +205,22 @@ export function BoardDock({
   /** A `?thread=` link not yet honoured. Survives a failed load, so the retry
    *  still lands on the thread the user was sent to. */
   const deepLinkPending = useRef(true);
+
+  /**
+   * The shell's dock slot (`#app-dock-slot`, app-shell.tsx), looked up AFTER
+   * mount: effects run once the whole tree has committed, and the static shell
+   * sits above this page in that tree, so the slot always exists by then.
+   * State rather than a ref, so finding it re-renders the portal into place.
+   * The server render and the first client render both see `null` and render
+   * nothing — no hydration mismatch, and no dock on a page without a slot.
+   */
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // A post-mount DOM lookup is the one correct time to find a portal target;
+    // same exemption as the localStorage read in `useDockState`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSlot(document.getElementById("app-dock-slot"));
+  }, []);
 
   /* ── Intelligence: the run the page read, and the strip's open requests. ── */
 
@@ -153,18 +253,19 @@ export function BoardDock({
 
   useEffect(() => {
     if (!openRequest || openRequest.boardId !== boardId) return;
-    setOpen(true);
-    setTab("intelligence");
-    // Subscribing to an external store and recording what it asked for is the
-    // sanctioned shape for an effect, not a cascading render: the strip lives
-    // in a different subtree, so a nonce-stamped request in the store IS the
-    // only channel it has. The request is consumed in the same pass, so this
-    // runs once per ask.
+    // Subscribing to an external store and reacting to what it asked for is
+    // the sanctioned shape for an effect, not a cascading render: the strip
+    // lives in a different subtree, so a nonce-stamped request in the store
+    // IS the only channel it has. `toggleOpen` itself sets local state (opens
+    // with the motion transition) — the request is consumed in the same
+    // pass, so this whole block runs once per ask.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    toggleOpen(true);
+    setTab("intelligence");
     setOpenedThisSession(true);
     if (openRequest.run) setWantsRun(true);
     consumeOpen(openRequest.nonce);
-  }, [boardId, consumeOpen, openRequest, setOpen, setTab]);
+  }, [boardId, consumeOpen, openRequest, toggleOpen, setTab]);
 
   const onRanOnMount = useCallback(() => {
     setWantsRun(false);
@@ -183,6 +284,24 @@ export function BoardDock({
   );
 
   const agentNames = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+  const activeThread =
+    boardThreads.find((t) => t.id === activeId) ??
+    agentThreads.find((t) => t.id === activeId) ??
+    null;
+  // Mid-thread the band reports the OPEN thread's persona, not the one queued
+  // for the next new thread. Falls back to "Ask" for an agent outside this
+  // user's roster.
+  const openPersona = activeThread?.agent_id ?? null;
+  /**
+   * The persona the reader is looking at. This one value drives the active
+   * tile, the title kicker, what New starts over on, and the "does this tile
+   * differ" test in `selectTile`.
+   */
+  const currentPersona: string | null = activeThread
+    ? openPersona && agentNames[openPersona]
+      ? openPersona
+      : null
+    : agentId;
 
   const selectThread = useCallback(async (id: string) => {
     const token = ++selectToken.current;
@@ -285,8 +404,14 @@ export function BoardDock({
     void loadThreads();
   }, [failure, loadThreads, selectThread]);
 
-  const startNew = useCallback(() => {
+  /**
+   * Start over on `persona`: a fresh chat instance with no thread. New uses
+   * it with the persona on screen; a tile tap uses it with a different one —
+   * "tap an agent and talk" (§2), replacing the locked select.
+   */
+  const startNewAs = useCallback((persona: string | null) => {
     selectToken.current++;
+    setAgentId(persona);
     setActiveId(null);
     setMessages([]);
     setThreadLoading(false);
@@ -296,11 +421,59 @@ export function BoardDock({
     syncThreadParam(null);
   }, []);
 
-  /** Switching persona applies to the NEXT thread, so the composer starts over. */
-  const changeAgent = useCallback((next: string | null) => {
-    setAgentId(next);
-    setChatInstance((n) => n + 1);
-  }, []);
+  /**
+   * §2 selection semantics. Intelligence is the ask that counts as "opened
+   * this session" (same rule as the old tab). Ask/agent tiles switch to Chat
+   * and, when the persona differs from the one on screen, start a new thread
+   * on it. Same persona: a no-op, so a stray click never throws away the open
+   * thread.
+   */
+  const selectTile = useCallback(
+    (tile: DockTile) => {
+      if (tile.kind === "intelligence") {
+        changeTab("intelligence");
+        return;
+      }
+      changeTab("chat");
+      const persona = tile.kind === "agent" ? tile.agentId : null;
+      if (persona !== currentPersona) startNewAs(persona);
+    },
+    [changeTab, currentPersona, startNewAs],
+  );
+
+  /**
+   * Which chat INSTANCE most recently reported itself running — not merely
+   * "the current one" the way `currentPersona` is, because `startNewAs`
+   * unmounts the old `AskChat` (a fresh `key`) while its `onSubmit` promise
+   * keeps running detached. That old instance's `finally` still fires
+   * `onBusyChange(false)` on the SAME closure it was handed at mount, and
+   * that closure's `busy ? currentPersona : null` ternary throws the
+   * captured persona away on the false branch — it always clears to `null`,
+   * whichever persona is actually on screen by then. Comparing against the
+   * instance the callback was created for (not just the persona value) is
+   * what lets a stale `false` be ignored instead of blanking a NEWER turn's
+   * dot mid-stream.
+   */
+  const runningInstance = useRef<number | null>(null);
+  const onBusyChange = useCallback(
+    (busy: boolean) => {
+      if (busy) {
+        runningInstance.current = chatInstance;
+        setStreamingPersona(currentPersona);
+        return;
+      }
+      // A stale reporter — some earlier, since-unmounted instance's turn
+      // settling after the reader moved on — must not clear a newer turn's
+      // dot; only the instance that is still current may turn it off.
+      if (runningInstance.current !== chatInstance) return;
+      runningInstance.current = null;
+      setStreamingPersona(null);
+    },
+    [chatInstance, currentPersona],
+  );
+  const presence: Readonly<Record<string, DockPresence>> = streamingPersona
+    ? { [streamingPersona]: "running" }
+    : EMPTY_PRESENCE;
 
   const onStarted = useCallback((id: string) => {
     // Adopt the id WITHOUT bumping `chatInstance`: this fires mid-turn, before
@@ -390,48 +563,15 @@ export function BoardDock({
     [setWidth, width],
   );
 
-  if (!open) {
-    return (
-      // One trigger, two shapes: a floating button on a phone (where the board
-      // fills the screen and there is no rail to sit in), a hairline rail
-      // beside the board from `md` up.
-      <div className="fixed right-4 bottom-4 z-30 shrink-0 md:static md:z-auto md:border-l md:p-1.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Open agent dock"
-          className="bg-surface border-border shadow-panel md:border-transparent md:bg-transparent md:shadow-none"
-          // Opening is just state. The fetch hangs off `open` in an effect, so
-          // the click and a dock restored open from storage take one path.
-          onClick={() => setOpen(true)}
-        >
-          <PanelRightOpen className="size-4" />
-        </Button>
-      </div>
-    );
-  }
-
-  const activeThread =
-    boardThreads.find((t) => t.id === activeId) ??
-    agentThreads.find((t) => t.id === activeId) ??
-    null;
-  // Mid-thread the switcher reports the OPEN thread's persona, not the one
-  // queued for the next new thread — a locked control showing the wrong name is
-  // worse than no control. Falls back to "Ask" for an agent outside this
-  // user's roster.
-  const openPersona = activeThread?.agent_id ?? null;
-
   const body: Omit<DockBodyProps, "onClose"> = {
     agents,
     agentNames,
-    switcherValue: activeThread
-      ? openPersona && agentNames[openPersona]
-        ? openPersona
-        : null
-      : agentId,
-    switcherLocked: activeId !== null,
-    onAgentChange: changeAgent,
-    onNew: startNew,
+    tileAgentId: currentPersona,
+    presence,
+    onSelectTile: selectTile,
+    activeThread,
+    onBusyChange,
+    onNew: () => startNewAs(currentPersona),
     error: failure?.message ?? null,
     // An optimistic share that rolled itself back has nothing to re-run — the
     // thread is already showing its true visibility again.
@@ -453,7 +593,6 @@ export function BoardDock({
     onStarted,
     onTurnComplete,
     tab,
-    onTabChange: changeTab,
     badge: unresolvedCount(run ?? null),
     canApply: access !== "viewer",
     runOnMount,
@@ -461,10 +600,28 @@ export function BoardDock({
   };
 
   if (narrow) {
+    if (!open) {
+      return (
+        // A phone has no rail to sit in: the trigger floats over the board.
+        <div className="fixed right-4 bottom-4 z-30">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open agent dock"
+            className="bg-surface border-border shadow-panel border"
+            // Opening is just state. The fetch hangs off `open` in an effect,
+            // so the click and a dock restored open from storage take one path.
+            onClick={() => setOpen(true)}
+          >
+            <PanelRightOpen className="size-4" />
+          </Button>
+        </div>
+      );
+    }
     return (
       <Sheet open onOpenChange={(next) => !next && setOpen(false)}>
         {/* `[&>button]:hidden` drops SheetContent's built-in X: the dock brings
-            its own close affordance and two of them in one header is noise. */}
+              its own close affordance and two of them in one header is noise. */}
         <SheetContent
           side="right"
           className="w-full max-w-none gap-0 p-0 [&>button]:hidden"
@@ -479,38 +636,102 @@ export function BoardDock({
     );
   }
 
-  return (
+  // The wide surface renders through the shell's slot, or not at all. `narrow`
+  // has already decided this is the wide surface — no second `hidden md:flex`
+  // breakpoint here, which is what used to open a band where neither surface
+  // rendered.
+  if (!slot) return null;
+
+  return createPortal(
     <aside
       aria-label="Agent dock"
-      // No `hidden md:flex`: `narrow` has already decided this is the wide
-      // surface, and a second, independently-computed breakpoint here is what
-      // opens a band where neither surface renders.
-      className="relative flex min-w-0 shrink-0 flex-col border-l"
-      style={{ width: shownWidth }}
+      data-open={open}
+      data-animating={animating || undefined}
+      onTransitionEnd={onTransitionEnd}
+      className={cn(
+        "relative flex min-w-0 shrink-0 flex-col overflow-hidden",
+        animating && "ease-keystone transition-[width] duration-[360ms]",
+      )}
+      style={{ width: open ? shownWidth : DOCK_RAIL_WIDTH }}
     >
-      {/* Hairlines brighten rather than thicken: the grip is invisible until you
-          reach for it, then it is the border going bright. */}
+      {/* Two layers, one aside (§5). The wrappers are ALWAYS mounted so the
+          open/closed class flip is a real transition; their contents mount
+          only while their side is showing or leaving, so a closed dock never
+          mounts the chat (whose composer autofocuses) and the keyboard never
+          meets two tablists. `inert` + aria-hidden take the leaving layer
+          out of the tab order and the a11y tree for the crossfade. */}
       <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize agent dock"
-        aria-valuenow={shownWidth}
-        aria-valuemin={DOCK_MIN_WIDTH}
-        aria-valuemax={DOCK_MAX_WIDTH}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") {
-            e.preventDefault();
-            setWidth(width + RESIZE_STEP);
-          } else if (e.key === "ArrowRight") {
-            e.preventDefault();
-            setWidth(width - RESIZE_STEP);
-          }
-        }}
-        className="hover:bg-border-hover focus-visible:bg-border-bright absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
-      />
-      <DockBody {...body} onClose={() => setOpen(false)} />
-    </aside>
+        data-layer="full"
+        inert={open ? undefined : true}
+        aria-hidden={open ? undefined : true}
+        className={cn(LAYER, open ? FULL_IN : FULL_OUT)}
+      >
+        {open || animating ? (
+          <>
+            {/* Hairlines brighten rather than thicken: the grip is invisible
+                until you reach for it, then it is the border going bright. */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize agent dock"
+              aria-valuenow={shownWidth}
+              aria-valuemin={DOCK_MIN_WIDTH}
+              aria-valuemax={DOCK_MAX_WIDTH}
+              tabIndex={0}
+              onPointerDown={startResize}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  setWidth(width + RESIZE_STEP);
+                } else if (e.key === "ArrowRight") {
+                  e.preventDefault();
+                  setWidth(width - RESIZE_STEP);
+                }
+              }}
+              className="hover:bg-border-hover focus-visible:bg-border-bright absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
+            />
+            <DockBody {...body} onClose={() => toggleOpen(false)} />
+          </>
+        ) : null}
+      </div>
+      <div
+        data-layer="mini"
+        inert={open ? true : undefined}
+        aria-hidden={open ? true : undefined}
+        className={cn(
+          LAYER,
+          "items-center gap-2.5 pt-3",
+          open ? MINI_OUT : MINI_IN,
+        )}
+      >
+        {!open || animating ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Open agent dock"
+              className="text-muted-foreground hover:text-foreground size-8 shrink-0"
+              onClick={() => toggleOpen(true)}
+            >
+              <PanelRightOpen className="size-4" />
+            </Button>
+            {/* The same tiles, vertical (§4): any tile opens the dock ON it. */}
+            <DockTiles
+              agents={agents}
+              tab={tab}
+              agentId={currentPersona}
+              badge={unresolvedCount(run ?? null)}
+              presence={presence}
+              orientation="vertical"
+              onSelect={(tile) => {
+                selectTile(tile);
+                toggleOpen(true);
+              }}
+            />
+          </>
+        ) : null}
+      </div>
+    </aside>,
+    slot,
   );
 }

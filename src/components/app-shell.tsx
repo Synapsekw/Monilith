@@ -23,6 +23,7 @@ type AppShellProps = {
  * Static application frame. Prerendered as part of the Cache Components shell:
  * sidebar chrome, header bar, command trigger and theme toggle paint instantly,
  * while the three data slots stream in behind their own Suspense boundaries.
+ * The empty dock slot is part of the static frame too — see the comment on it.
  */
 export function AppShell({
   children,
@@ -32,7 +33,7 @@ export function AppShell({
   commandPalette,
 }: AppShellProps) {
   return (
-    <div className="app-wash flex h-svh w-full overflow-hidden">
+    <div className="app-wash flex h-svh w-full overflow-hidden [&:has(#app-dock-slot:not(:empty))>div>main]:mr-1">
       <Sidebar navSlot={sidebarNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -51,6 +52,14 @@ export function AppShell({
           {children}
         </main>
       </div>
+      {/* The board page's agent dock portals its <aside> in here (BoardDock.tsx),
+          so the dock sits on the wash as the sidebar's twin — rail | card | dock —
+          instead of inside the content card. Static and empty on purpose: no
+          props, no request-time reads, so the prerendered shell is untouched
+          (static-shell.test.ts). While it holds a dock, the root's `:has()`
+          variant above narrows <main>'s right gutter to mr-1 — the dock's own
+          `left-1` supplies the other 4px, matching the card's left side. */}
+      <div id="app-dock-slot" className="flex shrink-0" />
       {commandPalette}
     </div>
   );
