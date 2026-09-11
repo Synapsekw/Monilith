@@ -10,7 +10,10 @@ import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
-import { computeSignals } from "@/lib/boards/intelligence/signals";
+import {
+  computeSignals,
+  latestActivityISO,
+} from "@/lib/boards/intelligence/signals";
 import {
   TRANSCRIPT_ACTIVITY_LIMIT,
   TRANSCRIPT_DAYS,
@@ -54,6 +57,11 @@ export async function runBoardIntelligence(input: {
   const user = await requireUser();
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
+  // The active org's id, not the board's, is what gets metered and entitled
+  // below — a board whose org_id doesn't match the caller's active org must
+  // never reach entitlement/runAi, even though getBoardPayload already
+  // proved RLS-visibility (a cross-org share can make a board readable).
+  if (org.id !== payload.board.org_id) return fail("Board not found.");
 
   try {
     await requireAiEntitlement(org.id, "board_intelligence");
@@ -66,25 +74,22 @@ export async function runBoardIntelligence(input: {
       members.map((m) => [m.userId, m.fullName ?? "someone"]),
     );
     const lastSeen = await getBoardLastSeenAt(supabase, boardId, user.id);
-    const signals = computeSignals(
-      {
-        items: payload.items,
-        columns: payload.columns,
-        cellValues: payload.cellValues,
-        groups: payload.groups,
-        dependencies: payload.dependencies,
-      },
-      {
-        now,
-        lastSeenAt: lastSeen ? new Date(lastSeen) : null,
-        currentUserId: user.id,
-        memberNames,
-      },
-    );
-    const maxUpdatedAt = payload.items.reduce<string | null>(
-      (m, i) => (m === null || i.updated_at > m ? i.updated_at : m),
-      null,
-    );
+    const signalsInput = {
+      items: payload.items,
+      columns: payload.columns,
+      cellValues: payload.cellValues,
+      groups: payload.groups,
+      dependencies: payload.dependencies,
+    };
+    const signals = computeSignals(signalsInput, {
+      now,
+      lastSeenAt: lastSeen ? new Date(lastSeen) : null,
+      currentUserId: user.id,
+      memberNames,
+    });
+    // items.updated_at is NOT bumped by cell edits (signals.ts) — use the
+    // cell-aware helper so a cell-only edit still changes the hash.
+    const maxUpdatedAt = latestActivityISO(signalsInput);
     const inputHash = intelligenceInputHash({
       itemCount: payload.items.length,
       maxUpdatedAt,
@@ -106,7 +111,10 @@ export async function runBoardIntelligence(input: {
     const since = new Date(
       now.getTime() - TRANSCRIPT_DAYS * 86_400_000,
     ).toISOString();
-    const [{ data: activities }, { data: updates }] = await Promise.all([
+    const [
+      { data: activities, error: activitiesError },
+      { data: updates, error: updatesError },
+    ] = await Promise.all([
       supabase
         .from("item_activities")
         .select("*")
@@ -122,6 +130,10 @@ export async function runBoardIntelligence(input: {
         .order("created_at", { ascending: false })
         .limit(TRANSCRIPT_UPDATES_LIMIT),
     ]);
+    // A failed transcript read must not silently produce a brief built on an
+    // empty (wrong) transcript — fail loud instead of caching a bad run.
+    if (activitiesError || updatesError)
+      return fail("Couldn't read recent activity.");
     const ctx = buildBoardContext(payload, members);
     const transcript = buildBoardTranscript({
       updates: updates ?? [],

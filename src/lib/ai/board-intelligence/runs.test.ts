@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { isRunStale, rowToRun } from "./runs";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
+import { getLatestBoardIntelligenceRun, isRunStale, rowToRun } from "./runs";
 import { INTELLIGENCE_STALE_MS } from "@/lib/boards/intelligence/constants";
 
 const row = (payload: unknown) => ({
@@ -60,5 +62,18 @@ describe("isRunStale", () => {
         { nowMs: at, inputHash: "h" },
       ),
     ).toBe(true);
+  });
+});
+
+describe("getLatestBoardIntelligenceRun", () => {
+  it("never throws — an error from the client resolves to null", async () => {
+    const q: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "order", "limit"]) q[m] = () => q;
+    q.maybeSingle = async () => ({ data: null, error: { message: "boom" } });
+    const supabase = {
+      from: () => q,
+    } as unknown as SupabaseClient<Database>;
+    const result = await getLatestBoardIntelligenceRun(supabase, "b1", "u1");
+    expect(result).toBeNull();
   });
 });
