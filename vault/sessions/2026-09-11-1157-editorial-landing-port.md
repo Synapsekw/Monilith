@@ -34,8 +34,9 @@ related:
 - Gates green in the worktree: typecheck, lint (4 pre-existing warnings), test (782 files / 7291
   passing), build. Visual parity checked against the artifact with Playwright tile screenshots at
   1440 and 390 widths (no horizontal overflow).
-- `/updates`: nothing announced — the branch is not merged. Announce "A new landing page" when it
-  is promoted.
+- Owner approved the preview; merged into `develop` @ `ae5c0eee` via `finish-task.sh` (worktree
+  removed, branch deleted). `/updates`: announced "A new landing page" (`d8436188`, regenerated in
+  `dd0ea26f`); it publishes on the next promotion.
 
 ## Why
 
@@ -65,9 +66,8 @@ capabilities, distinct from built-in scheduled board agents and their proposal r
 
 ## Open threads
 
-- **Branch is deliberately un-merged** (`task/editorial-landing`, worktree kept): the handoff says
-  merge/deploy only on the owner's request. On the go: `scripts/finish-task.sh` from the worktree,
-  then `/promote`, then a `/updates` entry for the new landing.
+- Merged to `develop`, not yet promoted: `/promote` is the remaining step (develop → main PR). The
+  new landing is not live on www.monolith.works until then.
 - The Chrome extension was not connected this session; Playwright stood in
   ([[playwright-screenshots-from-worktree]] in auto-memory).
 - Item-panel and agent-dock captures show the Keystone default theme (periwinkle), not the
@@ -77,5 +77,4 @@ capabilities, distinct from built-in scheduled board agents and their proposal r
 
 ## Next session entry point
 
-Ask the owner for the verdict on the preview; if approved, `finish-task.sh` in
-`.claude/worktrees/editorial-landing`, `/promote`, and announce the landing on `/updates`.
+Run `/promote` to ship the new landing; verify `www.monolith.works/` renders the Editorial hero and `/updates` carries "A new landing page".
