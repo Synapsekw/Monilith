@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
+    kind: "fixed",
+    title: "AI generation on Anthropic works again",
+    description:
+      "Generating a dashboard, board or automation with an Anthropic model, and the new board brief, failed immediately since 7 September; they run again.",
+  },
+  {
+    date: "2026-09-11",
     kind: "new",
     title: "Board brief and suggestions",
     description:
