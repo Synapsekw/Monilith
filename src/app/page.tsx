@@ -1,4 +1,4 @@
-import { MonolithHero } from "@/components/landing/monolith-hero";
+import { EditorialLanding } from "@/components/landing/editorial-landing";
 
 /**
  * Public landing. A pure static Server Component — it reads no cookies and does
@@ -8,5 +8,5 @@ import { MonolithHero } from "@/components/landing/monolith-hero";
  * routes them on to their board.
  */
 export default function Home() {
-  return <MonolithHero />;
+  return <EditorialLanding />;
 }

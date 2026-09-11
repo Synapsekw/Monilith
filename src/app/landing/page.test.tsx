@@ -4,8 +4,8 @@ import { render, screen } from "@testing-library/react";
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
 
 vi.mock("@/lib/auth/session", () => ({ getUser: () => getUser() }));
-vi.mock("@/components/landing/monolith-hero", () => ({
-  MonolithHero: ({ signedIn }: { signedIn?: boolean }) => (
+vi.mock("@/components/landing/editorial-landing", () => ({
+  EditorialLanding: ({ signedIn }: { signedIn?: boolean }) => (
     <div>monolith:{signedIn ? "in" : "out"}</div>
   ),
 }));
