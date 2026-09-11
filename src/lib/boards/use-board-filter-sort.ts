@@ -9,10 +9,12 @@ import {
   filterFacetCount,
   isFilterActive,
   FILTER_PARAM_KEYS,
+  URL_PARAM_KEYS,
   type BoardFilterState,
   type BoardSort,
 } from "@/lib/boards/board-filter";
 import type { ListFilter } from "@/lib/validations/dashboards";
+import type { IntelSelection } from "@/lib/boards/intelligence/types";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 
 /**
@@ -46,7 +48,7 @@ export function useBoardFilterSort() {
   // mutation would be invisible if it didn't. React bails out on the
   // unchanged `true`, so only the first write costs a render.
   const [hasWritten, setHasWritten] = useState(false);
-  const urlHasFilter = FILTER_PARAM_KEYS.some((k) => searchParams.get(k));
+  const urlHasFilter = URL_PARAM_KEYS.some((k) => searchParams.get(k));
   const useSaved = !hasWritten && !urlHasFilter && initialFilterQuery !== "";
 
   // Re-parse only when one of the filter params actually changes (identity is
@@ -58,7 +60,7 @@ export function useBoardFilterSort() {
   // or pipe could. It is written as an escape rather than a literal NUL byte: a
   // raw one makes git classify this file as binary, which silently costs it
   // diffs in review, line-ending normalization, and grep hits.
-  const raw = FILTER_PARAM_KEYS.map((k) => searchParams.get(k) ?? "").join(
+  const raw = URL_PARAM_KEYS.map((k) => searchParams.get(k) ?? "").join(
     "\u0000",
   );
   const state = useMemo<BoardFilterState>(
@@ -167,8 +169,17 @@ export function useBoardFilterSort() {
         status: [],
         conditions: { combinator: "and", conditions: [] },
         sort: null,
+        intel: null,
       }),
     [write],
+  );
+
+  // The Intelligence chip. replaceState (spec §3.3): a chip toggle is a lens on
+  // the board, not a navigation the Back button should undo.
+  const setIntel = useCallback(
+    (intel: IntelSelection | null) =>
+      write({ ...state, intel }, { replace: true }),
+    [state, write],
   );
 
   return {
@@ -181,5 +192,6 @@ export function useBoardFilterSort() {
     setConditions,
     setSort,
     clearAll,
+    setIntel,
   };
 }
