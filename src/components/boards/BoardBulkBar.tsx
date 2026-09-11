@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FolderInput, Tag, Trash2, UserPlus, X } from "lucide-react";
+import { Check, FolderInput, Tag, Trash2, UserPlus, X } from "lucide-react";
 import { useBoardSelection } from "@/stores/board-selection";
 import { useBulkMutations } from "@/lib/boards/use-bulk-mutations";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   StatusOptionList,
 } from "@/components/boards/cells/editors/status-options";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import { MemberAvatar } from "@/components/boards/cells/member-avatar";
 import type { Column } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { cn } from "@/lib/utils";
@@ -334,14 +335,15 @@ function PeopleAssignList({
                 isSelected && "bg-accent",
               )}
             >
-              <span
-                aria-hidden
-                className={cn(
-                  "size-1.5 shrink-0 rounded-full",
-                  isSelected ? "bg-primary" : "bg-muted-foreground/40",
-                )}
+              <MemberAvatar
+                userId={m.userId}
+                name={name}
+                avatarUrl={m.avatarUrl}
               />
               <span className="truncate">{name}</span>
+              {isSelected ? (
+                <Check aria-hidden className="text-primary ml-auto size-3.5" />
+              ) : null}
             </button>
           );
         })
