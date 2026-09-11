@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
     kind: "new",
+    title: "Board intelligence strip",
+    description:
+      "Every board now shows overdue, blocked, overloaded, stalled and changed-since chips under its header; click a chip to focus the board on those rows.",
+  },
+  {
+    date: "2026-09-11",
+    kind: "new",
     title: "A new landing page",
     description:
       "The Monolith site has a new front page: real product screenshots, a product tour of boards, item details and the agent dock, the agent-access story, plans and answers to common questions.",
