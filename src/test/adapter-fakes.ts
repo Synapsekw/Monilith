@@ -18,6 +18,14 @@ export type CapturedCall = {
   model: { modelId: string; provider: string };
   schema: unknown;
   system?: string;
+  /** ai@7: system-role messages travel here, never inside `messages`. */
+  instructions?:
+    | string
+    | {
+        role: string;
+        content: unknown;
+        providerOptions?: Record<string, Record<string, unknown>>;
+      }[];
   prompt?: string;
   messages?: {
     role: string;
