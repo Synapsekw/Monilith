@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/lib/boards/intelligence/context";
 import { localTodayISO } from "@/lib/boards/overdue";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { useBoardSelection } from "@/stores/board-selection";
 
 // jsdom offsetHeight/offsetWidth → 0 makes the virtualizer emit 0 rows; stub them.
 beforeAll(() => {
@@ -180,6 +181,44 @@ describe("BoardTable with an active intelligence chip", () => {
     expect(
       within(row as HTMLElement).getByTestId("intel-rule"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the intel rule visible while the matching row is mid-rename", () => {
+    window.history.replaceState(null, "", "/boards/b1?intel=overdue");
+    renderBoard();
+    const row = screen.getByText("Late and not done").closest(".intel-match");
+    expect(row).not.toBeNull();
+
+    // Open inline rename (NameCell's non-editing branch → editing branch).
+    fireEvent.click(
+      screen.getByRole("button", { name: "Late and not done name" }),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Rename Late and not done" }),
+    ).toBeInTheDocument();
+
+    // The editing branch is a SEPARATE sticky element from the non-editing
+    // one — it must render its own `.intel-rule` child, not inherit the one
+    // that just unmounted.
+    expect(
+      within(row as HTMLElement).getByTestId("intel-rule"),
+    ).toBeInTheDocument();
+  });
+
+  it("selected AND matching: hides the selection bar but keeps the intel rule", () => {
+    window.history.replaceState(null, "", "/boards/b1?intel=overdue");
+    renderBoard();
+    act(() => {
+      useBoardSelection.getState().toggle("i-late");
+    });
+
+    const row = screen.getByText("Late and not done").closest(".intel-match");
+    expect(row).not.toBeNull();
+    const rule = within(row as HTMLElement).getByTestId("intel-rule");
+    expect(rule).toBeInTheDocument();
+    // `.intel-rule` owns x=0 for a matching row — the selected accent bar
+    // (`before:…`) yields via `before:hidden` on the same sticky element.
+    expect(rule.parentElement).toHaveClass("before:hidden");
   });
 });
 

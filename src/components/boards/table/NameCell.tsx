@@ -82,6 +82,9 @@ export const NameCell = memo(function NameCell({
           NAME_FREEZE_EDGE,
         )}
       >
+        {intelMatch === true && (
+          <span aria-hidden data-testid="intel-rule" className="intel-rule" />
+        )}
         {leading}
         <Input
           autoFocus
