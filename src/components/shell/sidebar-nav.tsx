@@ -15,8 +15,7 @@ import type { ComponentType } from "react";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
-import { OrgSwitcher } from "@/components/shell/org-switcher";
-import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
+import { ContextSwitcher } from "@/components/shell/context-switcher";
 import { NavSection } from "@/components/shell/nav-section";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -162,12 +161,9 @@ export function SidebarNav({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <OrgSwitcher
+      <ContextSwitcher
         orgs={orgs}
         activeOrgId={activeOrgId}
-        collapsed={isCollapsed}
-      />
-      <WorkspaceSwitcher
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         collapsed={isCollapsed}

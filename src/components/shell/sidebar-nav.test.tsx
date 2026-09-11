@@ -140,12 +140,12 @@ describe("SidebarNav", () => {
         activeOrgId="o2"
         boards={[]}
         sharedBoards={[]}
-        workspaces={[]}
+        workspaces={[{ id: "w1", name: "Eng" }]}
         dashboards={[]}
       />,
     );
     expect(
-      screen.getByRole("button", { name: /switch organization/i }),
+      screen.getByRole("button", { name: /switch organization or workspace/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("Globex")).toBeInTheDocument();
   });
@@ -157,13 +157,16 @@ describe("SidebarNav", () => {
         activeOrgId="o1"
         boards={[]}
         sharedBoards={[]}
-        workspaces={[]}
+        workspaces={[{ id: "w1", name: "Eng" }]}
         dashboards={[]}
       />,
     );
     expect(
       screen.queryByRole("button", { name: /switch organization/i }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Switch workspace" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the active workspace in the switcher", () => {
