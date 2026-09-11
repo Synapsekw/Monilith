@@ -36,3 +36,20 @@ export const BLOCKED_LABEL = /\b(stuck|blocked)\b/i;
 
 /** Numbers columns that weight a person's load, by name. Absent → weight 1 per item. */
 export const EFFORT_COLUMN_NAME = /effort|estimate|points|hours/i;
+
+/* ── Phase 2 (Advise): the dock's Intelligence tab and the server run. ── */
+
+/** A stored run older than this is treated as stale and re-run on open. */
+export const INTELLIGENCE_STALE_MS = 30 * 60 * 1000;
+/** Activity/updates window fed into the transcript the model sees. */
+export const TRANSCRIPT_DAYS = 7;
+/** Cap on activity-log rows pulled into the transcript. */
+export const TRANSCRIPT_ACTIVITY_LIMIT = 150;
+/** Cap on item-update rows pulled into the transcript. */
+export const TRANSCRIPT_UPDATES_LIMIT = 50;
+/** Rough token ceiling for the assembled transcript before it's sent. */
+export const TRANSCRIPT_TOKEN_BUDGET = 6000;
+/** Cap on board members/items indexed into the roster passed to the model. */
+export const ROSTER_MAX_ITEMS = 120;
+/** Cap on suggestions a single run may return (spec §4.4). */
+export const MAX_SUGGESTIONS = 5;

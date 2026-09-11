@@ -1,13 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { DockTab } from "@/stores/board-intelligence";
 
 /** Narrower than this and the dock stops being a column beside the board. */
 export const DOCK_MIN_WIDTH = 320;
 /** Wider than this and the dock is the page, not a dock. */
 export const DOCK_MAX_WIDTH = 640;
 
-type Stored = { open: boolean; width: number };
+type Stored = { open: boolean; width: number; tab: DockTab };
 
 const keyFor = (boardId: string) => `monolith.dock.${boardId}`;
 
@@ -16,7 +23,7 @@ const keyFor = (boardId: string) => `monolith.dock.${boardId}`;
 export const clampDockWidth = (n: number) =>
   Math.min(DOCK_MAX_WIDTH, Math.max(DOCK_MIN_WIDTH, Math.round(n)));
 
-const CLOSED: Stored = { open: false, width: DOCK_MIN_WIDTH };
+const CLOSED: Stored = { open: false, width: DOCK_MIN_WIDTH, tab: "chat" };
 
 /** Whatever this board remembers, sanitised. Never throws: corrupt or
  *  unavailable storage (private mode, quota) simply means "closed, default
@@ -32,6 +39,9 @@ function readStored(boardId: string): Stored {
         typeof parsed.width === "number"
           ? clampDockWidth(parsed.width)
           : CLOSED.width,
+      // Old rows (pre-tab) have no `tab` key — default them to chat rather
+      // than treating the row as corrupt.
+      tab: parsed.tab === "intelligence" ? "intelligence" : "chat",
     };
   } catch {
     return CLOSED;
@@ -65,8 +75,20 @@ export function useDockState(boardId: string) {
     setState({ ...readStored(boardId), hydrated: true });
   }, [boardId]);
 
+  // The latest persisted-shape snapshot, kept outside React state so `persist`
+  // can merge a single field without racing the `setState` call beside it —
+  // both read from the same source of truth instead of two independent closures.
+  const latest = useRef<Stored>(CLOSED);
+  useEffect(() => {
+    latest.current = { open: state.open, width: state.width, tab: state.tab };
+  });
+
+  // `persist` is a side effect, so it stays OUT of the state updater — React
+  // may call an updater more than once, and a double write is a double write.
   const persist = useCallback(
-    (next: Stored) => {
+    (patch: Partial<Stored>) => {
+      const next = { ...latest.current, ...patch };
+      latest.current = next;
       try {
         window.localStorage.setItem(keyFor(boardId), JSON.stringify(next));
       } catch {
@@ -76,31 +98,39 @@ export function useDockState(boardId: string) {
     [boardId],
   );
 
-  // `persist` is a side effect, so it stays OUT of the state updater — React
-  // may call an updater more than once, and a double write is a double write.
   const setOpen = useCallback(
     (open: boolean) => {
       setState((prev) => ({ ...prev, open }));
-      persist({ open, width: state.width });
+      persist({ open });
     },
-    [persist, state.width],
+    [persist],
   );
 
   const setWidth = useCallback(
     (next: number) => {
       const width = clampDockWidth(next);
       setState((prev) => ({ ...prev, width }));
-      persist({ open: state.open, width });
+      persist({ width });
     },
-    [persist, state.open],
+    [persist],
+  );
+
+  const setTab = useCallback(
+    (tab: DockTab) => {
+      setState((prev) => ({ ...prev, tab }));
+      persist({ tab });
+    },
+    [persist],
   );
 
   return {
     open: state.open,
     width: state.width,
+    tab: state.tab,
     hydrated: state.hydrated,
     setOpen,
     setWidth,
+    setTab,
   };
 }
 
