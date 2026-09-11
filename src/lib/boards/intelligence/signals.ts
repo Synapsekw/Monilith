@@ -9,11 +9,14 @@ import {
 import { parseColumnOptions } from "@/lib/boards/column-options";
 import {
   BLOCKED_LABEL,
+  EFFORT_COLUMN_NAME,
+  MAX_CHIPS,
+  OVERLOAD_RATIO,
   SIGNAL_ORDER,
   SIGNAL_TONE,
   STALL_DAYS,
 } from "./constants";
-import type { Signal, SignalKind } from "./types";
+import type { IntelSelection, Signal, SignalKind } from "./types";
 
 /**
  * Deterministic board signals, computed client-side from the payload already
@@ -218,12 +221,117 @@ function stalledSignals(ctx: Ctx): Signal[] {
   return [s];
 }
 
+function firstName(name: string | undefined): string {
+  const first = name?.trim().split(/\s+/)[0];
+  return first && first.length > 0 ? first : "someone";
+}
+
+function numberOf(v: unknown): number | null {
+  const n =
+    typeof v === "object" && v !== null ? (v as { n?: unknown }).n : undefined;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * overloaded — per person: open items assigned in any people column, weighted
+ * by the effort/numbers column when the board has one, compared with the
+ * median load across everyone who carries load. One signal per person over
+ * OVERLOAD_RATIO × median, highest load first (the strip keeps the first).
+ */
+function overloadedSignals(ctx: Ctx): Signal[] {
+  const peopleCols = ctx.input.columns.filter((c) => c.kind === "people");
+  if (peopleCols.length === 0) return [];
+  const effortCol =
+    ctx.input.columns.find(
+      (c) => c.kind === "numbers" && EFFORT_COLUMN_NAME.test(c.name),
+    ) ?? null;
+
+  const load = new Map<string, { total: number; itemIds: string[] }>();
+  for (const it of ctx.input.items) {
+    if (!ctx.isOpen(it.id)) continue;
+    const weight = effortCol
+      ? (numberOf(ctx.cellMap.get(cellKey(it.id, effortCol.id))) ?? 1)
+      : 1;
+    const assignees = new Set<string>();
+    for (const col of peopleCols) {
+      const v = ctx.cellMap.get(cellKey(it.id, col.id));
+      const ids =
+        typeof v === "object" && v !== null
+          ? (v as { userIds?: unknown }).userIds
+          : undefined;
+      if (!Array.isArray(ids)) continue;
+      for (const id of ids) if (typeof id === "string") assignees.add(id);
+    }
+    for (const uid of assignees) {
+      const entry = load.get(uid) ?? { total: 0, itemIds: [] };
+      entry.total += weight;
+      entry.itemIds.push(it.id);
+      load.set(uid, entry);
+    }
+  }
+  if (load.size < 2) return [];
+
+  const totals = [...load.values()].map((e) => e.total).sort((a, b) => a - b);
+  const mid = totals.length / 2;
+  const median =
+    totals.length % 2 === 1
+      ? totals[Math.floor(mid)]
+      : (totals[mid - 1] + totals[mid]) / 2;
+  if (median <= 0) return [];
+
+  return [...load.entries()]
+    .filter(([, e]) => e.total > OVERLOAD_RATIO * median)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([uid, e]) => {
+      const s = signal(
+        "overloaded",
+        e.itemIds,
+        `overloaded · ${firstName(ctx.opts.memberNames?.get(uid))}`,
+      );
+      s.subjectUserId = uid;
+      return s;
+    });
+}
+
+/** "2:05 PM" (same local day) · "Tue" (< 6 days) · "Sep 3" (older). */
+export function formatSince(since: Date, now: Date): string {
+  const sameDay =
+    since.getFullYear() === now.getFullYear() &&
+    since.getMonth() === now.getMonth() &&
+    since.getDate() === now.getDate();
+  if (sameDay)
+    return since.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  if (now.getTime() - since.getTime() < 6 * DAY)
+    return since.toLocaleDateString("en-US", { weekday: "short" });
+  return since.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** changed — items with activity after the caller's last visit. Hidden on a first visit. */
+function changedSignals(ctx: Ctx): Signal[] {
+  const since = ctx.opts.lastSeenAt;
+  if (!since) return [];
+  const sinceMs = since.getTime();
+  const itemIds = ctx.input.items
+    .filter((it) => (ctx.lastActivity.get(it.id) ?? 0) > sinceMs)
+    .map((it) => it.id);
+  return [
+    signal(
+      "changed",
+      itemIds,
+      `changed since ${formatSince(since, ctx.opts.now)}`,
+    ),
+  ];
+}
+
 const KIND_BUILDERS: Record<SignalKind, (ctx: Ctx) => Signal[]> = {
   overdue: overdueSignals,
   blocked: blockedSignals,
-  overloaded: () => [],
+  overloaded: overloadedSignals,
   stalled: stalledSignals,
-  changed: () => [],
+  changed: changedSignals,
 };
 
 /** All signals with a non-zero count, in strip order. Not truncated. */
@@ -239,4 +347,54 @@ export function computeSignals(
   return out;
 }
 
-export { DAY as SIGNALS_DAY_MS };
+/** The chips the strip shows: the first MAX_CHIPS in strip order (spec §3.2). */
+export function stripSignals(signals: Signal[]): Signal[] {
+  return signals.slice(0, MAX_CHIPS);
+}
+
+/** The URL/selection form of a signal (`overloaded:u1`, `overdue`). */
+export function signalSelection(s: Signal): IntelSelection {
+  return s.subjectUserId
+    ? { kind: s.kind, subject: s.subjectUserId }
+    : { kind: s.kind };
+}
+
+export function selectionEquals(
+  a: IntelSelection | null,
+  b: IntelSelection | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return a.kind === b.kind && (a.subject ?? null) === (b.subject ?? null);
+}
+
+/** The signal the active chip points at, or null when none / no longer present. */
+export function findActiveSignal(
+  signals: Signal[],
+  sel: IntelSelection | null,
+): Signal | null {
+  if (!sel) return null;
+  return signals.find((s) => selectionEquals(signalSelection(s), sel)) ?? null;
+}
+
+/**
+ * Narrow a view's item list to the active chip. `null` (no chip) returns the
+ * SAME array so memoized derivations keep their identity. A matching sub-item
+ * keeps its parent so it stays reachable in every view (table rows nest under
+ * a parent; the timeline nests scheduled children under a header row).
+ */
+export function narrowItemsToSignal<
+  T extends { id: string; parent_id: string | null },
+>(items: T[], itemIds: ReadonlySet<string> | null): T[] {
+  if (itemIds === null) return items;
+  const parentsToKeep = new Set<string>();
+  for (const it of items)
+    if (itemIds.has(it.id) && it.parent_id) parentsToKeep.add(it.parent_id);
+  return items.filter((it) => itemIds.has(it.id) || parentsToKeep.has(it.id));
+}
+
+/** ISO timestamp of the board's newest item/cell activity, or null when empty. */
+export function latestActivityISO(input: SignalsInput): string | null {
+  let best = 0;
+  for (const t of buildLastActivity(input).values()) if (t > best) best = t;
+  return best > 0 ? new Date(best).toISOString() : null;
+}

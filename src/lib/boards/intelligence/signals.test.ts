@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { localTodayISO } from "@/lib/boards/overdue";
-import { computeSignals, type SignalsInput } from "./signals";
+import {
+  computeSignals,
+  formatSince,
+  latestActivityISO,
+  narrowItemsToSignal,
+  stripSignals,
+  findActiveSignal,
+  signalSelection,
+  selectionEquals,
+  type SignalsInput,
+} from "./signals";
+import { MAX_CHIPS } from "./constants";
 import type { Signal } from "./types";
 
 // Fri 11 Sep 2026 12:00 LOCAL. Weekday-dependent labels ("changed since Tue")
@@ -332,5 +343,259 @@ describe("computeSignals — stalled", () => {
       items: [item("a", { updated_at: daysAgo(5).toISOString() })],
     });
     expect(ofKind(computeSignals(input, opts()), "stalled")).toEqual([]);
+  });
+});
+
+describe("computeSignals — overloaded", () => {
+  const names = new Map([
+    ["u1", "Ana Lovelace"],
+    ["u2", "Ben"],
+  ]);
+  const assign = (id: string, ...users: string[]) => [
+    cell(id, STATUS, { optionId: OPEN }),
+    cell(id, PEOPLE, { userIds: users }),
+  ];
+
+  it("flags the person above OVERLOAD_RATIO × median, named by first name", () => {
+    const input = board({
+      items: [item("a"), item("b"), item("c"), item("d"), item("e"), item("f")],
+      cellValues: [
+        ...assign("a", "u1"),
+        ...assign("b", "u1"),
+        ...assign("c", "u1"),
+        ...assign("d", "u1"),
+        ...assign("e", "u2"),
+        ...assign("f", "u3"),
+      ],
+    });
+    const over = ofKind(
+      computeSignals(input, opts({ memberNames: names })),
+      "overloaded",
+    );
+    expect(over).toHaveLength(1);
+    expect(over[0]).toMatchObject({
+      kind: "overloaded",
+      count: 4,
+      label: "overloaded · Ana",
+      tone: "yellow",
+      subjectUserId: "u1",
+    });
+    expect([...over[0].itemIds].sort()).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("emits one signal per overloaded person, highest load first", () => {
+    const cells = [
+      ...["a1", "a2", "a3", "a4"].flatMap((id) => assign(id, "u1")),
+      ...["b1", "b2", "b3", "b4", "b5", "b6"].flatMap((id) => assign(id, "u2")),
+      ...assign("c1", "u3"),
+      ...assign("d1", "u4"),
+    ];
+    const input = board({
+      items: cells
+        .filter((c) => c.column_id === STATUS)
+        .map((c) => item(c.item_id)),
+      cellValues: cells,
+    });
+    const over = ofKind(
+      computeSignals(input, opts({ memberNames: names })),
+      "overloaded",
+    );
+    expect(over.map((s) => s.subjectUserId)).toEqual(["u2", "u1"]);
+    expect(over[0].label).toBe("overloaded · Ben");
+  });
+
+  it("weights items by the effort column and excludes done items", () => {
+    const input = board({
+      items: [item("big"), item("s1"), item("s2"), item("t1"), item("done")],
+      cellValues: [
+        ...assign("big", "u1"),
+        cell("big", EFFORT, { n: 5 }),
+        ...assign("s1", "u2"),
+        ...assign("s2", "u2"),
+        ...assign("t1", "u3"),
+        cell("done", STATUS, { optionId: DONE }),
+        cell("done", PEOPLE, { userIds: ["u3"] }),
+        cell("done", EFFORT, { n: 50 }),
+      ],
+    });
+    const over = ofKind(computeSignals(input, opts()), "overloaded");
+    expect(over).toHaveLength(1);
+    expect(over[0]).toMatchObject({
+      subjectUserId: "u1",
+      count: 1,
+      label: "overloaded · someone",
+    });
+  });
+
+  it("needs at least two loaded people (a lone assignee is never overloaded)", () => {
+    const input = board({
+      items: [item("a"), item("b")],
+      cellValues: [...assign("a", "u1"), ...assign("b", "u1")],
+    });
+    expect(ofKind(computeSignals(input, opts()), "overloaded")).toEqual([]);
+  });
+});
+
+describe("computeSignals — changed", () => {
+  it("is hidden on a first visit (lastSeenAt null)", () => {
+    const input = board({
+      items: [item("a", { updated_at: NOW.toISOString() })],
+    });
+    expect(ofKind(computeSignals(input, opts()), "changed")).toEqual([]);
+  });
+
+  it("counts items whose item or cell activity is after lastSeenAt", () => {
+    const lastSeenAt = new Date(2026, 8, 8, 10, 0, 0); // Tue 8 Sep, local
+    const input = board({
+      items: [
+        item("item-touched", { updated_at: daysAgo(1).toISOString() }),
+        item("cell-touched"),
+        item("untouched"),
+      ],
+      cellValues: [
+        cell(
+          "cell-touched",
+          DATE,
+          { date: dateISO(0) },
+          daysAgo(2).toISOString(),
+        ),
+      ],
+    });
+    const [changed] = ofKind(
+      computeSignals(input, opts({ lastSeenAt })),
+      "changed",
+    );
+    expect(changed).toMatchObject({
+      kind: "changed",
+      count: 2,
+      label: "changed since Tue",
+      tone: "accent",
+    });
+    expect([...changed.itemIds].sort()).toEqual([
+      "cell-touched",
+      "item-touched",
+    ]);
+  });
+});
+
+describe("formatSince", () => {
+  it("same day → clock time; within the week → weekday; older → month day", () => {
+    expect(formatSince(new Date(2026, 8, 11, 14, 5), NOW)).toBe("2:05 PM");
+    expect(formatSince(new Date(2026, 8, 8, 10, 0), NOW)).toBe("Tue");
+    expect(formatSince(new Date(2026, 8, 3, 10, 0), NOW)).toBe("Sep 3");
+  });
+});
+
+describe("ordering, truncation and helpers", () => {
+  function busyBoard(): SignalsInput {
+    const cells = [
+      // overdue + stuck blocker with a dependent
+      cell("late", STATUS, { optionId: STUCK }),
+      cell("late", DATE, { date: dateISO(3) }),
+      // overloaded u1 (4) vs u2/u3 (1 each) → u1 over; u4 (6) also over
+      ...["a1", "a2", "a3", "a4"].flatMap((id) => [
+        cell(id, STATUS, { optionId: OPEN }),
+        cell(id, PEOPLE, { userIds: ["u1"] }),
+      ]),
+      ...["b1", "b2", "b3", "b4", "b5", "b6"].flatMap((id) => [
+        cell(id, STATUS, { optionId: OPEN }),
+        cell(id, PEOPLE, { userIds: ["u4"] }),
+      ]),
+      cell("c1", STATUS, { optionId: OPEN }),
+      cell("c1", PEOPLE, { userIds: ["u2"] }),
+      cell("d1", STATUS, { optionId: OPEN }),
+      cell("d1", PEOPLE, { userIds: ["u3"] }),
+    ];
+    const ids = [...new Set(cells.map((c) => c.item_id)), "dep", "quiet"];
+    return board({
+      groups: [group("g1"), group("g-quiet")],
+      items: ids.map((id) =>
+        id === "quiet"
+          ? item(id, {
+              group_id: "g-quiet",
+              updated_at: daysAgo(9).toISOString(),
+            })
+          : item(id, { updated_at: daysAgo(1).toISOString() }),
+      ),
+      cellValues: cells,
+      dependencies: [dep("late", "dep")],
+    });
+  }
+
+  it("orders kinds overdue, blocked, overloaded, stalled, changed", () => {
+    const signals = computeSignals(
+      busyBoard(),
+      opts({ lastSeenAt: daysAgo(2) }),
+    );
+    expect(signals.map((s) => s.kind)).toEqual([
+      "overdue",
+      "blocked",
+      "overloaded",
+      "overloaded",
+      "stalled",
+      "changed",
+    ]);
+  });
+
+  it("stripSignals keeps the first MAX_CHIPS in order", () => {
+    const signals = computeSignals(
+      busyBoard(),
+      opts({ lastSeenAt: daysAgo(2) }),
+    );
+    expect(signals.length).toBeGreaterThan(MAX_CHIPS);
+    const strip = stripSignals(signals);
+    expect(strip).toHaveLength(MAX_CHIPS);
+    expect(strip.map((s) => s.kind)).toEqual([
+      "overdue",
+      "blocked",
+      "overloaded",
+      "overloaded",
+      "stalled",
+    ]);
+  });
+
+  it("narrowItemsToSignal returns the same array when no chip is active", () => {
+    const items = [item("a")];
+    expect(narrowItemsToSignal(items, null)).toBe(items);
+  });
+
+  it("narrowItemsToSignal keeps matches plus the parents of matching sub-items", () => {
+    const items = [
+      item("p"),
+      item("child", { parent_id: "p" }),
+      item("other"),
+      item("orphan-child", { parent_id: "other" }),
+    ];
+    const kept = narrowItemsToSignal(items, new Set(["child"]));
+    expect(kept.map((i) => i.id)).toEqual(["p", "child"]);
+  });
+
+  it("signalSelection / selectionEquals / findActiveSignal round-trip a subject", () => {
+    const signals = computeSignals(busyBoard(), opts());
+    const u4 = signals.find((s) => s.subjectUserId === "u4") as Signal;
+    const sel = signalSelection(u4);
+    expect(sel).toEqual({ kind: "overloaded", subject: "u4" });
+    expect(selectionEquals(sel, { kind: "overloaded", subject: "u4" })).toBe(
+      true,
+    );
+    expect(selectionEquals(sel, { kind: "overloaded" })).toBe(false);
+    expect(selectionEquals(null, null)).toBe(true);
+    expect(findActiveSignal(signals, sel)).toBe(u4);
+    expect(findActiveSignal(signals, { kind: "overdue" })?.kind).toBe(
+      "overdue",
+    );
+    expect(findActiveSignal(signals, { kind: "changed" })).toBeNull();
+    expect(findActiveSignal(signals, null)).toBeNull();
+  });
+
+  it("latestActivityISO is the newest item/cell timestamp, or null for an empty board", () => {
+    expect(latestActivityISO(board())).toBeNull();
+    const input = board({
+      items: [item("a", { updated_at: daysAgo(4).toISOString() })],
+      cellValues: [
+        cell("a", DATE, { date: dateISO(0) }, daysAgo(1).toISOString()),
+      ],
+    });
+    expect(latestActivityISO(input)).toBe(daysAgo(1).toISOString());
   });
 });
