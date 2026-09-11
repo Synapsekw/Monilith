@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import type { SharedBoardEntry } from "@/lib/boards/queries";
 import type { BoardFolder } from "@/lib/boards/folders/types";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { Kicker } from "@/components/ui/kicker";
 
 /**
  * The "Shared with me" block of unfiled shared boards.
@@ -28,9 +29,10 @@ export function SharedBoardsSection({
 
   return (
     <>
-      <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
-        Shared with me
-      </p>
+      <div className="mt-1.5 flex h-6 items-center gap-2 pr-1 pl-7">
+        <Kicker size="xs">Shared with me</Kicker>
+        <span aria-hidden="true" className="bg-border h-px min-w-3 flex-1" />
+      </div>
       {boards.map((board) => (
         <Fragment key={board.id}>
           {renderRow ? (

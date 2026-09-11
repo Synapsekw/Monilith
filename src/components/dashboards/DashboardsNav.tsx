@@ -35,7 +35,6 @@ const AiDashboardWizard = dynamic(
     ),
   { ssr: false },
 );
-import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import {
@@ -44,6 +43,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { NavSection } from "@/components/shell/nav-section";
+import {
+  SidebarRow,
+  railTileClass,
+  sidebarLabelClass,
+} from "@/components/shell/sidebar-row";
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -115,13 +119,13 @@ export function DashboardsNav({
   return (
     <>
       {collapsed ? (
-        <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+        <div className="flex flex-col items-center gap-0.5 py-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
                 href="/dashboards"
                 aria-label="Dashboards"
-                className="text-muted-foreground hover:bg-state-hover hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
+                className={railTileClass({})}
               >
                 <LayoutGrid className="size-4 shrink-0" />
                 {coarse ? <CoarseCaption label="Dashboards" /> : null}
@@ -141,12 +145,10 @@ export function DashboardsNav({
                         d.id === activeDashboardId ? "page" : undefined
                       }
                       aria-label={d.name}
-                      className={cn(
-                        "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                        d.id === activeDashboardId
-                          ? "bg-primary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-                      )}
+                      className={railTileClass({
+                        active: d.id === activeDashboardId,
+                        className: "uppercase",
+                      })}
                     >
                       <span className="shrink-0">{d.name.charAt(0)}</span>
                       {coarse ? <CoarseCaption label={d.name} /> : null}
@@ -161,7 +163,6 @@ export function DashboardsNav({
           storageKey="dash"
           title="Dashboards"
           titleHref="/dashboards"
-          icon={LayoutGrid}
           action={
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -191,32 +192,34 @@ export function DashboardsNav({
           }
         >
           {dashboards.length === 0 ? (
-            <p className="text-muted-foreground px-3 py-1 text-xs">
+            <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
               No dashboards yet
             </p>
           ) : (
             dashboards.map((d) => (
-              <div
+              <SidebarRow
                 key={d.id}
-                className={cn(
-                  "group flex items-center rounded-md pr-1 transition-colors",
-                  d.id === activeDashboardId
-                    ? "bg-primary/80 text-foreground"
-                    : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-                )}
+                child
+                active={d.id === activeDashboardId}
+                // `DashboardItemMenu` reveals through `RevealOnHover`, which
+                // keys off the UNNAMED `group-hover:` — the primitive only
+                // supplies the named `group/row` the board rows use.
+                className="group"
+                trailing={
+                  <DashboardItemMenu
+                    dashboard={{ id: d.id, name: d.name }}
+                    isActive={d.id === activeDashboardId}
+                  />
+                }
               >
                 <Link
                   href={`/dashboards/${d.id}`}
                   aria-current={d.id === activeDashboardId ? "page" : undefined}
-                  className="min-w-0 flex-1 truncate px-3 py-1 text-sm"
+                  className={sidebarLabelClass(true)}
                 >
                   {d.name}
                 </Link>
-                <DashboardItemMenu
-                  dashboard={{ id: d.id, name: d.name }}
-                  isActive={d.id === activeDashboardId}
-                />
-              </div>
+              </SidebarRow>
             ))
           )}
         </NavSection>

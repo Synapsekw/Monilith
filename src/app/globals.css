@@ -894,6 +894,16 @@
       transform: translateY(-4px);
     }
   }
+  /* Sidebar scroll body: rows fade at both ends instead of clipping. */
+  .nav-scroll {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 10px,
+      black calc(100% - 14px),
+      transparent
+    );
+  }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {
     *,

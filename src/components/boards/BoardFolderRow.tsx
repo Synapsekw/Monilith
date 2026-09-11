@@ -1,10 +1,11 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
+import { SIDEBAR_LEAD_CLASS, SidebarRow } from "@/components/shell/sidebar-row";
 
 /**
  * One collapsible folder in the Boards nav. Open/closed state reuses
@@ -55,7 +56,11 @@ export function BoardFolderRow({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div
+      <SidebarRow
+        child
+        // The disclosure button spans the lead slot AND the label, so the row
+        // itself renders no slot span — the button's own chevron span is it.
+        lead={null}
         ref={dropRef}
         // Focus anchor for the plain→drag subtree swap. Folder rows render
         // FIRST in the section, so the chevron is the first focusable thing a
@@ -64,9 +69,25 @@ export function BoardFolderRow({
         data-folder-row={folder.id}
         data-testid={dropRef ? `folder-drop-${folder.id}` : undefined}
         className={cn(
-          "group/folder text-muted-foreground hover:bg-state-hover hover:text-foreground flex items-center rounded-md pr-1 transition-colors",
+          // `BoardFolderMenu` reveals on `group-hover/folder`, a different
+          // group name from the primitive's own `group/row`.
+          "group/folder",
           isOver && "bg-state-hover ring-primary/60 text-foreground ring-1",
         )}
+        trailing={
+          <>
+            {/* Decorative: a screen reader would otherwise announce a bare
+                number with no unit after the folder name, and the expanded list
+                of boards is right there. */}
+            <span
+              aria-hidden
+              className="text-3xs text-muted-foreground mr-0.5 shrink-0 font-mono tabular-nums"
+            >
+              {count}
+            </span>
+            <BoardFolderMenu folder={folder} />
+          </>
+        }
       >
         {/* ONE disclosure, not two. The chevron and the name used to be
             separate buttons doing the identical thing, which cost the folder a
@@ -81,19 +102,22 @@ export function BoardFolderRow({
           onClick={() => toggleSection(key)}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded py-1 pr-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
+          // The label metrics of `sidebarLabelClass(true)`, spelled out: the
+          // helper's `truncate` is dead on a flex container (the inner span
+          // does the truncating), and its `pl-1` belongs AFTER the lead slot —
+          // which here lives INSIDE the button, so the button starts flush.
+          className="focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded py-1 pr-1 text-left text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
         >
           {/* Keeps the chevron in the same 24px column the board rows reserve
-              for their grip, so the header and its boards line up. */}
-          <span
-            aria-hidden
-            className="flex size-6 shrink-0 items-center justify-center"
-          >
-            {open ? (
-              <ChevronDown className="size-3.5" />
-            ) : (
-              <ChevronRight className="size-3.5" />
-            )}
+              for their grip, so the header and its boards line up. One rotated
+              chevron, not two glyphs — the rotation animates, a swap cannot. */}
+          <span aria-hidden className={SIDEBAR_LEAD_CLASS}>
+            <ChevronDown
+              className={cn(
+                "ease-keystone size-3.5 transition-transform duration-200",
+                !open && "-rotate-90",
+              )}
+            />
           </span>
           {open ? (
             <FolderOpen className="mr-1.5 size-3.5 shrink-0" aria-hidden />
@@ -102,17 +126,7 @@ export function BoardFolderRow({
           )}
           <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         </button>
-        {/* Decorative: a screen reader would otherwise announce a bare number
-            with no unit after the folder name, and the expanded list of boards
-            is right there. */}
-        <span
-          aria-hidden
-          className="text-3xs text-muted-foreground mr-0.5 shrink-0 tabular-nums"
-        >
-          {count}
-        </span>
-        <BoardFolderMenu folder={folder} />
-      </div>
+      </SidebarRow>
       <div id={bodyId} hidden={!open} className="flex flex-col gap-0.5 pl-3">
         {children}
       </div>
