@@ -14,6 +14,7 @@ import { DockThreadList } from "./DockThreadList";
 import {
   DockTiles,
   dockTileId,
+  knownAgentId,
   type DockAgent,
   type DockPresence,
   type DockTile,
@@ -130,18 +131,14 @@ export function DockBody({
   const [threadsOpen, setThreadsOpen] = useState(false);
   const threadCount = boardThreads.length + agentThreads.length;
   // A queued persona whose agent has since left the roster resolves to Ask —
-  // same rule `DockTiles` already applies to its own `agentId` prop. Without
-  // this, `chatTile` (and the `aria-labelledby` it feeds the panel) could
-  // point at a `dock-tab-agent-<staleId>` that DockTiles never renders,
-  // because it collapses that same stale id to the Ask tile. Tests presence
-  // of the KEY, not truthiness of the value — an agent whose name happens to
-  // be `""` is still on the roster, and `DockTiles` (which checks its own
-  // `agents` array by id) would still treat it as active; a truthiness check
-  // here would disagree with it for that one edge case.
-  const resolvedTileAgentId =
-    tileAgentId !== null && tileAgentId in agentNames ? tileAgentId : null;
+  // through `knownAgentId`, the SAME call `DockTiles` makes about its own
+  // `agentId` prop, so the two can never disagree. Without it, `chatTile`
+  // (and the `aria-labelledby` it feeds the panel) could point at a
+  // `dock-tab-agent-<staleId>` that DockTiles never renders, because it
+  // collapses that same stale id to the Ask tile.
+  const resolvedTileAgentId = knownAgentId(tileAgentId, agents);
   const personaName = resolvedTileAgentId
-    ? agentNames[resolvedTileAgentId]
+    ? (agentNames[resolvedTileAgentId] ?? "Agent")
     : "Ask";
   const chatTile: DockTile = resolvedTileAgentId
     ? { kind: "agent", agentId: resolvedTileAgentId }
@@ -265,7 +262,10 @@ export function DockBody({
               className="bg-border ease-keystone group-hover/ledger:bg-border-bright h-px min-w-3 flex-1 transition-colors duration-300"
             />
             <span className="text-kicker text-3xs font-mono tabular-nums">
-              {threadCount}
+              {/* A `0` beside the well's own skeleton is a claim the dock has
+                  not earned yet. Only the FIRST read is unknown — a re-read
+                  keeps showing the count it already has. */}
+              {loading && threadCount === 0 ? "…" : threadCount}
             </span>
             <ChevronRight
               aria-hidden="true"
@@ -328,11 +328,6 @@ export function DockBody({
                 <Skeleton variant="chrome" className="h-4 w-full" />
                 <Skeleton variant="chrome" className="h-4 w-5/6" />
               </div>
-            ) : readOnly ? (
-              <p className="text-muted-foreground px-3.5 py-3 text-sm">
-                This thread was shared with the board. You can read it, but only
-                its owner can reply.
-              </p>
             ) : (
               <AskChat
                 // Keyed on the CHAT INSTANCE, never on `activeId`.
@@ -354,6 +349,25 @@ export function DockBody({
                 onStarted={onStarted}
                 onTurnComplete={onTurnComplete}
                 onBusyChange={onBusyChange}
+                // Who answered, for the transcript's kicker and its
+                // brand-tinted turn tile. Without it every persona's answers
+                // were stamped "Monolith" while the band, the title kicker
+                // and the pulsing dot all named the agent.
+                //
+                // Deliberately NOT `agents`: that prop is the @handle roster,
+                // and the dock addresses a persona by TAPPING ITS TILE. The
+                // board page reads `user_agents` as `id, name` — no handle to
+                // offer — and turning on composer mentions here would let a
+                // message go to an agent other than the one the band says is
+                // answering, and rewrite the empty state to offer handles
+                // that do not exist. Attribution is what was broken; only
+                // attribution is wired.
+                agentNames={agentNames}
+                // A thread someone else shared: AskChat reads it out and says
+                // the same sentence in place of the composer. This used to
+                // replace the whole chat with that sentence, so a shared
+                // thread opened to a title row over an empty body.
+                readOnly={readOnly}
                 surface="atmosphere"
               />
             )}

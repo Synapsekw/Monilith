@@ -57,8 +57,9 @@ export function AppShell({
           instead of inside the content card. Static and empty on purpose: no
           props, no request-time reads, so the prerendered shell is untouched
           (static-shell.test.ts). While it holds a dock, the root's `:has()`
-          variant above narrows <main>'s right gutter to mr-1 — the dock's own
-          `left-1` supplies the other 4px, matching the card's left side. */}
+          variant above narrows <main>'s right gutter to mr-1 — 4px, which IS
+          the gutter, matching the card's own `ml-1` on the left. (The dock
+          used to inset its layers a further `left-1`, making it 8px.) */}
       <div id="app-dock-slot" className="flex shrink-0" />
       {commandPalette}
     </div>

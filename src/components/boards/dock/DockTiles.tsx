@@ -39,22 +39,61 @@ export type DockTilesProps = {
   /** `vertical` is the mini rail: Up/Down move, the edge bar sits on the
    *  right edge (the left rail's bar sits on its left — mirrored twins). */
   orientation?: "horizontal" | "vertical";
+  /** Id namespace for this row's tiles. Defaults to the band's; the rail
+   *  passes its own so the two layers never mint the same id mid-fold. */
+  idPrefix?: string;
+  /** Is the panel these tabs control actually in the document? The rail shows
+   *  the tiles with NO panel mounted, and `aria-controls` pointing at a node
+   *  that is not there is a dangling reference. */
+  panelMounted?: boolean;
   onSelect: (tile: DockTile) => void;
 };
 
 const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
 
+/** The band's id namespace — the one a mounted panel's `aria-labelledby`
+ *  points into. The mini rail renders the SAME tiles in a second,
+ *  simultaneously-mounted layer during a fold, so it needs its own. */
+export const DOCK_TILE_ID_PREFIX = "dock-tab";
+export const DOCK_RAIL_TILE_ID_PREFIX = "dock-rail-tab";
+
 /** The tab's element id — also what the mounted panel's `aria-labelledby`
- *  names, so the id is shared here rather than spelled in two files. */
-export function dockTileId(tile: DockTile): string {
+ *  names, so the id is shared here rather than spelled in two files.
+ *
+ *  `prefix` keeps the two layers apart. For ~360ms of every fold BOTH the band
+ *  and the rail are mounted; with one namespace each tile id existed twice and
+ *  the panel's `aria-labelledby` resolved to whichever came first in DOM order
+ *  — on a close, the `aria-hidden` layer that is leaving. */
+export function dockTileId(
+  tile: DockTile,
+  prefix: string = DOCK_TILE_ID_PREFIX,
+): string {
   switch (tile.kind) {
     case "intelligence":
-      return "dock-tab-intelligence";
+      return `${prefix}-intelligence`;
     case "ask":
-      return "dock-tab-ask";
+      return `${prefix}-ask`;
     case "agent":
-      return `dock-tab-agent-${tile.agentId}`;
+      return `${prefix}-agent-${tile.agentId}`;
   }
+}
+
+/**
+ * The ONE rule for "is this persona still someone we can show?".
+ *
+ * A persona id can outlive its agent — dock state persists it, a thread row
+ * keeps it after the owner deletes the agent — and every surface that renders
+ * it has to collapse that case to plain Ask. Three files used to answer it
+ * three different ways (`agentNames[id]` by truthiness, `id in agentNames`,
+ * `agents.some(...)`), which agreed only because agent names are validated
+ * non-empty. They ask this instead.
+ */
+export function knownAgentId(
+  agentId: string | null | undefined,
+  agents: readonly DockAgent[],
+): string | null {
+  if (!agentId) return null;
+  return agents.some((a) => a.id === agentId) ? agentId : null;
 }
 
 /** Only the OPEN section is mounted (DockBody), so only the selected tile has
@@ -128,7 +167,8 @@ function TileFace({ tile, agents }: { tile: DockTile; agents: DockAgent[] }) {
  * is controlled, so a parent that ignores `onSelect` would otherwise pin every
  * arrow press to the same origin — and the two reads disagree for exactly one
  * frame on every real switch, which is the frame the user is pressing in.
- * Roving tabindex: the tablist is ONE tab stop.
+ * Roving tabindex: the tablist is ONE tab stop. Moving is free; ACTIVATING is
+ * the deliberate act — see `move`.
  */
 export function DockTiles({
   agents,
@@ -137,6 +177,8 @@ export function DockTiles({
   badge,
   presence = EMPTY_PRESENCE,
   orientation = "horizontal",
+  idPrefix = DOCK_TILE_ID_PREFIX,
+  panelMounted = true,
   onSelect,
 }: DockTilesProps) {
   const vertical = orientation === "vertical";
@@ -150,10 +192,21 @@ export function DockTiles({
   // whose agent was since deleted) reads as plain Ask, never as index 0 —
   // that would light up Intelligence while `tab` is still "chat". Resolved
   // once here so `activeIndex` and every tile's `aria-selected` agree.
-  const resolvedAgentId =
-    agentId !== null && !agents.some((a) => a.id === agentId) ? null : agentId;
+  const resolvedAgentId = knownAgentId(agentId, agents);
   const activeIndex = tiles.findIndex((t) => isActive(t, tab, resolvedAgentId));
 
+  /**
+   * MANUAL activation (ARIA APG): an arrow MOVES FOCUS ONLY — Enter, Space or
+   * a click activate, which the native `<button>` already does through
+   * `onClick`.
+   *
+   * Automatic activation (select-on-arrow) is only correct when activating is
+   * free. Here it is not: selecting a different persona starts a NEW THREAD —
+   * it closes the open one, discards the composer's draft and strips
+   * `?thread=` — and arrowing onto Intelligence can kick off a metered model
+   * call. One glance along the roster must not cost the reader their
+   * conversation.
+   */
   const move = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const focused = refs.current.findIndex(
       (el) => el === document.activeElement,
@@ -169,7 +222,6 @@ export function DockTiles({
     else return;
     e.preventDefault();
     refs.current[next]?.focus();
-    onSelect(tiles[next]);
   };
 
   return (
@@ -197,7 +249,7 @@ export function DockTiles({
           const running =
             tile.kind === "agent" && presence[tile.agentId] === "running";
           return (
-            <Tooltip key={dockTileId(tile)}>
+            <Tooltip key={dockTileId(tile, idPrefix)}>
               <TooltipTrigger asChild>
                 <button
                   ref={(el) => {
@@ -205,10 +257,12 @@ export function DockTiles({
                   }}
                   type="button"
                   role="tab"
-                  id={dockTileId(tile)}
+                  id={dockTileId(tile, idPrefix)}
                   aria-label={label}
                   aria-selected={selected}
-                  aria-controls={selected ? panelIdFor(tile) : undefined}
+                  aria-controls={
+                    selected && panelMounted ? panelIdFor(tile) : undefined
+                  }
                   tabIndex={selected ? 0 : -1}
                   onClick={() => onSelect(tile)}
                   className={cn(
@@ -242,8 +296,22 @@ export function DockTiles({
                     selected &&
                       "after:bg-primary after:absolute after:content-['']",
                     selected &&
+                      // Both bars sit INSIDE their button's own box, on the
+                      // edge they name — the rotation of one recipe.
+                      //
+                      // The rail's used to hang 8px OUTSIDE (`-right-2`),
+                      // which cannot work for both tile sizes: the aside is
+                      // `overflow-hidden` at 48px, and the `pointer-coarse`
+                      // tile is 44px, so it very nearly fills the column and
+                      // there is no room outside it. In the shipped 44px
+                      // column (the layer used to inset itself `left-1`) the
+                      // 32px tile ran x=10…42 and the bar landed x=47…50 —
+                      // one pixel drawn — while the 44px tile ran x=4…48 and
+                      // put its bar at x=53…56: nothing at all. Anchored
+                      // inside the button's own right edge, the bar is always
+                      // drawn — x=37…40 and x=43…46 in today's 48px column.
                       (vertical
-                        ? "after:inset-y-2 after:-right-2 after:w-[3px] after:rounded-l-full"
+                        ? "after:inset-y-2 after:right-0 after:w-[3px] after:rounded-l-full"
                         : "after:inset-x-2 after:bottom-0 after:h-[3px] after:rounded-t-full"),
                   )}
                 >

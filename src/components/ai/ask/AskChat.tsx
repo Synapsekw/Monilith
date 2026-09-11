@@ -443,7 +443,16 @@ export function AskChat({
       {/* The run's queued approvals, between the report and the composer: the
           owner reads what the agent did, then decides what it could not. */}
       {agentProposals.length > 0 ? (
-        <div className="flex flex-col gap-2 px-4 pb-2">
+        <div
+          className={
+            surface === "card"
+              ? "flex flex-col gap-2 px-4 pb-2"
+              : // On the wash every other block — title row, ledger, transcript,
+                // notice, error banner — is `px-3.5`; `px-4` left the cards 2px
+                // out of the column.
+                "flex flex-col gap-2 px-3.5 pb-2"
+          }
+        >
           {agentProposals.map((p) => (
             <ProposalCard key={p.id} proposal={p} />
           ))}
