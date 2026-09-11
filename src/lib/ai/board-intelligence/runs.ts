@@ -1,4 +1,6 @@
-import type { Tables } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/types/database.types";
+import { INTELLIGENCE_STALE_MS } from "@/lib/boards/intelligence/constants";
 import { payloadSchema, type BoardIntelligencePayload } from "./schema";
 export type {
   Action,
@@ -20,12 +22,8 @@ export type BoardIntelligenceRun = {
   tokensOut: number;
 };
 
-// NOTE (Task 6): Task 5 owns the full build-out of this module
-// (`getLatestBoardIntelligenceRun`, `isRunStale`) — this task only needed
-// `rowToRun` (apply.ts loads a run by id), implemented exactly as the Task 5
-// brief specifies it so the two land without conflict.
-/** Map a DB row to the app shape, failing CLOSED on a payload an older
- *  client wrote in another shape (`payloadSchema.safeParse` → null). */
+/** DB row → app shape, re-validating the stored jsonb against `payloadSchema`
+ *  on every read (fails closed on a malformed/older-shape payload). */
 export function rowToRun(
   row: Tables<"board_intelligence_runs">,
 ): BoardIntelligenceRun | null {
@@ -43,4 +41,34 @@ export function rowToRun(
     tokensIn: row.tokens_in,
     tokensOut: row.tokens_out,
   };
+}
+
+/** Spec §8: ONE indexed LIMIT 1 read on (board_id, user_id, generated_at desc).
+ *  Never throws — a missing row, an RLS denial or a transport error is "no run". */
+export async function getLatestBoardIntelligenceRun(
+  supabase: SupabaseClient<Database>,
+  boardId: string,
+  userId: string,
+): Promise<BoardIntelligenceRun | null> {
+  const { data, error } = await supabase
+    .from("board_intelligence_runs")
+    .select("*")
+    .eq("board_id", boardId)
+    .eq("user_id", userId)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToRun(data);
+}
+
+export function isRunStale(
+  run: BoardIntelligenceRun,
+  opts: { nowMs: number; inputHash: string },
+): boolean {
+  const at = Date.parse(run.generatedAt);
+  if (Number.isNaN(at)) return true;
+  return (
+    opts.nowMs - at >= INTELLIGENCE_STALE_MS || run.inputHash !== opts.inputHash
+  );
 }

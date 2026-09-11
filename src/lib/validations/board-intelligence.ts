@@ -26,3 +26,15 @@ export const revertSuggestionSchema = z.object({
   before: z.array(beforeValueSchema).max(50),
   updateIds: z.array(z.string().uuid()).max(5),
 });
+
+/** Server Action input boundary for runBoardIntelligence({ boardId, force? }). */
+export const runBoardIntelligenceSchema = z.object({
+  boardId: z.string().uuid(),
+  force: z.boolean().optional(),
+});
+
+/** Server Action input boundary for dismissSuggestion({ runId, suggestionId }). */
+export const dismissSuggestionSchema = z.object({
+  runId: z.string().uuid(),
+  suggestionId: z.string().min(1).max(8),
+});
