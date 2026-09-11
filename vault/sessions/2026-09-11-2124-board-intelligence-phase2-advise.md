@@ -47,6 +47,7 @@ Not verified in a browser this session: the Chrome extension was disconnected an
 
 ## Open threads
 
+- **STILL FAILING after the adapter fix (owner retry, end of session):** "Catch me up" hangs ~2 minutes, then the same generic error. Not diagnosed — the `[intelligence] run failed` log line was not captured, and it is unconfirmed that the retry ran the pulled `develop`. Suspects, ranked: Anthropic call running to `MAX_OUTPUT_TOKENS = 16000` with thinking on (the summarize path needed `thinking: disabled`), an SDK retry loop on 529, `NoObjectGeneratedError` (the JSON schema's `type: ["string","null"]` arrays are new to this repo), or the OpenAI non-strict path. First move next session: get that log line.
 - Browser visual pass NOT done (Chrome extension disconnected; the e2e provisioner refuses DEV by design). Steps 2–12 above are the owed manual check; step 12's paint order first.
 - **Promote soon:** production's Anthropic structured features are broken until `develop` (`8aedef66`) reaches `main`. `develop` is ahead by Phase 2, the sidebar Keystone polish and this fix; migration `20260911144351` is on DEV, not PROD.
 - Follow-up: the OpenAI, compatible and Google adapters still pass the deprecated `system` option; move them to `instructions` and give each a real-`generateObject` wire test.
