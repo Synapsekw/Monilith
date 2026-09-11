@@ -176,8 +176,14 @@ describe("Composer — surface", () => {
     expect(screen.getByRole("textbox").closest("form")!.className).toBe(
       "bg-surface focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors",
     );
-    expect(screen.getByText("⌘↵ to send").className).toBe(
-      "text-kicker font-mono font-medium tracking-[0.12em] uppercase text-2xs mx-auto mt-1.5 block max-w-3xl px-1",
+    // Contiguous `.toContain`, not `.toBe`: the rendered className is
+    // `Kicker`'s own base classes (uppercase + tracking — the mono eyebrow
+    // recipe) plus this component's `className` prop. Pinning the full
+    // composed string would hand-roll that recipe here, which
+    // `kicker-usage.test.ts` forbids outside the primitive. This still fails
+    // on any edit, removal, or reorder of the card-branch prop string itself.
+    expect(screen.getByText("⌘↵ to send").className).toContain(
+      "mx-auto mt-1.5 block max-w-3xl px-1",
     );
   });
 
