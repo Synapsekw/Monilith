@@ -170,30 +170,33 @@ export function SidebarNav({
         className="nav-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
       >
         {isCollapsed ? (
-          <nav className="flex flex-col items-center gap-0.5 px-2 pt-2">
-            <RailDivider />
-            {TOP.map((item) => (
-              <RailLink
-                key={item.href}
-                item={item}
-                active={isActive(item.href)}
-                coarse={coarse}
-              />
-            ))}
-            <RailDivider />
-            {PLANNING.map((item) => (
-              <RailLink
-                key={item.href}
-                item={item}
-                active={isActive(item.href)}
-                coarse={coarse}
-              />
-            ))}
-            <RailDivider />
-            {boardsNav}
-            <RailDivider />
-            {dashboardsNav}
-          </nav>
+          <>
+            <nav className="flex flex-col items-center gap-0.5 px-2 pt-2">
+              <RailDivider />
+              {TOP.map((item) => (
+                <RailLink
+                  key={item.href}
+                  item={item}
+                  active={isActive(item.href)}
+                  coarse={coarse}
+                />
+              ))}
+              <RailDivider />
+              {PLANNING.map((item) => (
+                <RailLink
+                  key={item.href}
+                  item={item}
+                  active={isActive(item.href)}
+                  coarse={coarse}
+                />
+              ))}
+              <RailDivider />
+              {boardsNav}
+              <RailDivider />
+              {dashboardsNav}
+            </nav>
+            <div className="h-3.5 shrink-0" aria-hidden="true" />
+          </>
         ) : (
           <>
             <nav className="flex flex-col gap-0.5 px-2 pt-2.5">
@@ -226,6 +229,7 @@ export function SidebarNav({
       </div>
 
       <footer
+        data-testid="sidebar-footer"
         className={
           isCollapsed
             ? "border-border flex flex-col items-center gap-0.5 border-t px-2 pt-2 pb-2"

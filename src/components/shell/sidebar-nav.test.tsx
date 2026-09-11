@@ -209,7 +209,7 @@ describe("SidebarNav", () => {
       />,
     );
     expect(screen.queryByText("Personal")).not.toBeInTheDocument();
-    const footer = screen.getByRole("contentinfo");
+    const footer = screen.getByTestId("sidebar-footer");
     expect(footer).toContainElement(
       screen.getByRole("link", { name: "My Time" }),
     );
@@ -233,10 +233,12 @@ describe("SidebarNav", () => {
     expect(body.className).toContain("nav-scroll");
     expect(body).toHaveAttribute("data-scroll-container");
     expect(body).toContainElement(screen.getByText("Goals"));
-    expect(body).not.toContainElement(screen.getByRole("contentinfo"));
+    expect(body).not.toContainElement(screen.getByTestId("sidebar-footer"));
     expect(
       document.querySelector('[data-orientation="horizontal"][role="none"]'),
     ).toBeNull();
+    // The last row sits above the bottom mask fade, not clipped by it.
+    expect(body.lastElementChild).toHaveClass("h-3.5");
   });
 
   it("collapsed: groups the rail with hairline dividers and keeps the footer", () => {
@@ -254,8 +256,12 @@ describe("SidebarNav", () => {
     expect(
       document.querySelectorAll("span[aria-hidden='true'].w-4.h-px").length,
     ).toBe(5);
-    expect(screen.getByRole("contentinfo")).toContainElement(
+    expect(screen.getByTestId("sidebar-footer")).toContainElement(
       screen.getByLabelText("Trash"),
+    );
+    // The last rail tile sits above the bottom mask fade too, not clipped by it.
+    expect(screen.getByTestId("sidebar-scroll").lastElementChild).toHaveClass(
+      "h-3.5",
     );
   });
 
