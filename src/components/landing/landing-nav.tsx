@@ -1,56 +1,73 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { nunito } from "@/lib/fonts";
-import styles from "./monolith-hero.module.css";
+import { ArrowUpRight, Menu, X } from "lucide-react";
+import { LandingWordmark } from "./landing-wordmark";
+import styles from "./editorial-landing.module.css";
+
+export const NAV_LINKS = [
+  ["Product", "#product"],
+  ["For agents", "#agents"],
+  ["Why Monolith", "#why"],
+  ["Pricing", "#pricing"],
+] as const;
 
 /**
- * Public landing nav. A Server Component — pure links, no state; it sticks with
- * CSS alone, so nothing here reaches the client bundle.
+ * Sticky landing header. The only client component in the header — the
+ * mobile menu toggle is the one piece of state. Section links are in-page
+ * anchors, never `<Link>`/router navigations: the landing is one route and a
+ * router nav would re-run every query in the page (working agreement #5).
  *
- * The wordmark repeats here at brand-lockup scale (the hero's is the display
- * cut). Same face, same tracking — only the size differs.
- *
- * Section links are in-page anchors, never `<Link>`/router navigations: the
- * landing is one route, and a router nav would re-run its queries (working
- * agreement #5, gotcha-09).
+ * Logged out: Sign in + the trial CTA. Signed in (the /landing splash for an
+ * authenticated viewer): a single "Enter app" path back into the workspace.
  */
 export function LandingNav({ signedIn = false }: { signedIn?: boolean }) {
+  const [open, setOpen] = useState(false);
   return (
-    <header className={styles.nav}>
-      <div className={styles.navInner}>
-        <Link
-          href="/landing"
-          className={`${styles.navBrand} ${nunito.className}`}
+    <header className={styles.header}>
+      <div className={styles.navWrap}>
+        <a href="#top" aria-label="Monolith home">
+          <LandingWordmark />
+        </a>
+        <nav
+          className={
+            open ? `${styles.mainNav} ${styles.mainNavOpen}` : styles.mainNav
+          }
+          aria-label="Main navigation"
         >
-          MONOLITH
-        </Link>
-
-        <nav className={styles.navLinks} aria-label="Landing sections">
-          <a href="#agents">Agents</a>
-          <a href="#features">Product</a>
-          <a href="#views">Views</a>
-          {/* In-page anchor, not a <Link>: the teaser lives on this route, and a
-              router navigation would re-run every query in the page (gotcha-09).
-              The full comparison at /pricing is a real route, linked from the
-              teaser's CTA and the footer. */}
-          <a href="#pricing">Pricing</a>
-          <Link href="/updates">Updates</Link>
+          {NAV_LINKS.map(([label, href]) => (
+            <a href={href} key={href} onClick={() => setOpen(false)}>
+              {label}
+            </a>
+          ))}
         </nav>
-
         <div className={styles.navActions}>
           {signedIn ? (
-            <Link href="/" className={styles.navCta}>
+            <Link href="/" className={styles.cta}>
               Enter app
+              <ArrowUpRight size={18} aria-hidden="true" />
             </Link>
           ) : (
             <>
-              <Link href="/login" className={styles.navLink}>
+              <Link href="/login" className={styles.signIn}>
                 Sign in
               </Link>
-              <Link href="/signup" className={styles.navCta}>
-                Get started
+              <Link href="/signup" className={styles.cta}>
+                Start your trial
+                <ArrowUpRight size={18} aria-hidden="true" />
               </Link>
             </>
           )}
+          <button
+            type="button"
+            className={styles.mobileMenu}
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? "Close navigation" : "Open navigation"}
+            aria-expanded={open}
+          >
+            {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+          </button>
         </div>
       </div>
     </header>
