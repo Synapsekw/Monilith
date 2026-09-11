@@ -21,7 +21,19 @@ export interface BoardIntelligenceStoreState {
   runs: Record<string, BoardIntelligenceRun | null>;
   openRequest: OpenRequest | null;
   filterRequest: FilterRequest | null;
+  /**
+   * A write (apply, undo or dismiss) is in flight for this board.
+   *
+   * It lives in the STORE rather than in the tab, because the tab unmounts the
+   * moment the reader switches to Chat or closes the dock — and a guard that
+   * unmounts is not a guard: the second apply would capture its `before` values
+   * after the first write had landed, so the undo restored what the first write
+   * had just written. One write per board at a time, held somewhere that
+   * outlives the panel.
+   */
+  busy: Record<string, boolean>;
   setRun: (boardId: string, run: BoardIntelligenceRun | null) => void;
+  setBusy: (boardId: string, busy: boolean) => void;
   requestOpen: (boardId: string, opts?: { run?: boolean }) => void;
   consumeOpen: (nonce: number) => void;
   requestFilter: (boardId: string, selection: IntelSelection) => void;
@@ -36,8 +48,15 @@ export const useBoardIntelligenceStore = create<BoardIntelligenceStoreState>()(
     runs: {},
     openRequest: null,
     filterRequest: null,
+    busy: {},
     setRun: (boardId, run) =>
       set((s) => ({ runs: { ...s.runs, [boardId]: run } })),
+    setBusy: (boardId, busy) =>
+      set((s) =>
+        Boolean(s.busy[boardId]) === busy
+          ? {}
+          : { busy: { ...s.busy, [boardId]: busy } },
+      ),
     requestOpen: (boardId, opts) =>
       set({
         openRequest: { boardId, nonce: nextNonce(), run: opts?.run ?? false },

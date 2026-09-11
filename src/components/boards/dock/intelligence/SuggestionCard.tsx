@@ -49,8 +49,9 @@ export function SuggestionCard({
 }: {
   suggestion: Suggestion;
   canApply: boolean;
-  /** A write for this suggestion is in flight — every control on it is inert
-   *  until it settles, so a second click cannot start a second write. */
+  /** A write is in flight on this board — every control on every card is inert
+   *  until it settles, so a second click cannot start a second write (the
+   *  run's `applied`/`dismissed` are one array each, so two at once lose one). */
   pending: boolean;
   onApply: (actionIndex: number) => void;
   onDismiss: () => void;
@@ -81,7 +82,13 @@ export function SuggestionCard({
           <p className="text-muted-foreground text-xs">{suggestion.body}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {primary && (canApply || !isWrite(primary)) ? (
-              <Button size="xs" disabled={pending} onClick={() => onApply(0)}>
+              <Button
+                size="xs"
+                // A `filter` writes nothing, so an unrelated write in flight is
+                // no reason to take it away from the reader.
+                disabled={pending && isWrite(primary)}
+                onClick={() => onApply(0)}
+              >
                 {primary.label}
               </Button>
             ) : null}
@@ -89,7 +96,7 @@ export function SuggestionCard({
               <Button
                 size="xs"
                 variant="ghost"
-                disabled={pending}
+                disabled={pending && isWrite(secondary)}
                 onClick={() => onApply(1)}
               >
                 {secondary.label}

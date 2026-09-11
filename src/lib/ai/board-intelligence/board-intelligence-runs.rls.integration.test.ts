@@ -217,9 +217,11 @@ describe.skipIf(!integrationTargetReady())(
         p_writes: [{ item_id: item!.id, column_id: col!.id, value: null }],
       });
       expect(undo.error).toBeNull();
+      // `cell_values` is keyed by (item_id, column_id) — there is no `id`
+      // column, and selecting one makes the probe error instead of asserting.
       const cells = await owner.anon
         .from("cell_values")
-        .select("id")
+        .select("item_id, column_id")
         .eq("item_id", item!.id);
       expect(cells.data).toEqual([]);
     });

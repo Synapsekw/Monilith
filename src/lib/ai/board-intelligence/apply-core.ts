@@ -53,12 +53,23 @@ export function planCellWrites(
         ? [
             {
               itemId: action.itemId,
-              value: {
-                date: action.date,
-                ...(typeof current(action.itemId)?.end === "string"
-                  ? { end: current(action.itemId)!.end }
-                  : {}),
-              },
+              // A ranged date cell is overdue on its END (`src/lib/boards/
+              // overdue.ts`: `(end ?? date) < today`), so "set the due date"
+              // has to move the END — keeping the old one left the row exactly
+              // as overdue as before. The start is clamped rather than kept,
+              // because a start after the end is an inverted range.
+              value: (() => {
+                const end = current(action.itemId)?.end;
+                if (typeof end !== "string") return { date: action.date };
+                const start = current(action.itemId)?.date;
+                return {
+                  date:
+                    typeof start === "string" && start < action.date
+                      ? start
+                      : action.date,
+                  end: action.date,
+                };
+              })(),
             },
           ]
         : [{ itemId: action.itemId, value: { optionId: action.optionId } }];

@@ -1,6 +1,7 @@
 import type { BoardPayload } from "@/lib/boards/queries";
 import { parseColumnOptions } from "@/lib/boards/column-options";
 import type { Member } from "@/lib/collaboration/activity";
+import type { Signal } from "@/lib/boards/intelligence/types";
 
 export type BoardContext = {
   boardId: string;
@@ -14,6 +15,10 @@ export type BoardContext = {
     { id: string; name: string; kind: string; options: Map<string, string> }
   >;
   members: Map<string, string>;
+  /** The run's signals, in `SIGNAL_ORDER`. `toAction` reads them to resolve a
+   *  `filter` on `overloaded` to the person it is about; empty is legitimate
+   *  (apply-time re-validation builds a context with no run attached). */
+  signals: readonly Signal[];
 };
 
 /** Everything validation, labelling and apply need to check a model-supplied
@@ -21,6 +26,7 @@ export type BoardContext = {
 export function buildBoardContext(
   payload: BoardPayload,
   members: readonly Member[],
+  signals: readonly Signal[] = [],
 ): BoardContext {
   return {
     boardId: payload.board.id,
@@ -45,5 +51,6 @@ export function buildBoardContext(
       ]),
     ),
     members: new Map(members.map((m) => [m.userId, m.fullName ?? "Someone"])),
+    signals,
   };
 }

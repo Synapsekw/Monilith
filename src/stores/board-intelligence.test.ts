@@ -49,6 +49,7 @@ beforeEach(() =>
     runs: {},
     openRequest: null,
     filterRequest: null,
+    busy: {},
   }),
 );
 
@@ -84,11 +85,27 @@ describe("board intelligence bridge store", () => {
     expect(useBoardIntelligenceStore.getState().openRequest).toBeNull();
   });
 
+  it("holds one write-in-flight flag per board", () => {
+    // The Intelligence tab unmounts on every dock close and tab switch, so the
+    // guard that stops a second apply cannot live in it.
+    const s = useBoardIntelligenceStore.getState();
+    expect(useBoardIntelligenceStore.getState().busy.b1).toBeUndefined();
+    s.setBusy("b1", true);
+    expect(useBoardIntelligenceStore.getState().busy.b1).toBe(true);
+    expect(useBoardIntelligenceStore.getState().busy.b2).toBeUndefined();
+    s.setBusy("b2", true);
+    s.setBusy("b1", false);
+    expect(useBoardIntelligenceStore.getState().busy).toEqual({
+      b1: false,
+      b2: true,
+    });
+  });
+
   it("filter requests behave the same way", () => {
     const s = useBoardIntelligenceStore.getState();
-    s.requestFilter("b1", { kind: "overdue" });
+    s.requestFilter("b1", { kind: "overloaded", subject: "u1" });
     const req = useBoardIntelligenceStore.getState().filterRequest!;
-    expect(req.selection).toEqual({ kind: "overdue" });
+    expect(req.selection).toEqual({ kind: "overloaded", subject: "u1" });
     s.consumeFilter(req.nonce);
     expect(useBoardIntelligenceStore.getState().filterRequest).toBeNull();
   });

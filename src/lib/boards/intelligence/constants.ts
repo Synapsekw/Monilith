@@ -53,6 +53,16 @@ export const TRANSCRIPT_TOKEN_BUDGET = 6000;
 export const ROSTER_MAX_ITEMS = 120;
 /** Cap on suggestions a single run may return (spec §4.4). */
 export const MAX_SUGGESTIONS = 5;
+/**
+ * Cap on signal rows a stored run payload (and the prompt's SIGNALS block) may
+ * carry. `computeSignals` emits ONE `overloaded` row per overloaded person, so
+ * a busy board can produce far more than five — the payload schema caps the
+ * array, and every producer slices to this BEFORE the schema sees it, or the
+ * run fails validation after the model call was already metered.
+ */
+export const MAX_PAYLOAD_SIGNALS = 10;
+/** Cap on status options listed per column in the prompt's COLUMNS block. */
+export const MAX_PROMPT_COLUMN_OPTIONS = 50;
 
 /** The single source of truth for the five signal kinds a `filter` action may
  *  target — was independently duplicated as a zod enum in `schema.ts` and a

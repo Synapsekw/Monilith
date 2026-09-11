@@ -32,6 +32,7 @@ const ctx: BoardContext = {
     ],
   ]),
   members: new Map([["u-ana", "Ana"]]),
+  signals: [],
 };
 const cells = [
   {
@@ -62,26 +63,82 @@ describe("planCellWrites", () => {
       ],
     });
   });
-  it("set_due keeps an existing end date", () => {
-    const r = planCellWrites(
-      {
-        type: "set_due",
-        itemId: "i1",
-        columnId: "c-date",
-        date: "2026-09-10",
-        label: "x",
-      },
-      ctx,
-      cells,
-    );
-    expect(r).toEqual({
+  // Overdue is decided by `(end ?? date) < today` (src/lib/boards/overdue.ts),
+  // so keeping the old `end` left the row exactly as overdue as before — the
+  // suggestion looked applied and changed nothing.
+  it("set_due moves the end of a ranged item and never inverts it", () => {
+    expect(
+      planCellWrites(
+        {
+          type: "set_due",
+          itemId: "i1",
+          columnId: "c-date",
+          date: "2026-09-10",
+          label: "x",
+        },
+        ctx,
+        cells,
+      ),
+    ).toEqual({
       ok: true,
       writes: [
         {
           item_id: "i1",
           column_id: "c-date",
-          value: { date: "2026-09-10", end: "2026-09-03" },
+          value: { date: "2026-09-01", end: "2026-09-10" },
         },
+      ],
+    });
+
+    // Pulling the deadline EARLIER than the existing start would invert the
+    // range, so the start comes with it.
+    expect(
+      planCellWrites(
+        {
+          type: "set_due",
+          itemId: "i1",
+          columnId: "c-date",
+          date: "2026-09-05",
+          label: "x",
+        },
+        ctx,
+        [
+          {
+            item_id: "i1",
+            column_id: "c-date",
+            value: { date: "2026-09-08", end: "2026-09-09" },
+          },
+        ],
+      ),
+    ).toEqual({
+      ok: true,
+      writes: [
+        {
+          item_id: "i1",
+          column_id: "c-date",
+          value: { date: "2026-09-05", end: "2026-09-05" },
+        },
+      ],
+    });
+  });
+
+  it("set_due on a single-date item writes just the date", () => {
+    expect(
+      planCellWrites(
+        {
+          type: "set_due",
+          itemId: "i2",
+          columnId: "c-date",
+          date: "2026-09-10",
+          label: "x",
+        },
+        ctx,
+        cells,
+      ),
+    ).toEqual({
+      ok: true,
+      writes: [
+        { item_id: "i2", column_id: "c-date", value: { date: "2026-09-10" } },
       ],
     });
   });

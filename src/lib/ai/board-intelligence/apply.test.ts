@@ -84,6 +84,9 @@ const runRow = (applied: string[] = []) => ({
 });
 
 let RUN_ROW: ReturnType<typeof runRow> = runRow();
+/** `applied` as the row stands when `setApplied` re-reads it, if that differs
+ *  from what `loadRun` saw at the top of the action. */
+let FRESH_APPLIED: string[] | null = null;
 let UPDATE_ROW: ReturnType<typeof runRow> | null = null;
 let DELETE_RESULT: { error: unknown } = { error: null };
 
@@ -95,9 +98,15 @@ function makeClient() {
     from: (table: string) => {
       if (table === "board_intelligence_runs") {
         return {
-          select: () => ({
+          select: (cols?: string) => ({
             eq: () => ({
-              maybeSingle: async () => ({ data: RUN_ROW, error: null }),
+              maybeSingle: async () => ({
+                data:
+                  cols === "applied" && FRESH_APPLIED
+                    ? { applied: FRESH_APPLIED }
+                    : RUN_ROW,
+                error: null,
+              }),
             }),
           }),
           update: (data: { applied: string[] }) => {
@@ -198,6 +207,7 @@ const boardPayload = () => ({
 
 beforeEach(() => {
   RUN_ROW = runRow();
+  FRESH_APPLIED = null;
   UPDATE_ROW = null;
   DELETE_RESULT = { error: null };
   updateSpy.mockReset();
@@ -254,6 +264,20 @@ describe("applySuggestion", () => {
     expect(res.data.effects).toEqual([
       { kind: "item_fields_set", boardId: "board-1", cells: [] },
     ]);
+  });
+
+  it("keeps a mark another write added between the load and the update", async () => {
+    // `applied` is one jsonb array shared by apply, undo and dismiss — writing
+    // the copy read at the top of the action drops whatever landed in between.
+    FRESH_APPLIED = ["s9"];
+    const { applySuggestion } = await import("./apply");
+    const res = await applySuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      actionIndex: 0,
+    });
+    expect(res.ok).toBe(true);
+    expect(updateSpy).toHaveBeenCalledWith({ applied: ["s9", "s1"] });
   });
 
   it("actionIndex 1 (nudge) posts as the current user and returns the update id", async () => {

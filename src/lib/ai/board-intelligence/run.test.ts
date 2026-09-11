@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Signal } from "@/lib/boards/intelligence/types";
 import { intelligenceInputHash } from "./input-hash";
 
 const requireUser = vi.fn();
@@ -10,6 +11,7 @@ const listOrgMembersCached = vi.fn();
 const getBoardLastSeenAt = vi.fn();
 const getLatestBoardIntelligenceRun = vi.fn();
 const generateBoardIntelligence = vi.fn();
+const computeSignals = vi.fn();
 const from = vi.fn();
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/session", () => ({ requireUser: () => requireUser() }));
@@ -27,6 +29,10 @@ vi.mock("@/lib/boards/queries", () => ({
 }));
 vi.mock("@/lib/org/queries-cached", () => ({
   listOrgMembersCached: (id: string) => listOrgMembersCached(id),
+}));
+vi.mock("@/lib/boards/intelligence/signals", async (orig) => ({
+  ...(await orig<typeof import("@/lib/boards/intelligence/signals")>()),
+  computeSignals: (...a: unknown[]) => computeSignals(...a),
 }));
 vi.mock("@/lib/boards/intelligence/visits", () => ({
   getBoardLastSeenAt: (...a: unknown[]) => getBoardLastSeenAt(...a),
@@ -131,6 +137,10 @@ const spyChain = (result: unknown) => {
   return { q, calls };
 };
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   requireUser.mockResolvedValue({ id: "u1" });
@@ -141,6 +151,7 @@ beforeEach(() => {
   ]);
   getBoardLastSeenAt.mockResolvedValue(null);
   getLatestBoardIntelligenceRun.mockResolvedValue(null);
+  computeSignals.mockReturnValue([]);
   from.mockImplementation((t: string) =>
     t === "board_intelligence_runs"
       ? chain({
@@ -258,6 +269,102 @@ describe("runBoardIntelligence", () => {
     expect(runAi).toHaveBeenCalled();
     expect(res).toMatchObject({ ok: true, data: { id: "r2" } });
   });
+  it("stores at most ten signals, so a board with more does not fail AFTER paying for the model call", async () => {
+    // `computeSignals` emits one `overloaded` row per overloaded person, so a
+    // twelve-person board blew past `payloadSchema`'s ten-signal cap — the
+    // payload was rejected after `runAi` had already been metered, and nothing
+    // was cached, so every retry paid again and failed again.
+    const many: Signal[] = Array.from({ length: 12 }, (_, i) => ({
+      kind: "overloaded",
+      count: 12 - i,
+      label: `overloaded · P${i}`,
+      tone: "yellow",
+      itemIds: [],
+      subjectUserId: `u${i}`,
+    }));
+    computeSignals.mockReturnValue(many);
+    const insert = spyChain({
+      data: {
+        id: "r2",
+        org_id: "o1",
+        board_id: BOARD,
+        user_id: "u1",
+        generated_at: "2026-09-11T10:00:00.000Z",
+        input_hash: "h",
+        payload: { brief: "new", suggestions: [], signals: [] },
+        dismissed: [],
+        applied: [],
+        model: "m",
+        tokens_in: 1,
+        tokens_out: 1,
+      },
+      error: null,
+    });
+    from.mockImplementation((t: string) =>
+      t === "board_intelligence_runs"
+        ? insert.q
+        : chain({ data: [], error: null }),
+    );
+
+    const res = await runBoardIntelligence({ boardId: BOARD });
+    expect(res).toMatchObject({ ok: true, data: { id: "r2" } });
+    const stored = insert.calls.insert[0][0] as {
+      payload: { signals: unknown[] };
+    };
+    expect(stored.payload.signals).toHaveLength(10);
+    // The most urgent ones survive — the rows are already in SIGNAL_ORDER.
+    expect(stored.payload.signals[0]).toMatchObject({ count: 12 });
+    // The prompt is capped too, and the HASH still sees all twelve.
+    const promptInput = generateBoardIntelligence.mock.calls[0][0] as {
+      signals: unknown[];
+    };
+    expect(promptInput.signals).toHaveLength(10);
+    expect(stored).toMatchObject({
+      input_hash: intelligenceInputHash({
+        itemCount: 0,
+        maxUpdatedAt: null,
+        signals: many,
+      }),
+    });
+  });
+  it("logs the suggestions validation dropped", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    generateBoardIntelligence.mockResolvedValue({
+      raw: {
+        brief: "new",
+        suggestions: [
+          {
+            kind: "overdue",
+            title: "Off-board",
+            evidence: "",
+            body: "",
+            evidenceItemIds: [],
+            actions: [
+              {
+                type: "set_due",
+                itemIds: null,
+                itemId: "ghost",
+                columnId: "nope",
+                toUserId: null,
+                date: "2026-09-20",
+                optionId: null,
+                userId: null,
+                message: null,
+                signalKind: null,
+              },
+            ],
+          },
+        ],
+      },
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: "m",
+    });
+    await runBoardIntelligence({ boardId: BOARD });
+    expect(warn).toHaveBeenCalledWith(
+      "[intelligence] dropped suggestions",
+      expect.objectContaining({ boardId: BOARD }),
+    );
+  });
   it("maps a gateway failure to the fallback copy", async () => {
     getLatestBoardIntelligenceRun.mockResolvedValue(null);
     runAi.mockRejectedValue(new Error("boom"));
@@ -340,16 +447,42 @@ describe("dismissSuggestion", () => {
       data: { ...baseRow, dismissed: ["s1"] },
       error: null,
     });
+    // The re-read immediately before the update (see `dismissSuggestion`).
+    const freshChain = spyChain({ data: { dismissed: ["s1"] }, error: null });
     const updateChain = spyChain({
       data: { ...baseRow, dismissed: ["s1"] },
       error: null,
     });
-    from.mockReturnValueOnce(selectChain.q).mockReturnValueOnce(updateChain.q);
+    from
+      .mockReturnValueOnce(selectChain.q)
+      .mockReturnValueOnce(freshChain.q)
+      .mockReturnValueOnce(updateChain.q);
     const res = await dismissSuggestion({ runId: RUN_ID, suggestionId: "s1" });
     expect(res).toMatchObject({ ok: true, data: { dismissed: ["s1"] } });
     // The dedupe: dismissing an id already in `dismissed` sends a single
     // copy, not two, to the update.
     expect(updateChain.calls.update[0][0]).toEqual({ dismissed: ["s1"] });
+  });
+
+  it("keeps a dismissal that landed between the load and the update", async () => {
+    // `dismissed` is one jsonb array read-modify-written by dismiss, apply and
+    // undo — reusing the copy read at the top of the action silently drops
+    // whatever another call marked in the meantime.
+    const selectChain = spyChain({ data: baseRow, error: null });
+    const freshChain = spyChain({ data: { dismissed: ["s9"] }, error: null });
+    const updateChain = spyChain({
+      data: { ...baseRow, dismissed: ["s9", "s1"] },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce(selectChain.q)
+      .mockReturnValueOnce(freshChain.q)
+      .mockReturnValueOnce(updateChain.q);
+    const res = await dismissSuggestion({ runId: RUN_ID, suggestionId: "s1" });
+    expect(res).toMatchObject({ ok: true });
+    expect(updateChain.calls.update[0][0]).toEqual({
+      dismissed: ["s9", "s1"],
+    });
   });
 
   it("fails on an unknown suggestion id without issuing an update", async () => {

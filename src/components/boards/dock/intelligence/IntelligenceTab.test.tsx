@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
@@ -114,6 +115,7 @@ beforeEach(() => {
     runs: {},
     openRequest: null,
     filterRequest: null,
+    busy: {},
   });
   runBoardIntelligence.mockResolvedValue({ ok: true, data: makeRun() });
 });
@@ -149,6 +151,35 @@ describe("IntelligenceTab — nothing read yet", () => {
         onRanOnMount={onRanOnMount}
       />,
     );
+    expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-read when the tab REMOUNTS while the first read is in flight", async () => {
+    // Switching to Chat (or closing the dock) unmounts this panel, so the
+    // mount-scoped `kicked` ref is gone by the time the reader comes back. The
+    // flag is lowered at KICK time rather than when the read resolves, so the
+    // parent has already recorded the ask — otherwise one ask costs two
+    // metered model calls.
+    seed(null);
+    runBoardIntelligence.mockReturnValue(new Promise(() => {}));
+    function Parent({ instance }: { instance: number }) {
+      const [runOnMount, setRunOnMount] = useState(true);
+      return (
+        <IntelligenceTab
+          key={instance}
+          boardId="b1"
+          canApply
+          runOnMount={runOnMount}
+          onRanOnMount={() => setRunOnMount(false)}
+        />
+      );
+    }
+    const { rerender } = render(<Parent instance={1} />);
+    await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
+
+    // A new `key` is a real unmount + mount, not a re-render.
+    rerender(<Parent instance={2} />);
+    await act(async () => {});
     expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
   });
 
@@ -320,7 +351,7 @@ describe("IntelligenceTab — the suggestions", () => {
     });
   });
 
-  it("goes inert while its own write is in flight", async () => {
+  it("goes inert while a write is in flight", async () => {
     seed(makeRun());
     applySuggestion.mockReturnValue(new Promise(() => {}));
     mount();
@@ -350,7 +381,14 @@ describe("IntelligenceTab — the suggestions", () => {
     );
     expect(applySuggestion).toHaveBeenCalledTimes(1);
 
-    // The other suggestion is untouched by it.
+    // Every WRITE on the board waits, not just this card's: `applied` and
+    // `dismissed` are one array each on the run, so two writes at once means
+    // one of the two marks is read-modify-written away.
+    const other = screen.getByRole("listitem", { name: /design is stalled/i });
+    expect(
+      within(other).getByRole("button", { name: "Dismiss" }),
+    ).toBeDisabled();
+    // A filter writes nothing, so it stays available.
     expect(screen.getByRole("button", { name: "Show stalled" })).toBeEnabled();
   });
 

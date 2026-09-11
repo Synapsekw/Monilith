@@ -68,9 +68,15 @@ export function IntelligenceTab({
    * One read per ASKING, however many times React re-renders the asking.
    *
    * Edge-triggered rather than mount-once: the parent lowers `runOnMount` as
-   * soon as this resolves, so releasing the guard there is what lets a SECOND
-   * "Catch me up" read the board again — a mount-once ref would answer the
-   * first request and silently swallow every one after it.
+   * soon as the read is KICKED OFF, so releasing the guard there is what lets a
+   * SECOND "Catch me up" read the board again — a mount-once ref would answer
+   * the first request and silently swallow every one after it.
+   *
+   * `onRanOnMount` fires BEFORE the await, not in `.finally`: this panel
+   * unmounts whenever the reader switches to Chat or closes the dock, taking
+   * `kicked` with it, so a request still in flight would be re-kicked on the
+   * next mount — a second metered model call for one ask. Lowering the parent's
+   * flag at kick time is the only half of the guard that survives the unmount.
    */
   const kicked = useRef(false);
   useEffect(() => {
@@ -80,7 +86,8 @@ export function IntelligenceTab({
     }
     if (kicked.current) return;
     kicked.current = true;
-    void catchMeUp().finally(onRanOnMount);
+    onRanOnMount();
+    void catchMeUp();
   }, [runOnMount, catchMeUp, onRanOnMount]);
 
   return (
@@ -145,7 +152,7 @@ export function IntelligenceTab({
                     key={s.id}
                     suggestion={s}
                     canApply={canApply}
-                    pending={pending.has(s.id)}
+                    pending={pending}
                     onApply={(i) => void apply(s.id, i)}
                     onDismiss={() => void dismiss(s.id)}
                   />

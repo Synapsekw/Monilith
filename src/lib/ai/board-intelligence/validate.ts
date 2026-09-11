@@ -1,6 +1,6 @@
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import { SIGNAL_KINDS } from "@/lib/boards/intelligence/constants";
-import type { SignalKind } from "@/lib/boards/intelligence/types";
+import type { Signal, SignalKind } from "@/lib/boards/intelligence/types";
 import type { BoardContext } from "./board-context";
 import {
   payloadSchema,
@@ -91,6 +91,25 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
     }
     case "filter": {
       if (!raw.signalKind || !isSignalKind(raw.signalKind)) return null;
+      // `overloaded` is the one per-PERSON signal: the strip's chip selects
+      // `{ kind, subject }`, so a filter with no subject selects nothing and
+      // the button does nothing. The subject is not the model's to invent —
+      // it is read from the run's own signals (the first overloaded person,
+      // which is the most overloaded one: `computeSignals` orders them).
+      if (raw.signalKind === "overloaded") {
+        const subject = ctx.signals.find(
+          (s) => s.kind === "overloaded",
+        )?.subjectUserId;
+        if (!subject) return null;
+        return {
+          type: "filter",
+          signalKind: "overloaded",
+          subject,
+          label: capLabel(
+            `Show overloaded rows · ${ctx.members.get(subject) ?? "someone"}`,
+          ),
+        };
+      }
       return {
         type: "filter",
         signalKind: raw.signalKind,
@@ -110,7 +129,10 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
 export function validateIntelligenceOutput(
   raw: unknown,
   ctx: BoardContext,
-  signals: BoardIntelligencePayload["signals"],
+  /** The FULL signal rows (not the stored triples): `toAction` needs
+   *  `subjectUserId` to resolve an `overloaded` filter, and the caller must
+   *  not have to pass the same list twice in two shapes. */
+  signals: readonly Signal[],
 ): { payload: BoardIntelligencePayload; warnings: string[] } {
   const parsed = rawOutputSchema.parse(raw);
   const warnings: string[] = [];
@@ -144,7 +166,11 @@ export function validateIntelligenceOutput(
   const payload: BoardIntelligencePayload = {
     brief: parsed.brief.trim(),
     suggestions,
-    signals,
+    signals: signals.map((s) => ({
+      kind: s.kind,
+      count: s.count,
+      label: s.label,
+    })),
   };
   // Safety net: everything above is built from real board data (item/column/
   // member names have no length cap), so re-run the exact schema the STORE

@@ -175,6 +175,7 @@ beforeEach(() => {
     runs: {},
     openRequest: null,
     filterRequest: null,
+    busy: {},
   });
 });
 
@@ -651,6 +652,29 @@ describe("BoardDock — Chat and Intelligence", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
     await openIntelligence();
     expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads NOTHING on page load when the dock was left open on Intelligence", async () => {
+    // `tab` is remembered per board, so the dock comes back where it was left.
+    // Restoring a tab is not the reader asking for a brief — kicking a model
+    // call here is a metered request on first paint, which the budget forbids.
+    window.localStorage.setItem(
+      "monolith.dock.b1",
+      JSON.stringify({ open: true, width: 360, tab: "intelligence" }),
+    );
+    mount({ initialRun: null });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: /intelligence/i }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    await act(async () => {});
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
+
+    // Asking for it — leaving and coming back to the tab — still reads once.
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await openIntelligence();
+    await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
   });
 });
 

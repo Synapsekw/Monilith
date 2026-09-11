@@ -99,6 +99,7 @@ beforeEach(() => {
     runs: {},
     openRequest: null,
     filterRequest: null,
+    busy: {},
   });
 });
 
@@ -288,6 +289,85 @@ describe("useIntelligenceRun", () => {
     expect(runBoardIntelligence).not.toHaveBeenCalled();
   });
 
+  it("forwards the subject of an overloaded filter to the strip", async () => {
+    // The `overloaded` chip is per PERSON — without the subject the provider
+    // selects nothing and the card's button does nothing at all.
+    seed(
+      makeRun({
+        payload: {
+          brief: "b",
+          signals: [],
+          suggestions: [
+            {
+              id: "s1",
+              kind: "overloaded",
+              title: "Ana is overloaded",
+              evidence: "7 items",
+              body: "b",
+              evidenceRows: [],
+              actions: [
+                {
+                  type: "filter",
+                  signalKind: "overloaded",
+                  subject: "u-ana",
+                  label: "Show overloaded rows · Ana",
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const { result } = mount();
+    await act(async () => {
+      await result.current.apply("s1", 0);
+    });
+    expect(
+      useBoardIntelligenceStore.getState().filterRequest?.selection,
+    ).toEqual({ kind: "overloaded", subject: "u-ana" });
+  });
+
+  it("holds the apply guard across an unmount — a closed dock is not a fresh start", async () => {
+    // The tab unmounts on every dock close and Chat switch. When the guard
+    // lived in the hook, coming back mid-apply let a second write through,
+    // and its `before` values were captured AFTER the first one landed.
+    seed(makeRun());
+    let resolve!: (v: unknown) => void;
+    applySuggestion.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const first = mount();
+    let inFlight!: Promise<void>;
+    act(() => {
+      inFlight = first.result.current.apply("s1", 0);
+    });
+    expect(applySuggestion).toHaveBeenCalledTimes(1);
+
+    first.unmount();
+    const second = mount();
+    expect(second.result.current.pending).toBe(true);
+    await act(async () => {
+      await second.result.current.apply("s1", 0);
+    });
+    expect(applySuggestion).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve({
+        ok: true,
+        data: {
+          before: [],
+          updateIds: [],
+          effects: [],
+          run: makeRun({ applied: ["s1"] }),
+        },
+      });
+      await inFlight;
+    });
+    expect(second.result.current.pending).toBe(false);
+  });
+
   it("applies a cell action, folds its effects and offers an undo", async () => {
     seed(makeRun());
     const applied = makeRun({ applied: ["s1"] });
@@ -350,7 +430,7 @@ describe("useIntelligenceRun", () => {
       first = result.current.apply("s1", 0);
     });
     expect(applySuggestion).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(result.current.pending.has("s1")).toBe(true));
+    await waitFor(() => expect(result.current.pending).toBe(true));
 
     // The second click of a double-click. Letting it through sends a second
     // write whose `before` values were read AFTER the first one landed, so its
@@ -359,11 +439,13 @@ describe("useIntelligenceRun", () => {
       await result.current.apply("s1", 0);
     });
     expect(applySuggestion).toHaveBeenCalledTimes(1);
-    // ...and a DIFFERENT suggestion is not blocked by it.
+    // ...and so is a write on a DIFFERENT suggestion: `applied`/`dismissed`
+    // are one array each on the run, so two writes in flight at once means one
+    // of the two marks is read-modify-written away.
     await act(async () => {
       await result.current.dismiss("s2");
     });
-    expect(dismissSuggestion).toHaveBeenCalledTimes(1);
+    expect(dismissSuggestion).not.toHaveBeenCalled();
 
     await act(async () => {
       resolve({
@@ -377,7 +459,7 @@ describe("useIntelligenceRun", () => {
       });
       await first;
     });
-    expect(result.current.pending.has("s1")).toBe(false);
+    expect(result.current.pending).toBe(false);
   });
 
   it("refuses a second dismiss of the same suggestion", async () => {
@@ -394,7 +476,7 @@ describe("useIntelligenceRun", () => {
     act(() => {
       first = result.current.dismiss("s1");
     });
-    await waitFor(() => expect(result.current.pending.has("s1")).toBe(true));
+    await waitFor(() => expect(result.current.pending).toBe(true));
     await act(async () => {
       await result.current.dismiss("s1");
     });
@@ -404,7 +486,7 @@ describe("useIntelligenceRun", () => {
       resolve({ ok: true, data: makeRun({ dismissed: ["s1"] }) });
       await first;
     });
-    expect(result.current.pending.has("s1")).toBe(false);
+    expect(result.current.pending).toBe(false);
   });
 
   it("leaves a NEWER brief alone when a late undo lands", async () => {

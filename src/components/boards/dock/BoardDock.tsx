@@ -16,6 +16,7 @@ import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import {
   unresolvedCount,
   useBoardIntelligenceStore,
+  type DockTab,
 } from "@/stores/board-intelligence";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
 import type { DockAgent } from "./AgentSwitcher";
@@ -139,6 +140,16 @@ export function BoardDock({
   /** A first open with nothing cached earns ONE read, and only one — a failed
    *  read must not re-fire every time the user comes back to the tab. */
   const [readOnce, setReadOnce] = useState(false);
+  /**
+   * Did the reader ASK for Intelligence in this session?
+   *
+   * `tab` is remembered per board, so a dock left open on Intelligence comes
+   * back on Intelligence — and without this, that alone kicked a model call on
+   * page load, which is exactly the "zero LLM calls on first paint" rule the
+   * budget is built on. Only an actual selection (the tab, or the strip's
+   * request) counts as asking.
+   */
+  const [openedThisSession, setOpenedThisSession] = useState(false);
 
   useEffect(() => {
     if (!openRequest || openRequest.boardId !== boardId) return;
@@ -150,6 +161,7 @@ export function BoardDock({
     // only channel it has. The request is consumed in the same pass, so this
     // runs once per ask.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpenedThisSession(true);
     if (openRequest.run) setWantsRun(true);
     consumeOpen(openRequest.nonce);
   }, [boardId, consumeOpen, openRequest, setOpen, setTab]);
@@ -158,7 +170,17 @@ export function BoardDock({
     setWantsRun(false);
     setReadOnce(true);
   }, []);
-  const runOnMount = wantsRun || (!readOnce && run === null);
+  const runOnMount =
+    wantsRun || (openedThisSession && !readOnce && run === null);
+
+  /** Selecting Intelligence is the ask; restoring it from storage is not. */
+  const changeTab = useCallback(
+    (next: DockTab) => {
+      if (next === "intelligence") setOpenedThisSession(true);
+      setTab(next);
+    },
+    [setTab],
+  );
 
   const agentNames = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
@@ -431,7 +453,7 @@ export function BoardDock({
     onStarted,
     onTurnComplete,
     tab,
-    onTabChange: setTab,
+    onTabChange: changeTab,
     badge: unresolvedCount(run ?? null),
     canApply: access !== "viewer",
     runOnMount,

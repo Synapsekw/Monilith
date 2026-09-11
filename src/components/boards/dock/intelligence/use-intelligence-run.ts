@@ -54,27 +54,31 @@ export function useIntelligenceRun(
    */
   const [nowMs, setNowMs] = useState(() => Date.now());
   /**
-   * Suggestions with a write in flight, by id.
+   * Is a write in flight for this board?
    *
    * A guard, not a spinner's bookkeeping: a double-click on Apply used to send
    * two `applySuggestion` calls, and the SECOND one captured its `before`
    * values AFTER the first write had already landed — so its undo restored the
-   * value the first write had just written, and the change became
-   * un-undoable. The disabled button is the visible half; this is the half that
-   * holds when the click beats the render.
+   * value the first write had just written, and the change became un-undoable.
+   * The disabled button is the visible half; this is the half that holds when
+   * the click beats the render.
+   *
+   * It is per BOARD and lives in the store, not per suggestion in this hook:
+   * component state dies with the panel (switch to Chat, close the dock) and
+   * takes the guard with it, and `applied`/`dismissed` are one jsonb array per
+   * run — two suggestions written at once read-modify-write the same list, so
+   * one of the two marks is lost. Serialising every write on the board is what
+   * makes both of those impossible.
    */
-  const [pending, setPending] = useState<ReadonlySet<string>>(
-    () => new Set<string>(),
-  );
-  const mark = useCallback((id: string, busy: boolean) => {
-    setPending((prev) => {
-      if (prev.has(id) === busy) return prev;
-      const next = new Set(prev);
-      if (busy) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
+  const busy = useBoardIntelligenceStore((s) => s.busy[boardId] ?? false);
+  const setBusy = useBoardIntelligenceStore((s) => s.setBusy);
+  /** Read the CURRENT flag, not the value this render closed over — a second
+   *  click in the same tick must see the first one's mark. */
+  const claim = useCallback(() => {
+    if (useBoardIntelligenceStore.getState().busy[boardId]) return false;
+    setBusy(boardId, true);
+    return true;
+  }, [boardId, setBusy]);
 
   const runIt = useCallback(
     async (force: boolean) => {
@@ -100,13 +104,12 @@ export function useIntelligenceRun(
 
   const dismiss = useCallback(
     async (suggestionId: string) => {
-      if (!run || pending.has(suggestionId)) return;
+      if (!run || !claim()) return;
       const prev = run;
       // Optimistic: the card is the user's own decision, so it goes now and
       // comes back only if the server disagrees.
       setRun(boardId, { ...run, dismissed: [...run.dismissed, suggestionId] });
       setError(null);
-      mark(suggestionId, true);
       try {
         const res = await dismissSuggestion({ runId: run.id, suggestionId });
         if (res.ok) setRun(boardId, res.data);
@@ -118,10 +121,10 @@ export function useIntelligenceRun(
         setRun(boardId, prev);
         setError("Couldn't dismiss.");
       } finally {
-        mark(suggestionId, false);
+        setBusy(boardId, false);
       }
     },
-    [boardId, mark, pending, run, setRun],
+    [boardId, claim, run, setBusy, setRun],
   );
 
   const apply = useCallback(
@@ -131,15 +134,19 @@ export function useIntelligenceRun(
         ?.actions[actionIndex];
       if (!action) return;
       if (action.type === "filter") {
-        requestFilter(boardId, { kind: action.signalKind });
+        // `subject` is what makes an `overloaded` chip select anything — it is
+        // one signal PER PERSON, so the kind alone matches nothing.
+        requestFilter(boardId, {
+          kind: action.signalKind,
+          ...(action.subject ? { subject: action.subject } : {}),
+        });
         return;
       }
       // Second guard, not the first: the button is never rendered for a viewer.
       if (!opts.canApply) return;
-      if (pending.has(suggestionId)) return;
+      if (!claim()) return;
       const runId = run.id;
       setError(null);
-      mark(suggestionId, true);
       try {
         const res = await applySuggestion({
           runId,
@@ -181,17 +188,17 @@ export function useIntelligenceRun(
       } catch {
         setError("Couldn't apply the suggestion.");
       } finally {
-        mark(suggestionId, false);
+        setBusy(boardId, false);
       }
     },
     [
       applyBoardEffects,
       boardId,
-      mark,
+      claim,
       opts.canApply,
-      pending,
       requestFilter,
       run,
+      setBusy,
       setRun,
     ],
   );
@@ -213,8 +220,8 @@ export function useIntelligenceRun(
     staleByAge,
     /** The tab's clock, so the timestamp and the staleness agree on "now". */
     nowMs,
-    /** Suggestion ids with a write in flight — their cards are inert. */
-    pending,
+    /** A write is in flight on this board — every card's buttons are inert. */
+    pending: busy,
     visible,
     catchMeUp,
     refresh,

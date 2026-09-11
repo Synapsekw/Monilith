@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -232,6 +232,17 @@ function connectedWrapper({ children }: { children: ReactNode }) {
 }
 
 describe("IntelligenceStrip (connected)", () => {
+  // The bridge store is module-global: a request left behind by another suite
+  // makes this one pass (or fail) for the wrong reason.
+  beforeEach(() =>
+    useBoardIntelligenceStore.setState({
+      runs: {},
+      openRequest: null,
+      filterRequest: null,
+      busy: {},
+    }),
+  );
+
   it("renders nothing without a provider", () => {
     const { container } = render(<IntelligenceStrip />);
     expect(container).toBeEmptyDOMElement();

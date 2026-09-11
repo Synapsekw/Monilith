@@ -3,6 +3,7 @@ import { buildBoardContext } from "./board-context";
 import { payloadSchema } from "./schema";
 import { toAction, validateIntelligenceOutput } from "./validate";
 import type { BoardPayload } from "@/lib/boards/queries";
+import type { Signal } from "@/lib/boards/intelligence/types";
 
 // Minimal payload: one group, a status column with two options, a date column,
 // a people column, two items, one member. Cast through unknown — only the
@@ -43,6 +44,27 @@ const members = [
   { userId: "u-bo", fullName: null },
 ];
 const ctx = buildBoardContext(payload, members);
+/** The same board, with the run's signals attached — an `overloaded` signal is
+ *  ONE PER PERSON, so `toAction` needs them to name the subject. */
+const overloaded: Signal = {
+  kind: "overloaded",
+  count: 7,
+  label: "overloaded · Ana",
+  tone: "yellow",
+  itemIds: ["i1", "i2"],
+  subjectUserId: "u-ana",
+};
+const overdueSignal: Signal = {
+  kind: "overdue",
+  count: 1,
+  label: "overdue",
+  tone: "red",
+  itemIds: ["i1"],
+};
+const signalCtx = buildBoardContext(payload, members, [
+  overdueSignal,
+  overloaded,
+]);
 const base = {
   itemIds: null,
   itemId: null,
@@ -213,6 +235,32 @@ describe("toAction", () => {
       label: "Show overdue rows",
     });
   });
+  it("resolves an overloaded filter to the person the signal is about", () => {
+    // Without the subject the chip selects nothing: `overloaded` is one signal
+    // per person, so the kind alone matches no rows and the button is dead.
+    expect(
+      toAction(
+        { ...base, type: "filter", signalKind: "overloaded" },
+        signalCtx,
+      ),
+    ).toEqual({
+      type: "filter",
+      signalKind: "overloaded",
+      subject: "u-ana",
+      label: "Show overloaded rows · Ana Lima",
+    });
+  });
+  it("drops an overloaded filter when the run has no overloaded signal", () => {
+    expect(
+      toAction({ ...base, type: "filter", signalKind: "overloaded" }, ctx),
+    ).toBeNull();
+    expect(
+      toAction(
+        { ...base, type: "filter", signalKind: "overloaded" },
+        buildBoardContext(payload, members, [overdueSignal]),
+      ),
+    ).toBeNull();
+  });
   it("sanitizes the nudge message and names the recipient", () => {
     expect(
       toAction(
@@ -286,7 +334,9 @@ describe("toAction", () => {
 });
 
 describe("validateIntelligenceOutput", () => {
-  const signals = [{ kind: "overdue" as const, count: 1, label: "overdue" }];
+  const signals: Signal[] = [overdueSignal];
+  /** What the payload stores: the triple, not the whole signal. */
+  const stored = [{ kind: "overdue", count: 1, label: "overdue" }];
   it("keeps the brief, drops suggestions with no valid action, mints ids, resolves evidence rows", () => {
     const { payload: out, warnings } = validateIntelligenceOutput(
       {
@@ -343,7 +393,43 @@ describe("validateIntelligenceOutput", () => {
       actions: [{ type: "set_due", itemId: "i1" }],
       evidenceRows: [{ itemId: "i1", name: "Ship" }],
     });
-    expect(out.signals).toEqual(signals);
+    expect(out.signals).toEqual(stored);
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+  it("stores an overloaded filter with its subject, and drops it without one", () => {
+    const raw = {
+      brief: "Ana is carrying the board.",
+      suggestions: [
+        {
+          kind: "overloaded",
+          title: "Ana is overloaded",
+          evidence: "7 items",
+          body: "b",
+          evidenceItemIds: ["i1"],
+          actions: [{ ...base, type: "filter", signalKind: "overloaded" }],
+        },
+      ],
+    };
+    const { payload: out } = validateIntelligenceOutput(raw, signalCtx, [
+      overdueSignal,
+      overloaded,
+    ]);
+    expect(out.suggestions[0]?.actions[0]).toEqual({
+      type: "filter",
+      signalKind: "overloaded",
+      subject: "u-ana",
+      label: "Show overloaded rows · Ana Lima",
+    });
+    expect(payloadSchema.safeParse(out).success).toBe(true);
+
+    // No overloaded signal → no subject to filter by → the action, and with it
+    // the only-action suggestion, is dropped rather than shipped inert.
+    const { payload: none, warnings } = validateIntelligenceOutput(
+      raw,
+      ctx,
+      signals,
+    );
+    expect(none.suggestions).toEqual([]);
     expect(warnings.length).toBeGreaterThan(0);
   });
   it("throws on a shape the raw schema rejects", () => {

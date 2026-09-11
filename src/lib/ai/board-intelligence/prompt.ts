@@ -1,7 +1,11 @@
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 import type { Signal } from "@/lib/boards/intelligence/types";
-import { ROSTER_MAX_ITEMS } from "@/lib/boards/intelligence/constants";
+import {
+  MAX_PAYLOAD_SIGNALS,
+  MAX_PROMPT_COLUMN_OPTIONS,
+  ROSTER_MAX_ITEMS,
+} from "@/lib/boards/intelligence/constants";
 import type { BoardContext } from "./board-context";
 
 export type PromptInput = {
@@ -107,13 +111,20 @@ export function buildItemRoster(
 }
 
 export function buildUserPrompt(input: PromptInput): string {
-  const { snapshot, ctx, signals, transcript, now, timezone } = input;
+  const { snapshot, ctx, transcript, now, timezone } = input;
+  // Defensive cap, matching the one the run applies before it hashes: one line
+  // per signal and one `overloaded` signal per person means a 60-person board
+  // would otherwise spend most of the prompt on the SIGNALS block.
+  const signals = input.signals.slice(0, MAX_PAYLOAD_SIGNALS);
   const groups = snapshot.groups.map(
     (g) => `${g.id} | ${sanitizeInline(g.name)}`,
   );
   const columns = [...ctx.columns.values()].map((c) => {
+    const listed = [...c.options].slice(0, MAX_PROMPT_COLUMN_OPTIONS);
     const opts = c.options.size
-      ? ` | options: ${[...c.options].map(([id, label]) => `${id}=${sanitizeInline(label)}`).join(", ")}`
+      ? ` | options: ${listed.map(([id, label]) => `${id}=${sanitizeInline(label)}`).join(", ")}${
+          c.options.size > listed.length ? ", …" : ""
+        }`
       : "";
     return `${c.id} | ${sanitizeInline(c.name)} | ${c.kind}${opts}`;
   });

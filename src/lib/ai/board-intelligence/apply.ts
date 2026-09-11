@@ -52,14 +52,29 @@ async function loadRun(supabase: ServerClient, runId: string) {
   return data ? rowToRun(data) : null;
 }
 
+/**
+ * Mark the run's `applied` list.
+ *
+ * `mark` is given the list as it stands RIGHT NOW, re-read a line before the
+ * update rather than reused from the top of the action: apply, undo and dismiss
+ * all read-modify-write the same jsonb arrays, and a list captured a round-trip
+ * ago silently drops whatever another call marked in between. The client
+ * serialises writes per board (`busy` in the bridge store), so this is
+ * belt-and-braces for the second tab, not the primary guard.
+ */
 async function setApplied(
   supabase: ServerClient,
   run: BoardIntelligenceRun,
-  applied: string[],
+  mark: (current: readonly string[]) => string[],
 ) {
+  const { data: fresh } = await supabase
+    .from("board_intelligence_runs")
+    .select("applied")
+    .eq("id", run.id)
+    .maybeSingle();
   const { data, error } = await supabase
     .from("board_intelligence_runs")
-    .update({ applied })
+    .update({ applied: mark(fresh?.applied ?? run.applied) })
     .eq("id", run.id)
     .select("*")
     .single();
@@ -149,10 +164,8 @@ export async function applySuggestion(input: {
     // authoritative rows regardless, and a retried applySuggestion re-applies
     // idempotently (the RPC upserts; a repeat nudge just posts a second
     // update), so this failure is never silent data loss.
-    const next = await setApplied(
-      supabase,
-      run,
-      Array.from(new Set([...run.applied, suggestion.id])),
+    const next = await setApplied(supabase, run, (applied) =>
+      Array.from(new Set([...applied, suggestion.id])),
     );
     return { ok: true, data: { before, updateIds, effects, run: next } };
   } catch (e) {
@@ -213,10 +226,8 @@ export async function revertSuggestion(input: {
         .eq("author_id", user.id);
       if (error) throw new Error(error.message);
     }
-    const next = await setApplied(
-      supabase,
-      run,
-      run.applied.filter((id) => id !== parsed.data.suggestionId),
+    const next = await setApplied(supabase, run, (applied) =>
+      applied.filter((id) => id !== parsed.data.suggestionId),
     );
     return { ok: true, data: { effects, run: next } };
   } catch (e) {

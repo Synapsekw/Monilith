@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SignalKind } from "@/lib/boards/intelligence/types";
 import {
+  MAX_PAYLOAD_SIGNALS,
   MAX_SUGGESTIONS,
   SIGNAL_KINDS,
 } from "@/lib/boards/intelligence/constants";
@@ -166,7 +167,15 @@ export const actionSchema = z.discriminatedUnion("type", [
     message: z.string().min(1).max(280),
     label,
   }),
-  z.object({ type: z.literal("filter"), signalKind, label }),
+  /** `subject` is resolved SERVER-SIDE from the run's signals (the model never
+   *  supplies it): an `overloaded` chip filters by person, so without the user
+   *  id the provider has nothing to select and the chip is inert. */
+  z.object({
+    type: z.literal("filter"),
+    signalKind,
+    subject: z.string().optional(),
+    label,
+  }),
 ]);
 export type Action = z.infer<typeof actionSchema>;
 
@@ -202,7 +211,7 @@ export const payloadSchema = z.object({
         label: z.string().max(80),
       }),
     )
-    .max(10),
+    .max(MAX_PAYLOAD_SIGNALS),
 });
 export type BoardIntelligencePayload = z.infer<typeof payloadSchema>;
 export type { SignalKind };

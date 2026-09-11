@@ -32,6 +32,7 @@ describe("generateBoardIntelligence", () => {
           items: new Map(),
           columns: new Map(),
           members: new Map(),
+          signals: [],
         },
         signals: [],
         transcript: "",

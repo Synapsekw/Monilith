@@ -35,7 +35,7 @@
 3. **No "targeted board revalidation" (§8).** Apply/Undo return `BoardEffect[]`; the client folds them into the TanStack cache. A new effect kind `cells_cleared` covers Undo back to an empty cell.
 4. **The latest run row is read on the board page**, in the existing `Promise.all`, as one indexed `LIMIT 1` single-row read (`(board_id, user_id, generated_at desc)`), and passed to both the strip and the dock. This is what makes the dock badge and "updated Xm ago" true on first paint; the tab's first open then costs **0** reads. The spec's "tab first open = one LIMIT 1 read" becomes "page = one LIMIT 1 read, tab = 0".
 5. **Per-action Apply.** A card's primary and secondary buttons each apply ONE action: `applySuggestion({ runId, suggestionId, actionIndex })`. Applying any action marks the suggestion applied.
-6. **Actions carry `columnId`.** `set_due`, `set_status` and `reassign` name the column they write; validation checks the column's kind (`date` / `status` / `people`) and, for status, that `optionId` is one of that column's options. This mirrors Phase 1 deviation 10 (overdue checks every date column) instead of guessing a "primary" column.
+6. **Actions carry `columnId`.** `set_due`, `set_status` and `reassign` name the column they write; validation checks the column's kind (`date` / `status` / `people`) and, for status, that `optionId` is one of that column's options. This mirrors Phase 1 deviation 10 (overdue checks every date column) instead of guessing a "primary" column. On a RANGED date cell `set_due` moves the `end` (overdue is `(end ?? date) < today`, `src/lib/boards/overdue.ts`) and clamps `date` to `min(existing.date, action.date)` — keeping the old `end` left the row exactly as overdue as before.
 7. **`nudge`** writes an `item_updates` row authored by the current user (the model's message, sanitized, ≤280 chars) plus a `notifications` row of kind `mention` for the target (skipped when the target is the current user) — the same shape the automations `notify` action uses. Undo deletes the update row (own-author policy); the notification stays.
 8. **`filter`** is client-only: the card button asks the intelligence provider to activate the matching chip through the bridge store; nothing is written.
 9. **Labels are resolved server-side at generation time** (`action.label`, `suggestion.evidenceRows[]` with item names) so the dock, which has no board payload, renders cards without a lookup.
@@ -675,18 +675,16 @@ it("an ordinary cell write still logs source = user", async () => {
     .eq("board_id", boardId)
     .limit(1)
     .single();
-  await owner.anon
-    .from("cell_values")
-    .upsert(
-      {
-        org_id: orgId,
-        board_id: boardId,
-        item_id: item!.id,
-        column_id: col!.id,
-        value: { text: "plain" },
-      },
-      { onConflict: "item_id,column_id" },
-    );
+  await owner.anon.from("cell_values").upsert(
+    {
+      org_id: orgId,
+      board_id: boardId,
+      item_id: item!.id,
+      column_id: col!.id,
+      value: { text: "plain" },
+    },
+    { onConflict: "item_id,column_id" },
+  );
   const act = await owner.anon
     .from("item_activities")
     .select("source")
@@ -2593,13 +2591,11 @@ import type { ProviderAdapter } from "@/lib/ai/providers/types";
 
 describe("generateBoardIntelligence", () => {
   it("calls generateStructured with the system/user prompts and the JSON schema, and passes the wire model", async () => {
-    const generateStructured = vi
-      .fn()
-      .mockResolvedValue({
-        data: { brief: "ok", suggestions: [] },
-        usage: { inputTokens: 10, outputTokens: 5 },
-        model: "claude-x",
-      });
+    const generateStructured = vi.fn().mockResolvedValue({
+      data: { brief: "ok", suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 5 },
+      model: "claude-x",
+    });
     const adapter = {
       kind: "anthropic",
       validateKey: vi.fn(),

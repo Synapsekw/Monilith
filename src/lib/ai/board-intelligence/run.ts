@@ -15,6 +15,7 @@ import {
   latestActivityISO,
 } from "@/lib/boards/intelligence/signals";
 import {
+  MAX_PAYLOAD_SIGNALS,
   TRANSCRIPT_ACTIVITY_LIMIT,
   TRANSCRIPT_DAYS,
   TRANSCRIPT_TOKEN_BUDGET,
@@ -87,6 +88,19 @@ export async function runBoardIntelligence(input: {
       currentUserId: user.id,
       memberNames,
     });
+    /**
+     * What the MODEL sees and what the payload STORES — the full set is what
+     * the hash is computed over.
+     *
+     * `computeSignals` emits one `overloaded` row per overloaded person, so a
+     * busy board easily exceeds `payloadSchema`'s ten-signal cap. Storing the
+     * full set made `validateIntelligenceOutput` throw AFTER the model call was
+     * metered, with nothing cached — so every retry paid again and failed
+     * again. Slicing here (the rows are already in `SIGNAL_ORDER`, most urgent
+     * first) keeps the hash sensitive to every signal while the payload stays
+     * inside the schema.
+     */
+    const topSignals = signals.slice(0, MAX_PAYLOAD_SIGNALS);
     // items.updated_at is NOT bumped by cell edits (signals.ts) — use the
     // cell-aware helper so a cell-only edit still changes the hash.
     const maxUpdatedAt = latestActivityISO(signalsInput);
@@ -134,7 +148,7 @@ export async function runBoardIntelligence(input: {
     // empty (wrong) transcript — fail loud instead of caching a bad run.
     if (activitiesError || updatesError)
       return fail("Couldn't read recent activity.");
-    const ctx = buildBoardContext(payload, members);
+    const ctx = buildBoardContext(payload, members, topSignals);
     const transcript = buildBoardTranscript({
       updates: updates ?? [],
       activities: activities ?? [],
@@ -162,7 +176,7 @@ export async function runBoardIntelligence(input: {
           {
             snapshot,
             ctx,
-            signals,
+            signals: topSignals,
             transcript,
             now: now.toISOString(),
             timezone: org.timezone ?? "UTC",
@@ -174,11 +188,16 @@ export async function runBoardIntelligence(input: {
         return { result: { raw, usage, model: used }, usage };
       },
     );
-    const { payload: out } = validateIntelligenceOutput(
+    const { payload: out, warnings } = validateIntelligenceOutput(
       generated.raw,
       ctx,
-      signals.map((s) => ({ kind: s.kind, count: s.count, label: s.label })),
+      topSignals,
     );
+    // Not user-facing (the brief is still good), but a run that silently drops
+    // half the model's suggestions is the only trace that the prompt and the
+    // board have drifted apart.
+    if (warnings.length)
+      console.warn("[intelligence] dropped suggestions", { boardId, warnings });
 
     const { data: row, error } = await supabase
       .from("board_intelligence_runs")
@@ -227,8 +246,20 @@ export async function dismissSuggestion(input: {
   if (!run) return fail("Brief not found.");
   if (!run.payload.suggestions.some((s) => s.id === parsed.data.suggestionId))
     return fail("Suggestion not found.");
+  // Re-read immediately before the update rather than reusing the array from
+  // the top of this action: `applied`/`dismissed` are read-modify-written by
+  // apply, undo AND dismiss, so a list captured a round-trip ago can drop a
+  // mark another call made in between.
+  const { data: current } = await supabase
+    .from("board_intelligence_runs")
+    .select("dismissed")
+    .eq("id", run.id)
+    .maybeSingle();
   const dismissed = Array.from(
-    new Set([...run.dismissed, parsed.data.suggestionId]),
+    new Set([
+      ...(current?.dismissed ?? run.dismissed),
+      parsed.data.suggestionId,
+    ]),
   );
   const { data: updated, error } = await supabase
     .from("board_intelligence_runs")

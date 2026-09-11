@@ -3,6 +3,7 @@ import { buildItemRoster, buildUserPrompt, systemPrompt } from "./prompt";
 import { buildBoardContext } from "./board-context";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
+import type { Signal } from "@/lib/boards/intelligence/types";
 
 const payload = {
   board: { id: "b1", org_id: "o1", name: "Launch <x>" },
@@ -118,5 +119,54 @@ describe("prompt", () => {
     expect(u).not.toContain("<x>");
     expect(u).toContain("u-ana | Ana");
     expect(u).toContain("c-status | Status | status | options: o-done=Done");
+  });
+  it("caps the SIGNALS block at ten lines", () => {
+    // `computeSignals` emits one `overloaded` row PER PERSON, so a busy board
+    // easily runs past ten — one line each would crowd out the roster.
+    const many: Signal[] = Array.from({ length: 12 }, (_, i) => ({
+      kind: "overloaded",
+      count: i,
+      label: `overloaded · P${i}`,
+      tone: "yellow",
+      itemIds: ["i1"],
+      subjectUserId: `u${i}`,
+    }));
+    const block = buildUserPrompt({ ...input, signals: many })
+      .split("=== SIGNALS ===")[1]!
+      .split("=== GROUPS ===")[0]!
+      .trim()
+      .split("\n");
+    expect(block).toHaveLength(10);
+    expect(block[0]).toContain("overloaded · P0");
+    expect(block.some((l) => l.includes("P10"))).toBe(false);
+  });
+  it("lists at most 50 options per column and marks the rest", () => {
+    const wide = {
+      ...payload,
+      columns: [
+        {
+          id: "c-many",
+          name: "Stage",
+          kind: "status",
+          settings: {
+            options: Array.from({ length: 60 }, (_, i) => ({
+              id: `o${i}`,
+              label: `S${i}`,
+              color: "green",
+            })),
+          },
+        },
+      ],
+    } as unknown as BoardPayload;
+    const line = buildUserPrompt({
+      ...input,
+      ctx: buildBoardContext(wide, []),
+    })
+      .split("=== COLUMNS ===")[1]!
+      .split("=== MEMBERS ===")[0]!
+      .trim();
+    expect(line.match(/o\d+=S\d+/g)).toHaveLength(50);
+    expect(line).toContain("o49=S49, …");
+    expect(line).not.toContain("o50=S50");
   });
 });
