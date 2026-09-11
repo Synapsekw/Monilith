@@ -8,6 +8,8 @@ import type { BoardPayload } from "@/lib/boards/queries";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useIntelItemIds } from "@/lib/boards/intelligence/context";
+import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
   onEventDropped,
   weekStartOnOrBefore,
@@ -158,6 +160,13 @@ export function CalendarBoard({
     [cache.cellValues],
   );
 
+  // Active Intelligence chip → narrow the items the month/week/agenda lay out.
+  const intelItemIds = useIntelItemIds();
+  const intelItems = useMemo(
+    () => narrowItemsToSignal(cache.items, intelItemIds),
+    [cache.items, intelItemIds],
+  );
+
   const sensors = useTouchAwareSensors();
 
   if (!dateColumn) {
@@ -274,7 +283,7 @@ export function CalendarBoard({
 
   const shared = {
     today,
-    items: cache.items,
+    items: intelItems,
     cellValues: cache.cellValues,
     dateColumnId: resolvedDateColumn.id,
     statusColumn,

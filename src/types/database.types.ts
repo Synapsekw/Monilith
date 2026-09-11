@@ -1285,6 +1285,32 @@ export type Database = {
           },
         ];
       };
+      board_visits: {
+        Row: {
+          board_id: string;
+          last_seen_at: string;
+          user_id: string;
+        };
+        Insert: {
+          board_id: string;
+          last_seen_at?: string;
+          user_id: string;
+        };
+        Update: {
+          board_id?: string;
+          last_seen_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_visits_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       boards: {
         Row: {
           archived_at: string | null;
@@ -4593,6 +4619,7 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      touch_board_visit: { Args: { p_board_id: string }; Returns: undefined };
       unshare_board: {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;

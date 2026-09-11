@@ -5,6 +5,10 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { ColorChip } from "@/components/ui/color-chip";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -28,8 +32,7 @@ export function statusOptionColor(
 ): string | null {
   if (!statusColumn) return null;
   const value = cellMap.get(cellKey(itemId, statusColumn.id)) as
-    | { optionId: string | null }
-    | undefined;
+    { optionId: string | null } | undefined;
   const optionId = value?.optionId ?? null;
   if (!optionId) return null;
   const options =
@@ -67,6 +70,7 @@ export function EventBar({
 
   const target = presenceTarget.event(interval.itemId);
   usePresenceFocus({ viewKind: "calendar", targetId: target }, isDragging);
+  const intelMatch = useIntelMatch(interval.itemId);
 
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -91,6 +95,7 @@ export function EventBar({
     "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 text-2xs font-medium",
     "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
     isDragging && "opacity-50",
+    intelRowClasses(intelMatch),
     roundLeft ? "rounded-l-sm" : "rounded-l-none",
     roundRight ? "rounded-r-sm" : "rounded-r-none",
   );

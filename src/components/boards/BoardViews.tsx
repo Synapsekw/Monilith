@@ -20,6 +20,11 @@ import {
   useBoardViewPrefs,
 } from "@/lib/boards/view-prefs-context";
 import type { ResolvedBoardViewPrefs } from "@/lib/validations/view-prefs";
+import {
+  BoardIntelligenceProvider,
+  IntelToneFrame,
+} from "@/lib/boards/intelligence/context";
+import { useBoardVisitTouch } from "@/lib/boards/intelligence/use-board-visit";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
 import { useBoardSnapshot } from "@/lib/offline/snapshot";
@@ -89,6 +94,7 @@ export function BoardViews({
   access,
   grants,
   viewPrefs,
+  lastSeenAt,
 }: {
   payload: BoardPayload;
   members: EditorMember[];
@@ -98,6 +104,8 @@ export function BoardViews({
   grants: HeaderGrant[];
   /** The caller's saved arrangement, read server-side so nothing flashes. */
   viewPrefs: ResolvedBoardViewPrefs;
+  /** board_visits.last_seen_at for the caller (null = first visit). Feeds "changed since". */
+  lastSeenAt: string | null;
 }) {
   useBoardCache(payload.board.id, payload);
 
@@ -221,27 +229,41 @@ export function BoardViews({
     // the saved arrangement.
     <BoardViewPrefsProvider boardId={payload.board.id} initial={viewPrefs}>
       <ActiveViewRecorder viewId={activeViewId} />
-      <BoardPresenceProvider value={presenceValue}>
-        <OfflinePersistence userId={currentUserId} />
-        {view}
-        <PresenceFlashMessage message={flash.lastMessage} />
-        <ItemPanel
-          itemId={openItem?.id ?? null}
-          itemName={openItem?.name ?? ""}
-          orgId={payload.board.org_id}
-          boardId={payload.board.id}
-          currentUserId={currentUserId}
-          columns={payload.columns}
-          members={members.map((m) => ({
-            userId: m.userId,
-            fullName: m.fullName,
-            avatarUrl: m.avatarUrl,
-          }))}
-          createdBy={openItem?.created_by ?? null}
-          createdAt={openItem?.created_at ?? null}
-          onClose={closeItem}
-        />
-      </BoardPresenceProvider>
+      {/* INSIDE the view-prefs provider: it reads the board filter state (the
+            `intel=` chip) through useBoardFilterSort. */}
+      <BoardIntelligenceProvider
+        boardId={payload.board.id}
+        initialData={payload}
+        members={members}
+        lastSeenAt={lastSeenAt}
+        currentUserId={currentUserId}
+      >
+        <BoardPresenceProvider value={presenceValue}>
+          <OfflinePersistence userId={currentUserId} />
+          <BoardVisitTouch
+            boardId={payload.board.id}
+            enabled={!isOfflineRender}
+          />
+          <IntelToneFrame>{view}</IntelToneFrame>
+          <PresenceFlashMessage message={flash.lastMessage} />
+          <ItemPanel
+            itemId={openItem?.id ?? null}
+            itemName={openItem?.name ?? ""}
+            orgId={payload.board.org_id}
+            boardId={payload.board.id}
+            currentUserId={currentUserId}
+            columns={payload.columns}
+            members={members.map((m) => ({
+              userId: m.userId,
+              fullName: m.fullName,
+              avatarUrl: m.avatarUrl,
+            }))}
+            createdBy={openItem?.created_by ?? null}
+            createdAt={openItem?.created_at ?? null}
+            onClose={closeItem}
+          />
+        </BoardPresenceProvider>
+      </BoardIntelligenceProvider>
     </BoardViewPrefsProvider>
   );
 }
@@ -257,5 +279,21 @@ function ActiveViewRecorder({ viewId }: { viewId: string }) {
   useEffect(() => {
     if (viewId) setActiveViewId(viewId);
   }, [viewId, setActiveViewId]);
+  return null;
+}
+
+/**
+ * Stamps the visit (board_visits) once per visit — hidden tab, pagehide or
+ * unmount. A component, not a bare hook call, so the offline replay can
+ * disable it without a conditional hook. Renders nothing.
+ */
+function BoardVisitTouch({
+  boardId,
+  enabled,
+}: {
+  boardId: string;
+  enabled: boolean;
+}) {
+  useBoardVisitTouch(boardId, enabled);
   return null;
 }

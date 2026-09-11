@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 12:15",
+  "updated": "2026-09-11 17:57",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "dd0ea26f",
+        "value": "db10664c",
         "tone": "warn",
-        "note": "Ahead of main: the Editorial landing merged (ae5c0eee) plus its /updates announcement. User-visible and unpromoted — /promote is the next step. No worktrees open."
+        "note": "Ahead of main: Board Intelligence Phase 1 (Orient) merged — the Intelligence strip under every board header, 18 commits, migration board_visits on DEV — plus its /updates entry. User-visible and unpromoted; /promote is the next step. No worktrees open."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7291 passing, 1 skipped, on task/editorial-landing. New guards: landing render/anchor/CTA/gallery/FAQ tests, hex-literal guard on the landing CSS module.",
+        "note": "7370 passing, 1 skipped, on task/board-intelligence-orient before merge. New guards: signals engine table tests, provider URL round-trip, sub-item-parent narrowing, CSS @layer placement of the row rule, render budget with the provider mounted.",
         "label": "test"
       },
       {
@@ -180,20 +180,20 @@
       },
       {
         "name": "ledger",
-        "value": "161/161",
+        "value": "162/162",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after both board-view-prefs migrations (20260909064520 creates the table and the save RPC; 20260909070508 revokes the PUBLIC execute grant Postgres hands every new function). gotcha-55 mis-stamped both and both were reconciled.",
+        "note": "Verified by db:ledger-check after 20260911113714_board_visits (table, RLS, touch_board_visit RPC with anon lockdown). apply_migration mis-stamped it again; reconciled with reconcile-migration-version.sh.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "/promote — the new landing is merged and not yet live",
-      "why": "The owner approved the Editorial landing preview and it merged to develop with an /updates entry. Nothing reaches www.monolith.works until the develop → main PR; every visitor still sees the old landing until then.",
+      "title": "/promote — Board Intelligence Phase 1 is merged and not yet live, then run its walkthrough",
+      "why": "The Intelligence strip merged to develop with an /updates entry after seven task reviews and a whole-branch review that caught a paint-order defect no test can see. Nothing reaches www.monolith.works until the develop → main PR. The browser visual pass is still owed: check the 2px row rule in Table and Timeline first (session note has the 11-step guide), then plan Phase 2 (Advise).",
       "tags": [
         "owner",
-        "landing",
+        "board-intelligence",
         "promote"
       ]
     },
@@ -358,14 +358,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-11-1157-editorial-landing-port",
-    "when": "2026-09-11 11:57",
-    "title": "Editorial landing port (Version 3, Charcoal + Cobalt)",
+    "id": "2026-09-11-1757-board-intelligence-phase1-orient",
+    "when": "2026-09-11 17:57",
+    "title": "Board Intelligence — brainstorm, spec, and Phase 1 (Orient) merged",
     "bullets": [
-      "The public landing is replaced by the owner-approved standalone design: one Server Component, a scoped CSS module with the artifact's palette, Radix-Tabs product tour, native-details FAQ, real routes and tier-sourced prices.",
-      "Product captures re-shot from the real UI on a throwaway Northwind Labs org (created through the app, deleted afterwards) so no private workspace data enters the repo.",
-      "Visual parity checked against the artifact with Playwright tiles at 1440 and 390; all four gates green.",
-      "Owner approved the preview in-session; merged to develop via finish-task.sh and announced on /updates. Promotion is the remaining step."
+      "Brainstormed with live mockups on the real board anatomy; locked an always-on Intelligence strip plus a dock tab for depth, labelled Intelligence (owner rejected Pulse). Spec covers four phases: Orient, Advise, Act, Ask.",
+      "Phase 1 shipped: five deterministic chips (overdue, blocked chain, overloaded, stalled, changed-since) computed client-side, an intel URL param via replaceState, narrowing plus highlight/dim in all four views, and a board_visits last-seen stamp.",
+      "Seven task reviews and a whole-branch review caught a dozen defects before merge, including a row rule painted under the frozen name column and a URL that wiped saved filters.",
+      "Merged to develop via finish-task.sh with all gates green and announced on /updates. Owed: the browser visual pass, then the Phase 2 plan."
     ]
   }
 }

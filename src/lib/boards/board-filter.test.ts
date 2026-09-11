@@ -9,6 +9,11 @@ import {
   buildItemPredicate,
   buildItemComparator,
   EMPTY_BOARD_FILTER,
+  parseIntel,
+  serializeIntel,
+  INTEL_PARAM_KEY,
+  URL_PARAM_KEYS,
+  FILTER_PARAM_KEYS,
   type BoardFilterState,
   type FilterColumnMeta,
 } from "@/lib/boards/board-filter";
@@ -68,6 +73,7 @@ describe("parse / serialize round-trip", () => {
         ],
       },
       sort: { field: { kind: "column", columnId: "c-num" }, direction: "desc" },
+      intel: null,
     };
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(serializeBoardFilter(state))) {
@@ -84,6 +90,7 @@ describe("parse / serialize round-trip", () => {
       status: null,
       filter: null,
       sort: null,
+      intel: null,
     });
   });
 
@@ -121,6 +128,7 @@ describe("active-state helpers", () => {
           conditions: [{ columnId: "c-text", operator: "eq", value: "y" }],
         },
         sort: { field: { kind: "name" }, direction: "asc" },
+        intel: null,
       }),
     ).toBe(4);
   });
@@ -549,5 +557,48 @@ describe("buildItemComparator", () => {
     [...rows].sort(asc);
     // O(n) reads (one per row), not O(n log n) (one per comparison).
     expect(reads).toBe(rows.length);
+  });
+});
+
+describe("intel param (active intelligence chip)", () => {
+  it("parses kind-only and kind:subject forms", () => {
+    expect(parseIntel("overdue")).toEqual({ kind: "overdue" });
+    expect(parseIntel("overloaded:u1")).toEqual({
+      kind: "overloaded",
+      subject: "u1",
+    });
+  });
+
+  it("rejects unknown kinds, empty subjects and empty strings", () => {
+    expect(parseIntel("bogus")).toBeNull();
+    expect(parseIntel("overdue:")).toBeNull();
+    expect(parseIntel("")).toBeNull();
+    expect(parseIntel(null)).toBeNull();
+  });
+
+  it("serializes both forms and drops the key when null", () => {
+    expect(serializeIntel({ kind: "overdue" })).toBe("overdue");
+    expect(serializeIntel({ kind: "overloaded", subject: "u1" })).toBe(
+      "overloaded:u1",
+    );
+    expect(serializeIntel(null)).toBeNull();
+  });
+
+  it("round-trips through parseBoardFilter / serializeBoardFilter", () => {
+    const state = parseBoardFilter(new URLSearchParams("q=x&intel=blocked"));
+    expect(state.intel).toEqual({ kind: "blocked" });
+    expect(serializeBoardFilter(state).intel).toBe("blocked");
+    expect(serializeBoardFilter({ ...EMPTY_BOARD_FILTER }).intel).toBeNull();
+  });
+
+  it("is a URL key but not a persisted filter key", () => {
+    expect(URL_PARAM_KEYS).toContain(INTEL_PARAM_KEY);
+    expect(FILTER_PARAM_KEYS).not.toContain(INTEL_PARAM_KEY);
+  });
+
+  it("does not count toward isFilterActive (the strip owns its own clear)", () => {
+    expect(
+      isFilterActive({ ...EMPTY_BOARD_FILTER, intel: { kind: "overdue" } }),
+    ).toBe(false);
   });
 });

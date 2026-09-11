@@ -7,6 +7,10 @@ import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CacheDependency } from "@/lib/boards/cache";
 import type { GanttRow } from "@/lib/boards/gantt";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { softPillText } from "@/components/boards/cells/soft-pill-color";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -111,6 +115,7 @@ export function GanttRowItem({
   // focus while dragged; the ring surfaces other users' drags on the same event.
   const target = presenceTarget.event(row.itemId);
   usePresenceFocus({ viewKind: "timeline", targetId: target }, isDragging);
+  const intelMatch = useIntelMatch(row.itemId);
 
   const barStyle = transform
     ? { transform: `translate3d(${transform.x}px, 0, 0)` }
@@ -191,7 +196,10 @@ export function GanttRowItem({
   return (
     <div
       data-testid="gantt-row"
-      className="group hover:bg-state-hover/5 flex border-b"
+      className={cn(
+        "group hover:bg-state-hover/5 flex border-b",
+        intelRowClasses(intelMatch),
+      )}
       style={{ height: ROW_H }}
     >
       {/* Sticky name label */}

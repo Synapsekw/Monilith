@@ -64,6 +64,11 @@ import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import {
+  useBoardIntelligenceOptional,
+  useIntelItemIds,
+} from "@/lib/boards/intelligence/context";
+import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
+import {
   buildItemPredicate,
   buildItemComparator,
 } from "@/lib/boards/board-filter";
@@ -293,22 +298,51 @@ export function BoardTableInner({
     [cache.dependencies],
   );
 
+  // `topLevel`/`childrenByParent` bucket the FULL, unnarrowed board — the Board
+  // Total footer and the drag-start item lookup below both intentionally stay
+  // unaffected by any in-page narrowing (quick search already doesn't touch
+  // them either), so they always read off this pair, never the intel-narrowed
+  // one below.
   const { topLevel, childrenByParent } = useMemo(
     () => bucketItems(items),
     [items],
   );
 
+  // Active Intelligence chip (null = none). `narrowItemsToSignal` runs on the
+  // FULL flat item list (not just `topLevel`) — a matching SUB-item's parent
+  // must be kept even though the parent itself carries `parent_id: null` and
+  // never appears in `itemIds`, and `narrowItemsToSignal` can only see that
+  // relationship when parent and child are in the same input array. Narrowing
+  // a per-group, top-level-only list (as an earlier version of this code did)
+  // silently dropped the parent of every matching sub-item.
+  const intelItemIds = useIntelItemIds();
+  const intelGroupIds =
+    useBoardIntelligenceOptional()?.activeSignal?.groupIds ?? null;
+  // No chip active → reuse the identity of `topLevel`/`childrenByParent`
+  // above instead of paying a second `bucketItems` pass (the hot, default
+  // path).
+  const {
+    topLevel: visibleTopLevel,
+    childrenByParent: visibleChildrenByParent,
+  } = useMemo(
+    () =>
+      intelItemIds === null
+        ? { topLevel, childrenByParent }
+        : bucketItems(narrowItemsToSignal(items, intelItemIds)),
+    [intelItemIds, items, topLevel, childrenByParent],
+  );
+
   // Top-level items grouped by group_id, in position order.
   const itemsByGroup = useMemo(() => {
-    const byGroup = new Map<string, typeof topLevel>();
+    const byGroup = new Map<string, typeof visibleTopLevel>();
     for (const g of groups) byGroup.set(g.id, []);
-    for (const it of topLevel) {
+    for (const it of visibleTopLevel) {
       const bucket = byGroup.get(it.group_id);
       if (bucket) bucket.push(it);
       else byGroup.set(it.group_id, [it]);
     }
     return byGroup;
-  }, [groups, topLevel]);
+  }, [groups, visibleTopLevel]);
 
   // Filter / sort / quick-search state — read from the URL, applied to the
   // already-loaded cache in memory (0 server round-trips; see AGENTS.md
@@ -792,8 +826,11 @@ export function BoardTableInner({
                     groupControls={groupControls}
                     nameWidth={nameWidth}
                     autoFocusRename={group.id === renameGroupId}
-                    childrenByParent={childrenByParent}
-                    collapsed={collapsedGroups.has(group.id)}
+                    childrenByParent={visibleChildrenByParent}
+                    collapsed={
+                      collapsedGroups.has(group.id) &&
+                      !(intelGroupIds?.includes(group.id) ?? false)
+                    }
                     expanded={expanded}
                     onToggleExpand={toggleExpand}
                     renamingItemId={renamingItemId}

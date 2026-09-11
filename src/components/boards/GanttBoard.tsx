@@ -22,6 +22,8 @@ import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
+import { useIntelItemIds } from "@/lib/boards/intelligence/context";
+import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
   buildGanttRows,
   detectViolations,
@@ -205,11 +207,19 @@ export function GanttBoard({
     ZOOM_DAY_COUNT[zoom],
   );
 
+  // Active Intelligence chip → narrow the rows on the timeline. A matching
+  // sub-item keeps its parent (narrowItemsToSignal) so it stays nested.
+  const intelItemIds = useIntelItemIds();
+  const intelItems = useMemo(
+    () => narrowItemsToSignal(cache.items, intelItemIds),
+    [cache.items, intelItemIds],
+  );
+
   // Build Gantt row layout (positions all items on the timeline).
   const ganttResult = useMemo(() => {
     if (!dateColumn || !rangeStartISO || !startSourceId) return null;
     return buildGanttRows(
-      cache.items,
+      intelItems,
       effectiveCellValues,
       startSourceId,
       endSourceId,
@@ -222,7 +232,7 @@ export function GanttBoard({
     startSourceId,
     endSourceId,
     rangeStartISO,
-    cache.items,
+    intelItems,
     effectiveCellValues,
     dayCount,
     zoom,

@@ -6,6 +6,10 @@ import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
 import type { Json } from "@/types/database.types";
 import { agendaGroups, type AgendaItem } from "@/lib/boards/calendar-agenda";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { Kicker } from "@/components/ui/kicker";
 import { CellRenderer } from "@/components/boards/cells";
 
@@ -128,42 +132,15 @@ function AgendaDayList({
   const visible = expanded ? items : items.slice(0, DAY_CAP);
   return (
     <ul className="flex flex-col p-1.5">
-      {visible.map((item) => {
-        const isSpan = item.range.end !== item.range.start;
-        const statusValue = statusColumn
-          ? (cellMap.get(cellKey(item.itemId, statusColumn.id)) ?? null)
-          : null;
-        return (
-          <li key={item.itemId} data-testid="agenda-item">
-            <button
-              type="button"
-              onClick={(e) =>
-                onItemTap?.(
-                  item.itemId,
-                  e.currentTarget.getBoundingClientRect(),
-                )
-              }
-              className="hover:bg-state-hover flex w-full items-center gap-2 rounded px-2 py-1.5 text-left pointer-coarse:min-h-11"
-            >
-              <span className="flex-1 truncate text-sm">{item.name}</span>
-              {isSpan && (
-                <span className="text-muted-foreground bg-surface-muted border-border text-3xs rounded-sm border px-2 py-0.5">
-                  {fmt(item.range.start)} – {fmt(item.range.end)}
-                </span>
-              )}
-              {statusColumn && (
-                <CellRenderer
-                  kind={statusColumn.kind}
-                  value={statusValue as Json}
-                  settings={
-                    (statusColumn.settings ?? {}) as Record<string, unknown>
-                  }
-                />
-              )}
-            </button>
-          </li>
-        );
-      })}
+      {visible.map((item) => (
+        <AgendaRow
+          key={item.itemId}
+          item={item}
+          statusColumn={statusColumn}
+          cellMap={cellMap}
+          onItemTap={onItemTap}
+        />
+      ))}
       {hiddenCount > 0 && !expanded && (
         <li>
           <button
@@ -176,5 +153,54 @@ function AgendaDayList({
         </li>
       )}
     </ul>
+  );
+}
+
+function AgendaRow({
+  item,
+  statusColumn,
+  cellMap,
+  onItemTap,
+}: {
+  item: AgendaItem;
+  statusColumn: CacheColumn | undefined;
+  cellMap: CellMap;
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
+}) {
+  const isSpan = item.range.end !== item.range.start;
+  const statusValue = statusColumn
+    ? (cellMap.get(cellKey(item.itemId, statusColumn.id)) ?? null)
+    : null;
+  const intelMatch = useIntelMatch(item.itemId);
+  return (
+    <li
+      data-testid="agenda-item"
+      className={cn(
+        intelRowClasses(intelMatch),
+        intelMatch === true && "rounded",
+      )}
+    >
+      <button
+        type="button"
+        onClick={(e) =>
+          onItemTap?.(item.itemId, e.currentTarget.getBoundingClientRect())
+        }
+        className="hover:bg-state-hover flex w-full items-center gap-2 rounded px-2 py-1.5 text-left pointer-coarse:min-h-11"
+      >
+        <span className="flex-1 truncate text-sm">{item.name}</span>
+        {isSpan && (
+          <span className="text-muted-foreground bg-surface-muted border-border text-3xs rounded-sm border px-2 py-0.5">
+            {fmt(item.range.start)} – {fmt(item.range.end)}
+          </span>
+        )}
+        {statusColumn && (
+          <CellRenderer
+            kind={statusColumn.kind}
+            value={statusValue as Json}
+            settings={(statusColumn.settings ?? {}) as Record<string, unknown>}
+          />
+        )}
+      </button>
+    </li>
   );
 }
