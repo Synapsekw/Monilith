@@ -83,4 +83,29 @@ describe("Board Intelligence row rule wins the cascade", () => {
     const root = utilities.match(/\.intel-match\s*\{([^}]*)\}/);
     expect(root![1]).not.toMatch(/box-shadow/);
   });
+
+  it("keeps the rule out of the hit-test and rounds it with its host", () => {
+    const utilities = extractLayerBlock("utilities");
+    const after = utilities.match(/\.intel-match::after\s*\{([^}]*)\}/);
+    expect(after).not.toBeNull();
+    expect(after![1]).toMatch(/pointer-events:\s*none/);
+    expect(after![1]).toMatch(/border-start-start-radius:\s*inherit/);
+    expect(after![1]).toMatch(/border-end-start-radius:\s*inherit/);
+  });
+
+  it("lets a frozen column draw the rule instead of the row", () => {
+    const utilities = extractLayerBlock("utilities");
+    // A row that delegates the rule to a sticky child must not ALSO paint it.
+    expect(utilities).toMatch(
+      /\.intel-match\[data-intel-rule="cell"\]::after\s*\{[^}]*content:\s*none/,
+    );
+    const rule = utilities.match(/\.intel-rule\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toMatch(/position:\s*absolute/);
+    expect(rule![1]).toMatch(/left:\s*0/);
+    expect(rule![1]).toMatch(/width:\s*2px/);
+    expect(rule![1]).toMatch(/background:\s*var\(--intel-rule, transparent\)/);
+    expect(rule![1]).toMatch(/pointer-events:\s*none/);
+    expect(utilities).not.toMatch(/\.intel-match\s*\{[^}]*inset\b/);
+  });
 });

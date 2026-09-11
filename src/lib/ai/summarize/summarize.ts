@@ -37,7 +37,7 @@ function chipText(
 /** Plain-text line for one resolved activity descriptor. Mirrors the
  *  human-readable phrasing in ActivityRow.tsx (kept in sync deliberately —
  *  same descriptor kinds, same copy). */
-function describeActivityLine(descriptor: ActivityDescriptor): string {
+export function describeActivityLine(descriptor: ActivityDescriptor): string {
   switch (descriptor.kind) {
     case "item_created":
       return "created this item";
@@ -75,12 +75,10 @@ export function buildTranscript(args: {
   if (updates.length === 0 && activities.length === 0) return "";
 
   const entries: TranscriptEntry[] = [
-    ...updates.map(
-      (u): TranscriptEntry => ({
-        at: u.created_at,
-        line: `${nameOf(u.author_id, members)}: ${u.body_text}`,
-      }),
-    ),
+    ...updates.map((u): TranscriptEntry => ({
+      at: u.created_at,
+      line: `${nameOf(u.author_id, members)}: ${u.body_text}`,
+    })),
     ...activities.map((a): TranscriptEntry => {
       const descriptor = resolveActivity(a, columns, members);
       return {

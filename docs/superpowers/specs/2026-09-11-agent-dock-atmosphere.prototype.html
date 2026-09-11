@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-run="idle">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monolith agent dock — atmosphere polish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --brand:#5a6ed5; --brand-fg:#fff;
+  --background:#f6f6f8; --foreground:#1a1a1f;
+  --surface:#fff; --surface-muted:#f1f1f4; --popover:#fff;
+  --muted-fg:#5b5b62; --kicker:#5b5b62;
+  --border:rgba(0,0,0,.08); --border-hover:rgba(0,0,0,.14); --border-bright:rgba(0,0,0,.22);
+  --app-wash:linear-gradient(168deg,#dde2f2 0%,#d6dbee 46%,#cfd4e6 100%);
+  --app-bloom:radial-gradient(110% 85% at 8% -6%, color-mix(in oklab, color-mix(in oklab,var(--brand) 12%, white) 70%, transparent) 0%, transparent 58%);
+  --content-surface:#fff; --content-edge:rgb(0 0 0/12%);
+  --content-lift:-1px -1px 0 0 rgb(30 40 90/8%),0 1px 3px 0 rgb(30 40 90/8%);
+  --state-hover:rgb(0 0 0/4%); --state-active:rgb(0 0 0/7%);
+  --state-selected:color-mix(in oklab,var(--brand) 14%,transparent);
+  --chrome-fill:rgb(0 0 0/5%);
+  --glow:0 0 30px -8px rgba(90,110,213,.35);
+  --status-green:#3f9d6a; --status-yellow:#c9a227; --status-blue:#4f7fd6;
+  --dotring:#d9deef;
+  --radius:14px; --ease:cubic-bezier(.16,1,.3,1);
+  --gallery-bg:#e9eaf0; --gallery-fg:#1a1a1f; --gallery-muted:#5b5b62; --gallery-card:#fff; --gallery-line:rgba(0,0,0,.1);
+}
+[data-theme="dark"]{
+  --brand:#8ea2eb; --brand-fg:#0e0e10;
+  --background:#0e0e10; --foreground:#f4f4f6;
+  --surface:#161619; --surface-muted:#1c1c20; --popover:#1c1c20;
+  --muted-fg:#b2b2ba; --kicker:#b2b2ba;
+  --border:rgba(255,255,255,.1); --border-hover:rgba(255,255,255,.16); --border-bright:rgba(255,255,255,.26);
+  --app-wash:linear-gradient(168deg,#212540 0%,#141728 46%,#08090d 100%);
+  --app-bloom:radial-gradient(110% 85% at 8% -6%, color-mix(in oklab,var(--brand) 22%,transparent) 0%, transparent 58%);
+  --content-surface:#0e0e10; --content-edge:rgb(255 255 255/8%);
+  --content-lift:inset 0 1px 0 0 rgb(255 255 255/5%),0 8px 24px -12px rgb(0 0 0/60%);
+  --state-hover:rgb(255 255 255/5%); --state-active:rgb(255 255 255/9%);
+  --state-selected:color-mix(in oklab,var(--brand) 14%,transparent);
+  --chrome-fill:rgb(255 255 255/6%);
+  --glow:0 0 36px -6px rgba(255,255,255,.35);
+  --status-green:#6fd39a; --status-yellow:#e6c65a; --status-blue:#7ea6f0;
+  --dotring:#14172a;
+  --gallery-bg:#0a0a0c; --gallery-fg:#f4f4f6; --gallery-muted:#b2b2ba; --gallery-card:#141417; --gallery-line:rgba(255,255,255,.1);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Nunito Sans",system-ui,sans-serif;background:var(--gallery-bg);color:var(--gallery-fg);-webkit-font-smoothing:antialiased;font-size:14px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.s{width:14px;height:14px}
+svg.i.xs{width:12px;height:12px}
+.kicker{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--kicker)}
+.kicker.xs{font-size:10px}
+
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:12px 24px;background:color-mix(in oklab,var(--gallery-bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--gallery-line)}
+.top h1{font-size:15px;font-weight:800;margin:0}
+.top .kick{font-family:"JetBrains Mono";font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gallery-muted)}
+.seg{display:inline-flex;border:1px solid var(--gallery-line);border-radius:8px;overflow:hidden}
+.seg button{padding:5px 10px;font-size:12px;font-weight:600;color:var(--gallery-muted)}
+.seg button[aria-pressed="true"]{background:var(--gallery-fg);color:var(--gallery-bg)}
+.top .sp{flex:1}
+.intro{padding:18px 24px 4px;max-width:1100px}
+.intro h2{margin:0 0 6px;font-size:18px;font-weight:800}
+.intro p{margin:0;color:var(--gallery-muted);line-height:1.5;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;padding:16px 24px 56px}
+@media (max-width:1180px){.grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.col h2{margin:0;font-size:13px;font-weight:800;display:flex;align-items:center;gap:10px}
+.col h2 .kick{font-family:"JetBrains Mono";font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gallery-muted);font-weight:500}
+.col h2 .sp{flex:1}
+.pick,.tog{font-size:11px;font-weight:700;padding:4px 10px;border:1px solid var(--gallery-line);border-radius:6px;color:var(--gallery-muted);transition:all 150ms}
+.pick:hover,.tog:hover{color:var(--gallery-fg);border-color:var(--gallery-fg)}
+.pick.selected{background:var(--gallery-fg);color:var(--gallery-bg);border-color:var(--gallery-fg)}
+.notes{font-size:12.5px;line-height:1.5;color:var(--gallery-muted);margin:0;padding-left:18px}
+.notes li{margin:2px 0}
+.notes b{color:var(--gallery-fg);font-weight:700}
+
+/* ---------- app frame ---------- */
+.frame{height:640px;border-radius:12px;overflow:hidden;display:flex;background-image:var(--app-bloom),var(--app-wash);color:var(--foreground);border:1px solid var(--gallery-line);position:relative;font-size:14px}
+.rail{width:56px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:14px;color:var(--muted-fg)}
+.rail .mk{width:24px;height:24px;color:var(--foreground)}
+.rail .it{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.rail .it.on{background:var(--state-selected);color:var(--foreground);position:relative}
+.rail .it.on::before{content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:3px;background:var(--brand);border-radius:0 2px 2px 0}
+.content{flex:1;min-width:0;display:flex;flex-direction:column}
+.content header{height:56px;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 16px;flex-shrink:0}
+.searchbtn{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:8px;color:var(--muted-fg);font-size:13px;font-weight:600}
+.searchbtn kbd{background:var(--chrome-fill);border:1px solid var(--border);border-radius:4px;padding:0 5px;font-family:"JetBrains Mono";font-size:10px;margin-left:6px}
+.ghost{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--muted-fg)}
+.avatar{width:32px;height:32px;border-radius:999px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+main{flex:1;min-height:0;margin:0 4px 8px 4px;border-radius:14px;background:var(--content-surface);border:1px solid var(--content-edge);box-shadow:var(--content-lift);display:flex;overflow:hidden}
+.board{flex:1;min-width:0;padding:18px 18px 0;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.board .bh{display:flex;align-items:baseline;gap:10px}
+.board .bh h3{margin:0;font-size:17px;font-weight:800}
+.board .views{display:flex;gap:2px;border-bottom:1px solid var(--border)}
+.board .views span{font-size:12px;font-weight:600;color:var(--muted-fg);padding:6px 8px;border-bottom:2px solid transparent}
+.board .views span.on{color:var(--foreground);border-color:var(--brand)}
+.tbl{display:flex;flex-direction:column;font-size:12.5px}
+.tbl .r{display:grid;grid-template-columns:1fr 84px 60px;gap:8px;align-items:center;height:36px;border-bottom:1px solid var(--border);padding:0 4px}
+.tbl .r.h{color:var(--kicker);font-family:"JetBrains Mono";font-size:10px;letter-spacing:.1em;text-transform:uppercase;height:30px}
+.tbl .nm{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pill{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600;color:#0e0e10}
+[data-theme="light"] .pill{color:#fff}
+.pill.g{background:var(--status-green)}.pill.y{background:var(--status-yellow)}.pill.b{background:var(--status-blue)}
+.tbl .who{display:flex}
+.tbl .who i{width:20px;height:20px;border-radius:999px;background:var(--surface-muted);border:1px solid var(--border);margin-left:-6px;display:inline-block}
+
+/* ---------- shared dock pieces ---------- */
+.dock{position:relative;display:flex;flex-direction:column;min-width:0;flex-shrink:0;width:300px;transition:width 360ms var(--ease)}
+.grip{position:absolute;left:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2}
+.grip:hover{background:var(--border-hover)}
+.layer{position:absolute;inset:0;display:flex;flex-direction:column;transition:opacity 220ms ease,transform 360ms var(--ease)}
+.frame[data-open="false"] .layer.full{opacity:0;transform:translateX(24px);pointer-events:none;transition:opacity 140ms ease,transform 200ms ease-in}
+.frame[data-open="true"] .layer.mini{opacity:0;transform:translateX(-8px);pointer-events:none;transition:opacity 120ms ease,transform 160ms ease-in}
+.frame[data-open="false"] .layer.mini{transition-delay:140ms}
+.frame[data-open="true"] .layer.full{transition-delay:80ms}
+.hd{height:56px;display:flex;align-items:center;gap:4px;padding:0 12px 0 10px;flex-shrink:0}
+.hd .sp{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 8px;border-radius:8px;color:var(--muted-fg);font-size:12px;font-weight:600;transition:background 150ms,color 150ms}
+.btn:hover{background:var(--state-hover);color:var(--foreground)}
+.btn.ic{width:28px;padding:0}
+.ini{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;position:relative}
+.ini.ask{background:var(--chrome-fill);border:1px solid var(--border);color:var(--brand)}
+.ini.a{background:color-mix(in oklab,var(--brand) 18%,transparent);color:var(--brand)}
+[data-theme="light"] .ini.a{background:color-mix(in oklab,var(--brand) 14%,white)}
+.dot{position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;border-radius:999px;background:var(--muted-fg);border:2px solid var(--dotring);opacity:0}
+.dot.on{opacity:1;background:var(--status-green)}
+[data-run="running"] .dot.run{opacity:1;background:var(--brand);animation:pulse 1.4s var(--ease) infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in oklab,var(--brand) 55%,transparent)}60%{box-shadow:0 0 0 6px transparent}}
+.tab{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;border:1px solid transparent;position:relative;color:var(--muted-fg);transition:border-color 300ms var(--ease);cursor:pointer}
+.tab:hover{border-color:var(--border-hover)}
+.tab .ini{width:26px;height:26px;border-radius:7px;font-size:11px}
+.tab.on{border-color:var(--border)}
+.tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-9px;height:3px;background:var(--brand);border-radius:2px 2px 0 0}
+.tab .tip{position:absolute;top:100%;left:50%;transform:translate(-50%,6px);background:var(--popover);border:1px solid var(--border);color:var(--foreground);font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 120ms;z-index:6}
+.tab:hover .tip{opacity:1}
+.msgs{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:14px;padding:8px 14px}
+.msgs>*{transition:opacity 260ms ease,transform 360ms var(--ease)}
+.frame[data-open="false"] .msgs>*{opacity:0;transform:translateX(14px);transition:none}
+.msgs>*:nth-child(1){transition-delay:120ms}.msgs>*:nth-child(2){transition-delay:180ms}.msgs>*:nth-child(3){transition-delay:240ms}
+.me{align-self:flex-end;max-width:85%;background:var(--chrome-fill);border:1px solid var(--border);border-radius:10px;padding:7px 11px;font-size:13px}
+.ai{display:flex;gap:10px;align-items:flex-start}
+.ai .ini{margin-top:2px}
+.ai .t{font-size:13px;line-height:1.5;min-width:0}
+.ai .t .kicker{display:block;margin-bottom:3px}
+.think{display:none;align-items:center;gap:8px;color:var(--muted-fg);font-size:13px}
+[data-run="running"] .think{display:flex}
+.think b{display:inline-flex;gap:3px}
+.think b i{width:4px;height:4px;border-radius:999px;background:currentColor;animation:td 1.2s var(--ease) infinite}
+.think b i:nth-child(2){animation-delay:.15s}.think b i:nth-child(3){animation-delay:.3s}
+@keyframes td{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-2px)}}
+.composer{margin:0 10px 6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;align-items:flex-end;gap:8px;box-shadow:var(--content-lift);transition:border-color 150ms,box-shadow 300ms var(--ease),transform 360ms var(--ease),opacity 260ms ease}
+.composer:hover{border-color:var(--border-bright)}
+.frame[data-open="false"] .composer{opacity:0;transform:translateY(10px);transition:none}
+.frame[data-open="true"] .composer{transition-delay:200ms}
+.composer .ph{flex:1;color:var(--muted-fg);font-size:13px;padding:5px 6px}
+.send{width:30px;height:30px;border-radius:8px;background:var(--brand);color:var(--brand-fg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hint{display:block;padding:0 14px 10px;color:var(--kicker)}
+.threads{display:flex;flex-direction:column;gap:2px;padding:0 8px}
+.thr{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid transparent;color:var(--muted-fg);font-size:12.5px;position:relative;transition:border-color 150ms,color 150ms}
+.thr:hover{border-color:var(--border-hover);color:var(--foreground)}
+.thr .nm{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.thr .kicker{font-size:10px;flex-shrink:0}
+.thr.on{background:var(--state-selected);color:var(--foreground)}
+.thr.on::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:3px;background:var(--brand);border-radius:0 2px 2px 0}
+.ledger{display:flex;align-items:center;gap:8px;padding:4px 14px 6px;color:var(--kicker);cursor:pointer}
+.ledger .line{flex:1;height:1px;background:var(--border);transition:background 300ms var(--ease)}
+.ledger:hover .line{background:var(--border-bright)}
+.ledger .n{font-family:"JetBrains Mono";font-size:10px}
+.ttl{padding:8px 14px 2px;display:flex;align-items:baseline;gap:8px}
+.ttl b{font-size:14px;font-weight:800;flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.close{color:var(--muted-fg)}
+
+/* ========== V1 — MINI RAIL collapse ========== */
+.frame.V1[data-open="false"] .dock{width:48px}
+.V1 .mini{align-items:center;padding-top:12px;gap:10px}
+.V1 .mini .btn.ic{width:32px;height:32px}
+.V1 .mini .stack{display:flex;flex-direction:column;gap:8px;align-items:center;padding-top:4px}
+.V1 .mini .stack .ini{width:30px;height:30px;border-radius:9px;cursor:pointer}
+.V1 .mini .stack .ini.cur::after{content:"";position:absolute;right:-9px;top:6px;bottom:6px;width:3px;background:var(--brand);border-radius:2px 0 0 2px}
+.V1 .mini .vk{writing-mode:vertical-rl;transform:rotate(180deg);margin-top:auto;padding-bottom:16px}
+
+/* ========== V2 — LOG (timeline) + header-button collapse ========== */
+.frame.V2[data-open="false"] .dock{width:0}
+.V2 .content header .dockbtn{position:relative;opacity:0;transform:translateX(8px);transition:opacity 200ms ease,transform 320ms var(--ease);pointer-events:none}
+.frame.V2[data-open="false"] .content header .dockbtn{opacity:1;transform:none;pointer-events:auto;transition-delay:180ms}
+.V2 .dockbtn .dot{right:2px;bottom:2px;border-color:var(--dotring)}
+.V2 .log{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:4px 0 0}
+.V2 .log>*{transition:opacity 260ms ease,transform 360ms var(--ease)}
+.frame[data-open="false"] .V2 .log>*{opacity:0;transform:translateX(14px);transition:none}
+.V2 .log>*:nth-child(1){transition-delay:120ms}.V2 .log>*:nth-child(2){transition-delay:180ms}.V2 .log>*:nth-child(3){transition-delay:240ms}
+.V2 .row{display:grid;grid-template-columns:28px 1fr auto;gap:10px;padding:10px 14px;border-top:1px solid var(--border);font-size:13px;line-height:1.5;align-items:start}
+.V2 .row:first-child{border-top:0}
+.V2 .row .kicker{display:block;margin-bottom:3px}
+.V2 .row .ts{font-family:"JetBrains Mono";font-size:10px;color:var(--kicker);padding-top:3px}
+.V2 .row.you .ini{background:var(--chrome-fill);border:1px solid var(--border);color:var(--foreground);font-size:10px}
+.V2 .row .t{min-width:0}
+
+/* ========== V3 — SPINE collapse (vertical label) + bloom ========== */
+.frame.V3[data-open="false"] .dock{width:56px}
+.V3 .dock::before{content:"";position:absolute;left:0;right:0;top:0;height:260px;background:radial-gradient(80% 60% at 70% 0%, color-mix(in oklab,var(--brand) 20%,transparent) 0%, transparent 70%);pointer-events:none;opacity:.8;transition:opacity 400ms}
+[data-run="running"] .V3 .dock::before{animation:breathe 2.6s var(--ease) infinite}
+@keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
+.V3 .mini{align-items:center;padding-top:12px;gap:10px}
+.V3 .mini .btn.ic{width:32px;height:32px}
+.V3 .mini .cur{width:34px;height:34px;border-radius:10px;font-size:13px;box-shadow:var(--glow);cursor:pointer}
+.V3 .mini .vlabel{writing-mode:vertical-rl;transform:rotate(180deg);display:flex;align-items:center;gap:8px;margin-top:6px}
+.V3 .mini .vlabel b{font-size:12px;font-weight:800;color:var(--foreground);letter-spacing:.02em}
+.V3 .mini .others{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding-bottom:14px}
+.V3 .mini .others .ini{width:26px;height:26px;border-radius:7px;font-size:11px;opacity:.7}
+.V3 .ai .t{border-left:2px solid color-mix(in oklab,var(--brand) 45%,transparent);padding-left:10px}
+.V3 .hero{display:flex;align-items:center;gap:10px;padding:6px 14px 4px}
+.V3 .hero .ini{width:36px;height:36px;border-radius:10px;font-size:14px;box-shadow:var(--glow)}
+.V3 .hero .who b{display:block;font-size:15px;font-weight:800;line-height:1.1}
+.V3 .hero .who .kicker{display:block;font-size:10px;margin-top:3px}
+.V3 .composer{background:color-mix(in oklab,var(--surface) 80%,transparent);backdrop-filter:blur(8px)}
+.V3 .composer:hover{box-shadow:var(--glow)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="kick">Brainstorm · agent dock · round 3</span>
+  <h1>Atmosphere — polish, collapsed state, motion</h1>
+  <span class="sp"></span>
+  <button class="tog" id="allTog">Collapse all</button>
+  <span class="kick">State</span>
+  <div class="seg" id="runseg"><button aria-pressed="true" data-run="idle">Idle</button><button aria-pressed="false" data-run="running">Agent running</button></div>
+  <span class="kick">Theme</span>
+  <div class="seg" id="themeseg"><button aria-pressed="true" data-theme="dark">Dark</button><button aria-pressed="false" data-theme="light">Light</button></div>
+</div>
+
+<div class="intro">
+  <h2>Three finishes of the same dock — each with its own collapsed form</h2>
+  <p>All A4: dock on the wash, no chat card, composer the only raised surface. Each column pairs a <b>transcript finish</b> with a <b>collapsed form</b>; the two are separable. Click the close icon in the dock (or “Collapse” on the title) to watch it fold; click the collapsed control to reopen. Motion is the Keystone ease (360ms width, content slides in 80ms behind with a 60ms stagger).</p>
+</div>
+
+<div class="grid">
+
+<!-- ================= V1 ================= -->
+<div class="col">
+  <h2><span class="kick">V1</span> Ledger finish · collapses to a mini rail of agents <span class="sp"></span><button class="tog" data-frame="f1">Collapse</button><button class="pick" data-choice="V1">Pick V1</button></h2>
+  <div class="frame V1" id="f1" data-open="true">
+    <div class="rail"><svg class="mk" viewBox="0 0 24 24" fill="currentColor"><path d="M8 4 L16 2 L16 20 L8 22 Z"/></svg><span class="it"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><span class="it on"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg></span><span class="it"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+    <div class="content">
+      <header><span class="searchbtn"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search<kbd>⌘K</kbd></span><span class="ghost"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span><span class="avatar">DJ</span></header>
+      <main><div class="board"><div class="bh"><h3>Q3 launch</h3><span class="kicker xs">Planning</span></div><div class="views"><span class="on">Table</span><span>Kanban</span><span>Timeline</span></div><div class="tbl"><div class="r h"><span>Item</span><span>Status</span><span>Owner</span></div><div class="r"><span class="nm">Pricing page copy</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Stripe test-mode key</span><span class="pill y">Stuck</span><span class="who"><i></i><i></i></span></div><div class="r"><span class="nm">Onboarding video</span><span class="pill b">Working</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Press list</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Launch checklist</span><span class="pill b">Working</span><span class="who"><i></i><i></i><i></i></span></div></div></div></main>
+    </div>
+    <aside class="dock">
+      <div class="grip"></div>
+      <div class="layer full">
+        <div class="hd">
+          <span class="tab"><span class="ini ask"><svg class="i xs" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 6.1 15.6 4.1v2.4L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="m18.8 2.8 2.2 2.2-2.2 2.2-2.2-2.2Z"/></svg></span><span class="tip">Ask</span></span>
+          <span class="tab on"><span class="ini a">S<i class="dot run on"></i></span><span class="tip">Scout</span></span>
+          <span class="tab"><span class="ini a">L<i class="dot on"></i></span><span class="tip">Ledger</span></span>
+          <span class="tab"><span class="ini a">N<i class="dot"></i></span><span class="tip">Nova</span></span>
+          <span class="sp"></span>
+          <span class="btn ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="btn ic close" onclick="setOpen('f1',false)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M18 9l-2 3 2 3"/></svg></span>
+        </div>
+        <div class="ttl"><b>What's blocking the launch?</b><span class="kicker xs">Scout</span></div>
+        <div class="ledger"><span class="kicker xs">Threads</span><span class="line"></span><span class="n">3</span><svg class="i xs" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+        <div class="msgs">
+          <div class="me">What's blocking the launch?</div>
+          <div class="ai"><span class="ini a">S</span><div class="t"><span class="kicker">Scout</span>Two items are stuck: <b>Stripe test-mode key</b> has been waiting 6 days, and <b>Launch checklist</b> has three owners but no due date.</div></div>
+          <div class="think"><span class="ini a">S</span><b><i></i><i></i><i></i></b>Reading 14 items…</div>
+        </div>
+        <div class="composer"><span class="ph">Ask Scout about this board…</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+        <span class="kicker xs hint">↵ send · ⇧↵ newline</span>
+      </div>
+      <div class="layer mini">
+        <span class="btn ic" onclick="setOpen('f1',true)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M18 15l2-3-2-3"/></svg></span>
+        <div class="stack">
+          <span class="ini ask" onclick="setOpen('f1',true)"><svg class="i xs" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 6.1 15.6 4.1v2.4L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="m18.8 2.8 2.2 2.2-2.2 2.2-2.2-2.2Z"/></svg></span>
+          <span class="ini a cur" onclick="setOpen('f1',true)">S<i class="dot run on"></i></span>
+          <span class="ini a" onclick="setOpen('f1',true)">L<i class="dot on"></i></span>
+          <span class="ini a" onclick="setOpen('f1',true)">N<i class="dot"></i></span>
+        </div>
+        
+      </div>
+    </aside>
+  </div>
+  <ul class="notes">
+    <li><b>Open:</b> round-2 A4 with names on hover, thread title as a heading, threads folded in the ledger row.</li>
+    <li><b>Collapsed:</b> a 48px mini rail — the agents stay visible as a vertical stack with presence dots; the active one keeps the edge bar (on the right edge, mirroring the sidebar). Click any agent to reopen on them. Twin of the left rail's collapsed state.</li>
+  </ul>
+</div>
+
+<!-- ================= V2 ================= -->
+<div class="col">
+  <h2><span class="kick">V2</span> Log finish · collapses into the app header <span class="sp"></span><button class="tog" data-frame="f2">Collapse</button><button class="pick" data-choice="V2">Pick V2</button></h2>
+  <div class="frame V2" id="f2" data-open="true">
+    <div class="rail"><svg class="mk" viewBox="0 0 24 24" fill="currentColor"><path d="M8 4 L16 2 L16 20 L8 22 Z"/></svg><span class="it"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><span class="it on"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg></span><span class="it"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+    <div class="content">
+      <header><span class="searchbtn"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search<kbd>⌘K</kbd></span><span class="ghost"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span><span class="avatar">DJ</span><span class="ini a dockbtn" onclick="setOpen('f2',true)" style="width:32px;height:32px;border-radius:9px;cursor:pointer">S<i class="dot run on"></i></span></header>
+      <main><div class="board"><div class="bh"><h3>Q3 launch</h3><span class="kicker xs">Planning</span></div><div class="views"><span class="on">Table</span><span>Kanban</span><span>Timeline</span></div><div class="tbl"><div class="r h"><span>Item</span><span>Status</span><span>Owner</span></div><div class="r"><span class="nm">Pricing page copy</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Stripe test-mode key</span><span class="pill y">Stuck</span><span class="who"><i></i><i></i></span></div><div class="r"><span class="nm">Onboarding video</span><span class="pill b">Working</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Press list</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Launch checklist</span><span class="pill b">Working</span><span class="who"><i></i><i></i><i></i></span></div></div></div></main>
+    </div>
+    <aside class="dock">
+      <div class="grip"></div>
+      <div class="layer full">
+        <div class="hd">
+          <span class="tab"><span class="ini ask"><svg class="i xs" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 6.1 15.6 4.1v2.4L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="m18.8 2.8 2.2 2.2-2.2 2.2-2.2-2.2Z"/></svg></span><span class="tip">Ask</span></span>
+          <span class="tab on"><span class="ini a">S<i class="dot run on"></i></span><span class="tip">Scout</span></span>
+          <span class="tab"><span class="ini a">L<i class="dot on"></i></span><span class="tip">Ledger</span></span>
+          <span class="tab"><span class="ini a">N<i class="dot"></i></span><span class="tip">Nova</span></span>
+          <span class="sp"></span>
+          <span class="btn ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="btn ic close" onclick="setOpen('f2',false)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M18 9l-2 3 2 3"/></svg></span>
+        </div>
+        <div class="ttl"><b>What's blocking the launch?</b><span class="kicker xs">Thread 2 of 3</span></div>
+        <div class="log">
+          <div class="row you"><span class="ini">DJ</span><div class="t"><span class="kicker">You</span>What's blocking the launch?</div><span class="ts">14:02</span></div>
+          <div class="row"><span class="ini a">S</span><div class="t"><span class="kicker">Scout · read 14 items</span>Two items are stuck: <b>Stripe test-mode key</b> has been waiting 6 days, and <b>Launch checklist</b> has three owners but no due date.</div><span class="ts">14:02</span></div>
+          <div class="row think" style="display:none"><span class="ini a">S</span><div class="t"><b><i></i><i></i><i></i></b> Reading 14 items…</div><span class="ts">now</span></div>
+        </div>
+        <div class="composer"><span class="ph">Ask Scout about this board…</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+        <span class="kicker xs hint">↵ send · ⇧↵ newline</span>
+      </div>
+    </aside>
+  </div>
+  <ul class="notes">
+    <li><b>Open:</b> the transcript is a <b>log</b>, not a chat — every turn is a row with a lead tile, a mono kicker (“Scout · read 14 items”) and a timestamp, separated by hairlines. No bubbles at all; you and the agent share one grammar. Reads like the Activity tab.</li>
+    <li><b>Collapsed:</b> the dock leaves entirely; the board gets the full width. What remains is the active agent's tile in the app header next to your avatar, presence dot pulsing while it runs. Click it to slide the dock back in.</li>
+  </ul>
+</div>
+
+<!-- ================= V3 ================= -->
+<div class="col">
+  <h2><span class="kick">V3</span> Bloom finish · collapses to a spine with the agent's name <span class="sp"></span><button class="tog" data-frame="f3">Collapse</button><button class="pick" data-choice="V3">Pick V3</button></h2>
+  <div class="frame V3" id="f3" data-open="true">
+    <div class="rail"><svg class="mk" viewBox="0 0 24 24" fill="currentColor"><path d="M8 4 L16 2 L16 20 L8 22 Z"/></svg><span class="it"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span><span class="it on"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg></span><span class="it"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+    <div class="content">
+      <header><span class="searchbtn"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search<kbd>⌘K</kbd></span><span class="ghost"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span><span class="avatar">DJ</span></header>
+      <main><div class="board"><div class="bh"><h3>Q3 launch</h3><span class="kicker xs">Planning</span></div><div class="views"><span class="on">Table</span><span>Kanban</span><span>Timeline</span></div><div class="tbl"><div class="r h"><span>Item</span><span>Status</span><span>Owner</span></div><div class="r"><span class="nm">Pricing page copy</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Stripe test-mode key</span><span class="pill y">Stuck</span><span class="who"><i></i><i></i></span></div><div class="r"><span class="nm">Onboarding video</span><span class="pill b">Working</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Press list</span><span class="pill g">Done</span><span class="who"><i></i></span></div><div class="r"><span class="nm">Launch checklist</span><span class="pill b">Working</span><span class="who"><i></i><i></i><i></i></span></div></div></div></main>
+    </div>
+    <aside class="dock">
+      <div class="grip"></div>
+      <div class="layer full">
+        <div class="hd">
+          <span class="tab"><span class="ini ask"><svg class="i xs" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 6.1 15.6 4.1v2.4L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="m18.8 2.8 2.2 2.2-2.2 2.2-2.2-2.2Z"/></svg></span><span class="tip">Ask</span></span>
+          <span class="tab on"><span class="ini a">S<i class="dot run on"></i></span><span class="tip">Scout</span></span>
+          <span class="tab"><span class="ini a">L<i class="dot on"></i></span><span class="tip">Ledger</span></span>
+          <span class="tab"><span class="ini a">N<i class="dot"></i></span><span class="tip">Nova</span></span>
+          <span class="sp"></span>
+          <span class="btn ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          <span class="btn ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="btn ic close" onclick="setOpen('f3',false)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M18 9l-2 3 2 3"/></svg></span>
+        </div>
+        <div class="hero"><span class="ini a">S<i class="dot run on"></i></span><span class="who"><b>Scout</b><span class="kicker"><span data-idle="Idle" data-run="Running">Idle</span> · 3 docs · memory on</span></span></div>
+        <div class="ttl"><b>What's blocking the launch?</b></div>
+        <div class="msgs">
+          <div class="me">What's blocking the launch?</div>
+          <div class="ai"><span class="ini a">S</span><div class="t"><span class="kicker">Scout</span>Two items are stuck: <b>Stripe test-mode key</b> has been waiting 6 days, and <b>Launch checklist</b> has three owners but no due date.</div></div>
+          <div class="think"><span class="ini a">S</span><b><i></i><i></i><i></i></b>Reading 14 items…</div>
+        </div>
+        <div class="composer"><span class="ph">Ask Scout about this board…</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+        <span class="kicker xs hint">↵ send · ⇧↵ newline</span>
+      </div>
+      <div class="layer mini">
+        <span class="btn ic" onclick="setOpen('f3',true)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M18 15l2-3-2-3"/></svg></span>
+        <span class="ini a cur" onclick="setOpen('f3',true)">S<i class="dot run on"></i></span>
+        <span class="vlabel"><b>Scout</b><span class="kicker xs" data-idle="Idle" data-run="Running">Idle</span></span>
+        <div class="others">
+          <span class="ini ask" onclick="setOpen('f3',true)"><svg class="i xs" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 6.1 15.6 4.1v2.4L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="m18.8 2.8 2.2 2.2-2.2 2.2-2.2-2.2Z"/></svg></span>
+          <span class="ini a" onclick="setOpen('f3',true)">L</span>
+          <span class="ini a" onclick="setOpen('f3',true)">N</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <ul class="notes">
+    <li><b>Open:</b> a soft periwinkle bloom sits behind the header and <i>breathes</i> while the agent runs; the active agent gets a small hero row (name + mono facts) under the tabs; agent replies carry a 2px periwinkle hairline on the left; the composer is glass (blurred wash showing through) and glows on hover/focus.</li>
+    <li><b>Collapsed:</b> a 56px spine: the active agent's tile with the glow, its name and state written <b>vertically</b> along the spine, the other agents small at the bottom. You always know who's on duty even when the dock is folded.</li>
+  </ul>
+</div>
+
+<!-- ================= NOTES COLUMN ================= -->
+<div class="col">
+  <h2><span class="kick">Motion</span> What every variant shares</h2>
+  <ul class="notes" style="padding-top:4px">
+    <li><b>Fold:</b> width eases 300 → 48/0/56px over 360ms on the Keystone curve (<code>cubic-bezier(.16,1,.3,1)</code>). The open content exits first (140ms fade + 24px slide right), then the collapsed form fades in behind it.</li>
+    <li><b>Unfold:</b> width first; the header tabs, title and turns slide in from the right with a 60ms stagger (turn 1 at 120ms, turn 2 at 180ms…), the composer rises last from 10px below. Nothing scales — Keystone moves on one axis.</li>
+    <li><b>Presence:</b> the active agent's dot pulses (ring expands 6px, 1.4s) while a run is live, in every state including collapsed — so a folded dock still tells you something is happening.</li>
+    <li><b>Reduced motion:</b> the global <code>prefers-reduced-motion</code> rule in globals.css collapses all of this to instant; nothing here re-implements it.</li>
+    <li><b>Real build:</b> width comes from the existing <code>use-dock-state</code> (persisted, resizable); the fold is a CSS transition on the same value, and the two layers are one component with <code>data-open</code> — no Framer needed.</li>
+    <li>Mix freely: e.g. V1's open finish with V2's collapse-into-header, or V3's spine with V1's plainer transcript.</li>
+  </ul>
+</div>
+
+</div>
+
+<script>
+function setOpen(id,open){document.getElementById(id).dataset.open=open?'true':'false';syncTog();}
+function syncTog(){document.querySelectorAll('.tog[data-frame]').forEach(function(b){var f=document.getElementById(b.dataset.frame);b.textContent=f.dataset.open==='true'?'Collapse':'Open';});}
+(function(){
+  var root=document.documentElement;
+  function seg(id,attr){
+    var s=document.getElementById(id);
+    s.addEventListener('click',function(e){
+      var b=e.target.closest('button');if(!b)return;
+      s.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});
+      root.dataset[attr]=b.dataset[attr];
+      document.querySelectorAll('[data-idle][data-run]').forEach(function(el){el.textContent=root.dataset.run==='running'?el.dataset.run:el.dataset.idle});
+      document.querySelectorAll('.V2 .row.think').forEach(function(el){el.style.display=root.dataset.run==='running'?'grid':'none'});
+    });
+  }
+  seg('themeseg','theme');seg('runseg','run');
+  document.querySelectorAll('.tog[data-frame]').forEach(function(b){b.addEventListener('click',function(){var f=document.getElementById(b.dataset.frame);setOpen(b.dataset.frame,f.dataset.open!=='true')})});
+  var all=document.getElementById('allTog');
+  all.addEventListener('click',function(){var open=all.textContent==='Open all';['f1','f2','f3'].forEach(function(id){setOpen(id,open)});all.textContent=open?'Collapse all':'Open all'});
+  document.querySelectorAll('.pick').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.pick').forEach(function(x){x.classList.remove('selected')});b.classList.add('selected')})});
+})();
+</script>
+</body>
+</html>

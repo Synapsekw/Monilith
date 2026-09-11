@@ -34,6 +34,7 @@ export const NameCell = memo(function NameCell({
   selected = false,
   autoFocusRename = false,
   onRenameSettled,
+  intelMatch,
 }: {
   item: Item;
   controls: CellControls;
@@ -44,6 +45,8 @@ export const NameCell = memo(function NameCell({
   selected?: boolean;
   autoFocusRename?: boolean;
   onRenameSettled?: () => void;
+  /** Board Intelligence: true = active chip's rule paints inside this frozen column. */
+  intelMatch?: boolean | null;
 }) {
   const [editing, setEditing] = useState(autoFocusRename);
   const [name, setName] = useState(item.name);
@@ -79,6 +82,9 @@ export const NameCell = memo(function NameCell({
           NAME_FREEZE_EDGE,
         )}
       >
+        {intelMatch === true && (
+          <span aria-hidden data-testid="intel-rule" className="intel-rule" />
+        )}
         {leading}
         <Input
           autoFocus
@@ -125,13 +131,21 @@ export const NameCell = memo(function NameCell({
         // (::before, inset 6px). The bar is pointer-events-none so it never
         // blocks the checkbox/drag targets.
         selected
-          ? "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded"
+          ? cn(
+              "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded",
+              // The intel rule owns x=0 while a chip is active; the periwinkle
+              // wash still says "selected" on its own.
+              intelMatch === true && "before:hidden",
+            )
           : indented
             ? "bg-surface-sunken hover:bg-surface"
             : "bg-surface hover:bg-surface-muted",
         NAME_FREEZE_EDGE,
       )}
     >
+      {intelMatch === true && (
+        <span aria-hidden data-testid="intel-rule" className="intel-rule" />
+      )}
       {leading}
       <div
         role="button"

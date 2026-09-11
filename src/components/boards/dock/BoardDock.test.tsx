@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const loadDockThreads = vi.fn();
@@ -12,6 +12,25 @@ vi.mock("./dock-actions", () => ({
 const setThreadVisibility = vi.fn();
 vi.mock("@/lib/ai/ask/conversation-actions", () => ({
   setThreadVisibility: (i: unknown) => setThreadVisibility(i),
+}));
+
+const runBoardIntelligence = vi.fn();
+const dismissSuggestion = vi.fn();
+vi.mock("@/lib/ai/board-intelligence/run", () => ({
+  runBoardIntelligence: (i: unknown) => runBoardIntelligence(i),
+  dismissSuggestion: (i: unknown) => dismissSuggestion(i),
+}));
+
+const applySuggestion = vi.fn();
+vi.mock("@/lib/ai/board-intelligence/apply", () => ({
+  applySuggestion: (i: unknown) => applySuggestion(i),
+  revertSuggestion: vi.fn(),
+}));
+
+// The real hook reaches for a react-query client the dock is never rendered
+// with; the tab's own suite covers what it does with the effects.
+vi.mock("@/lib/boards/use-ai-effects", () => ({
+  useApplyBoardEffects: () => vi.fn(),
 }));
 
 /**
@@ -64,6 +83,8 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
 });
 
 import { BoardDock } from "./BoardDock";
+import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 
 const AGENTS = [
   { id: "a1", name: "Morning Brief" },
@@ -96,16 +117,83 @@ const rememberOpen = () =>
     JSON.stringify({ open: true, width: 360 }),
   );
 
+/** A run with two suggestions still open: one write, one browser-side filter. */
+const intelRun = (): BoardIntelligenceRun => ({
+  id: "r1",
+  boardId: "b1",
+  generatedAt: new Date().toISOString(),
+  inputHash: "h1",
+  model: "gemini-2.5-flash",
+  tokensIn: 900,
+  tokensOut: 340,
+  dismissed: [],
+  applied: [],
+  payload: {
+    brief: "Two items slipped and Design has not moved.",
+    signals: [],
+    suggestions: [
+      {
+        id: "s1",
+        kind: "overdue",
+        title: "Three items are overdue",
+        evidence: "3 items",
+        body: "Push the dates or hand them over.",
+        evidenceRows: [],
+        actions: [
+          {
+            type: "set_due",
+            itemId: "i1",
+            columnId: "c1",
+            date: "2026-09-18",
+            label: "Push to Friday",
+          },
+        ],
+      },
+      {
+        id: "s2",
+        kind: "stalled",
+        title: "Design is stalled",
+        evidence: "5 days",
+        body: "Nothing in Design changed since Friday.",
+        evidenceRows: [],
+        actions: [
+          { type: "filter", signalKind: "stalled", label: "Show stalled" },
+        ],
+      },
+    ],
+  },
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
   window.history.replaceState(null, "", "/boards/b1");
   loadDockThreads.mockResolvedValue(EMPTY);
   setThreadVisibility.mockResolvedValue({ ok: true, data: {} });
+  runBoardIntelligence.mockResolvedValue({ ok: true, data: intelRun() });
+  useBoardIntelligenceStore.setState({
+    runs: {},
+    openRequest: null,
+    filterRequest: null,
+    busy: {},
+  });
 });
 
-const mount = () =>
-  render(<BoardDock boardId="b1" agents={AGENTS} currentUserId="me" />);
+type MountProps = {
+  access?: "owner" | "editor" | "viewer";
+  initialRun?: BoardIntelligenceRun | null;
+};
+
+const mount = (props: MountProps = {}) =>
+  render(
+    <BoardDock
+      boardId="b1"
+      agents={AGENTS}
+      currentUserId="me"
+      access={props.access ?? "editor"}
+      initialRun={props.initialRun ?? null}
+    />,
+  );
 
 const openDock = () =>
   userEvent.click(screen.getByRole("button", { name: /open agent dock/i }));
@@ -486,5 +574,142 @@ describe("BoardDock — sharing a thread with the board", () => {
         name: /share "about the roadmap" with this board/i,
       }),
     ).toBeInTheDocument();
+  });
+});
+
+// The dock is two sections now. The rule that matters is that SWITCHING between
+// them is free: the thread read is guarded by `loaded`, and the Intelligence
+// tab renders a run the page already handed to the store.
+describe("BoardDock — Chat and Intelligence", () => {
+  const openIntelligence = () =>
+    userEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
+
+  it("shows both sections and opens on Chat", async () => {
+    mount();
+    await openDock();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Chat", "Intelligence"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+  });
+
+  it("hands the header over to Intelligence, and never re-reads the threads", async () => {
+    mount({ initialRun: intelRun() });
+    await openDock();
+    await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
+
+    await openIntelligence();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^new$/i })).toBeNull();
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "aria-labelledby",
+      "dock-tab-intelligence",
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    await openIntelligence();
+    expect(loadDockThreads).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts the unresolved suggestions on the tab", async () => {
+    mount({ initialRun: intelRun() });
+    await openDock();
+    expect(
+      screen.getByRole("tab", { name: /intelligence/i }),
+    ).toHaveTextContent("Intelligence2");
+  });
+
+  it("lets a viewer read and filter, but never apply", async () => {
+    mount({ access: "viewer", initialRun: intelRun() });
+    await openDock();
+    await openIntelligence();
+
+    expect(screen.getByText("Three items are overdue")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Push to Friday" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Show stalled" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^Read-only · /)).toBeInTheDocument();
+  });
+
+  it("reads the board ONCE when the tab is opened with nothing cached", async () => {
+    mount({ initialRun: null });
+    await openDock();
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
+
+    await openIntelligence();
+    await waitFor(() =>
+      expect(runBoardIntelligence).toHaveBeenCalledWith({
+        boardId: "b1",
+        force: false,
+      }),
+    );
+    expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
+
+    // Coming back to the tab renders the run that read produced — it does not
+    // read again.
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await openIntelligence();
+    expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads NOTHING on page load when the dock was left open on Intelligence", async () => {
+    // `tab` is remembered per board, so the dock comes back where it was left.
+    // Restoring a tab is not the reader asking for a brief — kicking a model
+    // call here is a metered request on first paint, which the budget forbids.
+    window.localStorage.setItem(
+      "monolith.dock.b1",
+      JSON.stringify({ open: true, width: 360, tab: "intelligence" }),
+    );
+    mount({ initialRun: null });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: /intelligence/i }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    await act(async () => {});
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
+
+    // Asking for it — leaving and coming back to the tab — still reads once.
+    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await openIntelligence();
+    await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
+  });
+});
+
+// The strip's "Catch me up" lives in a different subtree, so it asks through
+// the store. A request must open the dock, land on the right section, read the
+// board once, and then be gone — a request that survived would re-fire on every
+// later render.
+describe("BoardDock — the strip asks for a brief", () => {
+  it("opens on Intelligence and reads the board once", async () => {
+    mount();
+    expect(
+      screen.getByRole("button", { name: /open agent dock/i }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      useBoardIntelligenceStore.getState().requestOpen("b1", { run: true });
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: /intelligence/i }),
+      ).toHaveAttribute("aria-selected", "true"),
+    );
+    await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
+    expect(useBoardIntelligenceStore.getState().openRequest).toBeNull();
+  });
+
+  it("ignores a request meant for another board", async () => {
+    mount();
+    await act(async () => {
+      useBoardIntelligenceStore.getState().requestOpen("other", { run: true });
+    });
+    expect(
+      screen.getByRole("button", { name: /open agent dock/i }),
+    ).toBeInTheDocument();
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
   });
 });

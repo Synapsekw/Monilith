@@ -7,29 +7,24 @@ import type { BoardListEntry } from "@/lib/boards/queries";
 import type { BoardFolder } from "@/lib/boards/folders/types";
 import { cn } from "@/lib/utils";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
+import { SidebarRow, sidebarLabelClass } from "@/components/shell/sidebar-row";
 
 /**
- * An owned-board row that is NOT a `useSortable` item: the default first-paint
- * markup before the lazy sortable variant mounts, and — inside a folder — the
- * row the drag layer wraps too. Mirrors `SortableBoardRow` minus the sortable
- * hooks.
+ * An owned-board row that is NOT a `useSortable` item (first paint, and the
+ * row the drag layer wraps inside a folder). Built on `SidebarRow`: `lead` is
+ * the 24px slot — an inert spacer by default, a real grip when the drag layer
+ * passes one — so a row never shifts when the drag tree swaps in. Same prop
+ * names as `SharedBoardRow`: one pattern for both row kinds.
  *
- * `leading` is the 24px grip slot: an inert spacer by default, a real drag
- * handle when the drag layer passes one. Reserving it unconditionally is what
- * keeps a row from shifting horizontally when the drag tree swaps in, and is
- * what the "folder row alignment" tests pin. Same contract, same prop names, as
- * `SharedBoardRow` — one pattern for both row kinds, not two.
- *
- * The drag props are deliberately structural (a ref callback, a style, a
- * boolean), so this component stays free of @dnd-kit and can render in the
- * shell bundle.
+ * Structural drag props (ref callback, style, boolean) keep this file free of
+ * @dnd-kit so it can render in the shell bundle.
  */
 export function PlainBoardRow({
   board,
   isActive,
   folders = [],
   currentFolderId = null,
-  leading = <span className="size-6 shrink-0" aria-hidden />,
+  lead,
   dragRef,
   isDragging = false,
   style,
@@ -38,44 +33,48 @@ export function PlainBoardRow({
   isActive: boolean;
   folders?: BoardFolder[];
   currentFolderId?: string | null;
-  leading?: ReactNode;
+  lead?: ReactNode;
   dragRef?: (node: HTMLElement | null) => void;
   isDragging?: boolean;
   style?: CSSProperties;
 }) {
   return (
-    <div
+    <SidebarRow
+      child
+      active={isActive}
       data-board-row={board.id}
       ref={dragRef}
       style={style}
+      lead={lead}
       className={cn(
-        "group/row flex items-center rounded-md pr-1 transition-colors",
-        isDragging && "shadow-drag relative z-20",
-        isActive
-          ? "bg-primary/80 text-foreground"
-          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
+        isDragging && "shadow-drag z-20",
+        // Inside a folder body (pl-3) the bar must still sit on the sidebar edge.
+        currentFolderId && "before:-left-5",
       )}
+      trailing={
+        <>
+          {board.shared_out ? (
+            <Users2
+              aria-label="Shared with others"
+              className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
+            />
+          ) : null}
+          <BoardItemMenu
+            board={{ id: board.id, name: board.name }}
+            isActive={isActive}
+            folders={folders}
+            currentFolderId={currentFolderId}
+          />
+        </>
+      }
     >
-      {leading}
       <Link
         href={`/boards/${board.id}`}
         aria-current={isActive ? "page" : undefined}
-        className="min-w-0 flex-1 truncate py-1 pr-1 text-xs"
+        className={sidebarLabelClass(true)}
       >
         {board.name}
       </Link>
-      {board.shared_out ? (
-        <Users2
-          aria-label="Shared with others"
-          className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
-        />
-      ) : null}
-      <BoardItemMenu
-        board={{ id: board.id, name: board.name }}
-        isActive={isActive}
-        folders={folders}
-        currentFolderId={currentFolderId}
-      />
-    </div>
+    </SidebarRow>
   );
 }

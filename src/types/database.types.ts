@@ -1153,6 +1153,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      board_intelligence_runs: {
+        Row: {
+          applied: string[];
+          board_id: string;
+          dismissed: string[];
+          generated_at: string;
+          id: string;
+          input_hash: string;
+          model: string | null;
+          org_id: string;
+          payload: Json;
+          tokens_in: number;
+          tokens_out: number;
+          user_id: string;
+        };
+        Insert: {
+          applied?: string[];
+          board_id: string;
+          dismissed?: string[];
+          generated_at?: string;
+          id?: string;
+          input_hash: string;
+          model?: string | null;
+          org_id: string;
+          payload: Json;
+          tokens_in?: number;
+          tokens_out?: number;
+          user_id: string;
+        };
+        Update: {
+          applied?: string[];
+          board_id?: string;
+          dismissed?: string[];
+          generated_at?: string;
+          id?: string;
+          input_hash?: string;
+          model?: string | null;
+          org_id?: string;
+          payload?: Json;
+          tokens_in?: number;
+          tokens_out?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_intelligence_runs_board_org_fkey";
+            columns: ["board_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "board_intelligence_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_members: {
         Row: {
           access_level: Database["public"]["Enums"]["board_access"];
@@ -1909,6 +1969,7 @@ export type Database = {
           new_value: Json | null;
           old_value: Json | null;
           org_id: string;
+          source: string;
         };
         Insert: {
           action: Database["public"]["Enums"]["activity_action"];
@@ -1921,6 +1982,7 @@ export type Database = {
           new_value?: Json | null;
           old_value?: Json | null;
           org_id: string;
+          source?: string;
         };
         Update: {
           action?: Database["public"]["Enums"]["activity_action"];
@@ -1933,6 +1995,7 @@ export type Database = {
           new_value?: Json | null;
           old_value?: Json | null;
           org_id?: string;
+          source?: string;
         };
         Relationships: [
           {
@@ -3886,6 +3949,10 @@ export type Database = {
           credits: number;
           month: string;
         }[];
+      };
+      apply_intelligence_cells: {
+        Args: { p_board_id: string; p_writes: Json };
+        Returns: Json;
       };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };

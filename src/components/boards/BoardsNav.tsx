@@ -13,7 +13,6 @@ import { useParams } from "next/navigation";
 import { FolderKanban } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
-import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +21,7 @@ import {
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { PlainBoardRow } from "@/components/boards/PlainBoardRow";
 import { NavSection } from "@/components/shell/nav-section";
+import { railTileClass } from "@/components/shell/sidebar-row";
 import type {
   BoardFolder,
   BoardFolderPlacement,
@@ -205,12 +205,18 @@ export function BoardsNav({
   }, [foldersSupplied, folderIdSignature, pruneSections]);
 
   return collapsed ? (
-    <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+    <div className="flex flex-col items-center gap-0.5 py-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <span
             aria-label="Boards"
-            className="text-muted-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
+            className={railTileClass({
+              // Not a link — no hover tint, and the default cursor. NOT
+              // `pointer-events-none`: that would also kill the Radix tooltip
+              // this span is the trigger for.
+              className:
+                "hover:text-muted-foreground cursor-default hover:bg-transparent",
+            })}
           >
             <FolderKanban className="size-4 shrink-0" />
             {coarse ? <CoarseCaption label="Boards" /> : null}
@@ -231,12 +237,10 @@ export function BoardsNav({
                   href={`/boards/${b.id}`}
                   aria-current={b.id === activeBoardId ? "page" : undefined}
                   aria-label={b.name}
-                  className={cn(
-                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                    b.id === activeBoardId
-                      ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-                  )}
+                  className={railTileClass({
+                    active: b.id === activeBoardId,
+                    className: "uppercase",
+                  })}
                 >
                   <span className="shrink-0">{b.name.charAt(0)}</span>
                   {coarse ? <CoarseCaption label={b.name} /> : null}
@@ -255,12 +259,10 @@ export function BoardsNav({
                   href={`/boards/${b.id}`}
                   aria-current={b.id === activeBoardId ? "page" : undefined}
                   aria-label={b.name}
-                  className={cn(
-                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                    b.id === activeBoardId
-                      ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-                  )}
+                  className={railTileClass({
+                    active: b.id === activeBoardId,
+                    className: "uppercase",
+                  })}
                 >
                   <span className="shrink-0">{b.name.charAt(0)}</span>
                   {coarse ? <CoarseCaption label={b.name} /> : null}
@@ -275,7 +277,6 @@ export function BoardsNav({
     <NavSection
       storageKey="boards"
       title="Boards"
-      icon={FolderKanban}
       action={
         <>
           <NewFolderDialog />
@@ -286,7 +287,9 @@ export function BoardsNav({
       {grouped.unfiledOwned.length === 0 &&
       folderSections.length === 0 &&
       grouped.unfiledShared.length === 0 ? (
-        <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
+        <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
+          No boards yet
+        </p>
       ) : dndReady ? (
         <BoardsNavSortable
           boards={grouped.unfiledOwned}

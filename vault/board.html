@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 17:57",
+  "updated": "2026-09-11 21:24",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "db10664c",
+        "value": "1dbc19fd",
         "tone": "warn",
-        "note": "Ahead of main: Board Intelligence Phase 1 (Orient) merged — the Intelligence strip under every board header, 18 commits, migration board_visits on DEV — plus its /updates entry. User-visible and unpromoted; /promote is the next step. No worktrees open."
+        "note": "Ahead of main: Board Intelligence Phase 2 (Advise, 19 commits, migration board_intelligence_runs on DEV) and the sidebar Keystone polish (8 commits), each announced on /updates. Both user-visible and unpromoted; /promote is the next step. No live worktrees."
       },
       {
         "name": "main",
-        "value": "d9e9cf77",
+        "value": "148b3c6f",
         "tone": "ok",
-        "note": "PR #119 merged 2026-09-11 — readable assignees: avatar stack, identity colours, who-is-assigned picker (promoted by another session; recorded from the commit graph, not re-verified live here). PR #118 and #117 before it."
+        "note": "PR #121 merged 2026-09-11 — Board Intelligence Phase 1: the Intelligence strip with overdue / blocked / overloaded / stalled / changed-since chips under every board header. Verified live: main CI green (run 34611243080), Vercel state=success. PR #119 and #118 before it."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #119 build per the commit graph; last live verification was after PR #118 (Vercel state=success, www.monolith.works 200). /sync-prod not run: three DEV migrations are not yet on PROD."
+        "note": "Serving the PR #121 build — verified: Vercel state=success on 148b3c6f, www.monolith.works/updates serving \"Board intelligence strip\". /sync-prod not run: five DEV migrations are not yet on PROD."
       }
     ],
     "gates": [
@@ -162,14 +162,14 @@
         "name": "lint",
         "value": "pass",
         "tone": "ok",
-        "note": "0 errors, 4 pre-existing unrelated warnings.",
+        "note": "0 errors, 5 pre-existing unrelated warnings.",
         "label": "lint"
       },
       {
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7370 passing, 1 skipped, on task/board-intelligence-orient before merge. New guards: signals engine table tests, provider URL round-trip, sub-item-parent narrowing, CSS @layer placement of the row rule, render budget with the provider mounted.",
+        "note": "7520 passing, 1 skipped, on task/board-intelligence-advise before merge (finish-task re-ran all four gates on the rebased branch). New suites: schema/validate/transcript/prompt/generate/run/apply for the board brief, the bridge store, dock tabs + Intelligence tab + hook, the strip's Catch me up, the RLS + RPC integration probes (skip without PULSE_TEST_DB).",
         "label": "test"
       },
       {
@@ -180,20 +180,21 @@
       },
       {
         "name": "ledger",
-        "value": "162/162",
+        "value": "163/163",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after 20260911113714_board_visits (table, RLS, touch_board_visit RPC with anon lockdown). apply_migration mis-stamped it again; reconciled with reconcile-migration-version.sh.",
+        "note": "Verified by db:ledger-check after 20260911144351_board_intelligence_runs (runs cache table + RLS, item_activities.source, apply_intelligence_cells RPC with anon lockdown, item_updates board index). apply_migration mis-stamped it again; reconciled by keying on version.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "/promote — Board Intelligence Phase 1 is merged and not yet live, then run its walkthrough",
-      "why": "The Intelligence strip merged to develop with an /updates entry after seven task reviews and a whole-branch review that caught a paint-order defect no test can see. Nothing reaches www.monolith.works until the develop → main PR. The browser visual pass is still owed: check the 2px row rule in Table and Timeline first (session note has the 11-step guide), then plan Phase 2 (Advise).",
+      "title": "/promote — Board Intelligence Phase 2 and the sidebar Keystone polish are merged and not yet live, then run all three walkthroughs",
+      "why": "Two user-visible batches sit on develop with /updates entries: the board brief with one-click Apply and Undo (the whole-branch review's Critical: more than ten signals on a big board failed the server's own schema after paying for the model call) and the sidebar polish. Neither Phase 2 nor the sidebar has been seen in an authenticated browser. Check Catch me up → Apply → Undo and the frozen-column rule at scrollLeft > 0, then the collapsed rail, then plan Phase 3 (Act: assign_person automation + Always do this) and decide board_intelligence_runs retention.",
       "tags": [
         "owner",
         "board-intelligence",
+        "sidebar",
         "promote"
       ]
     },
@@ -263,7 +264,7 @@
     {
       "sev": "amber",
       "title": "A whole visual batch shipped without anyone seeing it",
-      "text": "Seven UI tasks and a fix wave landed on develop with the Chrome extension disconnected. Every colour claim is machine-checked — kicker, chrome-vs-card, brand-on-white, and all six presets in both modes — but skeleton fidelity, the header menu layout and whether Ember or Rose actually look good are eye judgements no test makes. The fifth whole-branch review in a row found a defect no task review saw: ten error boundaries had a dead Try again button because Next 16.3 renamed the retry prop. Assume the manual pass will find something too."
+      "text": "Now three batches in a row: the UI polish + presets, the sidebar polish, and Board Intelligence Phase 2 (dock tab, cards, Apply/Undo, strip pill) all landed on develop with the Chrome extension disconnected and the e2e provisioner refusing DEV. Every string, role and budget claim is machine-checked, but paint order, the 320px two-row dock header and the toast timing are eye judgements no test makes. The whole-branch review found the blocking defect for the fifth session running; assume the manual pass will find something too."
     },
     {
       "sev": "amber",
@@ -358,14 +359,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-11-1757-board-intelligence-phase1-orient",
-    "when": "2026-09-11 17:57",
-    "title": "Board Intelligence — brainstorm, spec, and Phase 1 (Orient) merged",
+    "id": "2026-09-11-2124-board-intelligence-phase2-advise",
+    "when": "2026-09-11 21:24",
+    "title": "Board Intelligence Phase 2 (Advise) built and merged; Phase 1 promoted",
     "bullets": [
-      "Brainstormed with live mockups on the real board anatomy; locked an always-on Intelligence strip plus a dock tab for depth, labelled Intelligence (owner rejected Pulse). Spec covers four phases: Orient, Advise, Act, Ask.",
-      "Phase 1 shipped: five deterministic chips (overdue, blocked chain, overloaded, stalled, changed-since) computed client-side, an intel URL param via replaceState, narrowing plus highlight/dim in all four views, and a board_visits last-seen stamp.",
-      "Seven task reviews and a whole-branch review caught a dozen defects before merge, including a row rule painted under the frozen name column and a URL that wiped saved filters.",
-      "Merged to develop via finish-task.sh with all gates green and announced on /updates. Owed: the browser visual pass, then the Phase 2 plan."
+      "Promoted develop → main as PR #121 (Phase 1 strip); verified live on Vercel and /updates; squash divergence healed.",
+      "Planned and built Phase 2 subagent-driven in parallel per-task worktrees: runs cache + activity source + one-transaction apply RPC, the board-checked validation layer, a per-user cached brief through runAi, the dock's Intelligence tab with Apply/Undo/Dismiss, the strip's Catch me up.",
+      "Eight task reviews each found something real; the whole-branch review found the Critical none could (signal cap vs the server's own payload) plus a plan defect (set_due kept the end date). One fix wave, one re-review, then finish-task.",
+      "Owed: the browser walkthrough (no authenticated browser this session), promotion, and a retention decision for board_intelligence_runs."
     ]
   }
 }

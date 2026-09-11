@@ -11,6 +11,7 @@ import {
   signalSelection,
   stripSignals,
 } from "@/lib/boards/intelligence/signals";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import type {
   IntelSelection,
   Signal,
@@ -18,11 +19,13 @@ import type {
 } from "@/lib/boards/intelligence/types";
 
 /**
- * The Intelligence strip (spec §2.1, Phase 1): mono kicker, up to MAX_CHIPS
- * hairline chips, a zero-state line, "✕ clear" while a chip is active, and
- * skeleton pills while the cache hydrates. No AI badge, no glow, no sparkle
- * (decision 27 / pulse-ui). Chip click is a URL-mirrored client filter — zero
- * server round-trips. "Catch me up" and "updated Xm ago" are Phase 2.
+ * The Intelligence strip (spec §2.1): mono kicker, up to MAX_CHIPS hairline
+ * chips, a zero-state line, "✕ clear" while a chip is active, skeleton pills
+ * while the cache hydrates, and a trailing "updated Xm ago" / "Catch me up"
+ * cluster. No AI badge, no glow, no sparkle (decision 27 / pulse-ui). Chip
+ * click is a URL-mirrored client filter — zero server round-trips. "Catch me
+ * up" only stamps a nonce-stamped open+run request onto the store (Task 2)
+ * for the dock to consume — no fetch happens here.
  */
 
 /** 6px dot per tone. Static strings so Tailwind emits them. */
@@ -39,10 +42,14 @@ export type StripViewProps = {
   selection: IntelSelection | null;
   activeSignal: Signal | null;
   lastChangeAt: string | null;
+  /** The latest board-intelligence run's `generatedAt`, or null with no run yet. */
+  lastRunAt: string | null;
   nowMs: number;
   loading: boolean;
   onToggle: (signal: Signal) => void;
   onClear: () => void;
+  /** Opens the dock's Intelligence tab and asks it to run. */
+  onCatchMeUp: () => void;
 };
 
 function zeroStateText(lastChangeAt: string | null, nowMs: number): string {
@@ -91,10 +98,12 @@ export function IntelligenceStripView({
   selection,
   activeSignal,
   lastChangeAt,
+  lastRunAt,
   nowMs,
   loading,
   onToggle,
   onClear,
+  onCatchMeUp,
 }: StripViewProps) {
   // Zero-count chips are hidden (the engine already drops them; this is the
   // belt to that brace) and the strip shows at most MAX_CHIPS.
@@ -155,6 +164,21 @@ export function IntelligenceStripView({
           clear
         </button>
       ) : null}
+
+      <span className="ml-auto flex shrink-0 items-center gap-2">
+        {lastRunAt && (
+          <span className="text-muted-foreground text-3xs font-mono">
+            updated {timeAgo(lastRunAt, nowMs)}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onCatchMeUp}
+          className="border-border hover:border-border-hover focus-visible:ring-ring ease-keystone inline-flex h-6 shrink-0 items-center rounded-sm border px-2 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
+        >
+          Catch me up
+        </button>
+      </span>
     </div>
   );
 }
@@ -162,6 +186,10 @@ export function IntelligenceStripView({
 /** Connected strip: reads the board's provider; renders nothing without one. */
 export function IntelligenceStrip() {
   const intel = useBoardIntelligenceOptional();
+  const lastRunAt = useBoardIntelligenceStore(
+    (s) => s.runs[intel?.boardId ?? ""]?.generatedAt ?? null,
+  );
+  const requestOpen = useBoardIntelligenceStore((s) => s.requestOpen);
   if (!intel) return null;
   return (
     <IntelligenceStripView
@@ -169,10 +197,12 @@ export function IntelligenceStrip() {
       selection={intel.selection}
       activeSignal={intel.activeSignal}
       lastChangeAt={intel.lastChangeAt}
+      lastRunAt={lastRunAt}
       nowMs={intel.nowMs}
       loading={intel.loading}
       onToggle={intel.toggle}
       onClear={intel.clear}
+      onCatchMeUp={() => requestOpen(intel.boardId, { run: true })}
     />
   );
 }

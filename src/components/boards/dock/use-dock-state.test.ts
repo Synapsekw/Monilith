@@ -14,10 +14,20 @@ beforeEach(() => window.localStorage.clear());
  *  exposes the LATEST one, which is exactly the render this constraint is not
  *  about. */
 function recordRenders(boardId: string) {
-  const seen: { open: boolean; width: number; hydrated: boolean }[] = [];
+  const seen: {
+    open: boolean;
+    width: number;
+    tab: string;
+    hydrated: boolean;
+  }[] = [];
   function Probe() {
     const s = useDockState(boardId);
-    seen.push({ open: s.open, width: s.width, hydrated: s.hydrated });
+    seen.push({
+      open: s.open,
+      width: s.width,
+      tab: s.tab,
+      hydrated: s.hydrated,
+    });
     return null;
   }
   render(createElement(Probe));
@@ -41,11 +51,17 @@ describe("useDockState", () => {
     expect(seen[0]).toEqual({
       open: false,
       width: DOCK_MIN_WIDTH,
+      tab: "chat",
       hydrated: false,
     });
     // The remembered state arrives afterwards, from the effect.
     expect(seen.length).toBeGreaterThan(1);
-    expect(seen.at(-1)).toEqual({ open: true, width: 380, hydrated: true });
+    expect(seen.at(-1)).toEqual({
+      open: true,
+      width: 380,
+      tab: "chat",
+      hydrated: true,
+    });
   });
 
   it("persists open state per board", () => {
@@ -76,5 +92,23 @@ describe("useDockState", () => {
     expect(clampDockWidth(DOCK_MIN_WIDTH - 50)).toBe(DOCK_MIN_WIDTH);
     expect(clampDockWidth(DOCK_MAX_WIDTH + 50)).toBe(DOCK_MAX_WIDTH);
     expect(clampDockWidth(400.6)).toBe(401);
+  });
+
+  it("remembers the tab per board and defaults to chat for old rows", () => {
+    window.localStorage.setItem(
+      "monolith.dock.board-1",
+      JSON.stringify({ open: true, width: 380 }),
+    );
+    const { result } = renderHook(() => useDockState("board-1"));
+    expect(result.current.tab).toBe("chat");
+    act(() => result.current.setTab("intelligence"));
+    expect(result.current.tab).toBe("intelligence");
+    expect(
+      JSON.parse(window.localStorage.getItem("monolith.dock.board-1")!),
+    ).toEqual({
+      open: true,
+      width: 380,
+      tab: "intelligence",
+    });
   });
 });

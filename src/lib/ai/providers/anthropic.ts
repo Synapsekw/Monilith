@@ -1,7 +1,7 @@
 import "server-only";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
-import type { ModelMessage } from "ai";
+import type { ModelMessage, SystemModelMessage } from "ai";
 import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
@@ -59,20 +59,25 @@ export const anthropicAdapter: ProviderAdapter = {
     const provider = createAnthropic({ apiKey, fetch: client?.fetch });
     const sdkThinking = toSdkThinking(thinking);
     // The system prompt is frozen per feature, so it is the cache prefix. Sent
-    // as an explicit system MESSAGE rather than the `system` string because
-    // `cache_control` can only be attached via a message's providerOptions —
-    // dropping it would silently end prompt caching and multiply input COGS.
-    const messages: ModelMessage[] = [
+    // as a system MESSAGE (not a bare string) because `cache_control` can only
+    // be attached via a message's providerOptions — dropping it would silently
+    // end prompt caching and multiply input COGS. It rides `instructions`, not
+    // `messages`: since ai@7.0.92 `standardizePrompt` rejects a system role
+    // inside `messages` ("Use the instructions option instead"), and the SDK
+    // maps an instructions message to the top-level `system` block WITH its
+    // providerOptions intact (convertToLanguageModelPrompt).
+    const instructions: SystemModelMessage[] = [
       {
         role: "system",
         content: system,
         providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
       },
-      { role: "user", content: user },
     ];
+    const messages: ModelMessage[] = [{ role: "user", content: user }];
     const res = await generateObjectFn(client)({
       model: provider(model),
       schema: toSdkSchema(schema),
+      instructions,
       messages,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       providerOptions: {
