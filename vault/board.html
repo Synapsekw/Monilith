@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 17:57",
+  "updated": "2026-09-11 19:45",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "db10664c",
+        "value": "75611f29",
         "tone": "warn",
-        "note": "Ahead of main: Board Intelligence Phase 1 (Orient) merged — the Intelligence strip under every board header, 18 commits, migration board_visits on DEV — plus its /updates entry. User-visible and unpromoted; /promote is the next step. No worktrees open."
+        "note": "Ahead of main: Board Intelligence Phase 1 (Orient, 18 commits, migration board_visits on DEV) and the sidebar Keystone polish (8 commits: one row primitive, edge-bar active state, ledger headers, one context chip, pinned footer, scrolling body; AA and scroll defects fixed), each with its /updates entries. Both user-visible and unpromoted; /promote is the next step. Two worktrees belong to other sessions."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7370 passing, 1 skipped, on task/board-intelligence-orient before merge. New guards: signals engine table tests, provider URL round-trip, sub-item-parent narrowing, CSS @layer placement of the row rule, render budget with the provider mounted.",
+        "note": "7398 passing, 1 skipped, on task/sidebar-keystone before merge (finish-task re-ran all four gates on the rebased branch). New guards: sidebar-active-guard (no bg-primary/80 in shell/boards/dashboards), the row primitive's lead tri-state, the ledger header's single toggle, the context chip's multi-org-without-workspaces path, the rail's no-gutter regression test.",
         "label": "test"
       },
       {
@@ -189,11 +189,12 @@
   },
   "next": [
     {
-      "title": "/promote — Board Intelligence Phase 1 is merged and not yet live, then run its walkthrough",
-      "why": "The Intelligence strip merged to develop with an /updates entry after seven task reviews and a whole-branch review that caught a paint-order defect no test can see. Nothing reaches www.monolith.works until the develop → main PR. The browser visual pass is still owed: check the 2px row rule in Table and Timeline first (session note has the 11-step guide), then plan Phase 2 (Advise).",
+      "title": "/promote — Board Intelligence Phase 1 and the sidebar Keystone polish are merged and not yet live, then run both walkthroughs",
+      "why": "Two user-visible batches sit on develop with /updates entries: the Intelligence strip (paint-order defect caught only by the whole-branch review) and the sidebar polish (rail gutter squeeze and a vanishing org switcher, likewise caught only at the branch level, measured in headless Chromium). Neither has been seen in an authenticated browser. Nothing reaches www.monolith.works until the develop → main PR. Check the 2px row rule in Table and Timeline, then the collapsed rail's edge bar and tile widths, then plan Board Intelligence Phase 2 (Advise).",
       "tags": [
         "owner",
         "board-intelligence",
+        "sidebar",
         "promote"
       ]
     },
@@ -356,16 +357,27 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/bia-t5",
+      "head": "8d249faf",
+      "note": "another session"
+    },
+    {
+      "branch": "task/board-intelligence-advise",
+      "head": "3a037c4a",
+      "note": "another session"
+    }
+  ],
   "session": {
-    "id": "2026-09-11-1757-board-intelligence-phase1-orient",
-    "when": "2026-09-11 17:57",
-    "title": "Board Intelligence — brainstorm, spec, and Phase 1 (Orient) merged",
+    "id": "2026-09-11-1945-sidebar-keystone-polish",
+    "when": "2026-09-11 19:45",
+    "title": "Sidebar Keystone polish — one row grammar, edge bar, ledger headers, merged",
     "bullets": [
-      "Brainstormed with live mockups on the real board anatomy; locked an always-on Intelligence strip plus a dock tab for depth, labelled Intelligence (owner rejected Pulse). Spec covers four phases: Orient, Advise, Act, Ask.",
-      "Phase 1 shipped: five deterministic chips (overdue, blocked chain, overloaded, stalled, changed-since) computed client-side, an intel URL param via replaceState, narrowing plus highlight/dim in all four views, and a board_visits last-seen stamp.",
-      "Seven task reviews and a whole-branch review caught a dozen defects before merge, including a row rule painted under the frozen name column and a URL that wiped saved filters.",
-      "Merged to develop via finish-task.sh with all gates green and announced on /updates. Owed: the browser visual pass, then the Phase 2 plan."
+      "Audited the whole sidebar package from code (Chrome extension down): two defects (AA-failing active rows, a desktop sidebar that never scrolled) and eight grammar inconsistencies. Four options rendered live from the real tokens; the owner chose Keystone.",
+      "Shipped: a SidebarRow primitive (24px lead slot, 3px periwinkle edge bar), ledger NavSection headers, one ContextSwitcher chip for org + workspace, a scrolling body with fade mask, a pinned My Time / Trash footer, rail dividers, every board/folder/dashboard row migrated, a guard test against bg-primary/80.",
+      "Five task reviews and a whole-branch review: the branch review alone found the rail gutter squeeze clipping the edge bar (headless Chromium) and org switching vanishing for a multi-org user with no workspaces.",
+      "Merged to develop via finish-task.sh with all gates green and announced on /updates. Owed: the browser walkthrough, collapsed rail first."
     ]
   }
 }
