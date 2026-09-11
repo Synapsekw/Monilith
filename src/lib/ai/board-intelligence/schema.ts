@@ -93,7 +93,32 @@ export const BOARD_INTELLIGENCE_JSON_SCHEMA = {
   },
 } as const;
 
-/* ── Zod for the SAME shape, carrying the length caps the JSON Schema omits. ── */
+/* ── Zod for the SAME shape, carrying the length caps the JSON Schema omits.
+
+   Those caps TRUNCATE; they never reject. The model is never told them (the
+   schema above carries no lengths), so rejecting on one failed the run AFTER
+   the provider call was metered — and a failure leaves the input hash
+   unchanged, so every retry regenerated, paid and failed again. Shape stays
+   strict: a wrong type or an unknown `kind` is a real provider failure, a
+   701-character brief is not. The STORED shapes below (`actionSchema`,
+   `suggestionSchema`, `payloadSchema`) are fed only server-built data and stay
+   strict — they are the safety net in validate.ts. ── */
+const MAX_ACTIONS = 2;
+const MAX_EVIDENCE_ITEMS = 8;
+const MAX_ACTION_ITEM_IDS = 50;
+
+/** Cut to `max` characters on a word boundary where there is one, marking the
+ *  cut with an ellipsis. The result is always `<= max`. */
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+const cappedString = (max: number) =>
+  z.string().transform((t) => truncate(t, max));
+const cappedArray = <T extends z.ZodType>(item: T, max: number) =>
+  z.array(item).transform((a) => (a.length <= max ? a : a.slice(0, max)));
 const suggestionKind = z.enum([
   "overdue",
   "blocked",
@@ -106,31 +131,34 @@ export type SuggestionKind = z.infer<typeof suggestionKind>;
 
 const rawActionSchema = z.object({
   type: z.enum(["reassign", "set_due", "set_status", "nudge", "filter"]),
-  itemIds: z.array(z.string()).max(50).nullable(),
+  itemIds: cappedArray(z.string(), MAX_ACTION_ITEM_IDS).nullable(),
   itemId: z.string().nullable(),
   columnId: z.string().nullable(),
   toUserId: z.string().nullable(),
   date: z.string().nullable(),
   optionId: z.string().nullable(),
   userId: z.string().nullable(),
-  message: z.string().max(280).nullable(),
+  message: cappedString(280).nullable(),
   signalKind: z.string().nullable(),
 });
 export type RawAction = z.infer<typeof rawActionSchema>;
 
+/** No `min(1)` on `title` or `actions`: a blank title or an empty action list
+ *  makes the suggestion USELESS, not the run — validate.ts drops it with a
+ *  warning rather than throwing away a brief that was already paid for. */
 const rawSuggestionSchema = z.object({
   kind: suggestionKind,
-  title: z.string().min(1).max(80),
-  evidence: z.string().max(40),
-  body: z.string().max(240),
-  evidenceItemIds: z.array(z.string()).max(8),
-  actions: z.array(rawActionSchema).min(1).max(2),
+  title: cappedString(80),
+  evidence: cappedString(40),
+  body: cappedString(240),
+  evidenceItemIds: cappedArray(z.string(), MAX_EVIDENCE_ITEMS),
+  actions: cappedArray(rawActionSchema, MAX_ACTIONS),
 });
 export type RawSuggestion = z.infer<typeof rawSuggestionSchema>;
 
 export const rawOutputSchema = z.object({
-  brief: z.string().min(1).max(700),
-  suggestions: z.array(rawSuggestionSchema).max(MAX_SUGGESTIONS),
+  brief: cappedString(700),
+  suggestions: cappedArray(rawSuggestionSchema, MAX_SUGGESTIONS),
 });
 export type RawOutput = z.infer<typeof rawOutputSchema>;
 
