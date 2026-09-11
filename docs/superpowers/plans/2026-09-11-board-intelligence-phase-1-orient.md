@@ -3973,3 +3973,4 @@ Setup: pull `develop`, `pnpm install`, `pnpm dev`, sign in to an org on DEV (the
 7. `intel` is not persisted to the saved view arrangement and does not count toward the toolbar's `isFilterActive`.
 8. Blocked = "stuck/blocked"-labelled option on the first status column (no separate blocked flag exists); chain follows successors transitively; count = blockers.
 9. The strip is mounted inside `BoardHeader` (fragment sibling) because every view owns its header.
+10. Overdue checks every date column, not only the primary one — mirrors the date cell tinting every past date.

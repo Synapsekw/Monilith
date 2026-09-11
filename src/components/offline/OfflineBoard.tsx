@@ -140,6 +140,8 @@ export function OfflineBoard({
             /* Offline replay has no server read, so there is no saved
                arrangement to seed from — render today's defaults. */
             viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+            /* No server read offline → no "changed since" chip. */
+            lastSeenAt={null}
           />
         </OfflineRenderProvider>
       </div>

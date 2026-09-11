@@ -6,6 +6,7 @@ import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
+import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,28 +26,38 @@ export default async function BoardPage({
   // extra getBoardAccess call (a re-select of boards.created_by + a second,
   // narrower board_members lookup) — access is now derived below from data
   // already loaded here (see deriveBoardAccess).
-  const [payload, { data: grantRows }, { data: agentRows }, viewPrefs] =
-    await Promise.all([
-      getBoardPayload(boardId),
-      supabase
-        .from("board_members")
-        .select("user_id, access_level")
-        .eq("board_id", boardId),
-      // Owner-scoped by RLS and capped by max_agents_per_user (default 3) —
-      // this is a roster of names for the dock's switcher, NOT thread data.
-      // Threads stay unfetched until the dock is opened.
-      supabase
-        .from("user_agents")
-        .select("id, name")
-        .eq("owner_id", user.id)
-        .order("name"),
-      // The caller's saved arrangement for this board. A point read on the
-      // (user_id, board_id) primary key, issued in parallel with work that is
-      // already slower, so it costs no measurable added latency. Resolving it
-      // server-side is what lets collapsed groups arrive already collapsed —
-      // no expand-then-collapse flash.
-      getBoardViewPrefs(supabase, boardId, user.id),
-    ]);
+  const [
+    payload,
+    { data: grantRows },
+    { data: agentRows },
+    viewPrefs,
+    lastSeenAt,
+  ] = await Promise.all([
+    getBoardPayload(boardId),
+    supabase
+      .from("board_members")
+      .select("user_id, access_level")
+      .eq("board_id", boardId),
+    // Owner-scoped by RLS and capped by max_agents_per_user (default 3) —
+    // this is a roster of names for the dock's switcher, NOT thread data.
+    // Threads stay unfetched until the dock is opened.
+    supabase
+      .from("user_agents")
+      .select("id, name")
+      .eq("owner_id", user.id)
+      .order("name"),
+    // The caller's saved arrangement for this board. A point read on the
+    // (user_id, board_id) primary key, issued in parallel with work that is
+    // already slower, so it costs no measurable added latency. Resolving it
+    // server-side is what lets collapsed groups arrive already collapsed —
+    // no expand-then-collapse flash.
+    getBoardViewPrefs(supabase, boardId, user.id),
+    // Board Intelligence: when this user last had the board open. A point
+    // read on the (board_id, user_id) primary key, in parallel with the
+    // payload — the one extra first-paint read spec §8 allows. Drives the
+    // "changed since" chip; null on a first visit hides it.
+    getBoardLastSeenAt(supabase, boardId, user.id),
+  ]);
   if (!payload) notFound();
 
   const sp = await searchParams;
@@ -86,6 +97,7 @@ export default async function BoardPage({
           access={access ?? "viewer"}
           grants={grants}
           viewPrefs={viewPrefs}
+          lastSeenAt={lastSeenAt}
         />
       </div>
       <BoardDock

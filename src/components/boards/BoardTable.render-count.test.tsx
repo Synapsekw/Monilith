@@ -1,8 +1,17 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
+import { BoardIntelligenceProvider } from "@/lib/boards/intelligence/context";
 import { upsertCellValue, type BoardCache } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
 
@@ -95,8 +104,10 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// Reads the LIVE window.location so the intelligence budget below can switch
+// a chip on with `history.replaceState` — exactly how the real hook sees it.
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 const ITEM_IDS = ["i1", "i2", "i3", "i4", "i5", "i6"] as const;
@@ -341,5 +352,102 @@ describe("BoardTable row-body render budget", () => {
     ).toBe("sub-patched");
     expect(rowBodiesRendered()).toEqual(["Sub 1"]);
     expect(rowsRendered()).toEqual(["s1"]);
+  });
+});
+
+/**
+ * Same budget, with the Board Intelligence provider mounted.
+ *
+ * The provider recomputes every signal on every cache change, so it sits
+ * directly in the cell-edit hot path — and it publishes the active chip's item
+ * Set through a context every row subscribes to. These pin that neither costs
+ * the table a wider render than the provider-less budget above.
+ *
+ * The chip is `stalled`, not `overdue`: this fixture has no date column, so
+ * `overdue` yields no signal at all and the assertion would be hollow. Every
+ * item's `updated_at` is months old and its cells carry no `updated_at`, so
+ * the single group IS stalled and all six rows are in the active set — a
+ * genuinely active chip with a real match Set.
+ */
+describe("BoardTable render budget with Board Intelligence", () => {
+  function renderIntelBoard() {
+    const qc = new QueryClient();
+    const p = payloadFixture();
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <TooltipProvider>
+          <BoardIntelligenceProvider
+            boardId="b1"
+            initialData={p}
+            members={[]}
+            lastSeenAt={null}
+            currentUserId="u1"
+          >
+            <BoardTable payload={p} selectedViewId="v1" />
+          </BoardIntelligenceProvider>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    return { ...view, qc };
+  }
+
+  async function patchItem1Cell(qc: QueryClient) {
+    await act(async () => {
+      qc.setQueryData<BoardCache>(boardKey("b1"), (prev) =>
+        prev
+          ? upsertCellValue(prev, {
+              item_id: "i1",
+              column_id: "c1",
+              board_id: "b1",
+              org_id: "o1",
+              value: { text: "patched" },
+            } as never)
+          : prev,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("keeps the single-cell budget with the provider mounted and no chip", async () => {
+    window.history.replaceState(null, "", "/");
+    const { qc } = renderIntelBoard();
+    resetProbes();
+
+    await patchItem1Cell(qc);
+
+    expect(
+      screen.getByRole("button", { name: "Item 1 Col 1" }).textContent,
+    ).toBe("patched");
+    // Identical to the provider-less budget: the provider recomputes signals,
+    // but with no chip active `IntelMatchContext` stays `null`, so no row
+    // subscribes to anything that changed.
+    expect(rowsRendered()).toEqual(["i1"]);
+    expect(cellRenders.length).toBe(COLUMN_IDS.length);
+  });
+
+  it("keeps the single-cell budget with a chip active", async () => {
+    window.history.replaceState(null, "", "/?intel=stalled");
+    const { qc } = renderIntelBoard();
+    // Sanity: the chip really is active — every row is in the match set.
+    expect(document.querySelectorAll(".intel-match").length).toBe(
+      ITEM_IDS.length,
+    );
+    resetProbes();
+
+    await patchItem1Cell(qc);
+
+    expect(
+      screen.getByRole("button", { name: "Item 1 Col 1" }).textContent,
+    ).toBe("patched");
+    // Still just the patched row. The cell patch carries no `updated_at`, so
+    // the stalled signal's `itemIds` are unchanged; the provider keys the
+    // match Set on those ids, so its identity survives and every sibling row
+    // bails out. A patch that DID change the set would re-render each row
+    // once — that is the ceiling this pins the common case below.
+    expect(rowsRendered()).toEqual(["i1"]);
+    expect(cellRenders.length).toBe(COLUMN_IDS.length);
+    expect(rowBodiesRendered()).toEqual(["Item 1"]);
   });
 });

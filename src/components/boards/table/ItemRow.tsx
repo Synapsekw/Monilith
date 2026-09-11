@@ -16,6 +16,10 @@ import {
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
 import { useBoardSelection } from "@/stores/board-selection";
@@ -146,6 +150,10 @@ export const ItemRow = memo(function ItemRow({
   // to just this row's boolean membership, so toggling one row re-renders only the
   // affected (visible) rows — not the whole cache tree. Selection is top-level only.
   const selected = useBoardSelection((s) => s.selectedIds.has(item.id));
+  // Intelligence chip: true → 2px tone rule, false → dimmed, null → no chip.
+  // Read from a dedicated context whose value only changes when the active
+  // set changes, so this memoized row is untouched by unrelated cache edits.
+  const intelMatch = useIntelMatch(item.id);
   // Priority cells only: direct-dependent counts. Computed once for the whole
   // board in BoardTableInner and threaded via `controls` (see priority.ts) —
   // not recomputed per visible row.
@@ -257,6 +265,7 @@ export const ItemRow = memo(function ItemRow({
           ? "bg-primary/[0.08]"
           : "hover:bg-foreground/[0.025] hover:border-border-hover",
         isDragging && "shadow-drag relative z-10",
+        intelRowClasses(intelMatch),
       )}
       style={{
         height: ROW_HEIGHT,

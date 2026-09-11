@@ -7,6 +7,8 @@ import {
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellKey } from "@/lib/boards/cache";
 import { stripMarkdown } from "@/lib/boards/markdown";
+import { SIGNAL_ORDER } from "@/lib/boards/intelligence/constants";
+import type { IntelSelection } from "@/lib/boards/intelligence/types";
 
 /**
  * Board-level filter / sort / quick-search state.
@@ -23,9 +25,7 @@ export type SortDirection = "asc" | "desc";
 
 /** A sort target: the built-in Name / Created columns, or a real board column. */
 export type SortField =
-  | { kind: "name" }
-  | { kind: "created" }
-  | { kind: "column"; columnId: string };
+  { kind: "name" } | { kind: "created" } | { kind: "column"; columnId: string };
 
 export type BoardSort = { field: SortField; direction: SortDirection };
 
@@ -40,6 +40,8 @@ export type BoardFilterState = {
   conditions: ListFilter;
   /** Active in-memory sort, or null to keep the board's own position order. */
   sort: BoardSort | null;
+  /** The active Intelligence chip (`intel=<kind>[:<subject>]`), or null. URL-only — never persisted. */
+  intel: IntelSelection | null;
 };
 
 /** The empty / cleared state. */
@@ -49,6 +51,7 @@ export const EMPTY_BOARD_FILTER: BoardFilterState = {
   status: [],
   conditions: { combinator: "and", conditions: [] },
   sort: null,
+  intel: null,
 };
 
 // ── URL param names (kept distinct from the board's `view` / `item` params) ──
@@ -59,6 +62,16 @@ export const FILTER_PARAM_KEYS = [
   "filter",
   "sort",
 ] as const;
+
+/**
+ * The active Intelligence chip. Lives in the URL next to the filter params
+ * (History API, 0 round-trips) but is deliberately NOT in FILTER_PARAM_KEYS:
+ * that list is what `useBoardFilterSort` persists into the saved arrangement,
+ * and a remembered "changed since Tue" chip would be meaningless next visit.
+ */
+export const INTEL_PARAM_KEY = "intel";
+/** Every board-state param the hook reads from the URL. */
+export const URL_PARAM_KEYS = [...FILTER_PARAM_KEYS, INTEL_PARAM_KEY] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parse / serialize (URL ⇄ state)
@@ -107,6 +120,25 @@ function parseConditions(raw: string | null): ListFilter {
   return { combinator: "and", conditions: [] };
 }
 
+const SIGNAL_KIND_SET = new Set<string>(SIGNAL_ORDER);
+
+/** `intel=<kind>[:<subject>]` → selection; anything malformed → null (total + safe). */
+export function parseIntel(raw: string | null): IntelSelection | null {
+  if (!raw) return null;
+  const idx = raw.indexOf(":");
+  const kind = idx === -1 ? raw : raw.slice(0, idx);
+  const subject = idx === -1 ? undefined : raw.slice(idx + 1);
+  if (!SIGNAL_KIND_SET.has(kind)) return null;
+  if (subject !== undefined && subject === "") return null;
+  const k = kind as IntelSelection["kind"];
+  return subject === undefined ? { kind: k } : { kind: k, subject };
+}
+
+export function serializeIntel(sel: IntelSelection | null): string | null {
+  if (!sel) return null;
+  return sel.subject ? `${sel.kind}:${sel.subject}` : sel.kind;
+}
+
 /** Read filter/sort/search state out of the URL search params. Total + safe. */
 export function parseBoardFilter(
   params: Pick<URLSearchParams, "get">,
@@ -117,6 +149,7 @@ export function parseBoardFilter(
     status: parseCsv(params.get("status")),
     conditions: parseConditions(params.get("filter")),
     sort: parseSort(params.get("sort")),
+    intel: parseIntel(params.get(INTEL_PARAM_KEY)),
   };
 }
 
@@ -127,7 +160,7 @@ export function parseBoardFilter(
  */
 export function serializeBoardFilter(
   state: BoardFilterState,
-): Record<(typeof FILTER_PARAM_KEYS)[number], string | null> {
+): Record<(typeof URL_PARAM_KEYS)[number], string | null> {
   const q = state.q.trim();
   return {
     q: q === "" ? null : q,
@@ -137,6 +170,7 @@ export function serializeBoardFilter(
       ? JSON.stringify(state.conditions)
       : null,
     sort: serializeSort(state.sort),
+    intel: serializeIntel(state.intel),
   };
 }
 
