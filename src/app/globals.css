@@ -132,6 +132,10 @@
      wave; the reduced-motion block below stands it down. */
   --animate-thinking-dot: thinking-dot 1.2s cubic-bezier(0.16, 1, 0.3, 1)
     infinite;
+  /* Agent presence (board dock): the answering agent's dot breathes while its
+     turn streams. A box-shadow ring 0 → 6px — nothing scales — on the keystone
+     curve; the reduced-motion block below collapses it like every animation. */
+  --animate-pulse-ring: pulse-ring 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 @keyframes fadein {
@@ -175,6 +179,16 @@
   35% {
     opacity: 1;
     transform: translateY(-3px);
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 55%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 6px transparent;
   }
 }
 
