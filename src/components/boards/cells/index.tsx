@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
@@ -11,6 +10,7 @@ import { StatusPill, statusToneClasses } from "@/components/ui/status-pill";
 import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
+import { MemberAvatar } from "./member-avatar";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -90,53 +90,6 @@ function memberLabel(member: EditorMember | undefined) {
   return member?.fullName || member?.email || "Unknown";
 }
 
-function memberInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-/** Small member avatar for board cells — a stable Supabase public URL rendered
- *  via `<Image unoptimized>` (established avatar pattern; not routed through the
- *  optimizer) with a graceful initials fallback. size-5 matches CreatedByCell so
- *  the row height stays stable. */
-function MemberAvatar({
-  name,
-  avatarUrl,
-  className,
-}: {
-  name: string;
-  avatarUrl: string | null;
-  className?: string;
-}) {
-  return (
-    <span
-      data-slot="member-avatar"
-      className={cn(
-        "bg-surface-muted text-3xs flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full font-medium",
-        className,
-      )}
-    >
-      {avatarUrl ? (
-        <Image
-          src={avatarUrl}
-          alt=""
-          width={20}
-          height={20}
-          unoptimized
-          className="size-full object-cover"
-        />
-      ) : (
-        memberInitials(name)
-      )}
-    </span>
-  );
-}
-
 /** Beyond this many assignees the stack collapses to 3 avatars + a "+N" disc,
  *  so its width is bounded no matter how many people are on an item. */
 const MAX_STACKED_AVATARS = 4;
@@ -178,7 +131,11 @@ export function PeopleCell({
     const only = assignees[0];
     return (
       <span className="flex items-center gap-1.5 truncate text-sm">
-        <MemberAvatar name={only.label} avatarUrl={only.avatarUrl} />
+        <MemberAvatar
+          userId={only.id}
+          name={only.label}
+          avatarUrl={only.avatarUrl}
+        />
         <span className="truncate">{only.label}</span>
       </span>
     );
@@ -202,15 +159,18 @@ export function PeopleCell({
       {visible.map((a) => (
         <MemberAvatar
           key={a.id}
+          userId={a.id}
           name={a.label}
           avatarUrl={a.avatarUrl}
           // The ring in the cell's own surface colour keeps the overlapped
           // edges legible; hairlines would read as borders here.
-          className="ring-surface -ml-1.5 ring-2 first:ml-0"
+          className="ring-surface -ml-2 ring-2 first:ml-0"
         />
       ))}
       {overflow > 0 ? (
-        <span className="bg-surface-muted text-muted-foreground text-3xs ring-surface -ml-1.5 flex size-5 shrink-0 items-center justify-center rounded-full font-mono ring-2">
+        // The overflow disc stays neutral on purpose: it counts people, it is
+        // not one — an identity colour here would read as a ninth member.
+        <span className="bg-surface-muted text-muted-foreground text-2xs ring-surface -ml-2 flex size-6 shrink-0 items-center justify-center rounded-full font-mono ring-2">
           +{overflow}
         </span>
       ) : null}

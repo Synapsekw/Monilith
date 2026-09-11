@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Star } from "lucide-react";
-import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
 import { useFieldStatus } from "@/components/ui/field-status";
@@ -33,26 +32,12 @@ import {
 } from "@/lib/boards/priority";
 import { DirhamSign } from "@/components/boards/CurrencyAmount";
 import { LongTextEditor } from "./LongTextEditor";
+import { PopoverSurface } from "./popover-surface";
+import { PeopleEditor } from "./PeopleEditor";
+import type { EditorMember, EditorProps, Settings } from "./types";
 
-type Settings = Record<string, unknown> & { options?: ColumnOption[] };
-
-/** Member shape for the People editor — defined locally to avoid the
- * `server-only` import that `OrgMember` from `@/lib/boards/queries` carries. */
-export type EditorMember = {
-  userId: string;
-  fullName: string | null;
-  email: string | null;
-  avatarUrl: string | null;
-};
-
-type EditorProps<V> = {
-  value: V | null;
-  settings: Settings;
-  onCommit: (value: V) => void;
-  onCancel: () => void;
-  /** Clear the cell entirely (deletes the row). Falls back to onCancel. */
-  onClear?: () => void;
-};
+export type { EditorMember } from "./types";
+export { PeopleEditor } from "./PeopleEditor";
 
 /**
  * Column kinds whose editor holds a SET of values and commits once per toggle
@@ -83,48 +68,6 @@ function useCommitKeys(commit: () => void, cancel: () => void) {
       cancel();
     }
   };
-}
-
-/**
- * A floating popover surface for selector editors (Status/Dropdown/People).
- * Built on Radix Popover so it portals to the body — escaping the board's
- * `overflow-auto` scroll containers — and flips/shifts to stay on screen, so
- * every option is reachable however near the viewport edge the cell sits
- * (Monday-style). Monochrome chrome; color is earned only by the pills inside.
- *
- * `--radix-popover-content-available-height` caps the surface to the space the
- * collision detector measured, and the inner list scrolls beyond that.
- */
-function PopoverSurface({
-  label,
-  onCancel,
-  children,
-}: {
-  label: string;
-  /** Fired when the popover is dismissed (Escape or outside click). */
-  onCancel: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Popover
-      open
-      onOpenChange={(next) => {
-        if (!next) onCancel();
-      }}
-    >
-      {/* Anchors the floating surface to the cell it edits. */}
-      <PopoverAnchor className="absolute inset-0" aria-hidden />
-      <PopoverContent
-        role="listbox"
-        aria-label={label}
-        align="start"
-        sideOffset={4}
-        className="flex max-h-[min(20rem,var(--radix-popover-content-available-height))] min-w-[12rem] flex-col gap-0.5 overflow-auto p-1"
-      >
-        {children}
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 export function NumbersEditor({
@@ -344,62 +287,6 @@ export function DropdownEditor({
           </button>
         );
       })}
-      <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
-    </PopoverSurface>
-  );
-}
-
-export function PeopleEditor({
-  value,
-  onCommit,
-  onCancel,
-  onClear,
-  members = [],
-}: EditorProps<{ userIds: string[] }> & { members?: EditorMember[] }) {
-  const [selected, setSelected] = useState<string[]>(value?.userIds ?? []);
-  function toggle(id: string) {
-    const next = selected.includes(id)
-      ? selected.filter((x) => x !== id)
-      : [...selected, id];
-    setSelected(next);
-    // No assignees clears the cell (deletes the row).
-    if (next.length === 0) return (onClear ?? onCancel)();
-    onCommit({ userIds: next });
-  }
-  return (
-    <PopoverSurface label="Assign people" onCancel={onCancel}>
-      {members.length === 0 ? (
-        <span className="text-muted-foreground px-2 py-1 text-sm">
-          No members
-        </span>
-      ) : (
-        members.map((m) => {
-          const isSelected = selected.includes(m.userId);
-          const name = m.fullName ?? m.email ?? m.userId;
-          return (
-            <button
-              key={m.userId}
-              type="button"
-              role="option"
-              aria-selected={isSelected}
-              onClick={() => toggle(m.userId)}
-              className={cn(
-                "hover:bg-state-hover focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                isSelected && "bg-accent",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "size-1.5 shrink-0 rounded-full",
-                  isSelected ? "bg-primary" : "bg-muted-foreground/40",
-                )}
-              />
-              <span className="truncate">{name}</span>
-            </button>
-          );
-        })
-      )}
       <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
