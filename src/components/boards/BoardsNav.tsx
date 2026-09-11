@@ -205,7 +205,7 @@ export function BoardsNav({
   }, [foldersSupplied, folderIdSignature, pruneSections]);
 
   return collapsed ? (
-    <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+    <div className="flex flex-col items-center gap-0.5 py-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <span

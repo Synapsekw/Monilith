@@ -164,9 +164,13 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
+      {/* `data-scroll-container` reserves a stable 10px scrollbar gutter
+          (globals.css). The 56px rail cannot spare it — the squeeze clipped the
+          active edge bar and pushed rail tiles to three different widths — so
+          only the expanded body opts in. */}
       <div
         data-testid="sidebar-scroll"
-        data-scroll-container
+        data-scroll-container={isCollapsed ? undefined : ""}
         className="nav-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
       >
         {isCollapsed ? (
@@ -195,7 +199,11 @@ export function SidebarNav({
               <RailDivider />
               {dashboardsNav}
             </nav>
-            <div className="h-3.5 shrink-0" aria-hidden="true" />
+            <div
+              data-scroll-spacer=""
+              className="h-3.5 shrink-0"
+              aria-hidden="true"
+            />
           </>
         ) : (
           <>
@@ -223,42 +231,44 @@ export function SidebarNav({
             </NavSection>
             {boardsNav}
             {dashboardsNav}
-            <div className="h-3.5 shrink-0" aria-hidden="true" />
+            <div
+              data-scroll-spacer=""
+              className="h-3.5 shrink-0"
+              aria-hidden="true"
+            />
           </>
         )}
       </div>
 
+      {/* The hairline is INSET to the row column (`mx-2`, spec §4) instead of
+          running edge to edge, and it is the only rule here — the collapsed
+          rail no longer stacks a RailDivider on top of it. */}
       <footer
         data-testid="sidebar-footer"
         className={
           isCollapsed
-            ? "border-border flex flex-col items-center gap-0.5 border-t px-2 pt-2 pb-2"
-            : "border-border flex flex-col gap-0.5 border-t px-2 pt-2 pb-2"
+            ? "border-border mx-2 flex flex-col items-center gap-0.5 border-t pt-2 pb-2"
+            : "border-border mx-2 flex flex-col gap-0.5 border-t pt-2 pb-2"
         }
       >
-        {isCollapsed ? (
-          <>
-            <RailDivider />
-            {FOOTER.map((item) => (
+        {isCollapsed
+          ? FOOTER.map((item) => (
               <RailLink
                 key={item.href}
                 item={item}
                 active={isActive(item.href)}
                 coarse={coarse}
               />
+            ))
+          : FOOTER.map((item) => (
+              <SidebarLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                active={isActive(item.href)}
+              />
             ))}
-          </>
-        ) : (
-          FOOTER.map((item) => (
-            <SidebarLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={isActive(item.href)}
-            />
-          ))
-        )}
       </footer>
     </div>
   );

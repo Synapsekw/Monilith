@@ -149,9 +149,14 @@ export function railTileClass({
   return cn(TILE_BASE, active ? TILE_ACTIVE : TILE_IDLE, className);
 }
 
-/** Decorative 16px hairline between rail groups. */
+/** Decorative 16px hairline between rail groups. The `data-rail-divider` hook
+ *  is what the rail tests count — never utility classes, which restyle freely. */
 export function RailDivider() {
   return (
-    <span aria-hidden="true" className="bg-border my-1.5 h-px w-4 shrink-0" />
+    <span
+      aria-hidden="true"
+      data-rail-divider=""
+      className="bg-border my-1.5 h-px w-4 shrink-0"
+    />
   );
 }

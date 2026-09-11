@@ -46,10 +46,10 @@ export function MobileNav(props: NavData) {
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Brand />
         </SheetHeader>
-        <div
-          data-scroll-container
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
-        >
+        {/* No scrolling here: SidebarNav owns the one scroll region (its body,
+            under the pinned footer). A second one nested outside it double-
+            scrolled the drawer and reserved a second gutter. */}
+        <div className="flex min-h-0 flex-1 flex-col">
           <SidebarNav {...props} forceExpanded />
         </div>
       </SheetContent>

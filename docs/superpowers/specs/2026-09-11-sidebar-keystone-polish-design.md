@@ -4,6 +4,7 @@
 **Status:** approved (owner picked "Option B — Keystone" from a four-way live gallery; the
 prototype is committed next to this spec as `2026-09-11-sidebar-keystone-polish.prototype.html`
 — open it in a browser, it renders from the real tokens and every hover/toggle is live)
+**Superseded values (plan wins):** text edge is **36px** (sidebar px-2 + size-6 slot + label pl-1) and kickers use `pl-7`, not 38px / `pl-7.5`; the collapsed rail's Boards/Dashboards head tiles stay inside `BoardsNav` / `DashboardsNav` (SidebarNav only renders the dividers).
 
 ## Why
 

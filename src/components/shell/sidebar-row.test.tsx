@@ -140,6 +140,8 @@ describe("rail", () => {
     const { container } = render(<RailDivider />);
     const el = container.firstElementChild as HTMLElement;
     expect(el).toHaveAttribute("aria-hidden", "true");
+    // Stable hook for the rail tests (they used to match on utility classes).
+    expect(el).toHaveAttribute("data-rail-divider");
     expect(el.className).toContain("h-px");
     expect(el.className).toContain("w-4");
     expect(el.className).toContain("bg-border");

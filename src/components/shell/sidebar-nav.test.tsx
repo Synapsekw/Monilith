@@ -238,7 +238,31 @@ describe("SidebarNav", () => {
       document.querySelector('[data-orientation="horizontal"][role="none"]'),
     ).toBeNull();
     // The last row sits above the bottom mask fade, not clipped by it.
-    expect(body.lastElementChild).toHaveClass("h-3.5");
+    expect(body.querySelector("[data-scroll-spacer]")).toBe(
+      body.lastElementChild,
+    );
+  });
+
+  it("reserves the scrollbar gutter only when expanded (the 56px rail cannot spare 10px)", () => {
+    const nav = (
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />
+    );
+    const expanded = renderNav(nav);
+    expect(screen.getByTestId("sidebar-scroll")).toHaveAttribute(
+      "data-scroll-container",
+    );
+    expanded.unmount();
+
+    useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
+    renderNav(nav);
+    expect(screen.getByTestId("sidebar-scroll")).not.toHaveAttribute(
+      "data-scroll-container",
+    );
   });
 
   it("collapsed: groups the rail with hairline dividers and keeps the footer", () => {
@@ -252,16 +276,19 @@ describe("SidebarNav", () => {
         dashboards={[]}
       />,
     );
-    // ws chip | My Work+Agents | Planning | Boards | Dashboards  → 4 dividers in the body, 1 above the footer
-    expect(
-      document.querySelectorAll("span[aria-hidden='true'].w-4.h-px").length,
-    ).toBe(5);
+    // ws chip | My Work+Agents | Planning | Boards | Dashboards → 4 dividers in
+    // the body. The footer draws its own `border-t`, so no divider above it.
+    expect(document.querySelectorAll("[data-rail-divider]").length).toBe(4);
     expect(screen.getByTestId("sidebar-footer")).toContainElement(
       screen.getByLabelText("Trash"),
     );
+    expect(
+      screen.getByTestId("sidebar-footer").querySelector("[data-rail-divider]"),
+    ).toBeNull();
     // The last rail tile sits above the bottom mask fade too, not clipped by it.
-    expect(screen.getByTestId("sidebar-scroll").lastElementChild).toHaveClass(
-      "h-3.5",
+    const body = screen.getByTestId("sidebar-scroll");
+    expect(body.querySelector("[data-scroll-spacer]")).toBe(
+      body.lastElementChild,
     );
   });
 

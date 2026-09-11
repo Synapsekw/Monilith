@@ -32,7 +32,6 @@ import { moveBoardToFolder } from "@/lib/boards/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { useUIStore } from "@/stores/ui";
-import { cn } from "@/lib/utils";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 // A filed OWNED row is the same component the plain tree renders, just handed a
@@ -111,7 +110,7 @@ function SortableBoardRow({
       ref={setNodeRef}
       data-board-row={board.id}
       style={{ transform: DndCSS.Translate.toString(transform), transition }}
-      className={cn(isDragging && "shadow-drag z-20")}
+      className={isDragging ? "shadow-drag z-20" : undefined}
       lead={
         <button
           type="button"

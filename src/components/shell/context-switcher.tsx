@@ -73,12 +73,24 @@ export function ContextSwitcher({
     });
   }
 
-  if (workspaces.length === 0 || !activeWs) return null;
+  // A multi-org user whose ACTIVE org has no workspaces still needs the chip —
+  // it is the only way back to the org that does have them. Only a single-org
+  // user with nothing to switch to gets nothing.
+  if (!activeWs && !(multiOrg && activeOrg)) return null;
 
   const label = multiOrg
     ? "Switch organization or workspace"
     : "Switch workspace";
-  const initial = activeWs.name.charAt(0).toUpperCase();
+  // With no workspace the org takes the bold line (and the kicker is dropped:
+  // the name would otherwise be printed twice).
+  const primaryName = activeWs?.name ?? activeOrg?.name ?? "";
+  const showKicker = multiOrg && Boolean(activeOrg) && Boolean(activeWs);
+  const tooltip = activeWs
+    ? multiOrg && activeOrg
+      ? `${activeWs.name} · ${activeOrg.name}`
+      : activeWs.name
+    : (activeOrg?.name ?? "");
+  const initial = primaryName.charAt(0).toUpperCase();
   const chip =
     "bg-chrome-fill border-border hover:border-border-bright focus-visible:ring-ring flex items-center rounded-lg border transition-colors duration-300 ease-keystone focus-visible:ring-2 focus-visible:outline-none";
 
@@ -100,18 +112,22 @@ export function ContextSwitcher({
           <DropdownMenuSeparator />
         </>
       ) : null}
-      <DropdownMenuLabel className="text-muted-foreground text-xs">
-        Workspaces
-      </DropdownMenuLabel>
-      {workspaces.map((w) => (
-        <MenuRow
-          key={w.id}
-          item={w}
-          active={w.id === activeWs.id}
-          onSelect={() => switchWorkspace(w.id)}
-        />
-      ))}
-      <DropdownMenuSeparator />
+      {workspaces.length > 0 ? (
+        <>
+          <DropdownMenuLabel className="text-muted-foreground text-xs">
+            Workspaces
+          </DropdownMenuLabel>
+          {workspaces.map((w) => (
+            <MenuRow
+              key={w.id}
+              item={w}
+              active={w.id === activeWs?.id}
+              onSelect={() => switchWorkspace(w.id)}
+            />
+          ))}
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuItem onSelect={() => setNewOpen(true)} className="gap-2">
         <Plus className="size-4" />
         New workspace
@@ -138,11 +154,7 @@ export function ContextSwitcher({
                 <Avatar initial={initial} />
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent side="right">
-              {multiOrg && activeOrg
-                ? `${activeWs.name} · ${activeOrg.name}`
-                : activeWs.name}
-            </TooltipContent>
+            <TooltipContent side="right">{tooltip}</TooltipContent>
           </Tooltip>
         ) : (
           <DropdownMenuTrigger
@@ -151,13 +163,13 @@ export function ContextSwitcher({
           >
             <Avatar initial={initial} />
             <span className="flex min-w-0 flex-1 flex-col">
-              {multiOrg && activeOrg ? (
+              {showKicker && activeOrg ? (
                 <Kicker size="xs" className="truncate leading-tight">
                   {activeOrg.name}
                 </Kicker>
               ) : null}
               <span className="truncate text-sm leading-tight font-bold">
-                {activeWs.name}
+                {primaryName}
               </span>
             </span>
             <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />

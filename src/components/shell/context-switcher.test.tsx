@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ContextSwitcher } from "./context-switcher";
@@ -44,9 +44,49 @@ beforeEach(() => {
 });
 
 describe("ContextSwitcher", () => {
-  it("renders nothing without workspaces", () => {
+  it("renders nothing without workspaces when there is only one org", () => {
+    const { container } = renderIt({
+      workspaces: [],
+      orgs: [orgs[0]],
+      activeOrgId: "o1",
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders nothing without workspaces and without orgs", () => {
     const { container } = renderIt({ workspaces: [] });
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("multi org with no workspaces: still switchable, org name on the bold line", async () => {
+    renderIt({ workspaces: [], orgs, activeOrgId: "o1" });
+    const trigger = screen.getByRole("button", {
+      name: "Switch organization or workspace",
+    });
+    expect(trigger).toHaveTextContent("Acme");
+    // No workspace → no kicker line above the name.
+    expect(document.querySelector(".text-kicker")).toBeNull();
+    await userEvent.click(trigger);
+    expect(screen.getByText("Organization")).toBeInTheDocument();
+    expect(screen.queryByText("Workspaces")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /globex/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /new workspace/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /manage workspaces/i }),
+    ).toHaveAttribute("href", "/settings");
+  });
+
+  it("multi org with no workspaces, collapsed: org initial + org tooltip", () => {
+    renderIt({ workspaces: [], orgs, activeOrgId: "o2", collapsed: true });
+    const trigger = screen.getByRole("button", {
+      name: "Switch organization or workspace",
+    });
+    expect(trigger).toHaveTextContent("G");
+    expect(trigger.className).toContain("size-9");
   });
 
   it("single org: shows the workspace only, labelled 'Switch workspace'", () => {
@@ -85,11 +125,14 @@ describe("ContextSwitcher", () => {
     );
     await userEvent.click(screen.getByRole("menuitem", { name: /globex/i }));
     expect(vi.mocked(setActiveOrg)).toHaveBeenCalledWith("o2");
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    refresh.mockClear();
     await userEvent.click(
       screen.getByRole("button", { name: /switch organization/i }),
     );
     await userEvent.click(screen.getByRole("menuitem", { name: /growth/i }));
     expect(vi.mocked(setActiveWorkspace)).toHaveBeenCalledWith("w2");
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
     await userEvent.click(
       screen.getByRole("button", { name: /switch organization/i }),
     );
