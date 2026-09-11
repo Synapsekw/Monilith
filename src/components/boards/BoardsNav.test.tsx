@@ -380,6 +380,10 @@ describe("BoardsNav", () => {
       </TooltipProvider>,
     );
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(screen.getByText("Shared with me")).toHaveClass(
+      "text-kicker",
+      "uppercase",
+    );
     expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
     expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();
 

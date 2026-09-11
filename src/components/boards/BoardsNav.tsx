@@ -275,7 +275,6 @@ export function BoardsNav({
     <NavSection
       storageKey="boards"
       title="Boards"
-      icon={FolderKanban}
       action={
         <>
           <NewFolderDialog />

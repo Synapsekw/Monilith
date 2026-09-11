@@ -161,7 +161,6 @@ export function DashboardsNav({
           storageKey="dash"
           title="Dashboards"
           titleHref="/dashboards"
-          icon={LayoutGrid}
           action={
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
