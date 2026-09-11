@@ -39,4 +39,9 @@ export type BoardEffect =
       kind: "group_created";
       boardId: string;
       group: Tables<"groups">;
+    }
+  | {
+      kind: "cells_cleared";
+      boardId: string;
+      cells: { itemId: string; columnId: string }[];
     };

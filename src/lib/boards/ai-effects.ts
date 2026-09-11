@@ -1,6 +1,7 @@
 import {
   insertGroup,
   insertItem,
+  removeCellValue,
   upsertCellValue,
   type BoardCache,
 } from "@/lib/boards/cache";
@@ -51,5 +52,11 @@ export function applyBoardEffect(
     }
     case "group_created":
       return insertGroup(cache, effect.group);
+    case "cells_cleared": {
+      let next = cache;
+      for (const c of effect.cells)
+        next = removeCellValue(next, c.itemId, c.columnId);
+      return next;
+    }
   }
 }
