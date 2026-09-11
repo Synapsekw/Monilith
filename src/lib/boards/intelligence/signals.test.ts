@@ -197,3 +197,118 @@ describe("computeSignals — overdue", () => {
     );
   });
 });
+
+describe("computeSignals — blocked", () => {
+  it("includes the stuck blocker and its transitive dependents; count = blockers", () => {
+    const input = board({
+      items: [item("a"), item("b"), item("c"), item("lone")],
+      cellValues: [
+        cell("a", STATUS, { optionId: STUCK }),
+        cell("lone", STATUS, { optionId: STUCK }),
+      ],
+      dependencies: [dep("a", "b"), dep("b", "c")],
+    });
+    const [blocked] = ofKind(computeSignals(input, opts()), "blocked");
+    expect(blocked).toMatchObject({
+      kind: "blocked",
+      count: 1,
+      label: "blocked chain",
+      tone: "orange",
+    });
+    expect([...blocked.itemIds].sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("ignores stuck items without dependents and open items with dependents", () => {
+    const input = board({
+      items: [item("stuck-alone"), item("working"), item("dep")],
+      cellValues: [
+        cell("stuck-alone", STATUS, { optionId: STUCK }),
+        cell("working", STATUS, { optionId: OPEN }),
+      ],
+      dependencies: [dep("working", "dep")],
+    });
+    expect(ofKind(computeSignals(input, opts()), "blocked")).toEqual([]);
+  });
+
+  it("recognises a 'Blocked' label, not only 'Stuck'", () => {
+    const input = board({
+      columns: [
+        column(STATUS, "status", "Status", 0, {
+          options: [{ id: "opt-b", label: "Blocked", color: "#e2445c" }],
+        }),
+      ],
+      items: [item("a"), item("b")],
+      cellValues: [cell("a", STATUS, { optionId: "opt-b" })],
+      dependencies: [dep("a", "b")],
+    });
+    expect(ofKind(computeSignals(input, opts()), "blocked")[0].count).toBe(1);
+  });
+});
+
+describe("computeSignals — stalled", () => {
+  it("flags a group whose latest activity is older than STALL_DAYS and that has an open item", () => {
+    const input = board({
+      groups: [group("g1"), group("g2"), group("g3")],
+      items: [
+        item("old-open", {
+          group_id: "g1",
+          updated_at: daysAgo(10).toISOString(),
+        }),
+        item("fresh", { group_id: "g2", updated_at: daysAgo(2).toISOString() }),
+        item("old-done", {
+          group_id: "g3",
+          updated_at: daysAgo(10).toISOString(),
+        }),
+        item("old-done-2", {
+          group_id: "g1",
+          updated_at: daysAgo(12).toISOString(),
+        }),
+      ],
+      cellValues: [
+        cell("old-open", STATUS, { optionId: OPEN }),
+        cell("fresh", STATUS, { optionId: OPEN }),
+        cell("old-done", STATUS, { optionId: DONE }),
+        cell("old-done-2", STATUS, { optionId: DONE }),
+      ],
+    });
+    const [stalled] = ofKind(computeSignals(input, opts()), "stalled");
+    expect(stalled).toMatchObject({
+      kind: "stalled",
+      count: 1,
+      label: "stalled group",
+      tone: "gray",
+      groupIds: ["g1"],
+      itemIds: ["old-open"],
+    });
+  });
+
+  it("a recent cell edit rescues a group whose items.updated_at is stale", () => {
+    const input = board({
+      items: [item("a", { updated_at: daysAgo(10).toISOString() })],
+      cellValues: [
+        cell("a", STATUS, { optionId: OPEN }, daysAgo(1).toISOString()),
+      ],
+    });
+    expect(ofKind(computeSignals(input, opts()), "stalled")).toEqual([]);
+  });
+
+  it("pluralises the label for several stalled groups", () => {
+    const input = board({
+      groups: [group("g1"), group("g2")],
+      items: [
+        item("a", { group_id: "g1", updated_at: daysAgo(6).toISOString() }),
+        item("b", { group_id: "g2", updated_at: daysAgo(6).toISOString() }),
+      ],
+    });
+    const [stalled] = ofKind(computeSignals(input, opts()), "stalled");
+    expect(stalled.count).toBe(2);
+    expect(stalled.label).toBe("stalled groups");
+  });
+
+  it("exactly STALL_DAYS old is not yet stalled (strictly older)", () => {
+    const input = board({
+      items: [item("a", { updated_at: daysAgo(5).toISOString() })],
+    });
+    expect(ofKind(computeSignals(input, opts()), "stalled")).toEqual([]);
+  });
+});
