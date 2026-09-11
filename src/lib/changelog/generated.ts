@@ -5,6 +5,27 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
+    kind: "improved",
+    title: "A cleaner, more consistent sidebar",
+    description:
+      "Every row in the sidebar now shares one look: the open page carries a slim periwinkle bar on the sidebar's edge, section headers are labelled rules that fold when clicked, your organization and workspace live in one chip, and My Time and Trash stay pinned at the bottom.",
+  },
+  {
+    date: "2026-09-11",
+    kind: "fixed",
+    title: "The open board is readable in the sidebar again",
+    description:
+      "The highlighted board or dashboard row used white text on a light periwinkle fill in dark mode, which was hard to read. It now uses the same tint and edge bar as the rest of the navigation.",
+  },
+  {
+    date: "2026-09-11",
+    kind: "fixed",
+    title: "The sidebar scrolls when you have many boards",
+    description:
+      "A long list of boards used to push Dashboards, My Time and Trash off the bottom of the screen with no way to reach them. The middle of the sidebar now scrolls while the top and bottom stay in place.",
+  },
+  {
+    date: "2026-09-11",
     kind: "new",
     title: "Board intelligence strip",
     description:
