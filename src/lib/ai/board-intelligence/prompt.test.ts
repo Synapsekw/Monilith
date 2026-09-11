@@ -89,6 +89,10 @@ describe("prompt", () => {
     expect(s).toMatch(/plain prose/i);
     expect(s).toMatch(/only ids that appear/i);
     expect(s).toMatch(/at most 5 suggestions/i);
+    // The size caps are enforced by truncation, so the model is TOLD them —
+    // otherwise every brief gets silently cut mid-sentence.
+    expect(s).toMatch(/under 700 characters/i);
+    expect(s).toMatch(/at most 8 items/i);
   });
   it("roster puts signal items first, then by recency, capped", () => {
     const rows = buildItemRoster(input, 2);

@@ -432,6 +432,72 @@ describe("validateIntelligenceOutput", () => {
     expect(none.suggestions).toEqual([]);
     expect(warnings.length).toBeGreaterThan(0);
   });
+  /* The caps are the model's to miss — it is never told them — so busting one
+     must cost a truncation, never the whole (already metered) run. */
+  it("saves a run whose every field busts a cap, truncated", () => {
+    const { payload: out } = validateIntelligenceOutput(
+      {
+        brief: `${"word ".repeat(300)}end`,
+        suggestions: Array.from({ length: 7 }, () => ({
+          kind: "overdue",
+          title: "T".repeat(200),
+          evidence: "E".repeat(100),
+          body: "B".repeat(500),
+          evidenceItemIds: Array.from({ length: 12 }, () => "i1"),
+          actions: [
+            {
+              ...base,
+              type: "set_due",
+              itemId: "i1",
+              columnId: "c-date",
+              date: "2026-09-20",
+            },
+            { ...base, type: "filter", signalKind: "overdue" },
+            { ...base, type: "filter", signalKind: "overdue" },
+          ],
+        })),
+      },
+      ctx,
+      signals,
+    );
+    expect(out.brief.length).toBeLessThanOrEqual(700);
+    expect(out.suggestions).toHaveLength(5);
+    expect(out.suggestions[0]?.actions).toHaveLength(2);
+    expect(payloadSchema.safeParse(out).success).toBe(true);
+  });
+
+  it("drops a suggestion the model left untitled, keeping the ids contiguous", () => {
+    const suggestion = (title: string) => ({
+      kind: "overdue" as const,
+      title,
+      evidence: "1 overdue",
+      body: "b",
+      evidenceItemIds: ["i1"],
+      actions: [
+        {
+          ...base,
+          type: "set_due",
+          itemId: "i1",
+          columnId: "c-date",
+          date: "2026-09-20",
+        },
+      ],
+    });
+    const { payload: out, warnings } = validateIntelligenceOutput(
+      {
+        brief: "One item is late.",
+        suggestions: [suggestion("  "), suggestion("Push it")],
+      },
+      ctx,
+      signals,
+    );
+    expect(out.suggestions).toHaveLength(1);
+    expect(out.suggestions[0]?.id).toBe("s1");
+    expect(out.suggestions[0]?.title).toBe("Push it");
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(payloadSchema.safeParse(out).success).toBe(true);
+  });
+
   it("throws on a shape the raw schema rejects", () => {
     expect(() =>
       validateIntelligenceOutput({ brief: 1 }, ctx, signals),

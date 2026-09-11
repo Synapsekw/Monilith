@@ -149,6 +149,15 @@ export function validateIntelligenceOutput(
       warnings.push(
         `"${s.title}": dropped ${s.actions.length - actions.length} invalid action(s)`,
       );
+    // `rawOutputSchema` deliberately does not require a non-empty title (a cap
+    // the model was never told must never fail a metered run) — but the STORED
+    // `suggestionSchema` does, so an untitled card is dropped here, like one
+    // with no valid action, rather than tripping the safety net below.
+    const title = sanitizeInline(s.title).trim().slice(0, 80);
+    if (title.length === 0) {
+      warnings.push("Dropped an untitled suggestion");
+      continue;
+    }
     const evidenceRows = s.evidenceItemIds.flatMap((id) => {
       const it = ctx.items.get(id);
       return it ? [{ itemId: it.id, name: it.name, detail: "" }] : [];
@@ -156,7 +165,7 @@ export function validateIntelligenceOutput(
     suggestions.push({
       id: `s${suggestions.length + 1}`,
       kind: s.kind,
-      title: sanitizeInline(s.title).slice(0, 80),
+      title,
       evidence: sanitizeInline(s.evidence).slice(0, 40),
       body: sanitizeInline(s.body).slice(0, 240),
       evidenceRows,
