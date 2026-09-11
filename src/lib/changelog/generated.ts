@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-10",
+    kind: "fixed",
+    title: "Assign several people to one task",
+    description:
+      "The People picker now stays open while you pick, so you can add or remove several assignees in one go. Multi-select dropdowns behave the same way.",
+  },
+  {
+    date: "2026-09-10",
     kind: "improved",
     title: "Pages paint before data arrives",
     description:
