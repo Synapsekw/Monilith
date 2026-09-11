@@ -20,6 +20,7 @@ related:
 - Every task review found something real (RLS-silent clear, uncapped labels failing the read closed, cell edits not invalidating the cache, active-org vs board-org, double-click apply, stale undo); the whole-branch review then found a Critical none of them could: `computeSignals` emits one `overloaded` signal per person, so boards with ≥7 overloaded people produced >10 signals, the server's own payload failed `payloadSchema.max(10)` after the metered call, and nothing was cached — a permanent, paid failure. Also a plan defect: `set_due` preserved `end`, so a ranged overdue item stayed overdue. Both fixed in one wave before merge.
 - `/updates` announced "Board brief and suggestions" (trailer on `89b92956`). The 2026-08-27 coverage gap (agent memory / create_pdf) is deliberately unannounced: memory is inert in every org.
 - Memory: `parallel-implementers-need-own-worktrees`.
+- **Post-merge incident, found by the owner on the first click:** "Couldn't read this board." Root cause was not Phase 2 — `ai@7.0.92` (dependabot #112, 2026-09-07) rejects a system-role message inside `messages`, and the Anthropic adapter built one for the cache breakpoint, so every Anthropic-routed structured feature had been failing in production for four days with nothing logged. Fixed on `develop` (`60ac97aa`: system prompt rides `instructions`; a real-`generateObject` regression test with a fake `fetch`; the run action now logs its cause, `f0ab8a24`). ADR [[2026-09-11-gotcha-99-a-dependency-bump-can-flip-a-default-no-test-exercises]]. Announced on `/updates` as a fix.
 
 ## Why
 
@@ -47,10 +48,11 @@ Not verified in a browser this session: the Chrome extension was disconnected an
 ## Open threads
 
 - Browser visual pass NOT done (Chrome extension disconnected; the e2e provisioner refuses DEV by design). Steps 2–12 above are the owed manual check; step 12's paint order first.
-- Not promoted: `develop` is ahead of `main` by Phase 2 and the sidebar Keystone polish; migration `20260911144351` is on DEV, not PROD.
+- **Promote soon:** production's Anthropic structured features are broken until `develop` (`8aedef66`) reaches `main`. `develop` is ahead by Phase 2, the sidebar Keystone polish and this fix; migration `20260911144351` is on DEV, not PROD.
+- Follow-up: the OpenAI, compatible and Google adapters still pass the deprecated `system` option; move them to `instructions` and give each a real-`generateObject` wire test.
 - Deferred by review, none blocking: `revertSuggestion` does not tie the client-held before-values to the applied action's cells (editor-only, audit label only); "Catch me up" can scroll out of view on a narrow strip; the strip meta appears one render after mount; the full run row rides the RSC payload on every board load; `board_intelligence_runs` has no retention (decide deliberately); the prompt's MEMBERS block is uncapped; undo runs outside `startTransition`; hook error lost on tab switch.
 - Phases 3 (Act: `assign_person` automation + "Always do this") and 4 (Ask: inline Q&A) are specced, not planned.
 
 ## Next session entry point
 
-Promote `develop → main` (Phase 2 + sidebar polish), run this walkthrough and the sidebar one against production, then `writing-plans` for Phase 3 (Act) from spec §5.
+Promote `develop → main` first thing (the Anthropic fix is a production incident), then run this walkthrough and the sidebar one against production, then `writing-plans` for Phase 3 (Act) from spec §5.
