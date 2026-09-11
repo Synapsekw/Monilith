@@ -335,6 +335,127 @@ describe("useIntelligenceRun", () => {
     expect(applyBoardEffects).toHaveBeenCalledWith(undoEffects);
   });
 
+  it("refuses a second apply while the first is still in flight", async () => {
+    seed(makeRun());
+    let resolve!: (v: unknown) => void;
+    applySuggestion.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = mount();
+
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.apply("s1", 0);
+    });
+    expect(applySuggestion).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.pending.has("s1")).toBe(true));
+
+    // The second click of a double-click. Letting it through sends a second
+    // write whose `before` values were read AFTER the first one landed, so its
+    // undo would restore what the first write had just written.
+    await act(async () => {
+      await result.current.apply("s1", 0);
+    });
+    expect(applySuggestion).toHaveBeenCalledTimes(1);
+    // ...and a DIFFERENT suggestion is not blocked by it.
+    await act(async () => {
+      await result.current.dismiss("s2");
+    });
+    expect(dismissSuggestion).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve({
+        ok: true,
+        data: {
+          before: [],
+          updateIds: [],
+          effects: [],
+          run: makeRun({ applied: ["s1"] }),
+        },
+      });
+      await first;
+    });
+    expect(result.current.pending.has("s1")).toBe(false);
+  });
+
+  it("refuses a second dismiss of the same suggestion", async () => {
+    seed(makeRun());
+    let resolve!: (v: unknown) => void;
+    dismissSuggestion.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { result } = mount();
+
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.dismiss("s1");
+    });
+    await waitFor(() => expect(result.current.pending.has("s1")).toBe(true));
+    await act(async () => {
+      await result.current.dismiss("s1");
+    });
+    expect(dismissSuggestion).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolve({ ok: true, data: makeRun({ dismissed: ["s1"] }) });
+      await first;
+    });
+    expect(result.current.pending.has("s1")).toBe(false);
+  });
+
+  it("leaves a NEWER brief alone when a late undo lands", async () => {
+    seed(makeRun());
+    applySuggestion.mockResolvedValue({
+      ok: true,
+      data: {
+        before: [],
+        updateIds: ["u1"],
+        effects: [],
+        run: makeRun({ applied: ["s1"] }),
+      },
+    });
+    const undoEffects = [{ kind: "item_fields_set", boardId: "b1", cells: [] }];
+    revertSuggestion.mockResolvedValue({
+      ok: true,
+      data: { effects: undoEffects, run: makeRun({ id: "r1" }) },
+    });
+    const { result } = mount();
+    await act(async () => {
+      await result.current.apply("s1", 0);
+    });
+
+    // A Refresh lands inside the 8s undo window: the brief on screen is now a
+    // different run entirely.
+    const newer = makeRun({ id: "r2", payload: makeRun().payload });
+    act(() => {
+      useBoardIntelligenceStore.getState().setRun("b1", newer);
+    });
+
+    const undo = showUndoToast.mock.calls[0][1] as () => void;
+    await act(async () => {
+      undo();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The cells are reverted either way...
+    await waitFor(() =>
+      expect(revertSuggestion).toHaveBeenCalledWith({
+        runId: "r1",
+        suggestionId: "s1",
+        before: [],
+        updateIds: ["u1"],
+      }),
+    );
+    expect(applyBoardEffects).toHaveBeenCalledWith(undoEffects);
+    // ...but the brief the user is reading is NOT replaced by the old one.
+    expect(useBoardIntelligenceStore.getState().runs.b1).toEqual(newer);
+  });
+
   it("says so when the apply is refused and when the undo is", async () => {
     seed(makeRun());
     applySuggestion.mockResolvedValue({

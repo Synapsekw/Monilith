@@ -184,6 +184,26 @@ describe("IntelligenceTab — while it is reading", () => {
     expect(region.querySelectorAll(".animate-pulse")).toHaveLength(5);
     expect(container.querySelector("svg.animate-spin")).toBeNull();
   });
+
+  it("keeps the brief on screen while a refresh runs", async () => {
+    seed(makeRun({ generatedAt: new Date(NOW - 31 * 60_000).toISOString() }));
+    runBoardIntelligence.mockReturnValue(new Promise(() => {}));
+    mount();
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    // The answer the reader came for stays put; the disabled control is what
+    // says a new one is on its way.
+    expect(
+      screen.getByText(
+        "Delivery slipped on two items and Design has not moved since Friday.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Three items are overdue")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled(),
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });
 
 describe("IntelligenceTab — the brief", () => {
@@ -298,6 +318,40 @@ describe("IntelligenceTab — the suggestions", () => {
       runId: "r1",
       suggestionId: "s2",
     });
+  });
+
+  it("goes inert while its own write is in flight", async () => {
+    seed(makeRun());
+    applySuggestion.mockReturnValue(new Promise(() => {}));
+    mount();
+
+    const card = screen.getByRole("listitem", {
+      name: /three items are overdue/i,
+    });
+    await userEvent.click(
+      within(card).getByRole("button", { name: "Push to Friday" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        within(card).getByRole("button", { name: "Push to Friday" }),
+      ).toBeDisabled(),
+    );
+    expect(
+      within(card).getByRole("button", { name: "Give to Mia" }),
+    ).toBeDisabled();
+    expect(
+      within(card).getByRole("button", { name: "Dismiss" }),
+    ).toBeDisabled();
+
+    // A second click cannot start a second write.
+    await userEvent.click(
+      within(card).getByRole("button", { name: "Push to Friday" }),
+    );
+    expect(applySuggestion).toHaveBeenCalledTimes(1);
+
+    // The other suggestion is untouched by it.
+    expect(screen.getByRole("button", { name: "Show stalled" })).toBeEnabled();
   });
 
   it("runs a filter action in the browser", async () => {

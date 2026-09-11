@@ -69,7 +69,10 @@ export function DockTabs({
             type="button"
             role="tab"
             id={`dock-tab-${t.id}`}
-            aria-controls={`dock-panel-${t.id}`}
+            // Only the OPEN section is mounted, so only the selected tab has a
+            // panel to point at — `aria-controls` naming an id that is not in
+            // the document is a dangling reference, not a relationship.
+            aria-controls={selected ? `dock-panel-${t.id}` : undefined}
             aria-selected={selected}
             // Roving tabindex: the tablist is ONE tab stop, and the arrow keys
             // are what move within it.

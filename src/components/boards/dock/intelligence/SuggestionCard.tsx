@@ -43,11 +43,15 @@ const isWrite = (action: Action) => action.type !== "filter";
 export function SuggestionCard({
   suggestion,
   canApply,
+  pending,
   onApply,
   onDismiss,
 }: {
   suggestion: Suggestion;
   canApply: boolean;
+  /** A write for this suggestion is in flight — every control on it is inert
+   *  until it settles, so a second click cannot start a second write. */
+  pending: boolean;
   onApply: (actionIndex: number) => void;
   onDismiss: () => void;
 }) {
@@ -77,16 +81,26 @@ export function SuggestionCard({
           <p className="text-muted-foreground text-xs">{suggestion.body}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {primary && (canApply || !isWrite(primary)) ? (
-              <Button size="xs" onClick={() => onApply(0)}>
+              <Button size="xs" disabled={pending} onClick={() => onApply(0)}>
                 {primary.label}
               </Button>
             ) : null}
             {secondary && (canApply || !isWrite(secondary)) ? (
-              <Button size="xs" variant="ghost" onClick={() => onApply(1)}>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => onApply(1)}
+              >
                 {secondary.label}
               </Button>
             ) : null}
-            <Button size="xs" variant="ghost" onClick={onDismiss}>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={pending}
+              onClick={onDismiss}
+            >
               Dismiss
             </Button>
             {suggestion.evidenceRows.length > 0 && (

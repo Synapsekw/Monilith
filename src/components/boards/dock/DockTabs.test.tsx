@@ -50,8 +50,17 @@ describe("DockTabs", () => {
     );
     const [chat, intel] = screen.getAllByRole("tab");
     expect(chat).toHaveAttribute("id", "dock-tab-chat");
-    expect(chat).toHaveAttribute("aria-controls", "dock-panel-chat");
     expect(intel).toHaveAttribute("id", "dock-tab-intelligence");
+    // Only the open section is mounted, so only the selected tab has a panel to
+    // point at — the other would be naming an id that is not in the document.
+    expect(chat).toHaveAttribute("aria-controls", "dock-panel-chat");
+    expect(intel).not.toHaveAttribute("aria-controls");
+  });
+
+  it("moves aria-controls with the selection", () => {
+    render(<DockTabs value="intelligence" onChange={() => {}} badge={0} />);
+    const [chat, intel] = screen.getAllByRole("tab");
     expect(intel).toHaveAttribute("aria-controls", "dock-panel-intelligence");
+    expect(chat).not.toHaveAttribute("aria-controls");
   });
 });

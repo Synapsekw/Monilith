@@ -53,6 +53,28 @@ export function useIntelligenceRun(
    * whether to offer a Refresh.
    */
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /**
+   * Suggestions with a write in flight, by id.
+   *
+   * A guard, not a spinner's bookkeeping: a double-click on Apply used to send
+   * two `applySuggestion` calls, and the SECOND one captured its `before`
+   * values AFTER the first write had already landed — so its undo restored the
+   * value the first write had just written, and the change became
+   * un-undoable. The disabled button is the visible half; this is the half that
+   * holds when the click beats the render.
+   */
+  const [pending, setPending] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  const mark = useCallback((id: string, busy: boolean) => {
+    setPending((prev) => {
+      if (prev.has(id) === busy) return prev;
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   const runIt = useCallback(
     async (force: boolean) => {
@@ -78,12 +100,13 @@ export function useIntelligenceRun(
 
   const dismiss = useCallback(
     async (suggestionId: string) => {
-      if (!run) return;
+      if (!run || pending.has(suggestionId)) return;
       const prev = run;
       // Optimistic: the card is the user's own decision, so it goes now and
       // comes back only if the server disagrees.
       setRun(boardId, { ...run, dismissed: [...run.dismissed, suggestionId] });
       setError(null);
+      mark(suggestionId, true);
       try {
         const res = await dismissSuggestion({ runId: run.id, suggestionId });
         if (res.ok) setRun(boardId, res.data);
@@ -94,9 +117,11 @@ export function useIntelligenceRun(
       } catch {
         setRun(boardId, prev);
         setError("Couldn't dismiss.");
+      } finally {
+        mark(suggestionId, false);
       }
     },
-    [boardId, run, setRun],
+    [boardId, mark, pending, run, setRun],
   );
 
   const apply = useCallback(
@@ -111,10 +136,13 @@ export function useIntelligenceRun(
       }
       // Second guard, not the first: the button is never rendered for a viewer.
       if (!opts.canApply) return;
+      if (pending.has(suggestionId)) return;
+      const runId = run.id;
       setError(null);
+      mark(suggestionId, true);
       try {
         const res = await applySuggestion({
-          runId: run.id,
+          runId,
           suggestionId,
           actionIndex,
         });
@@ -128,7 +156,7 @@ export function useIntelligenceRun(
         showUndoToast("Applied", () => {
           void (async () => {
             const undo = await revertSuggestion({
-              runId: run.id,
+              runId,
               suggestionId,
               before,
               updateIds,
@@ -138,14 +166,34 @@ export function useIntelligenceRun(
               return;
             }
             applyBoardEffects(undo.data.effects);
-            setRun(boardId, undo.data.run);
+            // The board cells are reverted either way — but the BRIEF this undo
+            // belongs to may no longer be the one on screen. Eight seconds is
+            // long enough for a Refresh to land, and writing the old run back
+            // over a newer one would silently replace the brief the user is
+            // reading with a stale one.
+            if (
+              useBoardIntelligenceStore.getState().runs[boardId]?.id === runId
+            ) {
+              setRun(boardId, undo.data.run);
+            }
           })();
         });
       } catch {
         setError("Couldn't apply the suggestion.");
+      } finally {
+        mark(suggestionId, false);
       }
     },
-    [applyBoardEffects, boardId, opts.canApply, requestFilter, run, setRun],
+    [
+      applyBoardEffects,
+      boardId,
+      mark,
+      opts.canApply,
+      pending,
+      requestFilter,
+      run,
+      setRun,
+    ],
   );
 
   const visible = useMemo<Suggestion[]>(() => {
@@ -165,6 +213,8 @@ export function useIntelligenceRun(
     staleByAge,
     /** The tab's clock, so the timestamp and the staleness agree on "now". */
     nowMs,
+    /** Suggestion ids with a write in flight — their cards are inert. */
+    pending,
     visible,
     catchMeUp,
     refresh,

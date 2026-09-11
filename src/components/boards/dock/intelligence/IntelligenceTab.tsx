@@ -56,6 +56,7 @@ export function IntelligenceTab({
     error,
     staleByAge,
     nowMs,
+    pending,
     visible,
     catchMeUp,
     refresh,
@@ -107,9 +108,13 @@ export function IntelligenceTab({
         </div>
       )}
 
-      {running ? (
+      {/* The skeleton stands in for a brief that does not exist yet. Once one
+          does, a REFRESH leaves it on screen — replacing a readable answer with
+          five grey bars costs the reader the thing they came for, and the
+          disabled Refresh already says a new one is on its way. */}
+      {run ? null : running ? (
         <Reading />
-      ) : !run ? (
+      ) : (
         <div className="flex flex-col items-start gap-3">
           <p className="text-muted-foreground text-sm">
             Nothing yet — a brief of the last 7 days and what to do next.
@@ -118,7 +123,9 @@ export function IntelligenceTab({
             Catch me up
           </Button>
         </div>
-      ) : (
+      )}
+
+      {run && (
         <>
           <BriefBlock
             brief={run.payload.brief}
@@ -138,6 +145,7 @@ export function IntelligenceTab({
                     key={s.id}
                     suggestion={s}
                     canApply={canApply}
+                    pending={pending.has(s.id)}
                     onApply={(i) => void apply(s.id, i)}
                     onDismiss={() => void dismiss(s.id)}
                   />
