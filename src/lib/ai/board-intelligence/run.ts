@@ -219,6 +219,14 @@ export async function runBoardIntelligence(input: {
     if (!run) return fail("Couldn't read the saved brief.");
     return { ok: true, data: run };
   } catch (e) {
+    // The user sees mapAiError's copy; the real cause must reach the server
+    // log or a failed run is undiagnosable (no ai_usage row is written when
+    // the provider call itself throws).
+    console.error("[intelligence] run failed", {
+      boardId,
+      error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      cause: e instanceof Error && e.cause ? String(e.cause) : undefined,
+    });
     return fail(
       mapAiError(e, {
         fallback: "Couldn't read this board. Please try again.",
