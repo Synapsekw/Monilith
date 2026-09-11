@@ -229,13 +229,13 @@ describe.skipIf(!integrationTargetReady())(
         .from("columns")
         .select("id")
         .eq("board_id", owner.boardId)
-        .limit(1)
+        .eq("name", "Notes")
         .single();
       const { data: item } = await owner.anon
         .from("items")
         .select("id")
         .eq("board_id", owner.boardId)
-        .limit(1)
+        .eq("name", "Row")
         .single();
       const res = await viewer.anon.rpc("apply_intelligence_cells", {
         p_board_id: owner.boardId,
@@ -251,6 +251,33 @@ describe.skipIf(!integrationTargetReady())(
       expect(
         cells.data?.some((c) => JSON.stringify(c.value).includes("nope")),
       ).toBe(false);
+
+      // The clear path (value: null) is a delete filtered by RLS, not a
+      // rejected write — without the guard it "succeeds" on zero rows. Seed
+      // a real value as admin, then confirm a viewer's clear is rejected and
+      // the value survives.
+      const { error: seedErr } = await admin.from("cell_values").upsert(
+        {
+          org_id: owner.orgId,
+          board_id: owner.boardId,
+          item_id: item!.id,
+          column_id: col!.id,
+          value: { text: "seeded" },
+        },
+        { onConflict: "item_id,column_id" },
+      );
+      expect(seedErr).toBeNull();
+      const clearRes = await viewer.anon.rpc("apply_intelligence_cells", {
+        p_board_id: owner.boardId,
+        p_writes: [{ item_id: item!.id, column_id: col!.id, value: null }],
+      });
+      expect(clearRes.error).not.toBeNull();
+      const stillThere = await admin
+        .from("cell_values")
+        .select("value")
+        .eq("item_id", item!.id)
+        .eq("column_id", col!.id);
+      expect(stillThere.data).toHaveLength(1);
     });
 
     it("an ordinary cell write still logs source = user", async () => {
@@ -258,15 +285,15 @@ describe.skipIf(!integrationTargetReady())(
         .from("columns")
         .select("id")
         .eq("board_id", owner.boardId)
-        .limit(1)
+        .eq("name", "Notes")
         .single();
       const { data: item } = await owner.anon
         .from("items")
         .select("id")
         .eq("board_id", owner.boardId)
-        .limit(1)
+        .eq("name", "Row")
         .single();
-      await owner.anon.from("cell_values").upsert(
+      const { error: upsertErr } = await owner.anon.from("cell_values").upsert(
         {
           org_id: owner.orgId,
           board_id: owner.boardId,
@@ -276,6 +303,7 @@ describe.skipIf(!integrationTargetReady())(
         },
         { onConflict: "item_id,column_id" },
       );
+      expect(upsertErr).toBeNull();
       const act = await owner.anon
         .from("item_activities")
         .select("source")

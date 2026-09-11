@@ -137,6 +137,17 @@ begin
     raise exception 'apply_intelligence_cells: expected 1..50 writes';
   end if;
 
+  -- A duplicate (item_id, column_id) pair in the same batch would make the
+  -- returned `before` payload useless for Undo (it would restore whichever
+  -- write happened to run first, not the true pre-call state).
+  if (select count(*) from jsonb_array_elements(p_writes) w)
+     <> (
+       select count(distinct (w->>'item_id') || ':' || (w->>'column_id'))
+       from jsonb_array_elements(p_writes) w
+     ) then
+    raise exception 'apply_intelligence_cells: duplicate item_id/column_id in p_writes';
+  end if;
+
   -- RLS-filtered: a board the caller cannot read reads as "not found".
   select b.org_id into v_org from public.boards b where b.id = p_board_id;
   if v_org is null then
@@ -164,6 +175,13 @@ begin
 
     if v_value is null or jsonb_typeof(v_value) = 'null' then
       delete from public.cell_values cv where cv.item_id = v_item and cv.column_id = v_col;
+      -- A caller without edit access has the row RLS-filtered out of the
+      -- delete rather than erroring: it silently "succeeds" on zero rows.
+      -- Undo is the common case for this branch (clearing a previously-empty
+      -- cell), so only flag it when a row genuinely existed to delete.
+      if v_old is not null and not found then
+        raise exception 'apply_intelligence_cells: no edit access to this board' using errcode = '42501';
+      end if;
       v_cells := v_cells || jsonb_build_object('item_id', v_item, 'column_id', v_col, 'cleared', true);
     else
       insert into public.cell_values (org_id, board_id, item_id, column_id, value)
@@ -173,6 +191,11 @@ begin
       v_cells := v_cells || to_jsonb(v_row);
     end if;
   end loop;
+
+  -- Clear the transaction-local stamp so it cannot outlive this call if it
+  -- is ever invoked inside a larger caller transaction (set_config's `true`
+  -- argument scopes it to the transaction, not the statement).
+  perform set_config('app.activity_source', '', true);
 
   return jsonb_build_object('before', v_before, 'cells', v_cells);
 end $$;
