@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-11",
+    kind: "improved",
+    title: "Compact assignees in the People column",
+    description:
+      "When more than one person is assigned, the cell shows overlapping avatars (photo or initials) with a +N for the rest, so it fits the column; hover the stack to see everyone's names. A single assignee still shows their name.",
+  },
+  {
     date: "2026-09-10",
     kind: "fixed",
     title: "Assign several people to one task",

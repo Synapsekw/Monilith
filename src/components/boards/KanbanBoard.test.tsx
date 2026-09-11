@@ -284,7 +284,7 @@ describe("KanbanBoard", () => {
     expect(setCell).not.toHaveBeenCalled();
   });
 
-  it("renders assignee names on the card when a member directory is provided", () => {
+  it("stacks assignee avatars on the card when a member directory is provided", () => {
     renderKanban([
       {
         userId: "u1",
@@ -294,10 +294,12 @@ describe("KanbanBoard", () => {
       },
       { userId: "u2", fullName: null, email: "grace@x.com", avatarUrl: null },
     ]);
-    // fullName for u1, email fallback for u2 — each rendered as an avatar+name
-    // chip (no longer comma-joined into one text node).
-    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
-    expect(screen.getByText("grace@x.com")).toBeInTheDocument();
+    // fullName for u1, email fallback for u2 — two assignees collapse to an
+    // avatar stack whose accessible label carries both names.
+    expect(
+      screen.getByLabelText("2 assigned: Ada Lovelace, grace@x.com"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument();
   });
 
   it("falls back to a people count on the card when no directory is provided", () => {
