@@ -47,19 +47,40 @@ describe("Board Intelligence row rule wins the cascade", () => {
   });
 
   /**
-   * Second regression: ItemRow/SortableSubitemRow add `shadow-drag` (a real,
-   * non-`none` shadow) alongside the intel classes while dragging. Plain
-   * `.intel-match` fully REPLACES `box-shadow` (see the comment in
-   * globals.css on why it can't safely compose with `--shadow-card`), which
-   * would erase the drag elevation on a dragged matching row. `.intel-match`
-   * combined with `.shadow-drag` must compose both shadows instead.
+   * Second regression: the rule must be a PSEUDO-ELEMENT, not an `inset`
+   * box-shadow. An inset shadow paints on the element's own background —
+   * below every child — and the first child of a table row (`NameCell`) and
+   * of a gantt row (`GanttRowItem`'s label) is a `sticky left-0 z-10` column
+   * with an opaque background flush at x=0, so the 2px strip was completely
+   * covered in Table and Timeline. `::after` with a `z-index` above those
+   * z-10 frozen columns is what makes it visible in every view.
    */
-  it("composes the drag elevation with the tone rule for a dragged matching row", () => {
+  it("paints the rule as an ::after strip above the frozen name column", () => {
     const utilities = extractLayerBlock("utilities");
-    const match = utilities.match(/\.intel-match\.shadow-drag\s*\{([^}]*)\}/);
-    expect(match).not.toBeNull();
-    const body = match![1];
-    expect(body).toMatch(/inset 2px 0 0 var\(--intel-rule, transparent\)/);
-    expect(body).toMatch(/var\(--shadow-drag\)/);
+    const after = utilities.match(/\.intel-match::after\s*\{([^}]*)\}/);
+    expect(after).not.toBeNull();
+    const body = after![1];
+    expect(body).toMatch(/position:\s*absolute/);
+    expect(body).toMatch(/width:\s*2px/);
+    expect(body).toMatch(/background:\s*var\(--intel-rule, transparent\)/);
+    const z = body.match(/z-index:\s*(\d+)/);
+    expect(z).not.toBeNull();
+    expect(Number(z![1])).toBeGreaterThan(10);
+
+    // …anchored by `position: relative` on the row root itself.
+    const root = utilities.match(/\.intel-match\s*\{([^}]*)\}/);
+    expect(root).not.toBeNull();
+    expect(root![1]).toMatch(/position:\s*relative/);
+  });
+
+  /**
+   * And the row's own `box-shadow` is left alone, so a dragged matching row
+   * keeps its `shadow-drag` elevation with no composed override needed.
+   */
+  it("never touches box-shadow, so shadow-drag survives on a dragged row", () => {
+    const utilities = extractLayerBlock("utilities");
+    expect(utilities).not.toMatch(/\.intel-match\.shadow-drag\s*\{/);
+    const root = utilities.match(/\.intel-match\s*\{([^}]*)\}/);
+    expect(root![1]).not.toMatch(/box-shadow/);
   });
 });

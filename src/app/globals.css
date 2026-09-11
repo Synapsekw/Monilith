@@ -934,30 +934,36 @@
   [data-intel-tone="accent"] {
     --intel-rule: var(--primary);
   }
-  /* NOT composed with `shadow-card`/`--elevation-card`: that token is
-     literally the keyword `none` today, and CSS's box-shadow grammar only
-     allows `none` as the WHOLE value, never as one item in a comma list —
-     splicing it in (e.g. `var(--intel-rule), var(--shadow-card, none)`)
-     makes the entire declaration invalid at computed-value time, so it
-     falls back to `none` and the rule silently never renders. This rule
-     fully replaces box-shadow instead, which is lossless today because
-     `--elevation-card: none` means there is no resting card shadow to
-     begin with. Revisit if a real elevation is ever added to `.shadow-card`. */
+  /* A pseudo-element, NOT an `inset` box-shadow. An inset shadow paints on
+     the element's own background — i.e. BELOW every child — and the first
+     child of a table row (`NameCell`) and of a gantt row (`GanttRowItem`'s
+     label) is a `sticky left-0 z-10` column with a deliberately opaque
+     background flush at x=0, so an inset rule was completely covered in
+     Table and Timeline. `::after` is a real box in the row's stacking
+     context with `z-index: 20`, above those z-10 frozen columns, so the rule
+     is visible in every view. It also sidesteps the `box-shadow` composition
+     problem the inset version had: nothing to compose with `shadow-card`
+     (whose `--elevation-card` is the keyword `none`, illegal inside a
+     comma list) or with `shadow-drag` on a dragged row — the row's own
+     `box-shadow` is now untouched.
+     `position: relative` is the anchor. Safe on every row root that takes
+     these classes: table `ItemRow` / `SortableSubitemRow` and gantt
+     `GanttRowItem` are statically positioned (the table rows add Tailwind's
+     own `relative` while dragging, which is the same value), the Kanban card
+     `<article>` and the calendar `EventBar` already declare `relative`, and
+     the calendar agenda `<li>` is static. */
   .intel-match {
-    box-shadow: inset 2px 0 0 var(--intel-rule, transparent);
+    position: relative;
   }
-  /* A dragged table row also carries `shadow-drag` (ItemRow/SortableSubitemRow
-     add it alongside the intel classes on the same element — Kanban/Gantt
-     use `opacity-50` for drag feedback instead, so they never hit this).
-     Unlike `--elevation-card` above, `--elevation-drag` is never the keyword
-     `none` (see globals.css tokens below), so it's safe to splice into a
-     list: compose both shadows here instead of letting `.intel-match` alone
-     (a plain `box-shadow` replace) erase the drag elevation. Higher
-     specificity (two classes) wins regardless of declaration order. */
-  .intel-match.shadow-drag {
-    box-shadow:
-      inset 2px 0 0 var(--intel-rule, transparent),
-      var(--shadow-drag);
+  .intel-match::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 2px;
+    background: var(--intel-rule, transparent);
+    z-index: 20;
+    pointer-events: none;
   }
   /* Same reasoning for opacity: Kanban/Calendar apply `opacity-50` while
      dragging on the same element as `.intel-miss`. Being later in this same
