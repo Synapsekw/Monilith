@@ -1139,6 +1139,43 @@ describe("AskChat — surface and busy signal", () => {
     expect(note.className).toBe("text-muted-foreground px-3.5 py-3 text-sm");
   });
 
+  it("aligns queued approvals to the wash column, and keeps /ask's own padding", () => {
+    const PROPOSAL = {
+      id: "p1",
+      runId: "run-1",
+      userAgentId: "agent-1",
+      toolName: "create_item",
+      capability: "board.write",
+      summary: 'Add "Draft proposal" to a board group.',
+      status: "pending" as const,
+      expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+      createdAt: new Date().toISOString(),
+      target: null,
+    };
+    const block = () =>
+      screen.getByText(/Add "Draft proposal"/).closest("div.flex-col.gap-2")!;
+    const { rerender } = render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[ANSWER_ROW]}
+        agentProposals={[PROPOSAL]}
+      />,
+    );
+    // /ask is untouched.
+    expect(block().className).toBe("flex flex-col gap-2 px-4 pb-2");
+    rerender(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[ANSWER_ROW]}
+        agentProposals={[PROPOSAL]}
+        surface="atmosphere"
+      />,
+    );
+    // On the wash the title row, ledger, transcript, notice and error banner
+    // are all px-3.5; px-4 left these cards 2px out of the column.
+    expect(block().className).toBe("flex flex-col gap-2 px-3.5 pb-2");
+  });
+
   it("reports the turn busy from submit until it settles — including a failed send", async () => {
     const onBusyChange = vi.fn();
     const open = holdCreateConversation();

@@ -6,12 +6,28 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 // The chat and the Intelligence body have their own suites; here they are
 // probes for what the dock body hands them.
 vi.mock("@/components/ai/ask/AskChat", () => ({
-  AskChat: (p: { surface?: string; onBusyChange?: (b: boolean) => void }) => (
+  AskChat: (p: {
+    surface?: string;
+    onBusyChange?: (b: boolean) => void;
+    agentNames?: Readonly<Record<string, string>>;
+    agents?: readonly unknown[];
+    readOnly?: boolean;
+  }) => (
     <div
       data-testid="ask-chat"
       data-surface={p.surface ?? ""}
       data-busy-wired={p.onBusyChange ? "yes" : "no"}
-    />
+      data-agent-names={p.agentNames ? JSON.stringify(p.agentNames) : "none"}
+      data-agents={p.agents ? String(p.agents.length) : "none"}
+      data-read-only={p.readOnly ? "yes" : "no"}
+    >
+      {p.readOnly ? (
+        <p>
+          This thread was shared with the board. You can read it, but only its
+          owner can reply.
+        </p>
+      ) : null}
+    </div>
   ),
 }));
 vi.mock("./intelligence/IntelligenceTab", () => ({
@@ -245,6 +261,17 @@ describe("DockBody — threads ledger", () => {
     expect(ledger().querySelector("svg")).not.toBeNull();
   });
 
+  it("does not claim a count it has not read yet", async () => {
+    // A `0` beside the well's own skeleton contradicts it. Only the FIRST
+    // read is unknown — a re-read keeps showing the count already in hand.
+    const { rerender } = render(<DockBody {...props({ loading: true })} />);
+    expect(ledger().querySelector(".tabular-nums")).not.toHaveTextContent("0");
+    rerender(<DockBody {...props({ loading: true, boardThreads: rows })} />);
+    expect(ledger().querySelector(".tabular-nums")).toHaveTextContent("2");
+    rerender(<DockBody {...props()} />);
+    expect(ledger().querySelector(".tabular-nums")).toHaveTextContent("0");
+  });
+
   it("shows the list skeleton inside the well while the first read is in flight, painted for the wash", async () => {
     render(<DockBody {...props({ loading: true })} />);
     await userEvent.click(ledger());
@@ -274,7 +301,29 @@ describe("DockBody — transcript", () => {
     );
   });
 
-  it("replaces the chat with the read-only notice on someone else's shared thread", () => {
+  // Finding #3: the band, the title kicker and the presence dot all name the
+  // persona; without the roster the transcript stamped every answer
+  // "Monolith". `MessageList` resolves a turn's `agentId` through exactly
+  // this map.
+  it("hands the chat the persona names, so the transcript can attribute a turn", () => {
+    render(<DockBody {...props()} />);
+    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
+      "data-agent-names",
+      JSON.stringify({ a1: "Morning Brief", a2: "Overdue Chaser" }),
+    );
+    // But NOT the @handle roster: on this surface a persona is chosen by
+    // tapping its tile, and the board page reads no handles to offer.
+    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
+      "data-agents",
+      "none",
+    );
+  });
+
+  // Finding #7: this used to replace `AskChat` wholesale with the sentence, so
+  // a thread someone else shared opened to a title row, a "Shared" chip and an
+  // empty body — which reads as a load failure. AskChat's own read-only mode
+  // renders the transcript AND says the same sentence in place of the composer.
+  it("renders someone else's shared thread read-only, transcript and all", () => {
     render(
       <DockBody
         {...props({
@@ -287,10 +336,11 @@ describe("DockBody — transcript", () => {
         })}
       />,
     );
-    expect(screen.queryByTestId("ask-chat")).toBeNull();
-    const note = screen.getByText(/only its owner can reply/i);
-    expect(note.className).toContain("px-3.5");
-    expect(note.className).not.toMatch(/\bborder-/);
+    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
+      "data-read-only",
+      "yes",
+    );
+    expect(screen.getByText(/only its owner can reply/i)).toBeInTheDocument();
   });
 
   it("shows the loading skeleton while a thread's messages are read", () => {

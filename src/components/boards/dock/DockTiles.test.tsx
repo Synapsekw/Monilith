@@ -1,7 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { DockTiles, dockTileId, type DockTile } from "./DockTiles";
+import {
+  DockTiles,
+  dockTileId,
+  knownAgentId,
+  DOCK_RAIL_TILE_ID_PREFIX,
+} from "./DockTiles";
 
 const AGENTS = [
   { id: "a1", name: "Morning Brief" },
@@ -65,6 +70,52 @@ describe("DockTiles — roster", () => {
       "id",
       "dock-tab-agent-a1",
     );
+  });
+});
+
+describe("DockTiles — one row, two layers", () => {
+  it("mints ids in the namespace it is given, so the band and the rail never collide", () => {
+    // Both layers are mounted for the ~360ms of a fold. With one namespace
+    // every `dock-tab-*` existed twice and the chat panel's `aria-labelledby`
+    // resolved to whichever came first in DOM order — on a close, the
+    // `aria-hidden` layer on its way out.
+    expect(dockTileId({ kind: "ask" }, DOCK_RAIL_TILE_ID_PREFIX)).toBe(
+      "dock-rail-tab-ask",
+    );
+    expect(DOCK_RAIL_TILE_ID_PREFIX).not.toBe("dock-tab");
+    render(
+      <DockTiles
+        agents={AGENTS}
+        tab="chat"
+        agentId="a1"
+        badge={0}
+        orientation="vertical"
+        idPrefix={DOCK_RAIL_TILE_ID_PREFIX}
+        panelMounted={false}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: "Morning Brief" })).toHaveAttribute(
+      "id",
+      "dock-rail-tab-agent-a1",
+    );
+    // No panel is mounted beside the rail, so the selected tile points at
+    // nothing rather than at an id that is not in the document.
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).not.toHaveAttribute("aria-controls");
+    }
+  });
+});
+
+describe("knownAgentId", () => {
+  it("is the one rule three surfaces used to answer three ways", () => {
+    expect(knownAgentId("a1", AGENTS)).toBe("a1");
+    expect(knownAgentId("gone", AGENTS)).toBeNull();
+    expect(knownAgentId(null, AGENTS)).toBeNull();
+    expect(knownAgentId(undefined, AGENTS)).toBeNull();
+    // Identity by id, never by name: an agent whose display name is somehow
+    // empty is still on the roster.
+    expect(knownAgentId("a1", [{ id: "a1", name: "" }])).toBe("a1");
   });
 });
 
@@ -245,7 +296,14 @@ describe("DockTiles — selection follows tab + agentId", () => {
         onSelect={() => {}}
       />,
     );
-    expect(ask().className).toContain("after:-right-2");
+    // INSIDE the tile's own right edge, not hanging 8px past it. The aside is
+    // `overflow-hidden` at 48px and the `pointer-coarse` tile is 44px, so
+    // there is no room OUTSIDE a tile for a bar to live in: `-right-2` drew
+    // one pixel for the 32px tile and nothing at all for the 44px one.
+    // `right-0` is x=37…40 and x=43…46 in the 48px column: both fully drawn.
+    expect(ask().className).toContain("after:right-0");
+    expect(ask().className).not.toContain("after:-right-2");
+    expect(ask().className).toContain("after:inset-y-2");
     expect(ask().className).not.toContain("after:bottom-0");
     // Vertical is unaffected: the rail button stays a fixed square, not a
     // stretched rectangle.
@@ -401,10 +459,15 @@ describe("DockTiles — presence", () => {
   });
 });
 
+// MANUAL activation (ARIA APG). This was automatic — every arrow fired
+// `onSelect` — which was right while activation only swapped a panel, and is
+// wrong now that the dock routes it to "start a new thread on this persona":
+// one arrow along the roster closed the open thread, dropped the composer's
+// draft and stripped `?thread=`, and landing on Intelligence kicked a metered
+// model call. The keyboard CONTRACT changed here on purpose; roving tabindex,
+// Home/End and the wrap-around did not.
 describe("DockTiles — keyboard", () => {
-  const tiles = (calls: DockTile[][]) => calls.map((c) => c[0]);
-
-  it("ArrowRight/ArrowLeft move focus AND select, wrapping, from the focused tile", async () => {
+  it("ArrowRight/ArrowLeft move focus ONLY, wrapping, from the focused tile", async () => {
     const onSelect = vi.fn();
     render(
       <DockTiles
@@ -417,16 +480,40 @@ describe("DockTiles — keyboard", () => {
     );
     screen.getByRole("tab", { name: "Ask" }).focus();
     await userEvent.keyboard("{ArrowRight}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a1" });
     expect(screen.getByRole("tab", { name: "Morning Brief" })).toHaveFocus();
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
+    expect(screen.getByRole("tab", { name: "Intelligence" })).toHaveFocus();
+    // Wraps off the front edge onto the last tile.
     await userEvent.keyboard("{ArrowLeft}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a2" });
-    expect(tiles(onSelect.mock.calls)).toHaveLength(4);
+    expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveFocus();
+    // Four arrow presses, nothing activated.
+    expect(onSelect).not.toHaveBeenCalled();
+    // Selection has not moved either: the tablist is still controlled by
+    // `tab`/`agentId`, and Ask is still the one tab stop.
+    expect(selectedName()).toBe("Ask");
+    expect(screen.getByRole("tab", { name: "Ask" }).tabIndex).toBe(0);
   });
 
-  it("Home and End jump to the ends", async () => {
+  it("Enter and Space activate the focused tile", async () => {
+    const onSelect = vi.fn();
+    render(
+      <DockTiles
+        agents={AGENTS}
+        tab="chat"
+        agentId={null}
+        badge={0}
+        onSelect={onSelect}
+      />,
+    );
+    screen.getByRole("tab", { name: "Ask" }).focus();
+    await userEvent.keyboard("{ArrowRight}{Enter}");
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a1" });
+    await userEvent.keyboard("{ArrowRight} ");
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a2" });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it("Home and End jump to the ends, still without activating", async () => {
     const onSelect = vi.fn();
     render(
       <DockTiles
@@ -439,10 +526,12 @@ describe("DockTiles — keyboard", () => {
     );
     screen.getByRole("tab", { name: "Ask" }).focus();
     await userEvent.keyboard("{End}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a2" });
     expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveFocus();
     await userEvent.keyboard("{Home}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
+    expect(screen.getByRole("tab", { name: "Intelligence" })).toHaveFocus();
+    expect(onSelect).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Enter}");
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith({ kind: "intelligence" });
   });
 
   it("vertical: ArrowDown/ArrowUp move, ArrowRight/ArrowLeft are ignored", async () => {
@@ -463,11 +552,12 @@ describe("DockTiles — keyboard", () => {
     );
     screen.getByRole("tab", { name: "Ask" }).focus();
     await userEvent.keyboard("{ArrowRight}");
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "agent", agentId: "a1" });
+    expect(screen.getByRole("tab", { name: "Morning Brief" })).toHaveFocus();
     await userEvent.keyboard("{ArrowUp}{ArrowUp}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
+    expect(screen.getByRole("tab", { name: "Intelligence" })).toHaveFocus();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("clicking each tile reports it", async () => {

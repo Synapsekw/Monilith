@@ -68,6 +68,9 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
       boardId?: string;
       agentId?: string;
       surface?: string;
+      agentNames?: Readonly<Record<string, string>>;
+      agents?: readonly unknown[];
+      readOnly?: boolean;
       onStarted?: (id: string) => void;
       onTurnComplete?: () => void;
       onBusyChange?: (busy: boolean) => void;
@@ -85,7 +88,27 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
           data-agent={p.agentId ?? ""}
           data-surface={p.surface ?? ""}
           data-messages={String(p.initialMessages.length)}
+          data-agent-names={
+            p.agentNames ? JSON.stringify(p.agentNames) : "none"
+          }
+          data-agents={p.agents ? String(p.agents.length) : "none"}
+          data-read-only={p.readOnly ? "yes" : "no"}
         >
+          {/* The real component renders the transcript AND this sentence in
+              place of the composer when `readOnly` — the dock no longer
+              substitutes its own notice for the whole chat (finding #7). */}
+          {p.readOnly ? (
+            <p>
+              This thread was shared with the board. You can read it, but only
+              its owner can reply.
+            </p>
+          ) : null}
+          {/* The real `Composer` autofocuses its textarea on mount (and
+              renders none at all when `readOnly`), which is what the dock's
+              open-direction focus defers to — so the probe carries it too. */}
+          {p.readOnly ? null : (
+            <textarea autoFocus aria-label="Your question" readOnly />
+          )}
           <span data-testid="chat-draft">{draft}</span>
           <button type="button" onClick={() => setDraft("in-flight turn")}>
             mock type
@@ -347,18 +370,41 @@ describe("BoardDock", () => {
     expect(window.location.search).toBe("?view=kanban");
   });
 
-  it("refuses a turn on a thread someone else shared", async () => {
+  it("reads out a thread someone else shared, and refuses a turn on it", async () => {
+    // Finding #7: the dock used to swap the whole chat for that one sentence,
+    // so a shared thread opened to a title row, a Shared chip and an empty
+    // body. It goes through AskChat's own read-only mode now: transcript
+    // rendered, composer withheld, same sentence.
     loadDockThreads.mockResolvedValue(
       withThread({ user_id: "someone-else", visibility: "board" }),
     );
-    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+    loadThreadMessages.mockResolvedValue({
+      ok: true,
+      data: { messages: [{ id: "m1", role: "user", content: "hi" }] },
+    });
     mount();
     await openDock();
     await userEvent.click(await threadRow("About the roadmap"));
     expect(
       await screen.findByText(/only its owner can reply/i),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("ask-chat")).toBeNull();
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-read-only", "yes"),
+    );
+    expect(chat()).toHaveAttribute("data-messages", "1");
+  });
+
+  // Finding #3: the band, the title kicker and the presence dot all name the
+  // answering persona; the transcript stamped every answer "Monolith" because
+  // the roster never reached it.
+  it("hands the chat the persona names — but not the @handle roster", async () => {
+    mount();
+    await openDock();
+    expect(chat()).toHaveAttribute(
+      "data-agent-names",
+      JSON.stringify({ a1: "Morning Brief", a2: "Overdue Chaser" }),
+    );
+    expect(chat()).toHaveAttribute("data-agents", "none");
   });
 
   it("tap an agent and talk: an agent tile starts a new thread on that persona", async () => {
@@ -1011,6 +1057,207 @@ describe("BoardDock — tile selection", () => {
   });
 });
 
+// Spec §8 + finding #1: the band is a tablist with MANUAL activation, because
+// activating a tile here is not free — it starts a new thread on that persona.
+describe("BoardDock — the band's keyboard", () => {
+  it("arrowing across the band does not close the open thread; Enter does", async () => {
+    loadDockThreads.mockResolvedValue(withThread({ agent_id: "a1" }));
+    loadThreadMessages.mockResolvedValue({
+      ok: true,
+      data: { messages: [{ id: "m1", role: "user", content: "hi" }] },
+    });
+    mount();
+    await openDock();
+    await userEvent.click(await threadRow("About the roadmap"));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "c1"),
+    );
+    const instance = chat().getAttribute("data-instance");
+    // Half a question typed into the composer, which a remount would eat.
+    await userEvent.click(screen.getByRole("button", { name: /mock type/i }));
+    expect(screen.getByTestId("chat-draft")).toHaveTextContent(
+      "in-flight turn",
+    );
+
+    // One glance along the roster: back over Ask, onto Intelligence, then all
+    // the way out to the far end.
+    screen.getByRole("tab", { name: "Morning Brief" }).focus();
+    await userEvent.keyboard(
+      "{ArrowLeft}{ArrowLeft}{ArrowRight}{ArrowRight}{ArrowRight}",
+    );
+
+    // The thread, its id in the URL, the draft and the chat instance all
+    // survive; arrowing onto Intelligence did not kick a model call either.
+    expect(chat()).toHaveAttribute("data-conversation", "c1");
+    expect(chat().getAttribute("data-instance")).toBe(instance);
+    expect(screen.getByTestId("chat-draft")).toHaveTextContent(
+      "in-flight turn",
+    );
+    expect(window.location.search).toContain("thread=c1");
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
+    // Focus DID move — and stayed in the band rather than being pulled into
+    // a remounted composer.
+    expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveFocus();
+
+    // Enter is the activation, and it does start the new thread.
+    await userEvent.keyboard("{Enter}");
+    expect(chat()).toHaveAttribute("data-conversation", "");
+    expect(chat()).toHaveAttribute("data-agent", "a2");
+    expect(window.location.search).not.toContain("thread=");
+  });
+});
+
+// Finding #2: `onBusyChange`'s guard correctly refuses a stale `false`, but
+// nothing then cleared the dot for the turn that was ABANDONED — the reader
+// walked away from it, so the `false` that would have cleared it is exactly
+// the one the guard ignores.
+describe("BoardDock — an abandoned turn's presence dot", () => {
+  it("clears when the reader switches persona without starting a new turn", async () => {
+    mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    expect(
+      screen.getByRole("tab", { name: "Morning Brief · running" }),
+    ).toBeInTheDocument();
+
+    // Switch tiles and ask nothing. The old chat is unmounted knowingly.
+    await userEvent.click(screen.getByRole("tab", { name: "Overdue Chaser" }));
+    expect(document.querySelector("[data-dock-presence]")).toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Morning Brief" }),
+    ).toBeInTheDocument();
+  });
+
+  it("clears when the reader opens an older thread mid-stream", async () => {
+    loadDockThreads.mockResolvedValue(withThread());
+    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+    mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    expect(
+      screen.getByRole("tab", { name: "Morning Brief · running" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(await threadRow("About the roadmap"));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "c1"),
+    );
+    expect(document.querySelector("[data-dock-presence]")).toBeNull();
+  });
+});
+
+// Finding #4: `inert` lands on the leaving layer in the same commit, so the
+// control the reader just pressed is blurred and focus falls to <body> — the
+// next Tab restarts from the top of the page.
+describe("BoardDock — focus across a fold", () => {
+  it("hands focus to the rail on close", async () => {
+    mount();
+    await openDock();
+    await settled();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /close agent dock/i }),
+    );
+    await settled();
+    expect(document.body).not.toBe(document.activeElement);
+    expect(
+      screen.getByRole("button", { name: /open agent dock/i }),
+    ).toHaveFocus();
+  });
+
+  // Opening is the direction the chat already answers for itself: the reader
+  // came here to type, and the composer autofocuses. The dock must not take
+  // the caret off it and park it on a tab tile — that would be worse than
+  // what shipped before this branch.
+  it("leaves the caret in the composer when the dock opens on a persona", async () => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Morning Brief" }),
+    );
+    await settled();
+    expect(screen.getByLabelText("Your question")).toHaveFocus();
+    expect(
+      screen.getByRole("tab", { name: "Morning Brief" }),
+    ).not.toHaveFocus();
+
+    // And re-opening from the rail's own button, with a persona already
+    // chosen, does the same.
+    await userEvent.click(
+      screen.getByRole("button", { name: /close agent dock/i }),
+    );
+    await settled();
+    await openDock();
+    await settled();
+    expect(screen.getByLabelText("Your question")).toHaveFocus();
+  });
+
+  it("focuses the band tile when the open tab has no composer to catch it", async () => {
+    mount({ initialRun: intelRun() });
+    await userEvent.click(
+      await screen.findByRole("tab", { name: /^intelligence/i }),
+    );
+    await settled();
+    expect(screen.getByRole("tab", { name: /^intelligence/i })).toHaveFocus();
+  });
+
+  it("focuses the band tile for a shared thread, which withholds the composer", async () => {
+    // The predicate is "did this layer take the caret?", not "is this
+    // Intelligence?" — a read-only thread renders a transcript and no
+    // composer, and must not drop focus to <body> either.
+    loadDockThreads.mockResolvedValue(
+      withThread({ user_id: "someone-else", visibility: "board" }),
+    );
+    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+    mount();
+    await openDock();
+    await settled();
+    await userEvent.click(await threadRow("About the roadmap"));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-read-only", "yes"),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /close agent dock/i }),
+    );
+    await settled();
+    await openDock();
+    await settled();
+    expect(screen.queryByLabelText("Your question")).toBeNull();
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveFocus();
+  });
+});
+
+// Finding #6: both layers mount their tiles for the ~360ms of a fold.
+describe("BoardDock — the two layers' tile ids", () => {
+  it("never mints the same tile id twice, and the rail controls no panel", async () => {
+    mount();
+    await waitFor(() => expect(aside()).not.toBeNull());
+    // Collapsed: only the rail's tiles exist, and there is no panel for them
+    // to point at.
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).not.toHaveAttribute("aria-controls");
+      expect(tab.id).toMatch(/^dock-rail-tab-/);
+    }
+
+    // Mid-fold: BOTH layers are mounted. Every id in the document is unique,
+    // so the chat panel's `aria-labelledby` can only resolve to the band's.
+    await openDock();
+    const ids = [...aside()!.querySelectorAll("[role='tab']")].map((t) => t.id);
+    expect(ids.length).toBe(8);
+    expect(new Set(ids).size).toBe(ids.length);
+    const panel = document.getElementById("dock-panel-chat")!;
+    const labelledBy = panel.getAttribute("aria-labelledby")!;
+    expect(labelledBy).toBe("dock-tab-ask");
+    expect(document.getElementById(labelledBy)!.closest("[data-layer]")).toBe(
+      aside()!.querySelector("[data-layer='full']"),
+    );
+    expect(document.querySelectorAll(`[id='${labelledBy}']`).length).toBe(1);
+  });
+});
+
 // Spec §4: closed, the dock is a 48px rail of the SAME tiles. Any tile opens
 // the dock on that tile. Presence and the badge stay visible.
 describe("BoardDock — mini rail", () => {
@@ -1030,7 +1277,13 @@ describe("BoardDock — mini rail", () => {
       "Overdue Chaser",
     ]);
     expect(aside()!.style.width).toBe(`${DOCK_RAIL_WIDTH}px`);
+    // Inside the tile's own right edge: the aside is `overflow-hidden` at
+    // 48px, so a bar hung 8px OUTSIDE a centred tile was clipped to ~1px —
+    // and to nothing at all at `pointer-coarse` size (finding #5).
     expect(screen.getByRole("tab", { name: "Ask" }).className).toContain(
+      "after:right-0",
+    );
+    expect(screen.getByRole("tab", { name: "Ask" }).className).not.toContain(
       "after:-right-2",
     );
     expect(screen.queryByRole("separator")).toBeNull();

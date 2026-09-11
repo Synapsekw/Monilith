@@ -24,6 +24,8 @@ import { DockBody, type DockBodyProps } from "./DockBody";
 import { cn } from "@/lib/utils";
 import {
   DockTiles,
+  knownAgentId,
+  DOCK_RAIL_TILE_ID_PREFIX,
   type DockAgent,
   type DockPresence,
   type DockTile,
@@ -49,8 +51,14 @@ const DOCK_TRANSITION_MS = 360;
  *  is a real transition from a real start state. Exits are the quick half —
  *  the leaving layer is out of the way before the width settles; entrances
  *  ride ease-keystone with a delay so they start once the other has gone.
- *  Tailwind v4's translate utilities write the `translate` property. */
-const LAYER = "absolute inset-y-0 right-0 left-1 flex flex-col";
+ *  Tailwind v4's translate utilities write the `translate` property.
+ *
+ *  A layer fills the aside edge to edge. It used to inset itself `left-1`,
+ *  which ADDED to <main>'s own `mr-1` and made the card-to-dock gutter 8px
+ *  against the sidebar's 4px — the opposite of spec §1's "matching the card's
+ *  left side". The gutter is <main>'s margin alone now, and the rail gets its
+ *  full 48px back. */
+const LAYER = "absolute inset-0 flex flex-col";
 const FULL_IN =
   "ease-keystone translate-x-0 opacity-100 transition-[opacity,translate] duration-[220ms] delay-[80ms]";
 const FULL_OUT =
@@ -145,10 +153,31 @@ export function BoardDock({
    */
   const [animating, setAnimating] = useState(false);
   const animationFallback = useRef<number | null>(null);
+  /**
+   * Where focus belongs after the fold this toggle started — and NOTHING to do
+   * when the dock merely renders open from storage, which is why this is armed
+   * by `toggleOpen` rather than derived from `open`.
+   *
+   * Either direction applies `inert` to the layer that is leaving in the same
+   * commit, so the browser blurs the control the reader just pressed and focus
+   * falls to `<body>`: the next Tab restarts from the top of the page.
+   *
+   * Closing always lands on the rail's open button. Opening is the one the
+   * chat already answers for itself — the composer autofocuses on mount, the
+   * caret lands where the reader came to type, and that is the shipped
+   * behaviour of this surface. So the open direction only steps in when the
+   * layer took no focus of its own: Intelligence, which has no composer, and
+   * a shared thread opened read-only, which withholds one.
+   */
+  const focusAfterFold = useRef<"band" | "rail" | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
   const toggleOpen = useCallback(
     (next: boolean) => {
       setAnimating(true);
       setOpen(next);
+      // The control the reader just used is about to go inert (see
+      // `focusAfterFold`): hand focus to this fold's counterpart.
+      focusAfterFold.current = next ? "band" : "rail";
       if (animationFallback.current !== null) {
         window.clearTimeout(animationFallback.current);
       }
@@ -159,6 +188,35 @@ export function BoardDock({
     },
     [setOpen],
   );
+  useEffect(() => {
+    const want = focusAfterFold.current;
+    if (!want) return;
+    focusAfterFold.current = null;
+    // Scoped to the portalled aside: the Sheet (narrow) has neither layer, and
+    // an open request arriving on a phone must not hunt for a rail.
+    if (want === "rail") {
+      asideRef.current
+        ?.querySelector<HTMLElement>(
+          "[data-layer='mini'] button[aria-label='Open agent dock']",
+        )
+        ?.focus();
+      return;
+    }
+    const full = asideRef.current?.querySelector("[data-layer='full']");
+    // Asked as "did this layer already take the caret?" rather than "is this
+    // the Intelligence tab?": the composer is not the only thing that can
+    // answer, and a second focus call fighting `autoFocus` for the same
+    // element is a race to win nothing. Effects run after the commit that
+    // mounts the composer, so by here it has had its turn.
+    if (!full || full.contains(document.activeElement)) return;
+    full
+      .querySelector<HTMLElement>("[role='tab'][aria-selected='true']")
+      ?.focus();
+    // `animating` is in the deps because a toggle that does not change `open`
+    // (an open request for an already-open dock) still flips it — without it
+    // the arming would sit there and fire on some later, unrelated fold.
+  }, [open, animating]);
+
   const onTransitionEnd = (e: React.TransitionEvent<HTMLElement>) => {
     // Children's opacity/translate transitions bubble here too.
     if (e.target !== e.currentTarget || e.propertyName !== "width") return;
@@ -180,6 +238,23 @@ export function BoardDock({
   /** The persona whose turn is streaming, for the presence dot (§2, phase 1:
    *  only the mounted chat's turn — scheduled runs are out of scope). */
   const [streamingPersona, setStreamingPersona] = useState<string | null>(null);
+  /** Which chat INSTANCE most recently reported itself running — see
+   *  `onBusyChange` below for why the instance, not just the persona. */
+  const runningInstance = useRef<number | null>(null);
+  /**
+   * The running chat is being thrown away ON PURPOSE — a new thread, or a
+   * different thread picked from the ledger.
+   *
+   * Its turn keeps running detached and its `finally` will fire
+   * `onBusyChange(false)` from an instance that is no longer current, which
+   * the guard in `onBusyChange` (rightly) ignores. Nothing else would ever
+   * clear the dot, so the abandoned persona pulses "· running" for the rest
+   * of the session. Whoever unmounts it turns it off here.
+   */
+  const abandonRunningTurn = useCallback(() => {
+    runningInstance.current = null;
+    setStreamingPersona(null);
+  }, []);
 
   const [boardThreads, setBoardThreads] = useState<BoardThreadRow[]>([]);
   const [agentThreads, setAgentThreads] = useState<BoardThreadRow[]>([]);
@@ -298,42 +373,48 @@ export function BoardDock({
    * differ" test in `selectTile`.
    */
   const currentPersona: string | null = activeThread
-    ? openPersona && agentNames[openPersona]
-      ? openPersona
-      : null
+    ? knownAgentId(openPersona, agents)
     : agentId;
 
-  const selectThread = useCallback(async (id: string) => {
-    const token = ++selectToken.current;
-    setActiveId(id);
-    setMessages([]);
-    setThreadLoading(true);
-    setFailure(null);
-    setChatInstance((n) => n + 1);
-    untitled.current = false;
-    deepLinkPending.current = false;
-    syncThreadParam(id);
-    try {
-      const res = await loadThreadMessages({ conversationId: id });
-      if (selectToken.current !== token) return;
-      setThreadLoading(false);
-      if (res.ok) setMessages(res.data.messages);
-      else
-        setFailure({ kind: "thread", conversationId: id, message: res.error });
-    } catch {
-      // A REJECTION, not an `ok: false`: a dropped connection, a 500, or a
-      // deploy that moved the action id. Without this the skeleton below stays
-      // on screen forever and the failure surfaces only as an unhandled
-      // rejection in the console.
-      if (selectToken.current !== token) return;
-      setThreadLoading(false);
-      setFailure({
-        kind: "thread",
-        conversationId: id,
-        message: "Couldn't open this thread.",
-      });
-    }
-  }, []);
+  const selectThread = useCallback(
+    async (id: string) => {
+      const token = ++selectToken.current;
+      abandonRunningTurn();
+      setActiveId(id);
+      setMessages([]);
+      setThreadLoading(true);
+      setFailure(null);
+      setChatInstance((n) => n + 1);
+      untitled.current = false;
+      deepLinkPending.current = false;
+      syncThreadParam(id);
+      try {
+        const res = await loadThreadMessages({ conversationId: id });
+        if (selectToken.current !== token) return;
+        setThreadLoading(false);
+        if (res.ok) setMessages(res.data.messages);
+        else
+          setFailure({
+            kind: "thread",
+            conversationId: id,
+            message: res.error,
+          });
+      } catch {
+        // A REJECTION, not an `ok: false`: a dropped connection, a 500, or a
+        // deploy that moved the action id. Without this the skeleton below
+        // stays on screen forever and the failure surfaces only as an
+        // unhandled rejection in the console.
+        if (selectToken.current !== token) return;
+        setThreadLoading(false);
+        setFailure({
+          kind: "thread",
+          conversationId: id,
+          message: "Couldn't open this thread.",
+        });
+      }
+    },
+    [abandonRunningTurn],
+  );
 
   /**
    * Read the thread list. The ONLY fetch path — the open click, a restored-open
@@ -409,17 +490,21 @@ export function BoardDock({
    * it with the persona on screen; a tile tap uses it with a different one —
    * "tap an agent and talk" (§2), replacing the locked select.
    */
-  const startNewAs = useCallback((persona: string | null) => {
-    selectToken.current++;
-    setAgentId(persona);
-    setActiveId(null);
-    setMessages([]);
-    setThreadLoading(false);
-    setChatInstance((n) => n + 1);
-    untitled.current = false;
-    deepLinkPending.current = false;
-    syncThreadParam(null);
-  }, []);
+  const startNewAs = useCallback(
+    (persona: string | null) => {
+      selectToken.current++;
+      abandonRunningTurn();
+      setAgentId(persona);
+      setActiveId(null);
+      setMessages([]);
+      setThreadLoading(false);
+      setChatInstance((n) => n + 1);
+      untitled.current = false;
+      deepLinkPending.current = false;
+      syncThreadParam(null);
+    },
+    [abandonRunningTurn],
+  );
 
   /**
    * §2 selection semantics. Intelligence is the ask that counts as "opened
@@ -442,19 +527,20 @@ export function BoardDock({
   );
 
   /**
-   * Which chat INSTANCE most recently reported itself running — not merely
-   * "the current one" the way `currentPersona` is, because `startNewAs`
-   * unmounts the old `AskChat` (a fresh `key`) while its `onSubmit` promise
-   * keeps running detached. That old instance's `finally` still fires
+   * `runningInstance` (declared above, beside the state it guards) is the chat
+   * INSTANCE that most recently reported itself running — not merely "the
+   * current one" the way `currentPersona` is, because `startNewAs` unmounts
+   * the old `AskChat` (a fresh `key`) while its `onSubmit` promise keeps
+   * running detached. That old instance's `finally` still fires
    * `onBusyChange(false)` on the SAME closure it was handed at mount, and
    * that closure's `busy ? currentPersona : null` ternary throws the
    * captured persona away on the false branch — it always clears to `null`,
    * whichever persona is actually on screen by then. Comparing against the
    * instance the callback was created for (not just the persona value) is
    * what lets a stale `false` be ignored instead of blanking a NEWER turn's
-   * dot mid-stream.
+   * dot mid-stream. The abandoned turn's own dot is cleared where it is
+   * abandoned — `abandonRunningTurn`.
    */
-  const runningInstance = useRef<number | null>(null);
   const onBusyChange = useCallback(
     (busy: boolean) => {
       if (busy) {
@@ -644,6 +730,7 @@ export function BoardDock({
 
   return createPortal(
     <aside
+      ref={asideRef}
       aria-label="Agent dock"
       data-open={open}
       data-animating={animating || undefined}
@@ -723,6 +810,12 @@ export function BoardDock({
               badge={unresolvedCount(run ?? null)}
               presence={presence}
               orientation="vertical"
+              // Both layers are mounted for the ~360ms of a fold, so the rail
+              // mints its own ids rather than a second `dock-tab-*` set the
+              // panel's `aria-labelledby` could resolve to; and it controls
+              // nothing, because no panel is mounted beside it.
+              idPrefix={DOCK_RAIL_TILE_ID_PREFIX}
+              panelMounted={false}
               onSelect={(tile) => {
                 selectTile(tile);
                 toggleOpen(true);
