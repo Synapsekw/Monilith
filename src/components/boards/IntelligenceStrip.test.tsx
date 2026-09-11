@@ -51,6 +51,10 @@ describe("IntelligenceStripView", () => {
       />,
     );
     expect(screen.getByText("Intelligence")).toBeInTheDocument();
+    // `group`, not `toolbar`: the chips are plain tab stops, with none of the
+    // arrow-key roving focus a toolbar role promises.
+    expect(screen.getByRole("group", { name: "Intelligence" })).toBeTruthy();
+    expect(screen.queryByRole("toolbar")).toBeNull();
     const chips = screen.getAllByRole("button", { pressed: false });
     expect(chips).toHaveLength(2);
     expect(chips[0]).toHaveTextContent("3");

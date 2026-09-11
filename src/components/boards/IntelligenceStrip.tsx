@@ -101,7 +101,10 @@ export function IntelligenceStripView({
   const chips = stripSignals(signals.filter((s) => s.count > 0));
   return (
     <div
-      role="toolbar"
+      // `group`, not `toolbar`: a toolbar promises arrow-key roving focus
+      // between its controls, which these chips deliberately do not implement
+      // (they are plain tab stops). `group` + the label is the honest shape.
+      role="group"
       aria-label="Intelligence"
       className="flex h-8 shrink-0 items-center gap-2 overflow-x-auto px-6"
     >

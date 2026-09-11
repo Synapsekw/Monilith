@@ -29,8 +29,10 @@ export const SIGNAL_TONE: Record<SignalKind, SignalTone> = {
  * Status option labels that read as "blocked" — the same label-regex idiom
  * `src/lib/boards/overdue.ts` uses for done (/done|complete/i). The default
  * status column ships a "Stuck" option (`src/lib/boards/column-defaults.ts`).
+ * Word-bounded: a bare substring match made "Unstuck" — the opposite state —
+ * count as blocked.
  */
-export const BLOCKED_LABEL = /stuck|blocked/i;
+export const BLOCKED_LABEL = /\b(stuck|blocked)\b/i;
 
 /** Numbers columns that weight a person's load, by name. Absent → weight 1 per item. */
 export const EFFORT_COLUMN_NAME = /effort|estimate|points|hours/i;

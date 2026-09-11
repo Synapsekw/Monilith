@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { localTodayISO } from "@/lib/boards/overdue";
 import {
+  computeBoardIntel,
   computeSignals,
   formatSince,
   latestActivityISO,
@@ -253,6 +254,20 @@ describe("computeSignals — blocked", () => {
       dependencies: [dep("a", "b")],
     });
     expect(ofKind(computeSignals(input, opts()), "blocked")[0].count).toBe(1);
+  });
+
+  it("does not match 'Unstuck' — the label regex is word-bounded", () => {
+    const input = board({
+      columns: [
+        column(STATUS, "status", "Status", 0, {
+          options: [{ id: "opt-u", label: "Unstuck", color: "#00c875" }],
+        }),
+      ],
+      items: [item("a"), item("b")],
+      cellValues: [cell("a", STATUS, { optionId: "opt-u" })],
+      dependencies: [dep("a", "b")],
+    });
+    expect(ofKind(computeSignals(input, opts()), "blocked")).toEqual([]);
   });
 
   it("follows a dependency cycle without looping forever", () => {
@@ -586,6 +601,23 @@ describe("ordering, truncation and helpers", () => {
     );
     expect(findActiveSignal(signals, { kind: "changed" })).toBeNull();
     expect(findActiveSignal(signals, null)).toBeNull();
+  });
+
+  it("computeBoardIntel returns computeSignals AND latestActivityISO in one pass", () => {
+    // The provider needs both on every cache change; the folded call must be
+    // indistinguishable from calling the two narrower functions separately.
+    const input = board({
+      items: [item("a", { updated_at: daysAgo(4).toISOString() })],
+      cellValues: [
+        cell("a", DATE, { date: dateISO(1) }, daysAgo(1).toISOString()),
+      ],
+    });
+    const o = opts();
+    const intel = computeBoardIntel(input, o);
+    expect(intel.signals).toEqual(computeSignals(input, o));
+    expect(intel.latestActivityISO).toBe(latestActivityISO(input));
+    expect(intel.signals.map((s) => s.kind)).toContain("overdue");
+    expect(intel.latestActivityISO).toBe(daysAgo(1).toISOString());
   });
 
   it("latestActivityISO is the newest item/cell timestamp, or null for an empty board", () => {

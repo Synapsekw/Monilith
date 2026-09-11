@@ -235,6 +235,66 @@ describe("BoardIntelligenceProvider", () => {
     );
   });
 
+  // The provider is what turns `IntelMember` rows into the names the engine
+  // prints. A member with no full name must NOT be labelled by their raw
+  // email address: that leaks a contactable address into shared board chrome.
+  it("labels a member with no full name by the email local part, never the address", () => {
+    const peopleCache = {
+      ...cache,
+      columns: [
+        {
+          id: "c-people",
+          board_id: "b1",
+          org_id: "o1",
+          name: "Owner",
+          kind: "people",
+          position: 0,
+          settings: {},
+          width: null,
+        },
+      ],
+      items: [
+        { ...(cache.items[0] as object), id: "x1" },
+        { ...(cache.items[0] as object), id: "x2" },
+        { ...(cache.items[0] as object), id: "x3" },
+      ],
+      cellValues: [
+        { item_id: "x1", column_id: "c-people", value: { userIds: ["u-ana"] } },
+        { item_id: "x2", column_id: "c-people", value: { userIds: ["u-ana"] } },
+        { item_id: "x3", column_id: "c-people", value: { userIds: ["u-ben"] } },
+      ],
+    } as unknown as BoardCache;
+
+    function peopleWrapper({ children }: { children: ReactNode }) {
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      return (
+        <QueryClientProvider client={qc}>
+          <BoardIntelligenceProvider
+            boardId="b-people"
+            initialData={peopleCache}
+            members={[
+              { userId: "u-ana", fullName: null, email: "ana@acme.com" },
+              { userId: "u-ben", fullName: null, email: null },
+            ]}
+            lastSeenAt={null}
+            currentUserId="u1"
+          >
+            {children}
+          </BoardIntelligenceProvider>
+        </QueryClientProvider>
+      );
+    }
+
+    const { result } = renderHook(() => useBoardIntelligenceOptional(), {
+      wrapper: peopleWrapper,
+    });
+    const over = result.current!.signals.find((s) => s.kind === "overloaded");
+    expect(over?.label).toBe("overloaded · ana");
+    expect(over?.label).not.toContain("@");
+  });
+
   it("hooks fail open without a provider", () => {
     const { result } = renderHook(() => ({
       intel: useBoardIntelligenceOptional(),

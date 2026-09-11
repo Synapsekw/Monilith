@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useDeferredValue,
   useMemo,
   useState,
   type ReactNode,
@@ -12,9 +13,8 @@ import type { BoardCache } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
 import {
-  computeSignals,
+  computeBoardIntel,
   findActiveSignal,
-  latestActivityISO,
   selectionEquals,
   signalSelection,
 } from "./signals";
@@ -24,7 +24,7 @@ import type { IntelSelection, Signal } from "./types";
  * Board Intelligence (Phase 1) — the one place signals are computed.
  *
  * Reads the LIVE React-Query board cache (optimistic + realtime edits included),
- * memoizes `computeSignals` on the cache's identity, and mirrors the active chip
+ * memoizes `computeBoardIntel` on the cache's identity, and mirrors the active chip
  * to the URL through the board filter state (`intel=`; History API; zero RSC
  * re-runs — AGENTS.md working agreement #5).
  *
@@ -50,6 +50,14 @@ const BoardIntelligenceContext = createContext<BoardIntelligenceValue | null>(
 );
 const IntelMatchContext = createContext<ReadonlySet<string> | null>(null);
 
+/**
+ * "ana@acme.com" → "ana"; null/blank → "" (which `computeSignals` renders as
+ * "someone"). Never the full address — see the `memberNames` comment below.
+ */
+function emailLocalPart(email: string | null): string {
+  return email?.split("@")[0]?.trim() ?? "";
+}
+
 export type IntelMember = {
   userId: string;
   fullName: string | null;
@@ -73,18 +81,30 @@ export function BoardIntelligenceProvider({
   children: ReactNode;
 }) {
   const query = useBoardCache(boardId, initialData);
-  const cache = query.data ?? initialData;
+  const liveCache = query.data ?? initialData;
   const loading = query.data === undefined;
+  // Signals are a full scan of the payload; typing in a cell patches the cache
+  // on every keystroke. Deferring the cache the signals derive from lets React
+  // paint the edited cell first and recompute the strip in the following,
+  // interruptible pass — the same trick `BoardTableInner` uses for the search
+  // term. The rows' own data still comes from the live cache, so nothing the
+  // user is editing lags.
+  const cache = useDeferredValue(liveCache);
 
   // One clock per mount (react-hooks/purity forbids Date.now() in render). The
   // signals are "as of page open"; the next navigation re-snapshots.
   const [now] = useState(() => new Date());
   const nowMs = now.getTime();
 
+  // Never the raw email: "overloaded · ana@acme.com" leaks an address into
+  // shared chrome and reads nothing like a name. Local-part only, and
+  // `computeSignals` turns an empty string into "someone".
   const memberNames = useMemo(
     () =>
       new Map(
-        members.map((m) => [m.userId, m.fullName ?? m.email ?? ""] as const),
+        members.map(
+          (m) => [m.userId, m.fullName ?? emailLocalPart(m.email)] as const,
+        ),
       ),
     [members],
   );
@@ -93,9 +113,12 @@ export function BoardIntelligenceProvider({
     [lastSeenAt],
   );
 
-  const signals = useMemo(
+  // ONE pass over the payload for both: `computeSignals` and
+  // `latestActivityISO` each rebuild the per-item last-activity map, so two
+  // memos meant scanning every cell twice per edit.
+  const { signals, latestActivityISO: lastChangeAt } = useMemo(
     () =>
-      computeSignals(cache, {
+      computeBoardIntel(cache, {
         now,
         lastSeenAt: lastSeen,
         currentUserId,
@@ -103,7 +126,6 @@ export function BoardIntelligenceProvider({
       }),
     [cache, now, lastSeen, currentUserId, memberNames],
   );
-  const lastChangeAt = useMemo(() => latestActivityISO(cache), [cache]);
 
   const filter = useBoardFilterSort();
   const selection = filter.state.intel;

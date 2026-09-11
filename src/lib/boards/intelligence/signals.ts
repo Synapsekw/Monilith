@@ -334,17 +334,53 @@ const KIND_BUILDERS: Record<SignalKind, (ctx: Ctx) => Signal[]> = {
   changed: changedSignals,
 };
 
-/** All signals with a non-zero count, in strip order. Not truncated. */
-export function computeSignals(
-  input: SignalsInput,
-  opts: SignalsOptions,
-): Signal[] {
-  const ctx = buildContext(input, opts);
+function signalsFromContext(ctx: Ctx): Signal[] {
   const out: Signal[] = [];
   for (const kind of SIGNAL_ORDER) {
     for (const s of KIND_BUILDERS[kind](ctx)) if (s.count > 0) out.push(s);
   }
   return out;
+}
+
+function latestFrom(lastActivity: ReadonlyMap<string, number>): string | null {
+  let best = 0;
+  for (const t of lastActivity.values()) if (t > best) best = t;
+  return best > 0 ? new Date(best).toISOString() : null;
+}
+
+/** All signals with a non-zero count, in strip order. Not truncated. */
+export function computeSignals(
+  input: SignalsInput,
+  opts: SignalsOptions,
+): Signal[] {
+  return signalsFromContext(buildContext(input, opts));
+}
+
+export type BoardIntel = {
+  signals: Signal[];
+  /** ISO timestamp of the board's newest item/cell activity, or null. */
+  latestActivityISO: string | null;
+};
+
+/**
+ * Signals AND the board's last-activity stamp from ONE pass over the payload.
+ *
+ * `computeSignals` and `latestActivityISO` each build the per-item
+ * last-activity map (a full scan of `cellValues`), so calling both — which is
+ * exactly what the provider needs on every cache change, i.e. every cell edit
+ * — walked the cells twice. This shares the single derived context between
+ * them. Both narrower functions stay exported: they are the honest unit under
+ * test, and callers that need only one half shouldn't pay for the other.
+ */
+export function computeBoardIntel(
+  input: SignalsInput,
+  opts: SignalsOptions,
+): BoardIntel {
+  const ctx = buildContext(input, opts);
+  return {
+    signals: signalsFromContext(ctx),
+    latestActivityISO: latestFrom(ctx.lastActivity),
+  };
 }
 
 /** The chips the strip shows: the first MAX_CHIPS in strip order (spec §3.2). */
@@ -394,7 +430,5 @@ export function narrowItemsToSignal<
 
 /** ISO timestamp of the board's newest item/cell activity, or null when empty. */
 export function latestActivityISO(input: SignalsInput): string | null {
-  let best = 0;
-  for (const t of buildLastActivity(input).values()) if (t > best) best = t;
-  return best > 0 ? new Date(best).toISOString() : null;
+  return latestFrom(buildLastActivity(input));
 }
