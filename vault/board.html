@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 21:24",
+  "updated": "2026-09-12 01:00",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "1dbc19fd",
+        "value": "348dd546",
         "tone": "warn",
-        "note": "Ahead of main: Board Intelligence Phase 2 (Advise, 19 commits, migration board_intelligence_runs on DEV) and the sidebar Keystone polish (8 commits), each announced on /updates. Both user-visible and unpromoted; /promote is the next step. No live worktrees."
+        "note": "Ahead of main: Board Intelligence Phase 2 (Advise, 19 commits, migration board_intelligence_runs on DEV), the sidebar Keystone polish (8 commits) and the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher, 5 commits), each announced on /updates. All user-visible and unpromoted; /promote is the next step. No live worktrees."
       },
       {
         "name": "main",
@@ -189,8 +189,8 @@
   },
   "next": [
     {
-      "title": "/promote — Board Intelligence Phase 2 and the sidebar Keystone polish are merged and not yet live, then run all three walkthroughs",
-      "why": "Two user-visible batches sit on develop with /updates entries: the board brief with one-click Apply and Undo (the whole-branch review's Critical: more than ten signals on a big board failed the server's own schema after paying for the model call) and the sidebar polish. Neither Phase 2 nor the sidebar has been seen in an authenticated browser. Check Catch me up → Apply → Undo and the frozen-column rule at scrollLeft > 0, then the collapsed rail, then plan Phase 3 (Act: assign_person automation + Always do this) and decide board_intelligence_runs retention.",
+      "title": "/promote — Board Intelligence Phase 2, the sidebar Keystone polish and the agent-dock-atmosphere rebuild are merged and not yet live, then run all four walkthroughs",
+      "why": "Three user-visible batches sit on develop with /updates entries: the board brief with one-click Apply and Undo (the whole-branch review's Critical: more than ten signals on a big board failed the server's own schema after paying for the model call), the sidebar polish, and the agent dock's tile band replacing the pill-tab row and native persona select. None of the three has been seen in an authenticated browser. Check Catch me up → Apply → Undo and the frozen-column rule at scrollLeft > 0, the collapsed rail, the dock tile keyboard nav + agent pulse + collapse-to-rail, then plan Phase 3 (Act: assign_person automation + Always do this) and decide board_intelligence_runs retention.",
       "tags": [
         "owner",
         "board-intelligence",
@@ -359,18 +359,18 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-11-2124-board-intelligence-phase2-advise",
-    "when": "2026-09-11 21:24",
-    "title": "Board Intelligence Phase 2 (Advise) built and merged; Phase 1 promoted",
+    "id": "2026-09-12-0100-agent-dock-atmosphere-retire",
+    "when": "2026-09-12 01:00",
+    "title": "Agent dock atmosphere closed: DockTabs/AgentSwitcher retired, plan merged",
     "bullets": [
-      "Promoted develop → main as PR #121 (Phase 1 strip); verified live on Vercel and /updates; squash divergence healed.",
-      "Planned and built Phase 2 subagent-driven in parallel per-task worktrees: runs cache + activity source + one-transaction apply RPC, the board-checked validation layer, a per-user cached brief through runAi, the dock's Intelligence tab with Apply/Undo/Dismiss, the strip's Catch me up.",
-      "Eight task reviews each found something real; the whole-branch review found the Critical none could (signal cap vs the server's own payload) plus a plan defect (set_due kept the end date). One fix wave, one re-review, then finish-task.",
-      "Owed: the browser walkthrough (no authenticated browser this session), promotion, and a retention decision for board_intelligence_runs."
+      "Deleted DockTabs.tsx and AgentSwitcher.tsx (+ tests) once Task 4 had re-pointed DockBody's DockAgent import to DockTiles; grep proved no other reference remained.",
+      "Committed the retirement with a user-facing /updates trailer (\"Your agents front and centre in the board dock\") and regenerated generated.ts.",
+      "Full gate green pre- and post-rebase: typecheck clean, lint 0 errors, 809 test files / 7610 tests passed, build succeeded (67 pages).",
+      "finish-task.sh merged task/agent-dock-atmosphere into develop (348dd546), pushed, removed the worktree + branch — closes the 5-task plan. Browser walkthrough still owed."
     ]
   }
 }
-    </script>
+</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
