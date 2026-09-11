@@ -143,6 +143,13 @@ function blockedSignals(ctx: Ctx): Signal[] {
     else successors.set(d.predecessor_id, [d.successor_id]);
   }
 
+  // `removeItem`/`removeGroup` in cache.ts prune items/cellValues but not
+  // dependencies, so a stale edge can still point at an id no longer in
+  // `items` — skip such ids while walking so a dangling edge never puts a
+  // ghost id in `itemIds` (and never gets expanded further, since it has no
+  // real successors of its own).
+  const known = new Set(ctx.input.items.map((i) => i.id));
+
   const itemIds: string[] = [];
   const seen = new Set<string>();
   let blockers = 0;
@@ -161,6 +168,7 @@ function blockedSignals(ctx: Ctx): Signal[] {
       const id = stack.pop() as string;
       if (seen.has(id)) continue;
       seen.add(id);
+      if (!known.has(id)) continue;
       itemIds.push(id);
       for (const next of successors.get(id) ?? []) stack.push(next);
     }

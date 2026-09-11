@@ -243,6 +243,28 @@ describe("computeSignals — blocked", () => {
     });
     expect(ofKind(computeSignals(input, opts()), "blocked")[0].count).toBe(1);
   });
+
+  it("follows a dependency cycle without looping forever", () => {
+    const input = board({
+      items: [item("a"), item("b")],
+      cellValues: [cell("a", STATUS, { optionId: STUCK })],
+      dependencies: [dep("a", "b"), dep("b", "a")],
+    });
+    const [blocked] = ofKind(computeSignals(input, opts()), "blocked");
+    expect(blocked.count).toBe(1);
+    expect([...blocked.itemIds].sort()).toEqual(["a", "b"]);
+  });
+
+  it("ignores a dependency edge pointing at an item that no longer exists", () => {
+    const input = board({
+      items: [item("a")],
+      cellValues: [cell("a", STATUS, { optionId: STUCK })],
+      dependencies: [dep("a", "ghost")],
+    });
+    const [blocked] = ofKind(computeSignals(input, opts()), "blocked");
+    expect(blocked.count).toBe(1);
+    expect(blocked.itemIds).toEqual(["a"]);
+  });
 });
 
 describe("computeSignals — stalled", () => {
