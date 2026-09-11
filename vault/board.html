@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-10 10:33",
+  "updated": "2026-09-11 07:07",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "fdfa5bd6",
-        "tone": "warn",
-        "note": "AHEAD of main by four tracks: the final performance pass (the authenticated app shell prerenders again after two months at 0 bytes, the board table re-renders only the edited row, adding items is optimistic, the service worker no longer serves the offline page on slow online loads, cell payload a third smaller), per-user board view preferences, the UI polish + theme presets batch, and the dependency sweep with the mcp-handler v2 transport rewrite. No live worktrees."
+        "value": "fc93c5f0",
+        "tone": "ok",
+        "note": "Equal to main after the PR #118 heal — unpromoted delta 0. One worktree open: task/people-cell-stack (stacked avatars in the People cell, option A), stopped by the owner mid-build with uncommitted edits."
       },
       {
         "name": "main",
-        "value": "4dba7aaa",
+        "value": "68aacb47",
         "tone": "ok",
-        "note": "PR #115 merged 2026-09-07 — the Agents page, 25 commits: sticky @handle routing, an agent switcher, per-turn attribution, agent documents and memory in chat, and a rail split into chats and briefings with collapsible age buckets. Nothing has been promoted since; the dependency sweep is waiting on an MCP client walkthrough."
+        "note": "PR #118 merged 2026-09-11 — the People picker stays open for multi-select (2 commits). PR #117 merged 2026-09-10 — the final performance pass plus per-user board view preferences (35 commits). Both healed with -s ours."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 4dba7aaa. Verified live: Vercel state=success, www.monolith.works 200, /updates 200. Unlike the three promotions before it, this one is reachable by every user on arrival — no org ceiling gates it — so /updates carries six entries for it."
+        "note": "Serving 68aacb47. Verified live: Vercel state=success, www.monolith.works 200, /updates serving both 'Assign several people to one task' and the five perf-pass entries. /sync-prod not run: three DEV migrations are not yet on PROD."
       }
     ],
     "gates": [
@@ -198,31 +198,20 @@
       ]
     },
     {
-      "title": "Walk the board arrangement pass before promoting",
-      "why": "Board view preferences merged today and are not promoted. Seven steps in the 2026-09-09 11:31 session note: collapse a group and reload, expand sub-items and reload, switch to Timeline and revisit with a bare URL, apply a filter then clear it and reload again, and confirm a second user's arrangement is independent. The clear-then-reload step is the one that matters — it pins the rule that stops a cleared filter springing back.",
+      "title": "Decide task/people-cell-stack: finish option A or discard",
+      "why": "The owner chose overlapping avatars (cap 4, +N, names on hover) for the People cell from a live prototype, then said stop mid-build. The worktree holds uncommitted edits to cells/index.tsx and cells.test.tsx with the brief at .superpowers/sdd/people-stack/task-brief.md. A stalled worktree is not neutral storage — finish it through the gates and /promote, or remove it.",
       "tags": [
         "boards",
-        "owner",
-        "promote"
-      ]
-    },
-    {
-      "title": "Walk the perf-pass checks before promoting",
-      "why": "Six steps in the 2026-09-10 10:33 session note: hard-reload My Work on Slow 3G and see the sidebar frame paint before data; edit one cell with the Profiler on and confirm only that row re-renders; add items back-to-back without waiting; reload a board on a slow-but-online network and get the board, not the offline page; go offline and still get the offline page; open an item's Updates tab and see device-zone timestamps with no hydration warning.",
-      "tags": [
-        "perf",
-        "owner",
-        "promote"
-      ]
-    },
-    {
-      "title": "Look at Light mode and the header theme menu, walk an MCP client against v2, then promote",
-      "why": "Two tracks wait on develop. The UI batch shipped with zero pixels seen — Chrome was not connected, so the light-chrome fix, the six presets and the header picker rest on token math and 199 contrast and guard tests; the 2026-09-09 session note carries the nine-step manual pass. The mcp-handler 1.1 to 2.1 migration passes its gates and a route test, but no actual Claude Desktop or claude.ai session has run against it. Do both checks, then promote once.",
-      "tags": [
         "ui",
-        "mcp",
+        "owner"
+      ]
+    },
+    {
+      "title": "Walk the owed manual passes against production",
+      "why": "Everything is promoted now, so the checks are on www.monolith.works: Light mode and the header theme picker (2026-09-09 session note), the perf-pass steps (cold-load shell on Slow 3G, single-row re-render, add items back to back, slow-but-online reload), the board-arrangement steps (collapse, expand, view, filter, second user), the multi-assign steps (pick two, remove one, Escape, reload), and one real MCP client against the v2 transport.",
+      "tags": [
         "owner",
-        "promote"
+        "verify"
       ]
     },
     {
@@ -367,16 +356,23 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/people-cell-stack",
+      "head": "fc93c5f0",
+      "tone": "warn",
+      "note": "stopped, uncommitted"
+    }
+  ],
   "session": {
-    "id": "2026-09-10-1033-final-performance-pass",
-    "when": "2026-09-10 10:33",
-    "title": "Final performance pass: static shell, table re-render, optimistic add",
+    "id": "2026-09-11-0707-promote-117-118-multi-assign",
+    "when": "2026-09-11 07:07",
+    "title": "Promote #117 and #118, and the People picker multi-select fix",
     "bullets": [
-      "An evidence-first audit (build + Turbopack analyzer, DEV pg_stat_statements, three parallel read-only audits) found the DB fast and the bundle with nothing cheap to cut, and six real gaps.",
-      "Every (app) route had shipped a 0-byte static shell since July: one awaited cookies() above every Suspense boundary. Fixed by passing the cookie as an unawaited promise resolved in the one DateTime consumer; 24 routes are Partial Prerender again.",
-      "The board table's React.memo was defeated three ways at once (dnd-kit items array, sensor option literals, editing inside controls). Edit-mode entry now re-renders 1 cell instead of 18 on the fixture.",
-      "Add item and add subitem are optimistic with temp ids reconciled against the realtime echo; the service worker no longer serves the offline page on slow online loads; cell payload is a third smaller."
+      "PR #117 (perf pass + board view prefs, 35 commits) and PR #118 (multi-assign fix, 2 commits) promoted and verified live: main CI green, Vercel success, /updates serving the entries.",
+      "A People column could only take one assignee because EditableCell closed the editor on every commit and the picker commits once per toggle; the list was always stored. commitKeepsEditorOpen(kind) exempts people and dropdown.",
+      "Four renderings of several assignees were built as a live prototype; the owner chose the overlapping stack. Its build was stopped mid-implementation and waits in task/people-cell-stack.",
+      "/sync-prod deliberately not run; three DEV migrations are still not on PROD."
     ]
   }
 }

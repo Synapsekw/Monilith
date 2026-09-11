@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   CellEditor,
@@ -347,6 +347,85 @@ describe("PeopleEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: /clear/i }));
     expect(onClear).toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("splits the popover into who is assigned and everyone else", () => {
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u2"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+          { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
+        ]}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const assigned = screen.getByRole("group", { name: /assigned/i });
+    expect(
+      within(assigned).getByRole("option", { name: /grace/i }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(within(assigned).queryByText("Ada")).not.toBeInTheDocument();
+    const rest = screen.getByRole("group", { name: /everyone else/i });
+    expect(within(rest).getByRole("option", { name: /ada/i })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("shows an avatar for every member in the popover", () => {
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u2"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+          { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
+        ]}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    // The popover portals to the body, so query the document, not the container.
+    expect(
+      document.querySelectorAll('[data-slot="member-avatar"]'),
+    ).toHaveLength(2);
+  });
+
+  it("unassigns from the assigned chip's remove control", async () => {
+    const onCommit = vi.fn();
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u1", "u2"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+          { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
+        ]}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("option", { name: /unassign ada/i }),
+    );
+    expect(onCommit).toHaveBeenCalledWith({ userIds: ["u2"] });
+  });
+
+  it("says so when nobody is assigned yet", () => {
+    render(
+      <PeopleEditor
+        value={{ userIds: [] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+        ]}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/nobody assigned yet/i)).toBeInTheDocument();
   });
 });
 

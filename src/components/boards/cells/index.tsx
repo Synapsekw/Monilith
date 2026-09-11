@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
@@ -11,6 +10,7 @@ import { StatusPill, statusToneClasses } from "@/components/ui/status-pill";
 import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
+import { MemberAvatar } from "./member-avatar";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -90,44 +90,9 @@ function memberLabel(member: EditorMember | undefined) {
   return member?.fullName || member?.email || "Unknown";
 }
 
-function memberInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-/** Small member avatar for board cells — a stable Supabase public URL rendered
- *  via `<Image unoptimized>` (established avatar pattern; not routed through the
- *  optimizer) with a graceful initials fallback. size-5 matches CreatedByCell so
- *  the row height stays stable. */
-function MemberAvatar({
-  name,
-  avatarUrl,
-}: {
-  name: string;
-  avatarUrl: string | null;
-}) {
-  return (
-    <span className="bg-surface-muted text-3xs flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full font-medium">
-      {avatarUrl ? (
-        <Image
-          src={avatarUrl}
-          alt=""
-          width={20}
-          height={20}
-          unoptimized
-          className="size-full object-cover"
-        />
-      ) : (
-        memberInitials(name)
-      )}
-    </span>
-  );
-}
+/** Beyond this many assignees the stack collapses to 3 avatars + a "+N" disc,
+ *  so its width is bounded no matter how many people are on an item. */
+const MAX_STACKED_AVATARS = 4;
 
 export function PeopleCell({
   value,
@@ -149,24 +114,66 @@ export function PeopleCell({
     );
   }
   const byId = new Map(members.map((m) => [m.userId, m]));
-  // Avatar (image or initials) + name per assignee, in a single truncating row
-  // so the cell never grows the row height. Reads from the cached board payload
-  // (members) — first paint, no fetch, no presence dependency.
+  // Resolved in the order the ids are stored — never sorted, so the cell reads
+  // the same as the editor. Reads from the cached board payload (members):
+  // first paint, no fetch, no presence dependency.
+  const assignees = userIds.map((id) => {
+    const member = byId.get(id);
+    return {
+      id,
+      label: memberLabel(member),
+      avatarUrl: member?.avatarUrl ?? null,
+    };
+  });
+
+  // One assignee: avatar + name, truncating — the column is wide enough.
+  if (assignees.length === 1) {
+    const only = assignees[0];
+    return (
+      <span className="flex items-center gap-1.5 truncate text-sm">
+        <MemberAvatar
+          userId={only.id}
+          name={only.label}
+          avatarUrl={only.avatarUrl}
+        />
+        <span className="truncate">{only.label}</span>
+      </span>
+    );
+  }
+
+  // Several assignees: names never fit a 160px column, so collapse to an
+  // overlapping avatar stack. Beyond four we show three avatars + "+N" so the
+  // stack's width stays fixed; the names live on aria-label/title.
+  const visible =
+    assignees.length > MAX_STACKED_AVATARS
+      ? assignees.slice(0, MAX_STACKED_AVATARS - 1)
+      : assignees;
+  const overflow = assignees.length - visible.length;
+  const names = assignees.map((a) => a.label).join(", ");
   return (
-    <span className="flex items-center gap-2 truncate text-sm">
-      {userIds.map((id) => {
-        const member = byId.get(id);
-        const label = memberLabel(member);
-        return (
-          <span
-            key={id}
-            className="flex min-w-0 shrink-0 items-center gap-1.5 last:min-w-0 last:shrink"
-          >
-            <MemberAvatar name={label} avatarUrl={member?.avatarUrl ?? null} />
-            <span className="truncate">{label}</span>
-          </span>
-        );
-      })}
+    <span
+      className="flex items-center"
+      aria-label={`${assignees.length} assigned: ${names}`}
+      title={names}
+    >
+      {visible.map((a) => (
+        <MemberAvatar
+          key={a.id}
+          userId={a.id}
+          name={a.label}
+          avatarUrl={a.avatarUrl}
+          // The ring in the cell's own surface colour keeps the overlapped
+          // edges legible; hairlines would read as borders here.
+          className="ring-surface -ml-2 ring-2 first:ml-0"
+        />
+      ))}
+      {overflow > 0 ? (
+        // The overflow disc stays neutral on purpose: it counts people, it is
+        // not one — an identity colour here would read as a ninth member.
+        <span className="bg-surface-muted text-muted-foreground text-2xs ring-surface -ml-2 flex size-6 shrink-0 items-center justify-center rounded-full font-mono ring-2">
+          +{overflow}
+        </span>
+      ) : null}
     </span>
   );
 }

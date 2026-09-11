@@ -29,6 +29,25 @@ vi.mock("next/image", () => ({
   },
 }));
 
+const STACK_NAMES = [
+  "Person One",
+  "Person Two",
+  "Person Three",
+  "Person Four",
+  "Person Five",
+  "Person Six",
+];
+
+/** n members with ids u1…un and distinct full names, for People stack tests. */
+function stackMembers(n: number) {
+  return STACK_NAMES.slice(0, n).map((fullName, i) => ({
+    userId: `u${i + 1}`,
+    fullName,
+    email: null,
+    avatarUrl: null,
+  }));
+}
+
 const upsertCellMock = vi.fn();
 const renameItemMock = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
@@ -158,8 +177,26 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
-  it("PeopleCell shows assignee names when members are provided", () => {
+  it("PeopleCell shows the assignee name when exactly one person is assigned", () => {
     render(
+      <PeopleCell
+        value={{ userIds: ["u1"] }}
+        settings={{}}
+        members={[
+          {
+            userId: "u1",
+            fullName: "Ada Lovelace",
+            email: null,
+            avatarUrl: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
+  });
+
+  it("PeopleCell stacks avatars without names for two assignees", () => {
+    const { container } = render(
       <PeopleCell
         value={{ userIds: ["u1", "u2"] }}
         settings={{}}
@@ -179,8 +216,59 @@ describe("cell renderers (read-only, 2a)", () => {
         ]}
       />,
     );
-    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
-    expect(screen.getByText(/grace@hopper\.dev/)).toBeInTheDocument();
+    expect(container.textContent).not.toContain("Ada Lovelace");
+    expect(container.textContent).not.toContain("grace@hopper.dev");
+    expect(
+      container.querySelectorAll('[data-slot="member-avatar"]'),
+    ).toHaveLength(2);
+    const stack = screen.getByLabelText(
+      "2 assigned: Ada Lovelace, grace@hopper.dev",
+    );
+    expect(stack).toHaveAttribute("title", "Ada Lovelace, grace@hopper.dev");
+  });
+
+  it("PeopleCell shows all four avatars and no overflow disc for four assignees", () => {
+    const { container } = render(
+      <PeopleCell
+        value={{ userIds: ["u1", "u2", "u3", "u4"] }}
+        settings={{}}
+        members={stackMembers(4)}
+      />,
+    );
+    expect(
+      container.querySelectorAll('[data-slot="member-avatar"]'),
+    ).toHaveLength(4);
+    expect(container.textContent).not.toContain("+");
+  });
+
+  it("PeopleCell caps the stack at three avatars plus a +N disc", () => {
+    const { container } = render(
+      <PeopleCell
+        value={{ userIds: ["u1", "u2", "u3", "u4", "u5", "u6"] }}
+        settings={{}}
+        members={stackMembers(6)}
+      />,
+    );
+    expect(
+      container.querySelectorAll('[data-slot="member-avatar"]'),
+    ).toHaveLength(3);
+    expect(screen.getByText("+3")).toBeInTheDocument();
+    const stack = screen.getByLabelText(/^6 assigned: /);
+    expect(stack.getAttribute("aria-label")).toContain("Person Six");
+    expect(stack.getAttribute("title")).toContain("Person Six");
+  });
+
+  it("PeopleCell keeps the order of userIds in the stack label", () => {
+    render(
+      <PeopleCell
+        value={{ userIds: ["u3", "u1", "u2"] }}
+        settings={{}}
+        members={stackMembers(3)}
+      />,
+    );
+    expect(
+      screen.getByLabelText("3 assigned: Person Three, Person One, Person Two"),
+    ).toBeInTheDocument();
   });
 
   it("PeopleCell falls back to the count when no members are provided", () => {
