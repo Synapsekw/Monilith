@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
+    kind: "new",
+    title: "A new landing page",
+    description:
+      "The Monolith site has a new front page: real product screenshots, a product tour of boards, item details and the agent dock, the agent-access story, plans and answers to common questions.",
+  },
+  {
+    date: "2026-09-11",
     kind: "improved",
     title: "Compact assignees in the People column",
     description:
