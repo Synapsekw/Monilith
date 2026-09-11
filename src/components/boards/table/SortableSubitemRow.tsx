@@ -16,6 +16,10 @@ import {
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { cn } from "@/lib/utils";
 import { EditableCell } from "./EditableCell";
 import { NameCell } from "./NameCell";
@@ -96,6 +100,9 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
   const [todayISO] = useState(() => localTodayISO());
+  // Intelligence chip: true → 2px tone rule, false → dimmed, null → no chip.
+  // Same context read as ItemRow — see the note there.
+  const intelMatch = useIntelMatch(sub.id);
   // Priority cells only: direct-dependent counts, computed once for the whole
   // board in BoardTableInner and threaded via `controls` (see priority.ts).
   const dependentsByItem = controls.dependentsByItem;
@@ -144,6 +151,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
       className={cn(
         "ease-keystone border-border hover:border-border-hover hover:bg-foreground/[0.025] grid w-full border-b transition-colors",
         isDragging && "shadow-drag relative z-10",
+        intelRowClasses(intelMatch),
       )}
     >
       <NameCell

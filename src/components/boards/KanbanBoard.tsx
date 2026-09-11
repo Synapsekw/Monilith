@@ -34,6 +34,7 @@ import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
 import {
+  intelRowClasses,
   useIntelItemIds,
   useIntelMatch,
 } from "@/lib/boards/intelligence/context";
@@ -552,8 +553,7 @@ const KanbanCard = memo(function KanbanCard({
       className={cn(
         "bg-surface focus-visible:ring-ring shadow-card card-lift border-border hover:border-border-hover relative cursor-grab rounded-lg border p-3 text-left focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
-        intelMatch === true && "intel-match",
-        intelMatch === false && "intel-miss",
+        intelRowClasses(intelMatch),
       )}
     >
       <PresenceRing target={target} />

@@ -7,7 +7,10 @@ import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CacheDependency } from "@/lib/boards/cache";
 import type { GanttRow } from "@/lib/boards/gantt";
-import { useIntelMatch } from "@/lib/boards/intelligence/context";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { softPillText } from "@/components/boards/cells/soft-pill-color";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -195,8 +198,7 @@ export function GanttRowItem({
       data-testid="gantt-row"
       className={cn(
         "group hover:bg-state-hover/5 flex border-b",
-        intelMatch === true && "intel-match",
-        intelMatch === false && "intel-miss",
+        intelRowClasses(intelMatch),
       )}
       style={{ height: ROW_H }}
     >

@@ -196,6 +196,19 @@ export function useIntelMatch(itemId: string): boolean | null {
 }
 
 /**
+ * `useIntelMatch`'s result, turned into the pair of classes every row
+ * renderer (table, kanban, calendar, gantt) adds to its root element —
+ * `undefined` when there's no active chip so it's a cheap no-op in `cn(...)`.
+ */
+export function intelRowClasses(
+  intelMatch: boolean | null,
+): "intel-match" | "intel-miss" | undefined {
+  if (intelMatch === true) return "intel-match";
+  if (intelMatch === false) return "intel-miss";
+  return undefined;
+}
+
+/**
  * Stamps the active chip's tone on an ancestor of every row so the CSS rule in
  * globals.css (`[data-intel-tone] .intel-match`) can paint the 2px rule without
  * threading the tone through every view. `display: contents` keeps the views'

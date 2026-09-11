@@ -894,10 +894,31 @@
       transform: translateY(-4px);
     }
   }
-  /* Board Intelligence (Phase 1): while a strip chip is active the view frame
-     carries data-intel-tone; matching rows paint a 2px inset rule in that
-     status colour (inset so nothing shifts), non-matching rows dim. Rows only
-     know a boolean — the tone is resolved here, once. */
+  /* Respect reduced-motion globally */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Board Intelligence (Phase 1): while a strip chip is active the view frame
+   carries data-intel-tone; matching rows paint a 2px inset rule in that
+   status colour (inset so nothing shifts), non-matching rows dim. Rows only
+   know a boolean — the tone is resolved here, once.
+   Deliberately in @layer utilities, NOT @layer base: Tailwind's own layer
+   order is theme, base, components, utilities, so a `base`-layer box-shadow
+   or opacity rule always LOSES to a same-property Tailwind utility class on
+   the same element (e.g. Kanban's `shadow-card`, or `opacity-50` while
+   dragging) — regardless of specificity or source order. Utilities beats
+   utilities on ties by source order instead, and this block is emitted after
+   `@import "tailwindcss"`, so `.intel-match` / `.intel-miss` win outright. */
+@layer utilities {
   [data-intel-tone="red"] {
     --intel-rule: var(--status-red);
   }
@@ -913,21 +934,25 @@
   [data-intel-tone="accent"] {
     --intel-rule: var(--primary);
   }
+  /* NOT composed with `shadow-card`/`--elevation-card`: that token is
+     literally the keyword `none` today, and CSS's box-shadow grammar only
+     allows `none` as the WHOLE value, never as one item in a comma list —
+     splicing it in (e.g. `var(--intel-rule), var(--shadow-card, none)`)
+     makes the entire declaration invalid at computed-value time, so it
+     falls back to `none` and the rule silently never renders. This rule
+     fully replaces box-shadow instead, which is lossless today because
+     `--elevation-card: none` means there is no resting card shadow to
+     begin with. Revisit if a real elevation is ever added to `.shadow-card`. */
   .intel-match {
     box-shadow: inset 2px 0 0 var(--intel-rule, transparent);
   }
+  /* Same reasoning for opacity: Kanban/Calendar apply `opacity-50` while
+     dragging on the same element as `.intel-miss`. Being later in this same
+     layer, `.intel-miss` wins outright — a non-matching row stays dimmed
+     even mid-drag. Deliberate: the intelligence context should stay legible
+     through a drag, and dragging a miss row while a chip is active is rare
+     (narrowing already removes most misses from the DOM). */
   .intel-miss {
     opacity: 0.35;
-  }
-  /* Respect reduced-motion globally */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
   }
 }

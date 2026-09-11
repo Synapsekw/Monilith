@@ -16,7 +16,10 @@ import {
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
-import { useIntelMatch } from "@/lib/boards/intelligence/context";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
 import { useBoardSelection } from "@/stores/board-selection";
@@ -262,8 +265,7 @@ export const ItemRow = memo(function ItemRow({
           ? "bg-primary/[0.08]"
           : "hover:bg-foreground/[0.025] hover:border-border-hover",
         isDragging && "shadow-drag relative z-10",
-        intelMatch === true && "intel-match",
-        intelMatch === false && "intel-miss",
+        intelRowClasses(intelMatch),
       )}
       style={{
         height: ROW_HEIGHT,

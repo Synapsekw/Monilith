@@ -6,7 +6,10 @@ import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
 import type { Json } from "@/types/database.types";
 import { agendaGroups, type AgendaItem } from "@/lib/boards/calendar-agenda";
-import { useIntelMatch } from "@/lib/boards/intelligence/context";
+import {
+  intelRowClasses,
+  useIntelMatch,
+} from "@/lib/boards/intelligence/context";
 import { Kicker } from "@/components/ui/kicker";
 import { CellRenderer } from "@/components/boards/cells";
 
@@ -173,8 +176,8 @@ function AgendaRow({
     <li
       data-testid="agenda-item"
       className={cn(
-        intelMatch === true && "intel-match rounded",
-        intelMatch === false && "intel-miss",
+        intelRowClasses(intelMatch),
+        intelMatch === true && "rounded",
       )}
     >
       <button
