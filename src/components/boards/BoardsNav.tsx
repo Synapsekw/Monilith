@@ -210,7 +210,13 @@ export function BoardsNav({
         <TooltipTrigger asChild>
           <span
             aria-label="Boards"
-            className={railTileClass({ className: "pointer-events-none" })}
+            className={railTileClass({
+              // Not a link — no hover tint, and the default cursor. NOT
+              // `pointer-events-none`: that would also kill the Radix tooltip
+              // this span is the trigger for.
+              className:
+                "hover:text-muted-foreground cursor-default hover:bg-transparent",
+            })}
           >
             <FolderKanban className="size-4 shrink-0" />
             {coarse ? <CoarseCaption label="Boards" /> : null}
@@ -281,7 +287,9 @@ export function BoardsNav({
       {grouped.unfiledOwned.length === 0 &&
       folderSections.length === 0 &&
       grouped.unfiledShared.length === 0 ? (
-        <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
+        <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
+          No boards yet
+        </p>
       ) : dndReady ? (
         <BoardsNavSortable
           boards={grouped.unfiledOwned}

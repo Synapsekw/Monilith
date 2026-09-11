@@ -192,7 +192,7 @@ export function DashboardsNav({
           }
         >
           {dashboards.length === 0 ? (
-            <p className="text-muted-foreground px-3 py-1 text-xs">
+            <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
               No dashboards yet
             </p>
           ) : (

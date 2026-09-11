@@ -5,11 +5,7 @@ import { ChevronDown, Folder, FolderOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
-import {
-  SIDEBAR_LEAD_CLASS,
-  SidebarRow,
-  sidebarLabelClass,
-} from "@/components/shell/sidebar-row";
+import { SIDEBAR_LEAD_CLASS, SidebarRow } from "@/components/shell/sidebar-row";
 
 /**
  * One collapsible folder in the Boards nav. Open/closed state reuses
@@ -106,13 +102,11 @@ export function BoardFolderRow({
           onClick={() => toggleSection(key)}
           aria-expanded={open}
           aria-controls={bodyId}
-          className={cn(
-            "focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded text-left focus-visible:ring-2 focus-visible:outline-none",
-            sidebarLabelClass(true),
-            // The label's `pl-1` belongs AFTER the lead slot; here the slot is
-            // inside the button, so the button itself starts flush.
-            "pl-0",
-          )}
+          // The label metrics of `sidebarLabelClass(true)`, spelled out: the
+          // helper's `truncate` is dead on a flex container (the inner span
+          // does the truncating), and its `pl-1` belongs AFTER the lead slot —
+          // which here lives INSIDE the button, so the button starts flush.
+          className="focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded py-1 pr-1 text-left text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
         >
           {/* Keeps the chevron in the same 24px column the board rows reserve
               for their grip, so the header and its boards line up. One rotated

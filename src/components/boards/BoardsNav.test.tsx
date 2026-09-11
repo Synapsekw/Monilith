@@ -307,6 +307,12 @@ describe("BoardsNav", () => {
     expect(
       screen.getByText("Boards", { selector: "span" }),
     ).toBeInTheDocument();
+    // …and the head tile stays hoverable so its Radix tooltip still opens: it
+    // is a dead tile, not a dead element. `cursor-default` + a transparent
+    // hover is how it declines the tint — never `pointer-events-none`.
+    const head = screen.getByLabelText("Boards");
+    expect(head.className).not.toContain("pointer-events-none");
+    expect(head.className).toContain("cursor-default");
     // The letter tile keeps its initial AND gains the full name as a caption.
     const tile = screen.getByRole("link", { name: "Marketing" });
     expect(tile).toHaveTextContent("M");
