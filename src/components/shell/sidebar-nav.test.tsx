@@ -182,9 +182,7 @@ describe("SidebarNav", () => {
     expect(screen.getByText("Engineering")).toBeInTheDocument();
   });
 
-  it("marks the active nav item with the Keystone periwinkle wash", () => {
-    // Keystone active state = --state-selected fill (brand-derived, tuned per
-    // theme for AA) + tinted hairline. Assert the semantic tokens.
+  it("marks the active nav item with the Keystone tint + edge bar", () => {
     vi.mocked(usePathname).mockReturnValue("/my-work");
     renderNav(
       <SidebarNav
@@ -194,10 +192,89 @@ describe("SidebarNav", () => {
         dashboards={[]}
       />,
     );
-    const active = screen.getByText("My Work").closest("a");
+    const active = screen.getByText("My Work").closest("a")!;
     expect(active).toHaveClass("bg-state-selected");
-    expect(active).toHaveClass("border-primary/40");
-    expect(active?.className).toContain("text-foreground");
+    expect(active.className).toContain("before:bg-primary");
+    expect(active.className).not.toContain("border-primary");
+    expect(active).toHaveAttribute("aria-current", "page");
+  });
+
+  it("has no Personal section: My Time and Trash live in a pinned footer", () => {
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    expect(screen.queryByText("Personal")).not.toBeInTheDocument();
+    const footer = screen.getByRole("contentinfo");
+    expect(footer).toContainElement(
+      screen.getByRole("link", { name: "My Time" }),
+    );
+    expect(footer).toContainElement(
+      screen.getByRole("link", { name: /trash/i }),
+    );
+    expect(footer.className).toContain("border-t");
+  });
+
+  it("scrolls the middle, not the footer, and draws no separators", () => {
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    const body = screen.getByTestId("sidebar-scroll");
+    expect(body.className).toContain("overflow-y-auto");
+    expect(body.className).toContain("nav-scroll");
+    expect(body).toHaveAttribute("data-scroll-container");
+    expect(body).toContainElement(screen.getByText("Goals"));
+    expect(body).not.toContainElement(screen.getByRole("contentinfo"));
+    expect(
+      document.querySelector('[data-orientation="horizontal"][role="none"]'),
+    ).toBeNull();
+  });
+
+  it("collapsed: groups the rail with hairline dividers and keeps the footer", () => {
+    useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[{ id: "w1", name: "Eng" }]}
+        activeWorkspaceId="w1"
+        dashboards={[]}
+      />,
+    );
+    // ws chip | My Work+Agents | Planning | Boards | Dashboards  → 4 dividers in the body, 1 above the footer
+    expect(
+      document.querySelectorAll("span[aria-hidden='true'].w-4.h-px").length,
+    ).toBe(5);
+    expect(screen.getByRole("contentinfo")).toContainElement(
+      screen.getByLabelText("Trash"),
+    );
+  });
+
+  it("collapsed: the active tile carries the edge bar, not the 80% fill", () => {
+    useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
+    vi.mocked(usePathname).mockReturnValue("/goals");
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    const goals = screen.getByLabelText("Goals");
+    expect(goals.className).toContain("bg-state-selected");
+    expect(goals.className).toContain("before:bg-primary");
+    expect(goals.className).not.toContain("bg-primary/80");
+    expect(goals.className).not.toContain("hover:border");
   });
 
   it("stays expanded when forceExpanded, ignoring the collapsed store", () => {

@@ -17,7 +17,11 @@ import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { ContextSwitcher } from "@/components/shell/context-switcher";
 import { NavSection } from "@/components/shell/nav-section";
-import { Separator } from "@/components/ui/separator";
+import {
+  RailDivider,
+  SidebarLink,
+  railTileClass,
+} from "@/components/shell/sidebar-row";
 import {
   Tooltip,
   TooltipContent,
@@ -25,7 +29,6 @@ import {
 } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
-import { cn } from "@/lib/utils";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import type {
   BoardFolder,
@@ -38,26 +41,22 @@ type NavLink = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const HOME: NavLink = { label: "My Work", href: "/my-work", icon: ListTodo };
-const ASK: NavLink = {
-  label: "Agents",
-  href: "/ask",
-  icon: AskAiMark,
-};
+const TOP: NavLink[] = [
+  { label: "My Work", href: "/my-work", icon: ListTodo },
+  { label: "Agents", href: "/ask", icon: AskAiMark },
+];
 const PLANNING: NavLink[] = [
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Workload", href: "/workload", icon: Gauge },
 ];
-const PERSONAL: NavLink[] = [{ label: "My Time", href: "/time", icon: Clock }];
-const TRASH: NavLink = {
-  label: "Trash",
-  href: "/boards#archived",
-  icon: Trash2,
-};
-const ALL_LINKS: NavLink[] = [HOME, ASK, ...PLANNING, ...PERSONAL, TRASH];
+const FOOTER: NavLink[] = [
+  { label: "My Time", href: "/time", icon: Clock },
+  { label: "Trash", href: "/boards#archived", icon: Trash2 },
+];
 
+/** Visible caption under a collapsed rail tile on a coarse pointer (gotcha-47). */
 function CoarseCaption({ label }: { label: string }) {
   return (
     <span className="text-muted-foreground text-3xs max-w-full truncate leading-tight">
@@ -68,30 +67,12 @@ function CoarseCaption({ label }: { label: string }) {
 
 function useActive() {
   const pathname = usePathname();
+  // Unchanged from today: "/boards#archived" never prefix-matches a board page.
   return (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Expanded (full-label) nav link. */
-function ExpandedLink({ item, active }: { item: NavLink; active: boolean }) {
-  return (
-    <Link
-      href={item.href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex items-center gap-2.5 rounded-md border border-transparent px-3 py-2 text-sm transition-colors duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-        active
-          ? "bg-state-selected border-primary/40 text-foreground"
-          : "text-muted-foreground hover:border-border hover:text-foreground",
-      )}
-    >
-      <item.icon className="size-4" />
-      {item.label}
-    </Link>
-  );
-}
-
-/** Collapsed icon-only rail link (with a coarse-pointer caption; gotcha-47). */
-function CollapsedLink({
+/** Collapsed icon-only rail link (tooltip + coarse caption). */
+function RailLink({
   item,
   active,
   coarse,
@@ -107,12 +88,7 @@ function CollapsedLink({
           href={item.href}
           aria-label={item.label}
           aria-current={active ? "page" : undefined}
-          className={cn(
-            "flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md border border-transparent transition-colors duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5",
-            active
-              ? "bg-state-selected border-primary/40 text-foreground"
-              : "text-muted-foreground hover:border-border hover:text-foreground",
-          )}
+          className={railTileClass({ active })}
         >
           <item.icon className="size-4 shrink-0" />
           {coarse ? <CoarseCaption label={item.label} /> : null}
@@ -124,9 +100,10 @@ function CollapsedLink({
 }
 
 /**
- * Direction B sidebar body. Order: workspace switcher -> My Work -> Planning ->
- * Boards -> Dashboards -> Personal. Boards/Dashboards carry their own collapsible
- * headers (NavSection). Platform admin now lives in the header, not here.
+ * Keystone sidebar body. Order: context chip → My Work / Agents → Planning →
+ * Boards → Dashboards, all inside ONE scroll region, then a pinned footer with
+ * My Time + Trash. No separators: the ledger rules + 14px section rhythm are
+ * the structure. Platform admin lives in the header, not here.
  */
 export function SidebarNav({
   orgs = [],
@@ -159,6 +136,24 @@ export function SidebarNav({
   const coarse = useCoarsePointer();
   const isActive = useActive();
 
+  const boardsNav = (
+    <BoardsNav
+      boards={boards}
+      sharedBoards={sharedBoards}
+      folders={folders}
+      placements={placements}
+      activeWorkspaceId={activeWorkspaceId}
+      collapsed={isCollapsed}
+    />
+  );
+  const dashboardsNav = (
+    <DashboardsNav
+      dashboards={dashboards}
+      activeWorkspaceId={activeWorkspaceId}
+      collapsed={isCollapsed}
+    />
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ContextSwitcher
@@ -169,80 +164,98 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
-      {!isCollapsed ? (
-        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
-      ) : null}
+      <div
+        data-testid="sidebar-scroll"
+        data-scroll-container
+        className="nav-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+      >
+        {isCollapsed ? (
+          <nav className="flex flex-col items-center gap-0.5 px-2 pt-2">
+            <RailDivider />
+            {TOP.map((item) => (
+              <RailLink
+                key={item.href}
+                item={item}
+                active={isActive(item.href)}
+                coarse={coarse}
+              />
+            ))}
+            <RailDivider />
+            {PLANNING.map((item) => (
+              <RailLink
+                key={item.href}
+                item={item}
+                active={isActive(item.href)}
+                coarse={coarse}
+              />
+            ))}
+            <RailDivider />
+            {boardsNav}
+            <RailDivider />
+            {dashboardsNav}
+          </nav>
+        ) : (
+          <>
+            <nav className="flex flex-col gap-0.5 px-2 pt-2.5">
+              {TOP.map((item) => (
+                <SidebarLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  active={isActive(item.href)}
+                />
+              ))}
+            </nav>
+            <NavSection storageKey="planning" title="Planning">
+              {PLANNING.map((item) => (
+                <SidebarLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  active={isActive(item.href)}
+                />
+              ))}
+            </NavSection>
+            {boardsNav}
+            {dashboardsNav}
+            <div className="h-3.5 shrink-0" aria-hidden="true" />
+          </>
+        )}
+      </div>
 
-      {isCollapsed ? (
-        <nav className="flex flex-col items-center gap-0.5 px-2 py-2">
-          {ALL_LINKS.map((item) => (
-            <CollapsedLink
+      <footer
+        className={
+          isCollapsed
+            ? "border-border flex flex-col items-center gap-0.5 border-t px-2 pt-2 pb-2"
+            : "border-border flex flex-col gap-0.5 border-t px-2 pt-2 pb-2"
+        }
+      >
+        {isCollapsed ? (
+          <>
+            <RailDivider />
+            {FOOTER.map((item) => (
+              <RailLink
+                key={item.href}
+                item={item}
+                active={isActive(item.href)}
+                coarse={coarse}
+              />
+            ))}
+          </>
+        ) : (
+          FOOTER.map((item) => (
+            <SidebarLink
               key={item.href}
-              item={item}
-              active={isActive(item.href)}
-              coarse={coarse}
-            />
-          ))}
-        </nav>
-      ) : (
-        <nav className="flex flex-col gap-0.5 px-2 pt-2">
-          <ExpandedLink item={HOME} active={isActive(HOME.href)} />
-          <ExpandedLink item={ASK} active={isActive(ASK.href)} />
-        </nav>
-      )}
-
-      {!isCollapsed ? (
-        <NavSection storageKey="planning" title="Planning">
-          {PLANNING.map((item) => (
-            <ExpandedLink
-              key={item.href}
-              item={item}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
               active={isActive(item.href)}
             />
-          ))}
-        </NavSection>
-      ) : null}
-
-      {!isCollapsed ? (
-        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
-      ) : null}
-
-      <BoardsNav
-        boards={boards}
-        sharedBoards={sharedBoards}
-        folders={folders}
-        placements={placements}
-        activeWorkspaceId={activeWorkspaceId}
-        collapsed={isCollapsed}
-      />
-
-      {!isCollapsed ? (
-        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
-      ) : null}
-
-      <DashboardsNav
-        dashboards={dashboards}
-        activeWorkspaceId={activeWorkspaceId}
-        collapsed={isCollapsed}
-      />
-
-      {!isCollapsed ? (
-        <NavSection storageKey="personal" title="Personal">
-          {PERSONAL.map((item) => (
-            <ExpandedLink
-              key={item.href}
-              item={item}
-              active={isActive(item.href)}
-            />
-          ))}
-        </NavSection>
-      ) : null}
-
-      {!isCollapsed ? (
-        <nav className="flex flex-col gap-0.5 px-2 pb-2">
-          <ExpandedLink item={TRASH} active={isActive(TRASH.href)} />
-        </nav>
-      ) : null}
+          ))
+        )}
+      </footer>
     </div>
   );
 }
