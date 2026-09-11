@@ -114,10 +114,25 @@ export function BoardIntelligenceProvider({
     [signals, selection],
   );
 
-  // Content-keyed so the Set's identity survives unrelated cache edits.
-  const idsKey = activeSignal ? activeSignal.itemIds.join("\u0000") : null;
+  // Content-keyed so the Set's identity survives unrelated cache edits:
+  // `computeSignals` returns a brand-new `Signal` object on every cache
+  // change even when its `itemIds` are unchanged, so memoizing directly on
+  // `activeSignal` would rebuild (and re-identify) the Set on every edit
+  // elsewhere on the board. `idsKey` is its own memo (not recomputed on
+  // every render) so the join only runs when `activeSignal` itself changes.
+  const idsKey = useMemo(
+    () => (activeSignal ? activeSignal.itemIds.join("\u0000") : null),
+    [activeSignal],
+  );
+  // Built from `activeSignal!.itemIds` directly (not by re-splitting
+  // `idsKey`) — splitting an empty-string `idsKey` (`"".split(...)`) would
+  // yield `[""]`, a Set containing one empty string, not an empty Set.
+  // `idsKey` is the memo key only; the Set's contents always come straight
+  // from the signal. Deliberately keyed on `idsKey` alone, not `activeSignal`
+  // — see the comment above `idsKey` for why.
   const intelItemIds = useMemo<ReadonlySet<string> | null>(
-    () => (idsKey === null ? null : new Set(idsKey.split("\u0000"))),
+    () => (idsKey === null ? null : new Set(activeSignal!.itemIds)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [idsKey],
   );
 

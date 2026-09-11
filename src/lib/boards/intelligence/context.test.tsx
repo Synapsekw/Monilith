@@ -1,6 +1,14 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { BoardCache } from "@/lib/boards/cache";
 import { localTodayISO } from "@/lib/boards/overdue";
@@ -58,6 +66,12 @@ window.history.pushState = ((...args: Parameters<History["pushState"]>) => {
   originalPushState(...args);
   urlStore.bump();
 }) as History["pushState"];
+// Keep this file self-contained: undo the patch above once this file's tests
+// are done, so a later test file in the same worker never sees it.
+afterAll(() => {
+  window.history.replaceState = originalReplaceState;
+  window.history.pushState = originalPushState;
+});
 
 // Fixed clock: the provider's own `now` (`useState(() => new Date())`) reads
 // the system clock at mount, and the fixture's item/cell timestamps are fixed

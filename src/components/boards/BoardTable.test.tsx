@@ -26,6 +26,8 @@ import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
 import { BoardViewPrefsProvider } from "@/lib/boards/view-prefs-context";
 import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
+import { BoardIntelligenceProvider } from "@/lib/boards/intelligence/context";
+import { localTodayISO } from "@/lib/boards/overdue";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -95,9 +97,13 @@ vi.mock("./BoardHeader", () => ({
 
 // BoardTable now reads filter/sort/search state from the URL via
 // useBoardFilterSort → useSearchParams. Default to an empty (no-filter) param
-// set so existing rows still render.
+// set so existing rows still render. `searchParamsOverride` lets one describe
+// block (the intel-narrowing suite below) opt into a real `intel=` selection
+// without affecting any other test in this file — it is reset to null in that
+// block's own afterEach.
+let searchParamsOverride: string | null = null;
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(searchParamsOverride ?? ""),
 }));
 
 // The view-prefs provider persists through a real Server Action, which cannot
@@ -425,6 +431,116 @@ describe("BoardTable subitems", () => {
     renderNested();
     // The badge should show "(2)" for the "Epic" parent which has 2 subitems
     expect(screen.getByText("(2)")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Fixture for the intel-narrowing regression below: a parent ("Epic") that
+ * never matches the active "overdue" chip itself, with exactly one sub-item
+ * ("Design") that does (a date cell two days in the past). Real signals run
+ * on the FULL flat item list (parents and sub-items alike), so `itemIds`
+ * for the "overdue" signal is `["s1"]` — the parent is never in it.
+ */
+function subitemMatchPayload() {
+  const now = new Date();
+  const twoDaysAgo = localTodayISO(new Date(now.getTime() - 2 * 86_400_000));
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [
+      {
+        id: "c-date",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Due",
+        kind: "date",
+        position: 0,
+        settings: {},
+        width: null,
+      },
+    ],
+    items: [
+      {
+        id: "p1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Epic",
+        position: 0,
+        updated_at: now.toISOString(),
+      },
+      {
+        id: "s1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: "p1",
+        name: "Design",
+        position: 1,
+        updated_at: now.toISOString(),
+      },
+    ],
+    cellValues: [
+      {
+        item_id: "s1",
+        column_id: "c-date",
+        value: { date: twoDaysAgo },
+        updated_at: now.toISOString(),
+      },
+    ],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderSubitemMatch() {
+  const qc = new QueryClient();
+  const payload = subitemMatchPayload();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardIntelligenceProvider
+        boardId="b1"
+        initialData={payload}
+        members={[]}
+        lastSeenAt={null}
+        currentUserId="u1"
+      >
+        <BoardTable payload={payload} selectedViewId="v1" />
+      </BoardIntelligenceProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable intel narrowing", () => {
+  beforeEach(() => {
+    searchParamsOverride = "intel=overdue";
+  });
+  afterEach(() => {
+    searchParamsOverride = null;
+  });
+
+  it("keeps a matching sub-item's parent visible and the sub-item reachable under it", () => {
+    renderSubitemMatch();
+    // Regression guard: narrowItemsToSignal used to run per-group over
+    // TOP-LEVEL items only, so it never saw the parent/child pair together and
+    // dropped "Epic" even though its sub-item "Design" matched the chip. The
+    // parent row — and its Expand affordance — must still render.
+    expect(
+      screen.getByRole("button", { name: "Expand Epic" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Design")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
+    expect(screen.getByText("Design")).toBeInTheDocument();
   });
 });
 
