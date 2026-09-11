@@ -107,6 +107,31 @@ describe("useBoardFilterSort saved-filter seeding", () => {
     expect(result.current.state.q).toBe("");
   });
 
+  it("keeps an ?intel=-only URL AND the saved filter, and never erases the save", () => {
+    // `intel` is a lens, not an arrangement: a shared `?intel=overdue` link
+    // carries no filter param, so the saved filter must still seed — and the
+    // chip must survive that seeding. The regression: `intel` counted as "the
+    // URL has a filter", so the save was neither applied nor seeded, and the
+    // next write persisted the resulting empty filter over it.
+    window.history.replaceState(null, "", "/boards/x?intel=overdue");
+    const { result } = renderHook(() => useBoardFilterSort(), {
+      wrapper: wrapWithPrefs("q=urgent"),
+    });
+    expect(result.current.state.q).toBe("urgent");
+    expect(result.current.state.intel).toEqual({ kind: "overdue" });
+
+    act(() => result.current.setIntel(null));
+    expect(window.location.search).not.toContain("intel=");
+    // The saved arrangement survived the write, in the URL…
+    expect(window.location.search).toContain("q=urgent");
+    expect(result.current.state.q).toBe("urgent");
+    // …and in what was persisted: every save (if any fired at all) carries the
+    // saved filter unchanged, never the empty string.
+    for (const [arg] of vi.mocked(saveBoardViewPrefs).mock.calls) {
+      expect(arg.state.filterQuery).toBe("q=urgent");
+    }
+  });
+
   it("leaves the URL filter alone when one is present", () => {
     // The mocked useSearchParams returns the URL's params for this case.
     window.history.replaceState(null, "", "/boards/x?q=fromurl");
