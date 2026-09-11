@@ -5,9 +5,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 
+const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-  useParams: () => ({}),
+  useParams: () => mockUseParams(),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/dashboards/actions", () => ({
@@ -20,6 +22,7 @@ vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
 beforeEach(() => {
   useUIStore.setState({ newDashboardOpen: false });
   vi.mocked(useCoarsePointer).mockReturnValue(false);
+  mockUseParams.mockReturnValue({});
 });
 
 describe("DashboardsNav", () => {
@@ -59,6 +62,31 @@ describe("DashboardsNav", () => {
         screen.getByText("Give your dashboard a name to get started."),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("renders dashboard rows as child SidebarRows with the tint+bar when active", () => {
+    mockUseParams.mockReturnValue({ dashboardId: "d1" });
+    render(
+      <TooltipProvider>
+        <DashboardsNav
+          dashboards={[
+            { id: "d1", name: "Team" },
+            { id: "d2", name: "Ops" },
+          ]}
+          activeWorkspaceId={activeWorkspaceId}
+        />
+      </TooltipProvider>,
+    );
+    const active = screen.getByRole("link", { name: "Team" })
+      .parentElement as HTMLElement;
+    expect(active.className).toContain("bg-state-selected");
+    expect(active.className).toContain("before:bg-primary");
+    expect(active.className).not.toContain("bg-primary/80");
+    expect(screen.getByRole("link", { name: "Ops" }).className).toContain(
+      "text-xs",
+    );
+    // 24px lead slot first, like every other row
+    expect(active.firstElementChild?.className).toContain("size-6");
   });
 
   it("collapsed + coarse: shows the Dashboards header + name as visible captions (gotcha-47)", () => {

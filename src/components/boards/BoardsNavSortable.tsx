@@ -44,6 +44,7 @@ import {
   type BoardsNavFocusAnchor,
 } from "@/components/boards/boards-nav-focus";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { SidebarRow, sidebarLabelClass } from "@/components/shell/sidebar-row";
 import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
 
 /**
@@ -62,9 +63,13 @@ export type FolderSection = {
  * The grip column, shared by the owned and shared row variants so the two
  * unfiled lists present one continuous handle column. Hidden until the row is
  * hovered or the handle is focused.
+ *
+ * It fills (`h-full w-full`) rather than sizes itself: every grip is handed to
+ * `SidebarRow` as its `lead`, and the primitive already wraps that in the 24px
+ * slot span. A `size-6` here would nest a 24px box inside a 24px box.
  */
 const GRIP_CLASS =
-  "text-muted-foreground focus-visible:ring-ring flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing";
+  "text-muted-foreground focus-visible:ring-ring flex h-full w-full cursor-grab touch-none items-center justify-center rounded opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing";
 
 /** Droppable ids are namespaced so a folder can never collide with a board id. */
 const FOLDER_DROP_PREFIX = "folder:";
@@ -100,52 +105,54 @@ function SortableBoardRow({
   } = useSortable({ id: board.id });
 
   return (
-    <div
+    <SidebarRow
+      child
+      active={isActive}
       ref={setNodeRef}
       data-board-row={board.id}
       style={{ transform: DndCSS.Translate.toString(transform), transition }}
-      className={cn(
-        "group/row flex items-center rounded-md pr-1 transition-colors",
-        isDragging && "shadow-drag relative z-20",
-        isActive
-          ? "bg-primary/80 text-foreground"
-          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-      )}
+      className={cn(isDragging && "shadow-drag z-20")}
+      lead={
+        <button
+          type="button"
+          aria-label={`Reorder ${board.name}`}
+          className={GRIP_CLASS}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+      }
+      trailing={
+        <>
+          {/* Right-aligned share marker — lives outside the name link so it
+              lines up in a vertical column under the + (not after the
+              variable-width name), just inside the hover actions menu. */}
+          {board.shared_out ? (
+            <Users2
+              aria-label="Shared with others"
+              className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
+            />
+          ) : null}
+          <BoardItemMenu
+            board={{ id: board.id, name: board.name }}
+            isActive={isActive}
+            folders={folders}
+            // Only unfiled boards reach the sortable list — filed ones render
+            // inside their folder, which is not drag-reorderable.
+            currentFolderId={null}
+          />
+        </>
+      }
     >
-      <button
-        type="button"
-        aria-label={`Reorder ${board.name}`}
-        className={GRIP_CLASS}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-3.5" />
-      </button>
       <Link
         href={`/boards/${board.id}`}
         aria-current={isActive ? "page" : undefined}
-        className="min-w-0 flex-1 truncate py-1 pr-1 text-xs"
+        className={sidebarLabelClass(true)}
       >
         {board.name}
       </Link>
-      {/* Right-aligned share marker — lives outside the name link so it lines
-          up in a vertical column under the + (not after the variable-width
-          name), just inside the hover actions menu. */}
-      {board.shared_out ? (
-        <Users2
-          aria-label="Shared with others"
-          className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
-        />
-      ) : null}
-      <BoardItemMenu
-        board={{ id: board.id, name: board.name }}
-        isActive={isActive}
-        folders={folders}
-        // Only unfiled boards reach the sortable list — filed ones render
-        // inside their folder, which is not drag-reorderable.
-        currentFolderId={null}
-      />
-    </div>
+    </SidebarRow>
   );
 }
 
@@ -246,7 +253,7 @@ function DraggableSharedRow({
       dragRef={setNodeRef}
       isDragging={isDragging}
       style={{ transform: DndCSS.Translate.toString(transform) }}
-      leading={
+      lead={
         <DragSourceGrip
           label={`Move ${board.name} into a folder`}
           attributes={attributes}
@@ -289,7 +296,7 @@ function DraggableFiledRow({
     dragRef: setNodeRef,
     isDragging,
     style: { transform: DndCSS.Translate.toString(transform) },
-    leading: (
+    lead: (
       <DragSourceGrip
         label={`Move ${entry.board.name} to another folder`}
         attributes={attributes}

@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils";
  * Active = `--state-selected` tint + a 3px `--brand` bar on the sidebar's
  * outer edge (`before:-left-2` cancels the sidebar's px-2). Rows nested in a
  * folder body (`pl-3`) pass `before:-left-5` so the bar stays on the edge.
- * Never `bg-primary/80 text-foreground` — white on periwinkle fails AA.
+ * Never a solid brand fill under `text-foreground` — white on periwinkle is
+ * ~2:1 and fails AA. `sidebar-active-guard.test.ts` pins that.
  */
 export const SIDEBAR_LEAD_CLASS =
   "flex size-6 shrink-0 items-center justify-center";

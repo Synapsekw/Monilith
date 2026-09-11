@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -224,6 +225,36 @@ describe("BoardsNav", () => {
     expect(
       screen.getByRole("link", { name: "Other Board" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  it("paints the active row with the selected tint + brand edge bar, never the AA-failing fill", () => {
+    // `bg-primary/80 text-foreground` was white-on-periwinkle (~2:1). The row
+    // grammar in `sidebar-row.tsx` is the tint plus a 3px brand bar instead.
+    mockUseParams.mockReturnValue({ boardId: "board-123" });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[
+            {
+              id: "board-123",
+              name: "Active Board",
+              workspace_id: "w1",
+              position: 0,
+              shared_out: false,
+            },
+          ]}
+          sharedBoards={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    const row = screen.getByRole("link", { name: "Active Board" })
+      .parentElement as HTMLElement;
+    expect(row.className).toContain("bg-state-selected");
+    expect(row.className).toContain("before:bg-primary");
+    expect(row.className).not.toContain("bg-primary/80");
+    // The 24px lead slot is still the row's first child.
+    expect(row.firstElementChild?.className).toContain("size-6");
   });
 
   it("collapsed: renders each board as an initial with the board name as its accessible label", () => {
@@ -2079,7 +2110,7 @@ describe("BoardsNav folder row alignment", () => {
     return row;
   }
 
-  beforeEach(() => {
+  function renderFoldered() {
     render(
       <TooltipProvider>
         <BoardsNav
@@ -2109,6 +2140,10 @@ describe("BoardsNav folder row alignment", () => {
         />
       </TooltipProvider>,
     );
+  }
+
+  beforeEach(() => {
+    renderFoldered();
   });
 
   it("gives a filed shared row the same 24px leading slot as a filed owned row", () => {
@@ -2132,5 +2167,20 @@ describe("BoardsNav folder row alignment", () => {
     for (const id of ["own", "shared"]) {
       expect(filedRow(id).className).not.toMatch(/(^|\s)gap-/);
     }
+  });
+
+  it("keeps the edge bar on the sidebar edge for an active filed row", () => {
+    // Folder bodies indent with `pl-3` (12px) on top of the sidebar's own
+    // `px-2` (8px), so a filed row's active bar has to reach 20px left —
+    // `before:-left-5`, not the top-level row's `before:-left-2`.
+    cleanup();
+    mockUseParams.mockReturnValue({ boardId: "own" });
+    renderFoldered();
+
+    const row = filedRow("own");
+    expect(row.className).toContain("bg-state-selected");
+    expect(row.className).toContain("before:bg-primary");
+    expect(row.className).toContain("before:-left-5");
+    expect(row.className).not.toContain("bg-primary/80");
   });
 });
