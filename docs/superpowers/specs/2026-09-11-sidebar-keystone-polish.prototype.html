@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monolith sidebar — polish options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Nunito:wght@800&display=swap" rel="stylesheet" />
+<style>
+/* ---------- Keystone tokens (copied from src/app/globals.css) ---------- */
+:root{
+  --brand:#5a6ed5; --brand-fg:#ffffff;
+  --background:#f6f6f8; --foreground:#1a1a1f;
+  --surface:#fff; --surface-muted:#f1f1f4; --popover:#fff;
+  --muted-fg:#5b5b62; --kicker:#5b5b62;
+  --border:rgba(0,0,0,.08); --border-hover:rgba(0,0,0,.14); --border-bright:rgba(0,0,0,.22);
+  --app-wash:linear-gradient(168deg,#dde2f2 0%,#d6dbee 46%,#cfd4e6 100%);
+  --app-bloom:radial-gradient(110% 85% at 8% -6%, color-mix(in oklab, color-mix(in oklab,var(--brand) 12%, white) 70%, transparent) 0%, transparent 58%);
+  --content-surface:#fff; --content-edge:rgb(0 0 0/12%);
+  --content-lift:-1px -1px 0 0 rgb(30 40 90/8%),0 1px 3px 0 rgb(30 40 90/8%);
+  --state-hover:rgb(0 0 0/4%); --state-active:rgb(0 0 0/7%);
+  --state-selected:color-mix(in oklab,var(--brand) 14%,transparent);
+  --chrome-fill:rgb(0 0 0/5%);
+  --radius:14px; --ease:cubic-bezier(.16,1,.3,1);
+  --gallery-bg:#e9eaf0; --gallery-fg:#1a1a1f; --gallery-muted:#5b5b62; --gallery-card:#fff; --gallery-line:rgba(0,0,0,.1);
+}
+[data-theme="dark"]{
+  --brand:#8ea2eb; --brand-fg:#0e0e10;
+  --background:#0e0e10; --foreground:#f4f4f6;
+  --surface:#161619; --surface-muted:#1c1c20; --popover:#1c1c20;
+  --muted-fg:#b2b2ba; --kicker:#b2b2ba;
+  --border:rgba(255,255,255,.1); --border-hover:rgba(255,255,255,.16); --border-bright:rgba(255,255,255,.26);
+  --app-wash:linear-gradient(168deg,#212540 0%,#141728 46%,#08090d 100%);
+  --app-bloom:radial-gradient(110% 85% at 8% -6%, color-mix(in oklab,var(--brand) 22%,transparent) 0%, transparent 58%);
+  --content-surface:#0e0e10; --content-edge:rgb(255 255 255/8%);
+  --content-lift:inset 0 1px 0 0 rgb(255 255 255/5%),0 8px 24px -12px rgb(0 0 0/60%);
+  --state-hover:rgb(255 255 255/5%); --state-active:rgb(255 255 255/9%);
+  --state-selected:color-mix(in oklab,var(--brand) 14%,transparent);
+  --chrome-fill:rgb(255 255 255/6%);
+  --gallery-bg:#0a0a0c; --gallery-fg:#f4f4f6; --gallery-muted:#b2b2ba; --gallery-card:#141417; --gallery-line:rgba(255,255,255,.1);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Nunito Sans",system-ui,sans-serif;background:var(--gallery-bg);color:var(--gallery-fg);-webkit-font-smoothing:antialiased;font-size:14px}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.i.s{width:14px;height:14px}
+svg.i.xs{width:12px;height:12px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+
+/* ---------- gallery chrome ---------- */
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:12px 24px;background:color-mix(in oklab,var(--gallery-bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--gallery-line)}
+.top h1{font-size:15px;font-weight:800;margin:0;letter-spacing:.01em}
+.top .kick{font-family:"JetBrains Mono";font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gallery-muted)}
+.seg{display:inline-flex;border:1px solid var(--gallery-line);border-radius:8px;overflow:hidden}
+.seg button{padding:5px 10px;font-size:12px;font-weight:600;color:var(--gallery-muted)}
+.seg button[aria-pressed="true"]{background:var(--gallery-fg);color:var(--gallery-bg)}
+.top .sp{flex:1}
+.findings{margin:20px 24px 8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.finding{background:var(--gallery-card);border:1px solid var(--gallery-line);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45}
+.finding b{display:block;font-size:12px;margin-bottom:2px}
+.finding .tag{font-family:"JetBrains Mono";font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gallery-muted);margin-right:6px}
+.finding.bug .tag{color:#e5574f}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:16px 24px 48px}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.col h2{margin:0;font-size:13px;font-weight:800;display:flex;align-items:baseline;gap:10px}
+.col h2 .kick{font-family:"JetBrains Mono";font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gallery-muted);font-weight:500}
+.col h2 .sp{flex:1}
+.col h2 .seg button{padding:3px 8px;font-size:11px}
+.notes{font-size:12.5px;line-height:1.5;color:var(--gallery-muted);margin:0;padding-left:18px}
+.notes li{margin:2px 0}
+.notes b{color:var(--gallery-fg);font-weight:700}
+
+/* ---------- app frame (mirrors app-shell.tsx) ---------- */
+.frame{height:760px;border-radius:12px;overflow:hidden;display:flex;background-image:var(--app-bloom),var(--app-wash);color:var(--foreground);border:1px solid var(--gallery-line);position:relative}
+.frame .content{flex:1;min-width:0;display:flex;flex-direction:column}
+.frame header{height:56px;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 16px}
+.frame .searchbtn{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:8px;color:var(--muted-fg);font-size:13px;font-weight:600}
+.frame .searchbtn kbd{background:var(--chrome-fill);border:1px solid var(--border);border-radius:4px;padding:0 5px;font-family:"JetBrains Mono";font-size:10px;margin-left:6px}
+.frame .ghost{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--muted-fg)}
+.frame .avatar{width:32px;height:32px;border-radius:999px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.frame main{flex:1;margin:0 8px 8px 4px;border-radius:14px;background:var(--content-surface);border:1px solid var(--content-edge);box-shadow:var(--content-lift);padding:20px}
+.frame main .ph{height:10px;border-radius:4px;background:var(--surface-muted);margin-bottom:10px}
+.frame main .ph.t{height:18px;width:50%;margin-bottom:16px}
+
+/* ---------- sidebar shared ---------- */
+.sb{width:240px;flex-shrink:0;display:flex;flex-direction:column;transition:width 200ms var(--ease);font-size:14px}
+.sb[data-collapsed="true"]{width:56px}
+.sb .brandrow{min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;gap:4px}
+.sb[data-collapsed="true"] .brandrow{flex-direction:column;padding:8px 0}
+.sb .wordmark{font-family:"Nunito";font-weight:800;font-size:14px;letter-spacing:.05em;display:inline-flex;align-items:baseline;padding:2px 4px;margin-left:-4px}
+.sb .wordmark svg{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
+.sb .mark{width:24px;height:24px}
+.sb .toggle{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg);transition:color 150ms}
+.sb .toggle:hover{color:var(--foreground);background:var(--state-hover)}
+.sb[data-collapsed="true"] .x{display:none!important}
+.sb[data-collapsed="false"] .c{display:none!important}
+.sb .body{flex:1;min-height:0;display:flex;flex-direction:column}
+.sb .sep{height:1px;background:var(--border);margin:4px 12px}
+.sb .ini{width:24px;height:24px;border-radius:6px;background:color-mix(in oklab,var(--brand) 18%,transparent);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.sb .kicker{font-family:"JetBrains Mono";font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--kicker);transition:color 300ms var(--ease)}
+.sb .kicker.xs{font-size:10px}
+.sb .empty{color:var(--muted-fg);font-size:12px;padding:4px 12px}
+.sb .act{width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg)}
+.sb .act:hover{color:var(--foreground);background:var(--state-hover)}
+.sb .dots{opacity:0;transition:opacity 150ms}
+.sb .row:hover .dots,.sb .row:focus-within .dots,.sb .row.active .dots{opacity:1}
+.sb [hidden]{display:none!important}
+.sb .chev{transition:transform 200ms var(--ease)}
+.sb .sec[data-open="false"] .chev{transform:rotate(-90deg)}
+.sb .tip{position:absolute;left:100%;top:50%;transform:translate(8px,-50%);background:var(--popover);color:var(--foreground);border:1px solid var(--border);font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 120ms;z-index:5}
+.sb .rl:hover .tip{opacity:1}
+.sb .rl{position:relative}
+
+/* ========== CURRENT (faithful) ========== */
+.sb[data-opt="cur"] .chip{margin:8px 8px 0;display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);transition:transform 300ms var(--ease),border-color 300ms var(--ease);cursor:pointer}
+.sb[data-opt="cur"] .chip:hover{transform:translateY(-4px);border-color:var(--border-bright)}
+.sb[data-opt="cur"] .chip .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;font-size:14px}
+.sb[data-opt="cur"] .chip .cud{color:var(--muted-fg)}
+.sb[data-opt="cur"] .sep{margin:4px 12px}
+.sb[data-opt="cur"] .nav{display:flex;flex-direction:column;gap:2px;padding:8px 8px 0}
+.sb[data-opt="cur"] .lnk{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid transparent;font-size:14px;color:var(--muted-fg);transition:color 300ms var(--ease),border-color 300ms var(--ease)}
+.sb[data-opt="cur"] .lnk:hover{border-color:var(--border);color:var(--foreground)}
+.sb[data-opt="cur"] .lnk.active{background:var(--state-selected);border-color:color-mix(in oklab,var(--brand) 40%,transparent);color:var(--foreground)}
+.sb[data-opt="cur"] .sec{display:flex;flex-direction:column;gap:2px;padding:8px 8px 0}
+.sb[data-opt="cur"] .sech{display:flex;align-items:center;gap:6px;padding:4px 6px}
+.sb[data-opt="cur"] .sech .cb{width:20px;height:20px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg)}
+.sb[data-opt="cur"] .sech .cb:hover{color:var(--foreground)}
+.sb[data-opt="cur"] .sech .ic{color:var(--muted-fg)}
+.sb[data-opt="cur"] .sech .acts{margin-left:auto;display:flex;align-items:center}
+.sb[data-opt="cur"] .sech:hover .kicker{color:var(--foreground)}
+.sb[data-opt="cur"] .secb{display:flex;flex-direction:column;gap:2px}
+.sb[data-opt="cur"] .row{display:flex;align-items:center;border-radius:8px;padding-right:4px;color:var(--muted-fg);transition:background 150ms,color 150ms}
+.sb[data-opt="cur"] .row:hover{background:var(--state-hover);color:var(--foreground)}
+.sb[data-opt="cur"] .row.active{background:color-mix(in oklab,var(--brand) 80%,transparent);color:var(--foreground)}
+.sb[data-opt="cur"] .row .lead{width:24px;height:24px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.sb[data-opt="cur"] .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;padding:4px 4px 4px 0}
+.sb[data-opt="cur"] .row.dash .nm{font-size:14px;padding:4px 12px}
+.sb[data-opt="cur"] .row .cnt{font-size:10px;font-variant-numeric:tabular-nums;margin-right:2px;color:var(--muted-fg)}
+.sb[data-opt="cur"] .row.active .cnt{color:var(--foreground)}
+.sb[data-opt="cur"] .row .fi{margin-right:6px;color:inherit}
+.sb[data-opt="cur"] .fbody{padding-left:12px;display:flex;flex-direction:column;gap:2px}
+.sb[data-opt="cur"] .shared{color:var(--muted-fg);font-size:12px;font-weight:600;padding:12px 12px 0}
+.sb[data-opt="cur"] .trash{padding:0 8px 8px}
+/* collapsed rail */
+.sb[data-opt="cur"] .rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px}
+.sb[data-opt="cur"] .rchip{width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);display:flex;align-items:center;justify-content:center;margin-top:8px;transition:transform 300ms var(--ease),border-color 300ms var(--ease)}
+.sb[data-opt="cur"] .rchip:hover{transform:translateY(-4px);border-color:var(--border-bright)}
+.sb[data-opt="cur"] .rl{width:36px;height:36px;border-radius:8px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;color:var(--muted-fg);font-size:14px;font-weight:600;text-transform:uppercase;transition:color 300ms var(--ease),border-color 300ms var(--ease)}
+.sb[data-opt="cur"] .rl:hover{color:var(--foreground);border-color:var(--border)}
+.sb[data-opt="cur"] .rl.tile:hover{border-color:transparent;background:var(--state-hover)}
+.sb[data-opt="cur"] .rl.active{background:var(--state-selected);border-color:color-mix(in oklab,var(--brand) 40%,transparent);color:var(--foreground)}
+.sb[data-opt="cur"] .rl.tile.active{background:color-mix(in oklab,var(--brand) 80%,transparent);border-color:transparent}
+
+/* ========== A — ALIGNED ========== */
+.sb[data-opt="a"] .body{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;mask-image:linear-gradient(to bottom,transparent,black 10px,black calc(100% - 14px),transparent)}
+.sb[data-opt="a"] .ctx{margin:8px 8px 0;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);overflow:hidden;transition:border-color 300ms var(--ease)}
+.sb[data-opt="a"] .ctx:hover{border-color:var(--border-bright)}
+.sb[data-opt="a"] .ctx .cr{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;transition:background 150ms}
+.sb[data-opt="a"] .ctx .cr:hover{background:var(--state-hover)}
+.sb[data-opt="a"] .ctx .cr + .cr{border-top:1px solid var(--border)}
+.sb[data-opt="a"] .ctx .cr.org{padding:4px 8px}
+.sb[data-opt="a"] .ctx .cr.org .ini{width:20px;height:20px;font-size:10px;border-radius:5px}
+.sb[data-opt="a"] .ctx .cr.org .nm{font-size:12px;font-weight:600;color:var(--muted-fg)}
+.sb[data-opt="a"] .ctx .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;font-size:14px}
+.sb[data-opt="a"] .ctx .cud{color:var(--muted-fg)}
+.sb[data-opt="a"] .grp{display:flex;flex-direction:column;gap:2px;padding:12px 8px 0}
+.sb[data-opt="a"] .grp.first{padding-top:10px}
+.sb[data-opt="a"] .sech{display:flex;align-items:center;height:28px;padding-right:2px}
+.sb[data-opt="a"] .sech .cb{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg);border-radius:6px;flex-shrink:0;margin-left:2px}
+.sb[data-opt="a"] .sech .cb:hover{color:var(--foreground);background:var(--state-hover)}
+.sb[data-opt="a"] .sech .kicker{margin-left:2px}
+.sb[data-opt="a"] .sech:hover .kicker{color:var(--foreground)}
+.sb[data-opt="a"] .sech .acts{margin-left:auto;display:flex;align-items:center}
+.sb[data-opt="a"] .secb{display:flex;flex-direction:column;gap:2px}
+/* one row primitive */
+.sb[data-opt="a"] .row{display:flex;align-items:center;gap:4px;border-radius:8px;border:1px solid transparent;padding:0 4px 0 2px;color:var(--muted-fg);min-height:32px;transition:background 150ms,color 150ms,border-color 300ms var(--ease)}
+.sb[data-opt="a"] .row.child{min-height:28px}
+.sb[data-opt="a"] .row:hover{background:var(--state-hover);color:var(--foreground)}
+.sb[data-opt="a"] .row.active{background:var(--state-selected);border-color:color-mix(in oklab,var(--brand) 40%,transparent);color:var(--foreground)}
+.sb[data-opt="a"] .row .lead{width:24px;height:24px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:inherit}
+.sb[data-opt="a"] .row .lead .dot{width:5px;height:5px;border-radius:999px;background:currentColor;opacity:.55}
+.sb[data-opt="a"] .row.active .lead .dot{opacity:1;background:var(--brand)}
+.sb[data-opt="a"] .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.sb[data-opt="a"] .row.child .nm{font-size:12px;font-weight:500}
+.sb[data-opt="a"] .row .cnt{font-family:"JetBrains Mono";font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="a"] .row .meta{color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="a"] .fbody{padding-left:14px;display:flex;flex-direction:column;gap:2px}
+.sb[data-opt="a"] .sub{display:flex;align-items:center;height:24px;padding-left:30px;margin-top:6px}
+.sb[data-opt="a"] .foot{margin-top:auto;padding:8px 8px 8px;display:flex;flex-direction:column;gap:2px}
+/* rail */
+.sb[data-opt="a"] .rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 8px 0}
+.sb[data-opt="a"] .rsep{width:16px;height:1px;background:var(--border);margin:6px 0}
+.sb[data-opt="a"] .rchip{width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);display:flex;align-items:center;justify-content:center;transition:border-color 300ms var(--ease)}
+.sb[data-opt="a"] .rchip:hover{border-color:var(--border-bright)}
+.sb[data-opt="a"] .rl{width:36px;height:36px;border-radius:8px;border:1px solid transparent;display:flex;align-items:center;justify-content:center;color:var(--muted-fg);font-size:13px;font-weight:600;text-transform:uppercase;transition:color 150ms,background 150ms,border-color 300ms var(--ease)}
+.sb[data-opt="a"] .rl:hover{color:var(--foreground);background:var(--state-hover)}
+.sb[data-opt="a"] .rl.active{background:var(--state-selected);border-color:color-mix(in oklab,var(--brand) 40%,transparent);color:var(--foreground)}
+
+/* ========== B — KEYSTONE ========== */
+.sb[data-opt="b"] .body{overflow-y:auto;scrollbar-width:none;mask-image:linear-gradient(to bottom,transparent,black 10px,black calc(100% - 14px),transparent)}
+.sb[data-opt="b"] .ctx{margin:8px 8px 0;display:flex;align-items:center;gap:10px;padding:7px 8px 7px 8px;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);cursor:pointer;transition:border-color 300ms var(--ease)}
+.sb[data-opt="b"] .ctx:hover{border-color:var(--border-bright)}
+.sb[data-opt="b"] .ctx .ini{width:28px;height:28px;border-radius:7px;font-size:13px}
+.sb[data-opt="b"] .ctx .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.sb[data-opt="b"] .ctx .txt .kicker{font-size:10px;letter-spacing:.14em;line-height:1.1}
+.sb[data-opt="b"] .ctx .txt .nm{font-weight:700;font-size:14px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb[data-opt="b"] .ctx .cud{color:var(--muted-fg)}
+.sb[data-opt="b"] .grp{display:flex;flex-direction:column;gap:2px;padding:14px 8px 0}
+.sb[data-opt="b"] .grp.first{padding-top:10px}
+.sb[data-opt="b"] .sech{display:flex;align-items:center;gap:8px;height:26px;padding:0 4px 0 12px;cursor:pointer}
+.sb[data-opt="b"] .sech .rule{flex:1;height:1px;background:var(--border);transition:background 300ms var(--ease)}
+.sb[data-opt="b"] .sech:hover .rule{background:var(--border-bright)}
+.sb[data-opt="b"] .sech:hover .kicker{color:var(--foreground)}
+.sb[data-opt="b"] .sech .acts{display:flex;align-items:center}
+.sb[data-opt="b"] .sech .cb{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg);opacity:0;transition:opacity 150ms}
+.sb[data-opt="b"] .sech:hover .cb,.sb[data-opt="b"] .sec[data-open="false"] .cb{opacity:1}
+.sb[data-opt="b"] .secb{display:flex;flex-direction:column;gap:2px}
+.sb[data-opt="b"] .row{position:relative;display:flex;align-items:center;gap:4px;border-radius:8px;padding:0 4px 0 2px;color:var(--muted-fg);min-height:32px;transition:background 150ms,color 150ms}
+.sb[data-opt="b"] .row.child{min-height:28px}
+.sb[data-opt="b"] .row:hover{background:var(--state-hover);color:var(--foreground)}
+.sb[data-opt="b"] .row.active{background:var(--state-selected);color:var(--foreground)}
+.sb[data-opt="b"] .row.active::before{content:"";position:absolute;left:-8px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+.sb[data-opt="b"] .row.child.active::before{top:6px;bottom:6px}
+.sb[data-opt="b"] .row .lead{width:24px;height:24px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.sb[data-opt="b"] .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.sb[data-opt="b"] .row.child .nm{font-size:12px;font-weight:500}
+.sb[data-opt="b"] .row .cnt{font-family:"JetBrains Mono";font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="b"] .row .meta{color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="b"] .fbody{padding-left:14px;display:flex;flex-direction:column;gap:2px}
+.sb[data-opt="b"] .sub{display:flex;align-items:center;gap:8px;height:24px;padding:0 4px 0 30px;margin-top:6px}
+.sb[data-opt="b"] .sub .rule{flex:1;height:1px;background:var(--border)}
+.sb[data-opt="b"] .foot{margin-top:auto;padding:8px 8px 8px;display:flex;flex-direction:column;gap:2px;position:relative}
+.sb[data-opt="b"] .foot::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--border)}
+/* rail */
+.sb[data-opt="b"] .rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 8px 0}
+.sb[data-opt="b"] .rsep{width:16px;height:1px;background:var(--border);margin:6px 0}
+.sb[data-opt="b"] .rchip{width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:var(--chrome-fill);display:flex;align-items:center;justify-content:center;transition:border-color 300ms var(--ease)}
+.sb[data-opt="b"] .rchip:hover{border-color:var(--border-bright)}
+.sb[data-opt="b"] .rl{position:relative;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted-fg);font-size:13px;font-weight:600;text-transform:uppercase;transition:color 150ms,background 150ms}
+.sb[data-opt="b"] .rl:hover{color:var(--foreground);background:var(--state-hover)}
+.sb[data-opt="b"] .rl.active{background:var(--state-selected);color:var(--foreground)}
+.sb[data-opt="b"] .rl.active::before{content:"";position:absolute;left:-8px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+.sb[data-opt="b"] .rfoot{margin-top:auto;padding:8px 8px 8px;display:flex;flex-direction:column;align-items:center;gap:2px}
+
+/* ========== C — QUIET ========== */
+.sb[data-opt="c"]{width:224px}
+.sb[data-opt="c"][data-collapsed="true"]{width:56px}
+.sb[data-opt="c"] .body{overflow-y:auto;scrollbar-width:none;mask-image:linear-gradient(to bottom,transparent,black 10px,black calc(100% - 14px),transparent)}
+.sb[data-opt="c"] .ctx{margin:4px 8px 0;display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:8px;cursor:pointer;transition:background 150ms}
+.sb[data-opt="c"] .ctx:hover{background:var(--state-hover)}
+.sb[data-opt="c"] .ctx .ini{width:22px;height:22px;border-radius:6px;font-size:11px}
+.sb[data-opt="c"] .ctx .txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.sb[data-opt="c"] .ctx .nm{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb[data-opt="c"] .ctx .org{font-size:11px;color:var(--muted-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb[data-opt="c"] .ctx .cud{color:var(--muted-fg);opacity:.7}
+.sb[data-opt="c"] .grp{display:flex;flex-direction:column;gap:1px;padding:14px 8px 0}
+.sb[data-opt="c"] .grp.first{padding-top:8px}
+.sb[data-opt="c"] .sech{display:flex;align-items:center;height:24px;padding:0 2px 0 8px;border-radius:6px;cursor:pointer;gap:6px}
+.sb[data-opt="c"] .sech:hover{background:var(--state-hover)}
+.sb[data-opt="c"] .sech:hover .kicker{color:var(--foreground)}
+.sb[data-opt="c"] .sech .cb{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg);opacity:0;transition:opacity 150ms}
+.sb[data-opt="c"] .sech:hover .cb,.sb[data-opt="c"] .sec[data-open="false"] .cb{opacity:1}
+.sb[data-opt="c"] .sech .acts{margin-left:auto;display:flex;align-items:center;opacity:0;transition:opacity 150ms}
+.sb[data-opt="c"] .sech:hover .acts,.sb[data-opt="c"] .sech:focus-within .acts{opacity:1}
+.sb[data-opt="c"] .sech .act{width:20px;height:20px}
+.sb[data-opt="c"] .secb{display:flex;flex-direction:column;gap:1px}
+.sb[data-opt="c"] .row{display:flex;align-items:center;gap:8px;border-radius:6px;padding:0 4px 0 8px;color:var(--muted-fg);min-height:28px;transition:background 120ms,color 120ms}
+.sb[data-opt="c"] .row:hover{background:var(--state-hover);color:var(--foreground)}
+.sb[data-opt="c"] .row.active{background:var(--state-selected);color:var(--foreground)}
+.sb[data-opt="c"] .row.active .nm{font-weight:700}
+.sb[data-opt="c"] .row .ic{color:var(--muted-fg);flex-shrink:0}
+.sb[data-opt="c"] .row:hover .ic,.sb[data-opt="c"] .row.active .ic{color:var(--foreground)}
+.sb[data-opt="c"] .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500}
+.sb[data-opt="c"] .row .cnt{font-family:"JetBrains Mono";font-size:10px;color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="c"] .row .meta{color:var(--muted-fg);margin-right:2px}
+.sb[data-opt="c"] .row .cb{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-fg);margin-left:-4px;margin-right:-4px}
+.sb[data-opt="c"] .tree{margin-left:16px;padding-left:8px;border-left:1px solid var(--border);display:flex;flex-direction:column;gap:1px}
+.sb[data-opt="c"] .tree .row{padding-left:6px}
+.sb[data-opt="c"] .sub{display:flex;align-items:center;height:22px;padding-left:8px;margin-top:6px}
+.sb[data-opt="c"] .foot{margin-top:auto;padding:8px 8px 8px;display:flex;flex-direction:column;gap:1px}
+/* rail */
+.sb[data-opt="c"] .rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px 0}
+.sb[data-opt="c"] .rsep{width:16px;height:1px;background:var(--border);margin:6px 0}
+.sb[data-opt="c"] .rl{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--muted-fg);font-size:12px;font-weight:700;text-transform:uppercase;transition:color 120ms,background 120ms}
+.sb[data-opt="c"] .rl:hover{color:var(--foreground);background:var(--state-hover)}
+.sb[data-opt="c"] .rl.active{background:var(--state-selected);color:var(--foreground)}
+.sb[data-opt="c"] .rl.ws .ini{width:24px;height:24px;font-size:11px}
+.sb[data-opt="c"] .rfoot{margin-top:auto;padding:8px 8px 8px;display:flex;flex-direction:column;align-items:center;gap:2px}
+@media (min-width:1900px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Sidebar polish — four versions of the whole package</h1>
+  <span class="kick">Monolith Keystone · rendered from the real tokens</span>
+  <span class="sp"></span>
+  <span class="kick">Theme</span>
+  <div class="seg" id="theme">
+    <button aria-pressed="true" data-v="dark">Dark</button>
+    <button aria-pressed="false" data-v="light">Light</button>
+  </div>
+  <span class="kick">All rails</span>
+  <div class="seg" id="allcol">
+    <button aria-pressed="true" data-v="false">Expanded</button>
+    <button aria-pressed="false" data-v="true">Collapsed</button>
+  </div>
+</div>
+
+<div class="findings" id="findings"></div>
+<div class="grid" id="grid"></div>
+
+<script>
+/* ---------- lucide-ish icons ---------- */
+const I = {
+  listTodo:'<rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  bar:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  kanban:'<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M8 10v4"/><path d="M12 10v2"/><path d="M16 10v6"/>',
+  grid:'<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  cud:'<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  right:'<path d="m9 18 6-6-6-6"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folderOpen:'<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  folderPlus:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/>',
+  users:'<path d="M14 19a6 6 0 0 0-12 0"/><circle cx="8" cy="9" r="4"/><path d="M22 19a6 6 0 0 0-6-6 4 4 0 1 0 0-8"/>',
+  eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  dots:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  chl:'<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+  chr:'<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  grip:'<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+};
+const ic = (n, cls='') => `<svg class="i ${cls}" viewBox="0 0 24 24">${I[n]}</svg>`;
+const askMark = (cls='') => `<svg class="i ${cls}" viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><path d="M8 6.1 15.6 4.1V6.5L8 8.5Z"/><path d="M8 10.4 15.6 8.4V20H8Z"/><path d="M18.8 2.8 21 5l-2.2 2.2L16.6 5Z"/></svg>`;
+const monoMark = `<svg class="mark" viewBox="0 0 100 100" style="fill:currentColor"><path d="M36 26 64 18v9L36 35Z"/><path d="M36 43 64 35v49H36Z"/></svg>`;
+const wordmark = `<a class="wordmark" href="#">MONOL<svg viewBox="8.6 3.2 6.8 17.6" style="fill:currentColor"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</a>`;
+
+/* ---------- data ---------- */
+const D = {
+  org:'Synapse', ws:'Marketing',
+  top:[{l:'My Work',i:'listTodo',h:'/my-work'},{l:'Agents',i:'ask',h:'/ask'}],
+  planning:[{l:'Goals',i:'target'},{l:'Portfolios',i:'bar'},{l:'Reports',i:'file'},{l:'Workload',i:'gauge'}],
+  folder:{n:'Q3 Launch',boards:['Launch checklist','Press & PR']},
+  boards:[{n:'Product Roadmap',active:true,shared:true},{n:'Hiring pipeline'},{n:'Website redesign'}],
+  sharedIn:[{n:'Client portal',viewer:true}],
+  dash:['Team overview','Sprint health'],
+};
+const tip = (t)=>`<span class="tip">${t}</span>`;
+const topIcon = (it,cls='')=> it.i==='ask'? askMark(cls) : ic(it.i,cls);
+
+/* ---------- renderers ---------- */
+function brandRow(){ return `<div class="brandrow"><span class="x">${wordmark}</span><span class="c" style="color:var(--foreground);display:inline-flex">${monoMark}</span><button class="toggle" data-act="collapse" aria-label="Collapse sidebar"><span class="x">${ic('chl')}</span><span class="c">${ic('chr')}</span></button></div>`; }
+
+function renderCur(){
+  const chip = (nm)=>`<div class="chip"><span class="ini">${nm[0]}</span><span class="nm">${nm}</span>${ic('cud','s cud')}</div>`;
+  const lnk = (it,active=false)=>`<a class="lnk ${active?'active':''}" href="#">${topIcon(it)}${it.l}</a>`;
+  const sech = (title,icon,acts,link=false)=>`<div class="sech"><button class="cb" data-act="sec">${ic('down','s chev')}</button>${icon?ic(icon,'s ic'):''}<span class="kicker">${title}</span>${acts?`<span class="acts">${acts}</span>`:''}</div>`;
+  const brow = (b,indent=false)=>`<div class="row ${b.active?'active':''}"><span class="lead"></span><span class="nm">${b.n}</span>${b.shared?ic('users','s meta'):''}${b.viewer?ic('eye','xs meta'):''}<button class="act dots">${ic('dots','s')}</button></div>`;
+  const exp = `
+    ${chip(D.org)}${chip(D.ws)}
+    <div class="sep"></div>
+    <div class="nav">${lnk(D.top[0])}${lnk(D.top[1])}</div>
+    <div class="sec" data-open="true">${sech('Planning')}<div class="secb">${D.planning.map(p=>lnk(p)).join('')}</div></div>
+    <div class="sep"></div>
+    <div class="sec" data-open="true">${sech('Boards','kanban',`<button class="act">${ic('folderPlus')}</button><button class="act">${ic('plus')}</button>`)}
+      <div class="secb">
+        <div class="row"><span class="lead">${ic('down','s chev')}</span>${ic('folderOpen','s fi')}<span class="nm">${D.folder.n}</span><span class="cnt">${D.folder.boards.length}</span><button class="act dots">${ic('dots','s')}</button></div>
+        <div class="fbody">${D.folder.boards.map(n=>brow({n})).join('')}</div>
+        ${D.boards.map(b=>brow(b)).join('')}
+        <p class="shared">Shared with me</p>
+        ${D.sharedIn.map(b=>brow(b)).join('')}
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="sec" data-open="true">${sech('Dashboards','grid',`<button class="act">${ic('plus')}</button>`,true)}
+      <div class="secb">${D.dash.map(n=>`<div class="row dash"><span class="nm">${n}</span><button class="act dots">${ic('dots','s')}</button></div>`).join('')}</div>
+    </div>
+    <div class="sec" data-open="true">${sech('Personal')}<div class="secb">${lnk({l:'My Time',i:'clock'})}</div></div>
+    <div class="nav trash">${lnk({l:'Trash',i:'trash'})}</div>`;
+  const rail = `
+    <div class="rail" style="padding-top:0">
+      <div class="rchip"><span class="ini">${D.org[0]}</span></div>
+      <div class="rchip"><span class="ini">${D.ws[0]}</span></div>
+      <div style="height:8px"></div>
+      ${[...D.top,...D.planning,{l:'My Time',i:'clock'},{l:'Trash',i:'trash'}].map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div style="height:8px"></div>
+      <a class="rl tile" href="#">${ic('kanban')}${tip('Boards')}</a>
+      <a class="rl tile" href="#">${ic('plus')}${tip('New board')}</a>
+      ${[...D.folder.boards.map(n=>({n})),...D.boards,...D.sharedIn].map(b=>`<a class="rl tile ${b.active?'active':''}" href="#">${b.n[0]}${tip(b.n)}</a>`).join('')}
+      <div style="height:8px"></div>
+      <a class="rl tile" href="#">${ic('grid')}${tip('Dashboards')}</a>
+      ${D.dash.map(n=>`<a class="rl tile" href="#">${n[0]}${tip(n)}</a>`).join('')}
+    </div>`;
+  return brandRow()+`<div class="body"><div class="x" style="display:contents">${exp}</div><div class="c">${rail}</div></div>`;
+}
+
+function renderA(){
+  const row = (it,{active=false,child=false,lead=null,trail=''}={})=>`<a class="row ${child?'child':''} ${active?'active':''}" href="#"><span class="lead">${lead??topIcon(it)}</span><span class="nm">${it.l}</span>${trail}</a>`;
+  const sech = (title,acts='')=>`<div class="sech"><button class="cb" data-act="sec">${ic('down','s chev')}</button><span class="kicker">${title}</span>${acts?`<span class="acts">${acts}</span>`:''}</div>`;
+  const brow = (b)=>row({l:b.n},{child:true,active:!!b.active,lead:'<span class="dot"></span>',trail:`${b.shared?ic('users','s meta'):''}${b.viewer?ic('eye','xs meta'):''}<button class="act dots">${ic('dots','s')}</button>`});
+  const exp = `
+    <div class="ctx">
+      <div class="cr org"><span class="ini">${D.org[0]}</span><span class="nm">${D.org}</span>${ic('cud','xs cud')}</div>
+      <div class="cr"><span class="ini">${D.ws[0]}</span><span class="nm">${D.ws}</span>${ic('cud','s cud')}</div>
+    </div>
+    <div class="grp first">${row(D.top[0])}${row(D.top[1])}</div>
+    <div class="grp sec" data-open="true">${sech('Planning')}<div class="secb">${D.planning.map(p=>row(p)).join('')}</div></div>
+    <div class="grp sec" data-open="true">${sech('Boards',`<button class="act">${ic('folderPlus')}</button><button class="act">${ic('plus')}</button>`)}
+      <div class="secb">
+        <div class="row child sec fold" data-open="true"><span class="lead"><button class="cb" data-act="sec" style="display:inline-flex;color:inherit">${ic('down','s chev')}</button></span>${ic('folderOpen','s meta')}<span class="nm">${D.folder.n}</span><span class="cnt">${D.folder.boards.length}</span><button class="act dots">${ic('dots','s')}</button></div>
+        <div class="fbody secb">${D.folder.boards.map(n=>brow({n})).join('')}</div>
+        ${D.boards.map(b=>brow(b)).join('')}
+        <div class="sub"><span class="kicker xs">Shared with me</span></div>
+        ${D.sharedIn.map(b=>brow(b)).join('')}
+      </div>
+    </div>
+    <div class="grp sec" data-open="true">${sech('Dashboards',`<button class="act">${ic('plus')}</button>`)}
+      <div class="secb">${D.dash.map(n=>brow({n})).join('')}</div>
+    </div>
+    <div class="grp sec" data-open="true">${sech('Personal')}<div class="secb">${row({l:'My Time',i:'clock'})}</div></div>
+    <div class="foot">${row({l:'Trash',i:'trash'})}</div>`;
+  const rail = `
+    <div class="rail" style="padding-top:0">
+      <div class="rchip" style="margin-top:8px"><span class="ini">${D.ws[0]}</span></div>
+      <div class="rsep"></div>
+      ${D.top.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      ${D.planning.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('kanban')}${tip('Boards')}</a>
+      ${[...D.folder.boards.map(n=>({n})),...D.boards,...D.sharedIn].map(b=>`<a class="rl ${b.active?'active':''}" href="#">${b.n[0]}${tip(b.n)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('grid')}${tip('Dashboards')}</a>
+      ${D.dash.map(n=>`<a class="rl" href="#">${n[0]}${tip(n)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('clock')}${tip('My Time')}</a>
+      <a class="rl" href="#">${ic('trash')}${tip('Trash')}</a>
+    </div>`;
+  return brandRow()+`<div class="body"><div class="x" style="display:contents">${exp}</div><div class="c">${rail}</div></div>`;
+}
+
+function renderB(){
+  const row = (it,{active=false,child=false,lead=null,trail=''}={})=>`<a class="row ${child?'child':''} ${active?'active':''}" href="#"><span class="lead">${lead??topIcon(it)}</span><span class="nm">${it.l}</span>${trail}</a>`;
+  const sech = (title,acts='')=>`<div class="sech" data-act="sec"><span class="kicker">${title}</span><span class="rule"></span>${acts?`<span class="acts">${acts}</span>`:''}<span class="cb">${ic('down','xs chev')}</span></div>`;
+  const brow = (b)=>row({l:b.n},{child:true,active:!!b.active,lead:'',trail:`${b.shared?ic('users','s meta'):''}${b.viewer?ic('eye','xs meta'):''}<button class="act dots">${ic('dots','s')}</button>`});
+  const exp = `
+    <div class="ctx"><span class="ini">${D.ws[0]}</span><span class="txt"><span class="kicker">${D.org}</span><span class="nm">${D.ws}</span></span>${ic('cud','s cud')}</div>
+    <div class="grp first">${row(D.top[0])}${row(D.top[1])}</div>
+    <div class="grp sec" data-open="true">${sech('Planning')}<div class="secb">${D.planning.map(p=>row(p)).join('')}</div></div>
+    <div class="grp sec" data-open="true">${sech('Boards',`<button class="act">${ic('folderPlus')}</button><button class="act">${ic('plus')}</button>`)}
+      <div class="secb">
+        <div class="row child sec" data-open="true"><span class="lead"><button class="cb2" data-act="sec" style="display:inline-flex;color:inherit">${ic('down','s chev')}</button></span>${ic('folderOpen','s meta')}<span class="nm">${D.folder.n}</span><span class="cnt">${D.folder.boards.length}</span><button class="act dots">${ic('dots','s')}</button></div>
+        <div class="fbody secb">${D.folder.boards.map(n=>brow({n})).join('')}</div>
+        ${D.boards.map(b=>brow(b)).join('')}
+        <div class="sub"><span class="kicker xs">Shared with me</span><span class="rule"></span></div>
+        ${D.sharedIn.map(b=>brow(b)).join('')}
+      </div>
+    </div>
+    <div class="grp sec" data-open="true">${sech('Dashboards',`<button class="act">${ic('plus')}</button>`)}
+      <div class="secb">${D.dash.map(n=>brow({n})).join('')}</div>
+    </div>
+    <div style="height:14px"></div>
+    <div class="foot">${row({l:'My Time',i:'clock'})}${row({l:'Trash',i:'trash'})}</div>`;
+  const rail = `
+    <div class="rail" style="padding-top:0">
+      <div class="rchip" style="margin-top:8px"><span class="ini">${D.ws[0]}</span></div>
+      <div class="rsep"></div>
+      ${D.top.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      ${D.planning.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('kanban')}${tip('Boards')}</a>
+      ${[...D.folder.boards.map(n=>({n})),...D.boards,...D.sharedIn].map(b=>`<a class="rl ${b.active?'active':''}" href="#">${b.n[0]}${tip(b.n)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('grid')}${tip('Dashboards')}</a>
+      ${D.dash.map(n=>`<a class="rl" href="#">${n[0]}${tip(n)}</a>`).join('')}
+    </div>
+    <div class="rfoot"><div class="rsep"></div><a class="rl" href="#">${ic('clock')}${tip('My Time')}</a><a class="rl" href="#">${ic('trash')}${tip('Trash')}</a></div>`;
+  return brandRow()+`<div class="body"><div class="x" style="display:contents">${exp}</div><div class="c" style="display:contents">${rail}</div></div>`;
+}
+
+function renderC(){
+  const row = (it,{active=false,icon=true,trail='',pre=''}={})=>`<a class="row ${active?'active':''}" href="#">${pre}${icon?topIcon(it,'ic'):''}<span class="nm">${it.l}</span>${trail}</a>`;
+  const sech = (title,acts='')=>`<div class="sech" data-act="sec"><span class="kicker">${title}</span><span class="cb">${ic('down','xs chev')}</span>${acts?`<span class="acts">${acts}</span>`:''}</div>`;
+  const brow = (b)=>row({l:b.n},{icon:false,active:!!b.active,trail:`${b.shared?ic('users','s meta'):''}${b.viewer?ic('eye','xs meta'):''}<button class="act dots">${ic('dots','s')}</button>`});
+  const exp = `
+    <div class="ctx"><span class="ini">${D.ws[0]}</span><span class="txt"><span class="nm">${D.ws}</span><span class="org">${D.org}</span></span>${ic('cud','s cud')}</div>
+    <div class="grp first">${row(D.top[0])}${row(D.top[1])}</div>
+    <div class="grp sec" data-open="true">${sech('Planning')}<div class="secb">${D.planning.map(p=>row(p)).join('')}</div></div>
+    <div class="grp sec" data-open="true">${sech('Boards',`<button class="act">${ic('folderPlus','s')}</button><button class="act">${ic('plus','s')}</button>`)}
+      <div class="secb">
+        <div class="row sec" data-open="true"><button class="cb" data-act="sec">${ic('down','xs chev')}</button>${ic('folderOpen','s ic')}<span class="nm">${D.folder.n}</span><span class="cnt">${D.folder.boards.length}</span><button class="act dots">${ic('dots','s')}</button></div>
+        <div class="tree secb">${D.folder.boards.map(n=>brow({n})).join('')}</div>
+        ${D.boards.map(b=>brow(b)).join('')}
+        <div class="sub"><span class="kicker xs">Shared with me</span></div>
+        ${D.sharedIn.map(b=>brow(b)).join('')}
+      </div>
+    </div>
+    <div class="grp sec" data-open="true">${sech('Dashboards',`<button class="act">${ic('plus','s')}</button>`)}
+      <div class="secb">${D.dash.map(n=>brow({n})).join('')}</div>
+    </div>
+    <div style="height:14px"></div>
+    <div class="foot">${row({l:'My Time',i:'clock'})}${row({l:'Trash',i:'trash'})}</div>`;
+  const rail = `
+    <div class="rail" style="padding-top:0">
+      <a class="rl ws" href="#" style="margin-top:4px"><span class="ini">${D.ws[0]}</span>${tip(D.ws+' · '+D.org)}</a>
+      <div class="rsep"></div>
+      ${D.top.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      ${D.planning.map(it=>`<a class="rl" href="#">${topIcon(it)}${tip(it.l)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('kanban')}${tip('Boards')}</a>
+      ${[...D.folder.boards.map(n=>({n})),...D.boards,...D.sharedIn].map(b=>`<a class="rl ${b.active?'active':''}" href="#">${b.n[0]}${tip(b.n)}</a>`).join('')}
+      <div class="rsep"></div>
+      <a class="rl" href="#">${ic('grid')}${tip('Dashboards')}</a>
+      ${D.dash.map(n=>`<a class="rl" href="#">${n[0]}${tip(n)}</a>`).join('')}
+    </div>
+    <div class="rfoot"><a class="rl" href="#">${ic('clock')}${tip('My Time')}</a><a class="rl" href="#">${ic('trash')}${tip('Trash')}</a></div>`;
+  return brandRow()+`<div class="body"><div class="x" style="display:contents">${exp}</div><div class="c" style="display:contents">${rail}</div></div>`;
+}
+
+/* ---------- gallery ---------- */
+const OPTS = [
+  { id:'cur', kick:'Baseline', title:'Current', render:renderCur, notes:[
+    'Faithful rebuild of <b>develop</b> today, hover it to compare against the options.',
+    'Active board row is <b>periwinkle at 80% with white text</b>, in dark mode that is roughly 2:1 contrast.',
+    'Top links hover with a <b>hairline</b>, rows hover with a <b>fill</b>, two hover languages.',
+    'Text edges: links start at 38px, board names at 32px, dashboard names at 20px, three left edges.',
+    'Board rows are 12px, dashboard rows are 14px. Same kind of thing, two sizes.',
+    'Org chip and workspace chip are <b>identical twins</b> stacked with a 4px lift on hover each.',
+    'Desktop sidebar has <b>no overflow-y</b>, a long board list pushes Trash off screen.'
+  ]},
+  { id:'a', kick:'Option A', title:'Aligned', render:renderA, notes:[
+    '<b>Smallest change.</b> Same order, same parts, one grammar.',
+    'One row primitive: 24px lead slot (icon / chevron / dot), so <b>every text edge sits at 36px</b>.',
+    'One active state everywhere (tint + brand hairline), one hover (fill). Kills the contrast defect.',
+    'Children are 12px/28px everywhere, dashboards drop to match boards. Top-level stays 14px/32px.',
+    'Section headers lose their icons, the kicker carries them; "Shared with me" becomes an xs kicker.',
+    'Org + workspace fuse into <b>one bordered context card</b> (org demoted to a slim row). No lift, hairline brightens only.',
+    'Separators removed, 12px section rhythm instead. Body scrolls with a soft fade mask.'
+  ]},
+  { id:'b', kick:'Option B', title:'Keystone', render:renderB, notes:[
+    '<b>Leans into the brand system.</b> Same fixes as A, plus three signatures.',
+    'Active item = <b>3px periwinkle bar</b> flush to the sidebar edge + faint tint. Reads at a glance in both rail and expanded.',
+    'Section headers become <b>ledger rules</b>: kicker, hairline to the right, actions at the end. Chevron only on hover / when closed. Whole header toggles.',
+    'Context card is one control: org as a mono kicker over the workspace name. One chip instead of two.',
+    'My Time + Trash move to a <b>pinned footer</b> above a hairline; the one-item "Personal" section goes away.',
+    'Rail gets hairline group dividers and a matching footer.'
+  ]},
+  { id:'c', kick:'Option C', title:'Quiet', render:renderC, notes:[
+    '<b>Flattest and most compact.</b> 224px wide, 28px rows, 13px labels (needs one new text token).',
+    'No bordered chips at all: workspace is a plain row with org in a small line beneath.',
+    'Section headers: kicker only, chevron and + actions <b>reveal on hover</b> (RevealOnHover handles touch).',
+    'Folder children hang on a <b>hairline tree guide</b>, the one structural flourish.',
+    'Active = tint + bold label, nothing else. Icons go from muted to foreground on hover/active.',
+    'Rail tiles shrink to 32px. Footer identical to B.',
+    'Trade-off: fewest visible affordances, relies most on hover.'
+  ]},
+];
+const FIND = [
+  {bug:true,tag:'Contrast',t:'Active board/dashboard row',d:'<code>bg-primary/80 text-foreground</code>: white on periwinkle in dark (~2:1), fails AA. Brand fills must use <code>text-primary-foreground</code>, or use the tint the top links already use.'},
+  {bug:true,tag:'Layout',t:'No scroll on the desktop sidebar',d:'<code>&lt;aside&gt;</code> and the nav body have no <code>overflow-y</code>; the mobile sheet does. Twenty boards push Personal + Trash below the fold with no way to reach them.'},
+  {bug:false,tag:'Grammar',t:'Two active states, two hovers',d:'Top links: tint + brand hairline, hover = hairline. Rows: solid fill, hover = fill. Pick one of each.'},
+  {bug:false,tag:'Alignment',t:'Three text left-edges',d:'Links 38px, board rows 32px, dashboard rows 20px, section kickers 34px. One lead-slot fixes it.'},
+  {bug:false,tag:'Scale',t:'Boards 12px, dashboards 14px',d:'Same kind of row, different size. Dashboards also get <code>px-3</code> while boards get a 24px grip slot.'},
+  {bug:false,tag:'Redundancy',t:'Twin switcher chips',d:'Org and workspace chips are identical in size, shape, avatar and icon, and each lifts 4px on hover, a card gesture on a nav control.'},
+  {bug:false,tag:'Rhythm',t:'Separators vs section padding',d:'Separator (my-1) + NavSection (pt-2) + nav (pt-2) stack unevenly; some groups get a hairline, some do not.'},
+  {bug:false,tag:'Labels',t:'Third label style',d:'"Shared with me" is a plain 12px semibold paragraph, sitting between mono kickers.'},
+  {bug:false,tag:'Sections',t:'Personal = one item',d:'A collapsible group wrapping a single link ("My Time"). Trash floats below it ungrouped.'},
+  {bug:false,tag:'Rail',t:'Collapsed rail has no grouping',d:'Icons, letter tiles and the bordered switcher squares run together with no dividers; folder structure disappears.'},
+];
+
+const fEl = document.getElementById('findings');
+fEl.innerHTML = FIND.map(f=>`<div class="finding ${f.bug?'bug':''}"><b><span class="tag">${f.bug?'defect':'polish'} · ${f.tag}</span>${f.t}</b>${f.d}</div>`).join('');
+
+const grid = document.getElementById('grid');
+grid.innerHTML = OPTS.map(o=>`
+  <section class="col" data-id="${o.id}">
+    <h2><span class="kick">${o.kick}</span>${o.title}<span class="sp"></span>
+      <div class="seg colseg"><button aria-pressed="true" data-v="false">Expanded</button><button aria-pressed="false" data-v="true">Collapsed</button></div>
+    </h2>
+    <div class="frame">
+      <aside class="sb" data-opt="${o.id}" data-collapsed="false">${o.render()}</aside>
+      <div class="content">
+        <header><span class="searchbtn">${ic('search')}Search…<kbd>⌘K</kbd></span><span class="ghost">${ic('moon')}</span><span class="ghost">${ic('bell')}</span><span class="avatar">DJ</span></header>
+        <main><div class="ph t"></div><div class="ph" style="width:80%"></div><div class="ph" style="width:65%"></div><div class="ph" style="width:72%"></div></main>
+      </div>
+    </div>
+    <ul class="notes">${o.notes.map(n=>`<li>${n}</li>`).join('')}</ul>
+  </section>`).join('');
+
+/* ---------- interactions ---------- */
+function setCollapsed(col, v){
+  col.querySelector('.sb').dataset.collapsed = v;
+  col.querySelectorAll('.colseg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===v));
+}
+document.addEventListener('click', e=>{
+  const t = e.target.closest('[data-act], .colseg button, #theme button, #allcol button, a');
+  if(!t) return;
+  if(t.matches('#theme button')){ document.documentElement.dataset.theme=t.dataset.v; t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t)); return; }
+  if(t.matches('#allcol button')){ document.querySelectorAll('.col').forEach(c=>setCollapsed(c,t.dataset.v)); t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t)); return; }
+  if(t.matches('.colseg button')){ setCollapsed(t.closest('.col'), t.dataset.v); return; }
+  if(t.dataset.act==='collapse'){ const col=t.closest('.col'); const sb=col.querySelector('.sb'); setCollapsed(col, sb.dataset.collapsed==='true'?'false':'true'); e.preventDefault(); return; }
+  if(t.dataset.act==='sec'){
+    e.preventDefault(); e.stopPropagation();
+    const sec = t.closest('.sec');
+    const open = sec.dataset.open !== 'false';
+    sec.dataset.open = open ? 'false' : 'true';
+    // body = the .secb that is a direct child, or the next sibling secb (folder rows)
+    let body = [...sec.children].find(c=>c.classList.contains('secb'));
+    if(!body){ body = sec.nextElementSibling; }
+    if(body) body.hidden = open;
+    return;
+  }
+  if(t.tagName==='A') e.preventDefault();
+});
+</script>
+</body>
+</html>
