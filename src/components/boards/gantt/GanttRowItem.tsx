@@ -196,6 +196,7 @@ export function GanttRowItem({
   return (
     <div
       data-testid="gantt-row"
+      data-intel-rule="cell"
       className={cn(
         "group hover:bg-state-hover/5 flex border-b",
         intelRowClasses(intelMatch),
@@ -210,6 +211,9 @@ export function GanttRowItem({
         )}
         style={{ width: LABEL_W, paddingLeft: 16 + depth * 16 }}
       >
+        {intelMatch === true && (
+          <span aria-hidden data-testid="intel-rule" className="intel-rule" />
+        )}
         {/* Expand/collapse toggle for a parent with scheduled sub-items; a
             same-size spacer otherwise so names stay vertically aligned. */}
         {row.hasChildren ? (

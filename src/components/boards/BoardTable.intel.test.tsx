@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
 import {
@@ -176,6 +176,10 @@ describe("BoardTable with an active intelligence chip", () => {
       "data-intel-tone",
       "red",
     );
+    expect(row).toHaveAttribute("data-intel-rule", "cell");
+    expect(
+      within(row as HTMLElement).getByTestId("intel-rule"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -273,11 +277,18 @@ describe("Sub-item rows with an active intelligence chip", () => {
     // it's visible but dims, exactly like ItemRow already does.
     const parentRow = screen.getByText("Parent item").closest(".intel-miss");
     expect(parentRow).not.toBeNull();
+    expect(
+      within(parentRow as HTMLElement).queryByTestId("intel-rule"),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Expand Parent item" }));
 
     const subRow = screen.getByText("Late subitem").closest(".intel-match");
     expect(subRow).not.toBeNull();
+    expect(subRow).toHaveAttribute("data-intel-rule", "cell");
+    expect(
+      within(subRow as HTMLElement).getByTestId("intel-rule"),
+    ).toBeInTheDocument();
 
     // narrowItemsToSignal drops a non-matching LEAF item entirely (same rule
     // that removes a non-matching top-level item elsewhere in this file) —
