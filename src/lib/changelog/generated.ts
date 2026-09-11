@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-12",
+    kind: "improved",
+    title: "Your agents front and centre in the board dock",
+    description:
+      "The board's agent dock now sits beside the board on the app background and puts Intelligence, Ask and each of your agents in one row of tiles. Tap an agent to start talking to it, watch its dot pulse while it answers, fold the thread list out of the way, and collapse the whole dock to a thin rail of the same tiles.",
+  },
+  {
     date: "2026-09-11",
     kind: "fixed",
     title: "AI generation on Anthropic works again",
