@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import {
@@ -146,5 +146,7 @@ describe("GanttBoard with an active intelligence chip", () => {
     const rows = screen.getAllByTestId("gantt-row");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveClass("intel-match");
+    expect(rows[0]).toHaveAttribute("data-intel-rule", "cell");
+    expect(within(rows[0]).getByTestId("intel-rule")).toBeInTheDocument();
   });
 });

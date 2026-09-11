@@ -1,22 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
+import { PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { AskChat } from "@/components/ai/ask/AskChat";
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 import { setThreadVisibility } from "@/lib/ai/ask/conversation-actions";
+import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
+import {
+  unresolvedCount,
+  useBoardIntelligenceStore,
+  type DockTab,
+} from "@/stores/board-intelligence";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
-import { AgentSwitcher, type DockAgent } from "./AgentSwitcher";
-import { DockThreadList } from "./DockThreadList";
+import type { DockAgent } from "./AgentSwitcher";
+import { DockBody, type DockBodyProps } from "./DockBody";
 import {
   clampDockWidth,
   useDockState,
@@ -61,183 +65,6 @@ type Failure =
   | { kind: "share"; message: string }
   | null;
 
-type DockBodyProps = {
-  agents: DockAgent[];
-  agentNames: Record<string, string>;
-  /** Persona shown in the switcher: the open thread's, or the next thread's. */
-  switcherValue: string | null;
-  /** A thread is open, so its persona is fixed on the conversation row. */
-  switcherLocked: boolean;
-  onAgentChange: (agentId: string | null) => void;
-  onNew: () => void;
-  /** Omitted inside the Sheet, which brings its own close affordance. */
-  onClose?: () => void;
-  error: string | null;
-  /** Absent when the failure has nothing to retry (an optimistic write that
-   *  already rolled itself back). */
-  onRetry?: () => void;
-  loading: boolean;
-  boardThreads: BoardThreadRow[];
-  agentThreads: BoardThreadRow[];
-  activeId: string | null;
-  currentUserId: string;
-  onSelectThread: (id: string) => void;
-  onToggleShare: (thread: BoardThreadRow) => void;
-  sharingId: string | null;
-  threadLoading: boolean;
-  readOnly: boolean;
-  boardId: string;
-  messages: UIMessage[];
-  agentId: string | null;
-  /** Identity of the CHAT INSTANCE, not of the conversation — see `chatKey`. */
-  chatKey: string;
-  onStarted: (conversationId: string) => void;
-  onTurnComplete: () => void;
-};
-
-/**
- * Header + thread list + chat — the dock's whole interior.
- *
- * Extracted so the desktop column and the mobile Sheet render ONE
- * implementation. Below `md` a 320px column beside a board leaves neither
- * usable, so the surface changes; what is inside it must not.
- */
-function DockBody({
-  agents,
-  agentNames,
-  switcherValue,
-  switcherLocked,
-  onAgentChange,
-  onNew,
-  onClose,
-  error,
-  onRetry,
-  loading,
-  boardThreads,
-  agentThreads,
-  activeId,
-  currentUserId,
-  onSelectThread,
-  onToggleShare,
-  sharingId,
-  threadLoading,
-  readOnly,
-  boardId,
-  messages,
-  agentId,
-  chatKey,
-  onStarted,
-  onTurnComplete,
-}: DockBodyProps) {
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5">
-        <AgentSwitcher
-          agents={agents}
-          value={switcherValue}
-          disabled={switcherLocked}
-          onChange={onAgentChange}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="shrink-0"
-          onClick={onNew}
-          disabled={activeId === null}
-        >
-          <Plus className="size-3.5" /> New
-        </Button>
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close agent dock"
-            className="shrink-0"
-            onClick={onClose}
-          >
-            <PanelRightClose className="size-4" />
-          </Button>
-        )}
-      </header>
-
-      {error && (
-        <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1.5">
-          <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
-          {onRetry && (
-            <Button variant="ghost" size="xs" onClick={onRetry}>
-              Try again
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Bounded on purpose: the transcript is the point of the dock, and a
-          thread list that grows without limit would push it off the panel. */}
-      <div className="max-h-48 shrink-0 overflow-y-auto border-b p-1.5">
-        {loading ? (
-          <div className="flex flex-col gap-1.5 p-1">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-4/5" />
-            <Skeleton className="h-6 w-3/5" />
-          </div>
-        ) : (
-          <DockThreadList
-            boardThreads={boardThreads}
-            agentThreads={agentThreads}
-            activeId={activeId}
-            currentUserId={currentUserId}
-            agentNames={agentNames}
-            sharingId={sharingId}
-            onSelect={onSelectThread}
-            onToggleShare={onToggleShare}
-          />
-        )}
-      </div>
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {threadLoading ? (
-          <div
-            role="status"
-            aria-busy="true"
-            aria-label="Loading thread"
-            className="flex flex-col gap-3 p-4"
-          >
-            <Skeleton className="h-4 w-2/3 self-end" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-          </div>
-        ) : readOnly ? (
-          <p className="text-muted-foreground p-4 text-sm">
-            This thread was shared with the board. You can read it, but only its
-            owner can reply.
-          </p>
-        ) : (
-          <AskChat
-            // Keyed on the CHAT INSTANCE, never on `activeId`.
-            //
-            // AskChat calls `onStarted` the moment createConversation resolves
-            // — BEFORE the stream opens — so `activeId` flips from null to the
-            // new id in the middle of a live turn. Keying on it would unmount
-            // the running chat and mount a fresh one with `initialMessages`
-            // still `[]`, and since that prop is snapshotted at mount with no
-            // re-sync, the user's question and the streaming answer would be
-            // gone for good. The instance id changes only where a reset is
-            // actually wanted: selecting a thread, starting a new one, or
-            // switching persona.
-            key={chatKey}
-            conversationId={activeId}
-            initialMessages={messages}
-            boardId={boardId}
-            agentId={agentId ?? undefined}
-            onStarted={onStarted}
-            onTurnComplete={onTurnComplete}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * The board's agent dock.
  *
@@ -257,12 +84,18 @@ export function BoardDock({
   boardId,
   agents,
   currentUserId,
+  access = "viewer",
+  initialRun = null,
 }: {
   boardId: string;
   agents: DockAgent[];
   currentUserId: string;
+  /** Least privilege by default: the page passes the real thing (Task 8). */
+  access?: "owner" | "editor" | "viewer";
+  /** The latest run, read ONCE by the board page. Never re-read here. */
+  initialRun?: BoardIntelligenceRun | null;
 }) {
-  const { open, setOpen, width, setWidth } = useDockState(boardId);
+  const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
   const narrow = useNarrowViewport();
   const [boardThreads, setBoardThreads] = useState<BoardThreadRow[]>([]);
   const [agentThreads, setAgentThreads] = useState<BoardThreadRow[]>([]);
@@ -288,6 +121,66 @@ export function BoardDock({
   /** A `?thread=` link not yet honoured. Survives a failed load, so the retry
    *  still lands on the thread the user was sent to. */
   const deepLinkPending = useRef(true);
+
+  /* ── Intelligence: the run the page read, and the strip's open requests. ── */
+
+  const setRun = useBoardIntelligenceStore((s) => s.setRun);
+  // `undefined` means "this board has never been seeded", which is NOT the same
+  // as a seeded `null` ("read, and there is no run") — that distinction is what
+  // decides whether opening the tab should read the board for the first time.
+  const run = useBoardIntelligenceStore((s) => s.runs[boardId]);
+  useEffect(() => {
+    if (run === undefined) setRun(boardId, initialRun);
+  }, [boardId, initialRun, run, setRun]);
+
+  const openRequest = useBoardIntelligenceStore((s) => s.openRequest);
+  const consumeOpen = useBoardIntelligenceStore((s) => s.consumeOpen);
+  /** The strip asked for a fresh read ("Catch me up"), not just for the tab. */
+  const [wantsRun, setWantsRun] = useState(false);
+  /** A first open with nothing cached earns ONE read, and only one — a failed
+   *  read must not re-fire every time the user comes back to the tab. */
+  const [readOnce, setReadOnce] = useState(false);
+  /**
+   * Did the reader ASK for Intelligence in this session?
+   *
+   * `tab` is remembered per board, so a dock left open on Intelligence comes
+   * back on Intelligence — and without this, that alone kicked a model call on
+   * page load, which is exactly the "zero LLM calls on first paint" rule the
+   * budget is built on. Only an actual selection (the tab, or the strip's
+   * request) counts as asking.
+   */
+  const [openedThisSession, setOpenedThisSession] = useState(false);
+
+  useEffect(() => {
+    if (!openRequest || openRequest.boardId !== boardId) return;
+    setOpen(true);
+    setTab("intelligence");
+    // Subscribing to an external store and recording what it asked for is the
+    // sanctioned shape for an effect, not a cascading render: the strip lives
+    // in a different subtree, so a nonce-stamped request in the store IS the
+    // only channel it has. The request is consumed in the same pass, so this
+    // runs once per ask.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpenedThisSession(true);
+    if (openRequest.run) setWantsRun(true);
+    consumeOpen(openRequest.nonce);
+  }, [boardId, consumeOpen, openRequest, setOpen, setTab]);
+
+  const onRanOnMount = useCallback(() => {
+    setWantsRun(false);
+    setReadOnce(true);
+  }, []);
+  const runOnMount =
+    wantsRun || (openedThisSession && !readOnce && run === null);
+
+  /** Selecting Intelligence is the ask; restoring it from storage is not. */
+  const changeTab = useCallback(
+    (next: DockTab) => {
+      if (next === "intelligence") setOpenedThisSession(true);
+      setTab(next);
+    },
+    [setTab],
+  );
 
   const agentNames = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
@@ -559,6 +452,12 @@ export function BoardDock({
     chatKey: `chat-${chatInstance}`,
     onStarted,
     onTurnComplete,
+    tab,
+    onTabChange: changeTab,
+    badge: unresolvedCount(run ?? null),
+    canApply: access !== "viewer",
+    runOnMount,
+    onRanOnMount,
   };
 
   if (narrow) {

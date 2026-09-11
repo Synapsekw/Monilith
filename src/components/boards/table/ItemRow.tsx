@@ -267,6 +267,7 @@ export const ItemRow = memo(function ItemRow({
         isDragging && "shadow-drag relative z-10",
         intelRowClasses(intelMatch),
       )}
+      data-intel-rule="cell"
       style={{
         height: ROW_HEIGHT,
         gridTemplateColumns: template,
@@ -278,6 +279,7 @@ export const ItemRow = memo(function ItemRow({
         item={item}
         controls={controls}
         selected={selected}
+        intelMatch={intelMatch}
         leading={
           <>
             {selectable && (

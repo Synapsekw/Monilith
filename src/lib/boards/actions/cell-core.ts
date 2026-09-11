@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cellValueSchema } from "@/lib/validations/boards";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Database, Json, Tables } from "@/types/database.types";
+import { notifyNewAssignees } from "./assign-notify";
 
 /** What a cell write needs, already parsed by the caller's own Zod boundary. */
 export type UpsertCellCoreInput = {
@@ -90,38 +91,14 @@ export async function upsertCellCore(
     return fail(error?.message ?? "Could not write the cell.");
 
   if (column.kind === "people") {
-    const next = (valueParsed.data as { userIds?: string[] }).userIds ?? [];
-    const added = next.filter(
-      (id) => !priorPeople.includes(id) && id !== actorId,
-    );
-    if (added.length > 0) {
-      // Best-effort fan-out: the cell write already succeeded, so never fail the
-      // caller — but never drop the failure silently either (spec F3 / decision D4).
-      let notifError: string | undefined;
-      if (!actorId) {
-        // A null actor cannot satisfy the `actor_id = auth.uid()` insert policy,
-        // so log it instead of paying a round-trip to be told so.
-        notifError = "no actor";
-      } else {
-        const { error: notifErr } = await supabase.from("notifications").insert(
-          added.map((rid) => ({
-            org_id: column.org_id,
-            recipient_id: rid,
-            actor_id: actorId,
-            kind: "assigned" as const,
-            board_id: column.board_id,
-            item_id: input.itemId,
-          })),
-        );
-        notifError = notifErr?.message;
-      }
-      if (notifError)
-        console.error("[notifications] assigned fan-out failed", {
-          itemId: input.itemId,
-          recipients: added.length,
-          error: notifError,
-        });
-    }
+    await notifyNewAssignees(supabase, {
+      orgId: column.org_id,
+      boardId: column.board_id,
+      itemId: input.itemId,
+      actorId,
+      prior: priorPeople,
+      next: (valueParsed.data as { userIds?: string[] }).userIds ?? [],
+    });
   }
   return { ok: true, data: { cell } };
 }

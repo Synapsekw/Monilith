@@ -3,6 +3,21 @@ import { applyBoardEffect } from "./ai-effects";
 import type { BoardCache } from "./cache";
 import type { BoardEffect } from "@/lib/ai/write/effects";
 
+function cell(itemId: string, columnId: string) {
+  return {
+    item_id: itemId,
+    column_id: columnId,
+    org_id: "o1",
+    board_id: "b1",
+    value: { text: "x" },
+  } as never;
+}
+
+function withCells(cells: ReturnType<typeof cell>[]): BoardCache {
+  const cache = baseCache();
+  return { ...cache, cellValues: cells as BoardCache["cellValues"] };
+}
+
 function baseCache(): BoardCache {
   return {
     board: { id: "b1", org_id: "o1", name: "B" } as BoardCache["board"],
@@ -164,5 +179,22 @@ describe("applyBoardEffect", () => {
       cells: [],
     });
     expect(next).toBe(cache);
+  });
+
+  it("cells_cleared removes the named cells and nothing else", () => {
+    const cache = withCells([
+      cell("i1", "c1"),
+      cell("i1", "c2"),
+      cell("i2", "c1"),
+    ]);
+    const next = applyBoardEffect(cache, {
+      kind: "cells_cleared",
+      boardId: "b1",
+      cells: [{ itemId: "i1", columnId: "c1" }],
+    });
+    expect(next.cellValues.map((c) => `${c.item_id}/${c.column_id}`)).toEqual([
+      "i1/c2",
+      "i2/c1",
+    ]);
   });
 });

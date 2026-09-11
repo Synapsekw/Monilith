@@ -34,6 +34,7 @@ const FEATURE_TIERS = Object.freeze(
     digest_narrative: "standard",
     thread_summary: "standard",
     personal_agent_run: "standard",
+    board_intelligence: "standard",
     // Short classification / rewrite — high volume, low difficulty.
     item_assist: "cheap",
     column_fill: "cheap",
@@ -58,8 +59,7 @@ export function tierForFeature(feature: string): ModelTier {
  * ignore them entirely.
  */
 export type ThinkingConfig =
-  | { type: "adaptive" }
-  | { type: "enabled"; budget_tokens: number };
+  { type: "adaptive" } | { type: "enabled"; budget_tokens: number };
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 

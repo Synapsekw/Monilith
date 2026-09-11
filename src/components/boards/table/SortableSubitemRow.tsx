@@ -153,12 +153,14 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         isDragging && "shadow-drag relative z-10",
         intelRowClasses(intelMatch),
       )}
+      data-intel-rule="cell"
     >
       <NameCell
         item={sub}
         controls={controls}
         leading={dragHandle}
         indented
+        intelMatch={intelMatch}
         autoFocusRename={sub.id === renamingItemId}
         onRenameSettled={onRenameSettled}
         trailing={

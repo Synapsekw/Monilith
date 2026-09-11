@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useDeferredValue,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -12,6 +13,7 @@ import {
 import type { BoardCache } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import {
   computeBoardIntel,
   findActiveSignal,
@@ -34,6 +36,7 @@ import type { IntelSelection, Signal } from "./types";
  * recomputes signals does not re-render every memoized row.
  */
 export type BoardIntelligenceValue = {
+  boardId: string;
   signals: Signal[];
   selection: IntelSelection | null;
   activeSignal: Signal | null;
@@ -131,6 +134,19 @@ export function BoardIntelligenceProvider({
   const selection = filter.state.intel;
   const setIntel = filter.setIntel;
 
+  // The strip's "Show … rows" button (in the dock's brief) stamps a
+  // nonce-stamped filter request onto the store; this is the one place that
+  // consumes it, applying the URL-mirrored selection exactly as `toggle`
+  // would. Guarded to this board so a request meant for a different board
+  // (another mounted provider, or a stale one) is ignored.
+  const filterRequest = useBoardIntelligenceStore((s) => s.filterRequest);
+  const consumeFilter = useBoardIntelligenceStore((s) => s.consumeFilter);
+  useEffect(() => {
+    if (!filterRequest || filterRequest.boardId !== boardId) return;
+    setIntel(filterRequest.selection);
+    consumeFilter(filterRequest.nonce);
+  }, [boardId, consumeFilter, filterRequest, setIntel]);
+
   const activeSignal = useMemo(
     () => findActiveSignal(signals, selection),
     [signals, selection],
@@ -169,6 +185,7 @@ export function BoardIntelligenceProvider({
 
   const value = useMemo<BoardIntelligenceValue>(
     () => ({
+      boardId,
       signals,
       selection,
       activeSignal,
@@ -180,6 +197,7 @@ export function BoardIntelligenceProvider({
       clear,
     }),
     [
+      boardId,
       signals,
       selection,
       activeSignal,

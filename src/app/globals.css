@@ -918,9 +918,10 @@
 }
 
 /* Board Intelligence (Phase 1): while a strip chip is active the view frame
-   carries data-intel-tone; matching rows paint a 2px inset rule in that
-   status colour (inset so nothing shifts), non-matching rows dim. Rows only
-   know a boolean — the tone is resolved here, once.
+   carries data-intel-tone; matching rows paint a 2px rule in that status
+   colour as an `::after` pseudo-element (or, for rows with a frozen first
+   column, an `.intel-rule` child inside that column), non-matching rows dim.
+   Rows only know a boolean — the tone is resolved here, once.
    Deliberately in @layer utilities, NOT @layer base: Tailwind's own layer
    order is theme, base, components, utilities, so a `base`-layer box-shadow
    or opacity rule always LOSES to a same-property Tailwind utility class on
@@ -974,6 +975,28 @@
     background: var(--intel-rule, transparent);
     z-index: 20;
     pointer-events: none;
+    /* Follow the host's corners (kanban cards are rounded-lg); a 2px box
+       with a 14px radius simply clips to the card's left edge. */
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
+  }
+  /* Rows whose first column is `sticky left-0` (table NameCell, gantt label)
+     delegate the rule to an `.intel-rule` child INSIDE that column, so it
+     stays visible at scrollLeft > 0. The row-level pseudo-element is
+     suppressed for them — one rule, not two. */
+  .intel-match[data-intel-rule="cell"]::after {
+    content: none;
+  }
+  .intel-rule {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 2px;
+    background: var(--intel-rule, transparent);
+    z-index: 20;
+    pointer-events: none;
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
   }
   /* Same reasoning for opacity: Kanban/Calendar apply `opacity-50` while
      dragging on the same element as `.intel-miss`. Being later in this same

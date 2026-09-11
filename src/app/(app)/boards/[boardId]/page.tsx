@@ -7,6 +7,7 @@ import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
+import { getLatestBoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,6 +33,7 @@ export default async function BoardPage({
     { data: agentRows },
     viewPrefs,
     lastSeenAt,
+    latestRun,
   ] = await Promise.all([
     getBoardPayload(boardId),
     supabase
@@ -57,6 +59,10 @@ export default async function BoardPage({
     // payload — the one extra first-paint read spec §8 allows. Drives the
     // "changed since" chip; null on a first visit hides it.
     getBoardLastSeenAt(supabase, boardId, user.id),
+    // Board Intelligence: one indexed LIMIT 1 single-row read, in parallel;
+    // the dock badge and the strip's "updated" meta are true on first paint,
+    // and the tab's first open costs no read.
+    getLatestBoardIntelligenceRun(supabase, boardId, user.id),
   ]);
   if (!payload) notFound();
 
@@ -104,6 +110,8 @@ export default async function BoardPage({
         boardId={boardId}
         agents={agentRows ?? []}
         currentUserId={user.id}
+        access={access ?? "viewer"}
+        initialRun={latestRun}
       />
     </div>
   );

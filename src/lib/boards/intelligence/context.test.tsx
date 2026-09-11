@@ -12,6 +12,7 @@ import {
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { BoardCache } from "@/lib/boards/cache";
 import { localTodayISO } from "@/lib/boards/overdue";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import {
   BoardIntelligenceProvider,
   IntelToneFrame,
@@ -171,6 +172,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   vi.useFakeTimers({ now: FIXED_NOW });
   window.history.replaceState(null, "", "/boards/b1");
+  useBoardIntelligenceStore.setState({ filterRequest: null });
 });
 afterEach(() => vi.useRealTimers());
 
@@ -207,6 +209,30 @@ describe("BoardIntelligenceProvider", () => {
     act(() => result.current.intel!.toggle(overdue));
     expect(window.location.search).not.toContain("intel=");
     expect(result.current.late).toBeNull();
+  });
+
+  it("consumes a filter request for its own board, ignores one for another", () => {
+    const { result, rerender } = renderHook(
+      () => useBoardIntelligenceOptional(),
+      { wrapper },
+    );
+
+    act(() =>
+      useBoardIntelligenceStore
+        .getState()
+        .requestFilter("other-board", { kind: "overdue" }),
+    );
+    rerender();
+    expect(result.current?.selection).toBeNull();
+    expect(useBoardIntelligenceStore.getState().filterRequest).not.toBeNull();
+
+    act(() =>
+      useBoardIntelligenceStore.getState().requestFilter("b1", {
+        kind: "overdue",
+      }),
+    );
+    expect(result.current?.selection).toEqual({ kind: "overdue" });
+    expect(useBoardIntelligenceStore.getState().filterRequest).toBeNull();
   });
 
   it("clear removes the chip; a stale URL chip with no matching signal narrows nothing", () => {
