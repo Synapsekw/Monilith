@@ -33,6 +33,8 @@ import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import { useIntelItemIds } from "@/lib/boards/intelligence/context";
+import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
   buildItemPredicate,
   buildItemComparator,
@@ -193,6 +195,7 @@ function KanbanBoardInner({
   // (the status options) is unaffected. Memoized so 5k cards aren't re-scanned
   // per keystroke or on unrelated re-renders.
   const filter = useBoardFilterSort();
+  const intelItemIds = useIntelItemIds();
   const filteredItems = useMemo(() => {
     const predicate = buildItemPredicate(filter.state, {
       columns: cache.columns,
@@ -202,10 +205,10 @@ function KanbanBoardInner({
       columns: cache.columns,
       cellMap,
     });
-    let next = cache.items.filter(predicate);
+    let next = narrowItemsToSignal(cache.items, intelItemIds).filter(predicate);
     if (comparator) next = [...next].sort(comparator);
     return next;
-  }, [filter.state, cache.columns, cache.items, cellMap]);
+  }, [filter.state, cache.columns, cache.items, cellMap, intelItemIds]);
 
   // These memos must be unconditional (above the early return) to keep hook
   // order stable. When groupColumn is null, kanbanColumns is an empty array

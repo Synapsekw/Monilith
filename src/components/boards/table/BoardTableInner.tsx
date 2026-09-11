@@ -64,6 +64,11 @@ import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import {
+  useBoardIntelligenceOptional,
+  useIntelItemIds,
+} from "@/lib/boards/intelligence/context";
+import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
+import {
   buildItemPredicate,
   buildItemComparator,
 } from "@/lib/boards/board-filter";
@@ -320,6 +325,11 @@ export function BoardTableInner({
   // filter/sort scan yields to input paint. Memoized so 5k rows aren't
   // re-scanned on unrelated re-renders (presence heartbeats).
   const filter = useBoardFilterSort();
+  // Active Intelligence chip (null = none). Narrows top-level rows before the
+  // filter predicate, exactly where quick search narrows them.
+  const intelItemIds = useIntelItemIds();
+  const intelGroupIds =
+    useBoardIntelligenceOptional()?.activeSignal?.groupIds ?? null;
   // Defer the *search* term so a fast typist never blocks on the row scan; the
   // heavy filter memo recomputes against the trailing value while the input
   // stays responsive. Non-search filter changes (discrete toggles) aren't
@@ -341,13 +351,13 @@ export function BoardTableInner({
     const out = new Map<string, Item[]>();
     let count = 0;
     for (const [gid, list] of itemsByGroup) {
-      let next = list.filter(predicate);
+      let next = narrowItemsToSignal(list, intelItemIds).filter(predicate);
       if (comparator) next = [...next].sort(comparator);
       out.set(gid, next);
       count += next.length;
     }
     return { visibleItemsByGroup: out, visibleCount: count };
-  }, [itemsByGroup, predicate, comparator]);
+  }, [itemsByGroup, predicate, comparator, intelItemIds]);
 
   // Per-group id arrays for dnd-kit's SortableContext. Memoizing on
   // `visibleItemsByGroup` is NOT enough to keep them referentially stable: its
@@ -793,7 +803,10 @@ export function BoardTableInner({
                     nameWidth={nameWidth}
                     autoFocusRename={group.id === renameGroupId}
                     childrenByParent={childrenByParent}
-                    collapsed={collapsedGroups.has(group.id)}
+                    collapsed={
+                      collapsedGroups.has(group.id) &&
+                      !(intelGroupIds?.includes(group.id) ?? false)
+                    }
                     expanded={expanded}
                     onToggleExpand={toggleExpand}
                     renamingItemId={renamingItemId}

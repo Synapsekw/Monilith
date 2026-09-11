@@ -16,6 +16,11 @@ vi.mock("@/lib/boards/view-prefs-actions", () => ({
   saveBoardViewPrefs: vi.fn(async () => ({ ok: true, data: undefined })),
 }));
 
+// The visit stamp is a Server Action (next/headers) — stub it like the prefs save.
+vi.mock("@/lib/boards/intelligence/visit-actions", () => ({
+  touchBoardVisit: vi.fn(async () => ({ ok: true, data: undefined })),
+}));
+
 // `useBoardSnapshot` (offline persistence) calls `useQueryClient()`, so
 // `BoardViews` now needs a provider above it — mirrors the wrapper pattern in
 // AutopilotCard.test.tsx / use-board-realtime.test.tsx. A fresh QueryClient
@@ -54,7 +59,9 @@ vi.mock("next/dynamic", () => ({
   },
 }));
 
-vi.mock("@/lib/boards/use-board-cache", () => ({ useBoardCache: vi.fn() }));
+vi.mock("@/lib/boards/use-board-cache", () => ({
+  useBoardCache: vi.fn(() => ({ data: undefined })),
+}));
 vi.mock("@/lib/boards/use-board-realtime", () => ({
   useBoardRealtime: vi.fn(),
 }));
@@ -134,6 +141,7 @@ describe("BoardViews", () => {
         access="owner"
         grants={[]}
         viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
       />,
     );
     expect(screen.getByTestId("table")).toHaveTextContent("table:v1");
@@ -151,6 +159,7 @@ describe("BoardViews", () => {
         access="owner"
         grants={[]}
         viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
       />,
     );
     expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -168,6 +177,7 @@ describe("BoardViews", () => {
         access="owner"
         grants={[]}
         viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
       />,
     );
     expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -184,6 +194,7 @@ describe("BoardViews", () => {
         access="owner"
         grants={[]}
         viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
       />,
     );
     expect(await screen.findByTestId("calendar")).toHaveTextContent(
@@ -204,6 +215,7 @@ describe("BoardViews", () => {
         access="owner"
         grants={[]}
         viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
       />,
     );
     expect(await screen.findByTestId("gantt")).toHaveTextContent("gantt:v4");
