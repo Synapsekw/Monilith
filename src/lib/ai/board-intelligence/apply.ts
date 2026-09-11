@@ -25,6 +25,22 @@ import { rowToRun, type BoardIntelligenceRun } from "./runs";
 
 const EDITOR_ONLY = "Only editors can apply suggestions.";
 
+/** RLS/RPC error text is not user-facing copy: the raw message is logged (for
+ *  debugging) and the caller gets either the "you lost edit access mid-flight"
+ *  copy — matched on the RPC's `42501` errcode or its literal wording (spec
+ *  §7: `apply_intelligence_cells` raises this when a caller without edit
+ *  access clears an existing cell) — or the generic fallback. */
+function mapWriteError(
+  e: unknown,
+  generic: string,
+): { ok: false; error: string } {
+  const message = e instanceof Error ? e.message : generic;
+  console.error("[intelligence] write failed", { error: message });
+  return /42501|no edit access/i.test(message)
+    ? fail(EDITOR_ONLY)
+    : fail(generic);
+}
+
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 async function loadRun(supabase: ServerClient, runId: string) {
@@ -110,20 +126,29 @@ export async function applySuggestion(input: {
         plan.writes,
       ));
       if (action.type === "reassign") {
-        for (const b of before) {
-          const prior =
-            (b.value as { userIds?: string[] } | null)?.userIds ?? [];
-          await notifyNewAssignees(supabase, {
-            orgId: ctx.orgId,
-            boardId: run.boardId,
-            itemId: b.itemId,
-            actorId: user.id,
-            prior,
-            next: [action.toUserId],
-          });
-        }
+        await Promise.all(
+          before.map((b) => {
+            const prior =
+              (b.value as { userIds?: string[] } | null)?.userIds ?? [];
+            return notifyNewAssignees(supabase, {
+              orgId: ctx.orgId,
+              boardId: run.boardId,
+              itemId: b.itemId,
+              actorId: user.id,
+              prior,
+              next: [action.toUserId],
+            });
+          }),
+        );
       }
     }
+    // The cell writes above already committed (`applyCellWrites`/`applyNudge`
+    // ran inside their own RPC/insert, not this function's try). If
+    // `setApplied` throws here, the response is `ok:false`, but the board
+    // data IS written — Realtime heals the mounted cache from the
+    // authoritative rows regardless, and a retried applySuggestion re-applies
+    // idempotently (the RPC upserts; a repeat nudge just posts a second
+    // update), so this failure is never silent data loss.
     const next = await setApplied(
       supabase,
       run,
@@ -131,9 +156,7 @@ export async function applySuggestion(input: {
     );
     return { ok: true, data: { before, updateIds, effects, run: next } };
   } catch (e) {
-    return fail(
-      e instanceof Error ? e.message : "Couldn't apply the suggestion.",
-    );
+    return mapWriteError(e, "Couldn't apply the suggestion.");
   }
 }
 
@@ -153,6 +176,8 @@ export async function revertSuggestion(input: {
   if (!run) return fail("Brief not found.");
   const access = await getBoardAccess(run.boardId);
   if (access !== "owner" && access !== "editor") return fail(EDITOR_ONLY);
+  if (!run.applied.includes(parsed.data.suggestionId))
+    return fail("Suggestion was not applied.");
   const payload = await getBoardPayload(run.boardId);
   if (!payload) return fail("Board not found.");
   const kinds = new Map(payload.columns.map((c) => [c.id, c.kind]));
@@ -184,6 +209,7 @@ export async function revertSuggestion(input: {
         .from("item_updates")
         .delete()
         .in("id", parsed.data.updateIds)
+        .eq("board_id", run.boardId)
         .eq("author_id", user.id);
       if (error) throw new Error(error.message);
     }
@@ -194,6 +220,6 @@ export async function revertSuggestion(input: {
     );
     return { ok: true, data: { effects, run: next } };
   } catch (e) {
-    return fail(e instanceof Error ? e.message : "Couldn't undo.");
+    return mapWriteError(e, "Couldn't undo.");
   }
 }

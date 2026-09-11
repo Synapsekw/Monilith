@@ -7,8 +7,9 @@ const USER_ZED = "44444444-4444-4444-8444-444444444444";
 const ACTOR = "55555555-5555-4555-8555-555555555555";
 const UPDATE_ID = "66666666-6666-4666-8666-666666666666";
 const COL_DATE = "77777777-7777-4777-8777-777777777777";
+const COL_PEOPLE = "88888888-8888-4888-8888-888888888888";
 
-const suggestion = {
+const setStatusSuggestion = {
   id: "s1",
   kind: "overdue" as const,
   title: "Overdue item",
@@ -33,6 +34,36 @@ const suggestion = {
   ],
 };
 
+const reassignSuggestion = {
+  id: "s2",
+  kind: "overloaded" as const,
+  title: "Reassign Ship",
+  evidence: "1 item",
+  body: "Ship is stuck with the wrong owner.",
+  evidenceRows: [],
+  actions: [
+    {
+      type: "reassign" as const,
+      itemIds: [ITEM_1],
+      columnId: COL_PEOPLE,
+      toUserId: USER_ZED,
+      label: "Reassign Ship to Zed",
+    },
+  ],
+};
+
+const filterSuggestion = {
+  id: "s3",
+  kind: "overdue" as const,
+  title: "Overdue rows",
+  evidence: "1 item",
+  body: "See the overdue items.",
+  evidenceRows: [],
+  actions: [
+    { type: "filter" as const, signalKind: "overdue" as const, label: "x" },
+  ],
+};
+
 const runRow = (applied: string[] = []) => ({
   id: RUN_ID,
   org_id: "org-1",
@@ -40,7 +71,11 @@ const runRow = (applied: string[] = []) => ({
   user_id: ACTOR,
   generated_at: "2026-09-11T10:00:00.000Z",
   input_hash: "h",
-  payload: { brief: "b", suggestions: [suggestion], signals: [] },
+  payload: {
+    brief: "b",
+    suggestions: [setStatusSuggestion, reassignSuggestion, filterSuggestion],
+    signals: [],
+  },
   dismissed: [],
   applied,
   model: "m",
@@ -53,7 +88,7 @@ let UPDATE_ROW: ReturnType<typeof runRow> | null = null;
 let DELETE_RESULT: { error: unknown } = { error: null };
 
 const updateSpy = vi.fn();
-const deleteInSpy = vi.fn();
+const deleteSpy = vi.fn();
 
 function makeClient() {
   return {
@@ -84,10 +119,18 @@ function makeClient() {
         return {
           delete: () => ({
             in: (_col: string, ids: string[]) => ({
-              eq: async () => {
-                deleteInSpy(ids);
-                return DELETE_RESULT;
-              },
+              eq: (boardCol: string, boardVal: string) => ({
+                eq: async (authorCol: string, authorVal: string) => {
+                  deleteSpy({
+                    ids,
+                    boardCol,
+                    boardVal,
+                    authorCol,
+                    authorVal,
+                  });
+                  return DELETE_RESULT;
+                },
+              }),
             }),
           }),
         };
@@ -148,6 +191,7 @@ const boardPayload = () => ({
       },
     },
     { id: COL_DATE, name: "Due", kind: "date", settings: {} },
+    { id: COL_PEOPLE, name: "Owner", kind: "people", settings: {} },
   ],
   cellValues: [],
 });
@@ -157,7 +201,7 @@ beforeEach(() => {
   UPDATE_ROW = null;
   DELETE_RESULT = { error: null };
   updateSpy.mockReset();
-  deleteInSpy.mockReset();
+  deleteSpy.mockReset();
   createClient.mockClear();
   requireUser.mockReset().mockResolvedValue({ id: ACTOR });
   getBoardAccess.mockReset().mockResolvedValue("editor");
@@ -236,6 +280,49 @@ describe("applySuggestion", () => {
     expect(applyCellWrites).not.toHaveBeenCalled();
   });
 
+  it("reassign replays notifyNewAssignees per before-row with the prior owners and the new target", async () => {
+    applyCellWrites.mockResolvedValue({
+      before: [
+        { itemId: ITEM_1, columnId: COL_PEOPLE, value: { userIds: ["u-old"] } },
+      ],
+      effects: [],
+    });
+    const { applySuggestion } = await import("./apply");
+    const res = await applySuggestion({
+      runId: RUN_ID,
+      suggestionId: "s2",
+      actionIndex: 0,
+    });
+    expect(res.ok).toBe(true);
+    expect(notifyNewAssignees).toHaveBeenCalledTimes(1);
+    expect(notifyNewAssignees).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        orgId: "org-1",
+        boardId: "board-1",
+        itemId: ITEM_1,
+        actorId: ACTOR,
+        prior: ["u-old"],
+        next: [USER_ZED],
+      }),
+    );
+  });
+
+  it("refuses a filter action server-side without touching the board", async () => {
+    const { applySuggestion } = await import("./apply");
+    const res = await applySuggestion({
+      runId: RUN_ID,
+      suggestionId: "s3",
+      actionIndex: 0,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "This action runs in the browser.",
+    });
+    expect(applyCellWrites).not.toHaveBeenCalled();
+    expect(applyNudge).not.toHaveBeenCalled();
+  });
+
   it("fails closed when the action no longer matches the board", async () => {
     getBoardPayload.mockResolvedValue({
       ...boardPayload(),
@@ -253,10 +340,61 @@ describe("applySuggestion", () => {
     });
     expect(applyCellWrites).not.toHaveBeenCalled();
   });
+
+  it("maps a 42501 (no edit access) write failure to the editor-only copy and logs the raw message", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    applyCellWrites.mockRejectedValue(
+      new Error("apply_intelligence_cells: no edit access to this board"),
+    );
+    const { applySuggestion } = await import("./apply");
+    const res = await applySuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      actionIndex: 0,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only editors can apply suggestions.",
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "[intelligence] write failed",
+      expect.objectContaining({
+        error: "apply_intelligence_cells: no edit access to this board",
+      }),
+    );
+  });
+
+  it("maps any other write failure to the generic copy", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    applyCellWrites.mockRejectedValue(new Error("connection reset"));
+    const { applySuggestion } = await import("./apply");
+    const res = await applySuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      actionIndex: 0,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Couldn't apply the suggestion.",
+    });
+  });
 });
 
 describe("revertSuggestion", () => {
+  it("fails with 'Suggestion was not applied.' when s1 isn't in run.applied", async () => {
+    const { revertSuggestion } = await import("./apply");
+    const res = await revertSuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      before: [{ itemId: ITEM_1, columnId: COL_STATUS, value: null }],
+      updateIds: [],
+    });
+    expect(res).toEqual({ ok: false, error: "Suggestion was not applied." });
+    expect(applyCellWrites).not.toHaveBeenCalled();
+  });
+
   it("fails with 'Invalid undo data.' when a before value fails the column schema", async () => {
+    RUN_ROW = runRow(["s1"]);
     const { revertSuggestion } = await import("./apply");
     const res = await revertSuggestion({
       runId: RUN_ID,
@@ -268,7 +406,7 @@ describe("revertSuggestion", () => {
     expect(applyCellWrites).not.toHaveBeenCalled();
   });
 
-  it("applies a valid before value (null becomes a clear) and unmarks s1", async () => {
+  it("applies a valid before value (null becomes a clear), unmarks s1, and scopes the update delete to this board+author", async () => {
     RUN_ROW = runRow(["s1"]);
     const { revertSuggestion } = await import("./apply");
     const res = await revertSuggestion({
@@ -281,8 +419,47 @@ describe("revertSuggestion", () => {
     expect(applyCellWrites).toHaveBeenCalledWith(expect.anything(), "board-1", [
       { item_id: ITEM_1, column_id: COL_STATUS, value: null },
     ]);
-    expect(deleteInSpy).toHaveBeenCalledWith([UPDATE_ID]);
+    expect(deleteSpy).toHaveBeenCalledWith({
+      ids: [UPDATE_ID],
+      boardCol: "board_id",
+      boardVal: "board-1",
+      authorCol: "author_id",
+      authorVal: ACTOR,
+    });
     if (!res.ok) return;
     expect(res.data.run.applied).not.toContain("s1");
+  });
+
+  it("maps a 42501 (no edit access) write failure to the editor-only copy", async () => {
+    RUN_ROW = runRow(["s1"]);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    applyCellWrites.mockRejectedValue(
+      new Error("apply_intelligence_cells: no edit access to this board"),
+    );
+    const { revertSuggestion } = await import("./apply");
+    const res = await revertSuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      before: [{ itemId: ITEM_1, columnId: COL_STATUS, value: null }],
+      updateIds: [],
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only editors can apply suggestions.",
+    });
+  });
+
+  it("maps any other write failure to the generic undo copy", async () => {
+    RUN_ROW = runRow(["s1"]);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    applyCellWrites.mockRejectedValue(new Error("connection reset"));
+    const { revertSuggestion } = await import("./apply");
+    const res = await revertSuggestion({
+      runId: RUN_ID,
+      suggestionId: "s1",
+      before: [{ itemId: ITEM_1, columnId: COL_STATUS, value: null }],
+      updateIds: [],
+    });
+    expect(res).toEqual({ ok: false, error: "Couldn't undo." });
   });
 });

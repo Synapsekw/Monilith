@@ -95,10 +95,17 @@ const rpcResultSchema = z.object({
         cleared: z.literal(true),
       }),
       // The non-cleared arm is the authoritative `cell_values` row the RPC
-      // returns via `to_jsonb(v_row)` — no synthetic id (item_id/column_id
-      // is the primary key) — so shape-gate loosely and cast to the
-      // generated row type below rather than re-declaring every column here.
-      z.record(z.string(), z.unknown()),
+      // returns via `to_jsonb(v_row)` — the real 6-column shape (no synthetic
+      // `id`; `(item_id, column_id)` is the primary key), so the later cast
+      // to `Tables<"cell_values">` is a genuine narrowing, not a shape-gate.
+      z.object({
+        item_id: z.string(),
+        column_id: z.string(),
+        value: z.unknown(),
+        org_id: z.string(),
+        board_id: z.string(),
+        updated_at: z.string(),
+      }),
     ]),
   ),
 });
@@ -122,8 +129,9 @@ export async function applyCellWrites(
     value: b.value ?? null,
   }));
   const rows = out.cells.filter(
-    (c) => !("cleared" in c),
-  ) as unknown as Tables<"cell_values">[];
+    (c): c is Extract<(typeof out.cells)[number], { org_id: string }> =>
+      !("cleared" in c),
+  ) as Tables<"cell_values">[];
   const cleared = out.cells.filter(
     (c): c is { item_id: string; column_id: string; cleared: true } =>
       "cleared" in c,

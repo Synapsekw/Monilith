@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
-import { isActionApplicable, planCellWrites } from "./apply-core";
+import {
+  applyCellWrites,
+  applyNudge,
+  isActionApplicable,
+  planCellWrites,
+} from "./apply-core";
 import type { BoardContext } from "./board-context";
 
 const ctx: BoardContext = {
@@ -171,5 +176,211 @@ describe("isActionApplicable", () => {
         ctx,
       ),
     ).toBe(true);
+  });
+});
+
+const ITEM_A = "i1";
+const COL_A = "c1";
+const COL_B = "c2";
+
+/** A minimal fake `SupabaseClient` for `applyCellWrites`/`applyNudge`:
+ *  `.rpc()` for the RPC call, `.from(table).insert(...)` chains for the
+ *  nudge's `item_updates`/`notifications` writes. */
+function makeRpcClient(result: {
+  data: unknown;
+  error: { message: string } | null;
+}) {
+  const rpc = vi.fn().mockResolvedValue(result);
+  return { client: { rpc } as never, rpc };
+}
+
+function makeNudgeClient(opts: {
+  insertError?: { message: string } | null;
+  notifyError?: { message: string } | null;
+}) {
+  const insertUpdate = vi.fn(() => ({
+    select: () => ({
+      single: async () =>
+        opts.insertError
+          ? { data: null, error: opts.insertError }
+          : { data: { id: "u1" }, error: null },
+    }),
+  }));
+  const insertNotification = vi
+    .fn()
+    .mockResolvedValue({ error: opts.notifyError ?? null });
+  const client = {
+    from: (table: string) => {
+      if (table === "item_updates") return { insert: insertUpdate };
+      if (table === "notifications") return { insert: insertNotification };
+      throw new Error(`unexpected table: ${table}`);
+    },
+  };
+  return { client: client as never, insertUpdate, insertNotification };
+}
+
+beforeEach(() => vi.restoreAllMocks());
+
+describe("applyCellWrites", () => {
+  it("maps before-values (null preserved) and splits cells into item_fields_set + cells_cleared", async () => {
+    const { client, rpc } = makeRpcClient({
+      data: {
+        before: [
+          { item_id: ITEM_A, column_id: COL_A, value: null },
+          { item_id: ITEM_A, column_id: COL_B, value: { text: "old" } },
+        ],
+        cells: [
+          {
+            item_id: ITEM_A,
+            column_id: COL_B,
+            value: { text: "new" },
+            org_id: "o",
+            board_id: "b",
+            updated_at: "2026-09-11T00:00:00.000Z",
+          },
+          { item_id: ITEM_A, column_id: COL_A, cleared: true },
+        ],
+      },
+      error: null,
+    });
+
+    const res = await applyCellWrites(client, "b", [
+      { item_id: ITEM_A, column_id: COL_B, value: { text: "new" } },
+    ]);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(res.before).toEqual([
+      { itemId: ITEM_A, columnId: COL_A, value: null },
+      { itemId: ITEM_A, columnId: COL_B, value: { text: "old" } },
+    ]);
+    expect(res.effects).toEqual([
+      {
+        kind: "item_fields_set",
+        boardId: "b",
+        cells: [
+          {
+            item_id: ITEM_A,
+            column_id: COL_B,
+            value: { text: "new" },
+            org_id: "o",
+            board_id: "b",
+            updated_at: "2026-09-11T00:00:00.000Z",
+          },
+        ],
+      },
+      {
+        kind: "cells_cleared",
+        boardId: "b",
+        cells: [{ itemId: ITEM_A, columnId: COL_A }],
+      },
+    ]);
+  });
+
+  it("throws the RPC's error message", async () => {
+    const { client } = makeRpcClient({
+      data: null,
+      error: { message: "no edit access to this board" },
+    });
+    await expect(
+      applyCellWrites(client, "b", [
+        { item_id: ITEM_A, column_id: COL_A, value: null },
+      ]),
+    ).rejects.toThrow("no edit access to this board");
+  });
+
+  it("throws when the result fails the Zod shape gate (a malformed row)", async () => {
+    const { client } = makeRpcClient({
+      data: {
+        before: [],
+        cells: [{ column_id: COL_A, cleared: true }], // missing item_id
+      },
+      error: null,
+    });
+    await expect(
+      applyCellWrites(client, "b", [
+        { item_id: ITEM_A, column_id: COL_A, value: null },
+      ]),
+    ).rejects.toThrow();
+  });
+});
+
+describe("applyNudge", () => {
+  it("inserts the update as the actor, with a mention notification when the target differs", async () => {
+    const { client, insertUpdate, insertNotification } = makeNudgeClient({});
+    const res = await applyNudge(client, {
+      orgId: "o",
+      boardId: "b",
+      itemId: ITEM_A,
+      actorId: "actor",
+      userId: "zed",
+      message: "please look",
+    });
+
+    expect(res).toEqual({ updateId: "u1" });
+    expect(insertUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        author_id: "actor",
+        body: { text: "please look" },
+        body_text: "please look",
+      }),
+    );
+    expect(insertNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipient_id: "zed",
+        actor_id: "actor",
+        kind: "mention",
+        update_id: "u1",
+      }),
+    );
+  });
+
+  it("skips the notification when the target is the actor", async () => {
+    const { client, insertNotification } = makeNudgeClient({});
+    await applyNudge(client, {
+      orgId: "o",
+      boardId: "b",
+      itemId: ITEM_A,
+      actorId: "actor",
+      userId: "actor",
+      message: "note to self",
+    });
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it("logs but does not throw when the notification insert fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = makeNudgeClient({
+      notifyError: { message: "insert denied" },
+    });
+    await expect(
+      applyNudge(client, {
+        orgId: "o",
+        boardId: "b",
+        itemId: ITEM_A,
+        actorId: "actor",
+        userId: "zed",
+        message: "please look",
+      }),
+    ).resolves.toEqual({ updateId: "u1" });
+    expect(spy).toHaveBeenCalledWith(
+      "[intelligence] nudge notification failed",
+      expect.objectContaining({ itemId: ITEM_A, error: "insert denied" }),
+    );
+  });
+
+  it("throws when the update insert fails", async () => {
+    const { client } = makeNudgeClient({
+      insertError: { message: "insert denied" },
+    });
+    await expect(
+      applyNudge(client, {
+        orgId: "o",
+        boardId: "b",
+        itemId: ITEM_A,
+        actorId: "actor",
+        userId: "zed",
+        message: "please look",
+      }),
+    ).rejects.toThrow("insert denied");
   });
 });
