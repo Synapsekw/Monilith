@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 07:07",
+  "updated": "2026-09-11 11:57",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "fc93c5f0",
+        "value": "efc42c0b",
         "tone": "ok",
-        "note": "Equal to main after the PR #118 heal — unpromoted delta 0. One worktree open: task/people-cell-stack (stacked avatars in the People cell, option A), stopped by the owner mid-build with uncommitted edits."
+        "note": "Equal to main after the PR #119 heal — unpromoted delta 0. One worktree open: task/editorial-landing (the approved Editorial landing), gates green and committed, deliberately un-merged until the owner reviews the local preview."
       },
       {
         "name": "main",
-        "value": "68aacb47",
+        "value": "d9e9cf77",
         "tone": "ok",
-        "note": "PR #118 merged 2026-09-11 — the People picker stays open for multi-select (2 commits). PR #117 merged 2026-09-10 — the final performance pass plus per-user board view preferences (35 commits). Both healed with -s ours."
+        "note": "PR #119 merged 2026-09-11 — readable assignees: avatar stack, identity colours, who-is-assigned picker (promoted by another session; recorded from the commit graph, not re-verified live here). PR #118 and #117 before it."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 68aacb47. Verified live: Vercel state=success, www.monolith.works 200, /updates serving both 'Assign several people to one task' and the five perf-pass entries. /sync-prod not run: three DEV migrations are not yet on PROD."
+        "note": "Serving the PR #119 build per the commit graph; last live verification was after PR #118 (Vercel state=success, www.monolith.works 200). /sync-prod not run: three DEV migrations are not yet on PROD."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7301 passing, 1 skipped, on develop. New guards this session: a static-shell source test (no awaited cookies() in the app shell), render-count budgets for the board table, exhaustiveness guards on the row memo comparators.",
+        "note": "7291 passing, 1 skipped, on task/editorial-landing. New guards: landing render/anchor/CTA/gallery/FAQ tests, hex-literal guard on the landing CSS module.",
         "label": "test"
       },
       {
@@ -189,21 +189,20 @@
   },
   "next": [
     {
+      "title": "Review the Editorial landing preview, then merge and promote it",
+      "why": "The approved landing (Version 3 / Editorial, Charcoal + Cobalt) is built, gated and committed on task/editorial-landing with neutral product captures. The handoff authorised preparing it, not shipping it, so it waits on your verdict: finish-task.sh, /promote, and an /updates entry.",
+      "tags": [
+        "owner",
+        "landing"
+      ]
+    },
+    {
       "title": "E6 Stripe — the last thing before feature-complete",
       "why": "With Spec 3 merged and promoted (PR #110), E6 is the only feature epic left in the final phase, and it is blocked on you rather than on code: `stripe` is still absent from package.json, and units B, C and E need at minimum a test-mode key to be verifiable. Units A (schema) and D (/pricing) shipped 2026-08-02. This is also what gates the DEV→PROD cutover, because that call waits on declaring feature-complete.",
       "tags": [
         "owner",
         "critical",
         "billing"
-      ]
-    },
-    {
-      "title": "Decide task/people-cell-stack: finish option A or discard",
-      "why": "The owner chose overlapping avatars (cap 4, +N, names on hover) for the People cell from a live prototype, then said stop mid-build. The worktree holds uncommitted edits to cells/index.tsx and cells.test.tsx with the brief at .superpowers/sdd/people-stack/task-brief.md. A stalled worktree is not neutral storage — finish it through the gates and /promote, or remove it.",
-      "tags": [
-        "boards",
-        "ui",
-        "owner"
       ]
     },
     {
@@ -358,21 +357,21 @@
   ],
   "worktrees": [
     {
-      "branch": "task/people-cell-stack",
-      "head": "fc93c5f0",
-      "tone": "warn",
-      "note": "stopped, uncommitted"
+      "branch": "task/editorial-landing",
+      "head": "f1e12b24",
+      "tone": "ok",
+      "note": "gated, awaiting go to merge"
     }
   ],
   "session": {
-    "id": "2026-09-11-0707-promote-117-118-multi-assign",
-    "when": "2026-09-11 07:07",
-    "title": "Promote #117 and #118, and the People picker multi-select fix",
+    "id": "2026-09-11-1157-editorial-landing-port",
+    "when": "2026-09-11 11:57",
+    "title": "Editorial landing port (Version 3, Charcoal + Cobalt)",
     "bullets": [
-      "PR #117 (perf pass + board view prefs, 35 commits) and PR #118 (multi-assign fix, 2 commits) promoted and verified live: main CI green, Vercel success, /updates serving the entries.",
-      "A People column could only take one assignee because EditableCell closed the editor on every commit and the picker commits once per toggle; the list was always stored. commitKeepsEditorOpen(kind) exempts people and dropdown.",
-      "Four renderings of several assignees were built as a live prototype; the owner chose the overlapping stack. Its build was stopped mid-implementation and waits in task/people-cell-stack.",
-      "/sync-prod deliberately not run; three DEV migrations are still not on PROD."
+      "The public landing is replaced by the owner-approved standalone design: one Server Component, a scoped CSS module with the artifact's palette, Radix-Tabs product tour, native-details FAQ, real routes and tier-sourced prices.",
+      "Product captures re-shot from the real UI on a throwaway Northwind Labs org (created through the app, deleted afterwards) so no private workspace data enters the repo.",
+      "Visual parity checked against the artifact with Playwright tiles at 1440 and 390; all four gates green.",
+      "Deliberately not merged: the handoff says merge and deploy only on the owner's request."
     ]
   }
 }

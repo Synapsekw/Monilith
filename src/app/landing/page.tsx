@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { MonolithHero } from "@/components/landing/monolith-hero";
+import { EditorialLanding } from "@/components/landing/editorial-landing";
 import { getUser } from "@/lib/auth/session";
 
 /**
@@ -11,7 +11,7 @@ import { getUser } from "@/lib/auth/session";
  */
 export async function LandingInner() {
   const user = await getUser();
-  return <MonolithHero signedIn={!!user} />;
+  return <EditorialLanding signedIn={!!user} />;
 }
 
 export default function LandingPage() {
@@ -19,7 +19,7 @@ export default function LandingPage() {
   // behind a Suspense boundary (Cache Components), with the signed-out hero as
   // the prerendered fallback.
   return (
-    <Suspense fallback={<MonolithHero signedIn={false} />}>
+    <Suspense fallback={<EditorialLanding signedIn={false} />}>
       <LandingInner />
     </Suspense>
   );

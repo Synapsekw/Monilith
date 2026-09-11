@@ -3,9 +3,9 @@ import { render, screen } from "@testing-library/react";
 
 // The static landing renders only the hero — no auth, no cookies, no redirect.
 // Stub the hero to a plain anchor so this test stays a pure render check
-// (the hero's own behavior is covered in monolith-hero.test.tsx).
-vi.mock("@/components/landing/monolith-hero", () => ({
-  MonolithHero: () => <a href="/login">MONOLITH</a>,
+// (the page's own behavior is covered in editorial-landing.test.tsx).
+vi.mock("@/components/landing/editorial-landing", () => ({
+  EditorialLanding: () => <a href="/login">MONOLITH</a>,
 }));
 
 import Home from "./page";
