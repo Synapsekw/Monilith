@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const loadDockThreads = vi.fn();
@@ -42,6 +48,16 @@ vi.mock("@/lib/boards/use-ai-effects", () => ({
  * of this mock had neither, which is why it could not see that adopting a new
  * conversation id was unmounting a live turn.
  */
+// Keyed by mount instance, never cleared on unmount: this is what lets a test
+// simulate a turn's `finally` firing AFTER the reader has switched away and
+// the real component has unmounted — the actual shape of finding #2's bug,
+// which no amount of clicking a still-mounted button can reach, because the
+// stale instance's buttons are gone from the DOM too. `vi.hoisted` because
+// `vi.mock` factories are hoisted above ordinary top-level declarations.
+const { busyHandlers } = vi.hoisted(() => ({
+  busyHandlers: new Map<number, (busy: boolean) => void>(),
+}));
+
 vi.mock("@/components/ai/ask/AskChat", async () => {
   const { useRef, useState } = await import("react");
   let seq = 0;
@@ -51,11 +67,14 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
       initialMessages: unknown[];
       boardId?: string;
       agentId?: string;
+      surface?: string;
       onStarted?: (id: string) => void;
       onTurnComplete?: () => void;
+      onBusyChange?: (busy: boolean) => void;
     }) => {
       const instance = useRef(0);
       if (instance.current === 0) instance.current = ++seq;
+      busyHandlers.set(instance.current, p.onBusyChange ?? (() => {}));
       const [draft, setDraft] = useState("");
       return (
         <div
@@ -64,6 +83,7 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
           data-conversation={p.conversationId ?? ""}
           data-board={p.boardId ?? ""}
           data-agent={p.agentId ?? ""}
+          data-surface={p.surface ?? ""}
           data-messages={String(p.initialMessages.length)}
         >
           <span data-testid="chat-draft">{draft}</span>
@@ -75,6 +95,12 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
           </button>
           <button type="button" onClick={() => p.onTurnComplete?.()}>
             mock complete
+          </button>
+          <button type="button" onClick={() => p.onBusyChange?.(true)}>
+            mock busy
+          </button>
+          <button type="button" onClick={() => p.onBusyChange?.(false)}>
+            mock idle
           </button>
         </div>
       );
@@ -225,11 +251,25 @@ const openDock = () =>
 
 const chat = () => screen.getByTestId("ask-chat");
 
-/** The row's SELECT target. Queried through its title text because the row's
- *  share toggle is labelled with that same title, so a role+name lookup is
- *  ambiguous by construction. */
-const threadRow = async (title: string) =>
-  (await screen.findByText(title)).closest("button")!;
+/** Unfold the threads ledger (collapsed by default) if it is not open yet. */
+const openThreads = async () => {
+  const ledger = screen.getByRole("button", { name: /^threads/i });
+  if (ledger.getAttribute("aria-expanded") !== "true") {
+    await userEvent.click(ledger);
+  }
+};
+
+/** The row's SELECT target, with the ledger unfolded. Queried through its
+ *  title text because the row's share toggle is labelled with that same
+ *  title, so a role+name lookup is ambiguous by construction. */
+const threadRow = async (title: string) => {
+  await openThreads();
+  return (await screen.findByText(title)).closest("button")!;
+};
+
+/** Wait for an open/close toggle's motion window to clear. */
+const settled = () =>
+  waitFor(() => expect(aside()).not.toHaveAttribute("data-animating"));
 
 describe("BoardDock", () => {
   it("fetches NOTHING while collapsed", () => {
@@ -249,18 +289,19 @@ describe("BoardDock", () => {
     expect(loadDockThreads).toHaveBeenCalledTimes(1);
   });
 
-  it("offers Ask as the first switcher entry, with no persona", async () => {
+  it("offers Intelligence, Ask and the roster as one tab row, opening on Ask", async () => {
     mount();
     await openDock();
-    const options = screen.getAllByRole("option");
-    expect(options[0]).toHaveTextContent("Ask");
-    expect(options.map((o) => o.textContent)).toEqual([
-      "Ask",
-      "Morning Brief",
-      "Overdue Chaser",
-    ]);
+    expect(
+      screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
+    ).toEqual(["Intelligence", "Ask", "Morning Brief", "Overdue Chaser"]);
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(chat()).toHaveAttribute("data-agent", "");
     expect(chat()).toHaveAttribute("data-board", "b1");
+    expect(chat()).toHaveAttribute("data-surface", "atmosphere");
   });
 
   it("mounts the chat on a selected thread only once its messages are in hand", async () => {
@@ -302,7 +343,7 @@ describe("BoardDock", () => {
     );
 
     // And starting a new thread drops only `thread`.
-    await userEvent.click(screen.getByRole("button", { name: /^new$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /new thread/i }));
     expect(window.location.search).toBe("?view=kanban");
   });
 
@@ -320,11 +361,22 @@ describe("BoardDock", () => {
     expect(screen.queryByTestId("ask-chat")).toBeNull();
   });
 
-  it("carries the chosen persona into a new thread", async () => {
+  it("tap an agent and talk: an agent tile starts a new thread on that persona", async () => {
     mount();
     await openDock();
-    await userEvent.selectOptions(screen.getByRole("combobox"), "a2");
+    await userEvent.click(screen.getByRole("tab", { name: "Overdue Chaser" }));
     expect(chat()).toHaveAttribute("data-agent", "a2");
+    expect(chat()).toHaveAttribute("data-conversation", "");
+    expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      screen.getByRole("heading", { name: "New thread" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading").parentElement).toHaveTextContent(
+      "Overdue Chaser",
+    );
   });
 });
 
@@ -374,9 +426,13 @@ describe("BoardDock — a turn survives its own conversation being created", () 
     );
 
     // The server auto-titles a thread on its first turn, so that one turn earns
-    // a re-read of the bounded list — and the new thread appears in it.
+    // a re-read of the bounded list — and the new thread appears in it, which
+    // the title row picks up too (queried by role: the same title also shows
+    // in the collapsed ledger's row).
     await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText("Roadmap risks")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Roadmap risks" }),
+    ).toBeInTheDocument();
   });
 
   it("DOES remount when the user genuinely starts over", async () => {
@@ -388,7 +444,7 @@ describe("BoardDock — a turn survives its own conversation being created", () 
     await userEvent.click(screen.getByRole("button", { name: /mock type/i }));
     const before = chat().getAttribute("data-instance");
 
-    await userEvent.click(screen.getByRole("button", { name: /^new$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /new thread/i }));
 
     expect(chat()).not.toHaveAttribute("data-instance", before!);
     expect(screen.getByTestId("chat-draft")).toHaveTextContent("");
@@ -514,6 +570,7 @@ describe("BoardDock — sharing a thread with the board", () => {
     loadDockThreads.mockResolvedValue(withThread());
     mount();
     await openDock();
+    await openThreads();
 
     await userEvent.click(
       await screen.findByRole("button", {
@@ -538,6 +595,7 @@ describe("BoardDock — sharing a thread with the board", () => {
     loadDockThreads.mockResolvedValue(withThread({ visibility: "board" }));
     mount();
     await openDock();
+    await openThreads();
 
     await userEvent.click(
       await screen.findByRole("button", {
@@ -558,6 +616,7 @@ describe("BoardDock — sharing a thread with the board", () => {
     });
     mount();
     await openDock();
+    await openThreads();
 
     await userEvent.click(
       await screen.findByRole("button", {
@@ -584,6 +643,7 @@ describe("BoardDock — sharing a thread with the board", () => {
     setThreadVisibility.mockRejectedValue(new Error("network"));
     mount();
     await openDock();
+    await openThreads();
 
     await userEvent.click(
       await screen.findByRole("button", {
@@ -609,40 +669,49 @@ describe("BoardDock — Chat and Intelligence", () => {
   const openIntelligence = () =>
     userEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
 
-  it("shows both sections and opens on Chat", async () => {
+  it("shows every tile and opens on Ask with the title row", async () => {
     mount();
     await openDock();
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Chat", "Intelligence"]);
-    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
+    ).toEqual(["Intelligence", "Ask", "Morning Brief", "Overdue Chaser"]);
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      screen.getByRole("heading", { name: "New thread" }),
+    ).toBeInTheDocument();
   });
 
-  it("hands the header over to Intelligence, and never re-reads the threads", async () => {
+  it("hands the band over to Intelligence, and never re-reads the threads", async () => {
     mount({ initialRun: intelRun() });
     await openDock();
     await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
 
     await openIntelligence();
-    expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^new$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new thread/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "New thread" })).toBeNull();
     expect(screen.getByRole("tabpanel")).toHaveAttribute(
       "aria-labelledby",
       "dock-tab-intelligence",
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    expect(
+      screen.getByRole("button", { name: /new thread/i }),
+    ).toBeInTheDocument();
     await openIntelligence();
     expect(loadDockThreads).toHaveBeenCalledTimes(1);
   });
 
-  it("counts the unresolved suggestions on the tab", async () => {
+  it("counts the unresolved suggestions on the Intelligence tile, in words", async () => {
     mount({ initialRun: intelRun() });
     await openDock();
-    expect(
-      screen.getByRole("tab", { name: /intelligence/i }),
-    ).toHaveTextContent("Intelligence2");
+    const intel = screen.getByRole("tab", {
+      name: "Intelligence · 2 suggestions",
+    });
+    expect(intel.querySelector("[data-dock-badge]")).toHaveTextContent("2");
   });
 
   it("lets a viewer read and filter, but never apply", async () => {
@@ -674,7 +743,7 @@ describe("BoardDock — Chat and Intelligence", () => {
 
     // Coming back to the tab renders the run that read produced — it does not
     // read again.
-    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
     await openIntelligence();
     expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
   });
@@ -697,7 +766,7 @@ describe("BoardDock — Chat and Intelligence", () => {
     expect(runBoardIntelligence).not.toHaveBeenCalled();
 
     // Asking for it — leaving and coming back to the tab — still reads once.
-    await userEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
     await openIntelligence();
     await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
   });
@@ -792,5 +861,282 @@ describe("BoardDock — placement in the shell's dock slot", () => {
     expect(
       screen.getByRole("button", { name: /close agent dock/i }),
     ).toBeInTheDocument();
+  });
+});
+
+// Spec §2 selection semantics: a tile is "tap an agent and talk". Same
+// persona as the thread on screen is a no-op; a different one starts over.
+describe("BoardDock — tile selection", () => {
+  it("re-tapping the open thread's agent is a no-op; another persona starts over", async () => {
+    loadDockThreads.mockResolvedValue(withThread({ agent_id: "a1" }));
+    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+    mount();
+    await openDock();
+    await userEvent.click(await threadRow("About the roadmap"));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "c1"),
+    );
+    const instance = chat().getAttribute("data-instance");
+    expect(screen.getByRole("tab", { name: "Morning Brief" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    expect(chat()).toHaveAttribute("data-conversation", "c1");
+    expect(chat()).toHaveAttribute("data-instance", instance!);
+
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    expect(chat()).toHaveAttribute("data-conversation", "");
+    expect(chat()).not.toHaveAttribute("data-instance", instance!);
+    expect(window.location.search).toBe("");
+  });
+
+  it("New starts over on the persona on screen and is disabled until there is a thread", async () => {
+    mount();
+    await openDock();
+    expect(screen.getByRole("button", { name: /new thread/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole("tab", { name: "Overdue Chaser" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /mock started/i }),
+    );
+    expect(screen.getByRole("button", { name: /new thread/i })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: /new thread/i }));
+    expect(chat()).toHaveAttribute("data-conversation", "");
+    expect(chat()).toHaveAttribute("data-agent", "a2");
+  });
+
+  it("selecting Intelligence by tile counts as asking for it", async () => {
+    mount({ initialRun: null });
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Intelligence" }));
+    await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
+  });
+
+  it("pulses the answering agent's tile while its turn streams, and only then", async () => {
+    mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    expect(document.querySelector("[data-dock-presence]")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    const running = screen.getByRole("tab", {
+      name: "Morning Brief · running",
+    });
+    expect(running.querySelector("[data-dock-presence]")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("tab", { name: "Overdue Chaser" })
+        .querySelector("[data-dock-presence]"),
+    ).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /mock idle/i }));
+    expect(
+      screen.getByRole("tab", { name: "Morning Brief" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-dock-presence]")).toBeNull();
+  });
+
+  // Finding #2: `startNewAs` unmounts the old `AskChat` (a fresh `key`), but
+  // its `onSubmit` promise keeps running detached — real turns are never
+  // aborted on unmount. That stale instance's `finally` still fires
+  // `onBusyChange(false)` on whichever closure it was handed before it
+  // unmounted. A clear that isn't scoped to the turn that is actually
+  // ending would blank whatever persona is running NOW.
+  it("a stale turn settling after a tile switch does not clear the new persona's dot", async () => {
+    mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    const staleInstance = Number(chat().getAttribute("data-instance"));
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    expect(
+      screen
+        .getByRole("tab", { name: "Morning Brief · running" })
+        .querySelector("[data-dock-presence]"),
+    ).not.toBeNull();
+
+    // Switch tiles before that turn settles. The old AskChat (captured above
+    // as `staleInstance`) unmounts; its buttons are gone from the DOM, which
+    // is exactly why this can't be driven by clicking — `busyHandlers` (the
+    // mock's escape hatch) still holds its `onBusyChange` closure.
+    await userEvent.click(screen.getByRole("tab", { name: "Overdue Chaser" }));
+    expect(chat().getAttribute("data-instance")).not.toBe(
+      String(staleInstance),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    expect(
+      screen
+        .getByRole("tab", { name: "Overdue Chaser · running" })
+        .querySelector("[data-dock-presence]"),
+    ).not.toBeNull();
+
+    // The stale, unmounted instance's turn finally settles.
+    act(() => busyHandlers.get(staleInstance)?.(false));
+
+    expect(
+      screen
+        .getByRole("tab", { name: "Overdue Chaser · running" })
+        .querySelector("[data-dock-presence]"),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByRole("tab", { name: "Morning Brief" })
+        .querySelector("[data-dock-presence]"),
+    ).toBeNull();
+  });
+
+  // Finding #5: the earlier presence tests only ever mount fresh, so
+  // `currentPersona` always comes from the queued `agentId` branch — never
+  // from an OPEN thread's own persona, which is the branch finding #2's race
+  // actually lives in.
+  it("shows presence for an existing, already-open thread's own persona", async () => {
+    loadDockThreads.mockResolvedValue(withThread({ agent_id: "a1" }));
+    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+    mount();
+    await openDock();
+    await userEvent.click(await threadRow("About the roadmap"));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "c1"),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    expect(
+      screen
+        .getByRole("tab", { name: "Morning Brief · running" })
+        .querySelector("[data-dock-presence]"),
+    ).not.toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /mock idle/i }));
+    expect(document.querySelector("[data-dock-presence]")).toBeNull();
+  });
+});
+
+// Spec §4: closed, the dock is a 48px rail of the SAME tiles. Any tile opens
+// the dock on that tile. Presence and the badge stay visible.
+describe("BoardDock — mini rail", () => {
+  it("shows the tiles vertically at rail width, badge intact, edge bar on the right, no fetch", async () => {
+    mount({ initialRun: intelRun() });
+    await waitFor(() => expect(aside()).not.toBeNull());
+    expect(screen.getByRole("tablist")).toHaveAttribute(
+      "aria-orientation",
+      "vertical",
+    );
+    expect(
+      screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
+    ).toEqual([
+      "Intelligence · 2 suggestions",
+      "Ask",
+      "Morning Brief",
+      "Overdue Chaser",
+    ]);
+    expect(aside()!.style.width).toBe(`${DOCK_RAIL_WIDTH}px`);
+    expect(screen.getByRole("tab", { name: "Ask" }).className).toContain(
+      "after:-right-2",
+    );
+    expect(screen.queryByRole("separator")).toBeNull();
+    expect(loadDockThreads).not.toHaveBeenCalled();
+  });
+
+  it("opens on the tapped agent and starts a new thread on it", async () => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Overdue Chaser" }),
+    );
+    await settled();
+    expect(aside()).toHaveAttribute("data-open", "true");
+    expect(screen.getByRole("tablist")).not.toHaveAttribute("aria-orientation");
+    expect(chat()).toHaveAttribute("data-agent", "a2");
+    expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
+  });
+
+  it("opens on Intelligence from the rail, rendering the cached run", async () => {
+    mount({ initialRun: intelRun() });
+    await userEvent.click(
+      await screen.findByRole("tab", { name: /^intelligence/i }),
+    );
+    await settled();
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "aria-labelledby",
+      "dock-tab-intelligence",
+    );
+    expect(screen.getByText("Three items are overdue")).toBeInTheDocument();
+    expect(runBoardIntelligence).not.toHaveBeenCalled();
+  });
+
+  it("keeps the presence dot on the rail while a turn streams", async () => {
+    mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Morning Brief" }));
+    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /close agent dock/i }),
+    );
+    await settled();
+    expect(
+      screen
+        .getByRole("tab", { name: "Morning Brief · running" })
+        .querySelector("[data-dock-presence]"),
+    ).not.toBeNull();
+  });
+});
+
+// Spec §5: the width transition exists only while a toggle is in flight, so a
+// drag or keyboard resize is instant; the two layers crossfade.
+describe("BoardDock — motion", () => {
+  it("animates the width only during a toggle, never during a resize", async () => {
+    mount();
+    await openDock();
+    expect(aside()).toHaveAttribute("data-animating");
+    expect(aside()!.className).toContain("transition-[width]");
+    await settled();
+    expect(aside()!.className).not.toContain("transition-[width]");
+
+    const grip = screen.getByRole("separator", { name: /resize agent dock/i });
+    grip.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(aside()!.style.width).toBe(`${DOCK_MIN_WIDTH + 16}px`);
+    expect(aside()).not.toHaveAttribute("data-animating");
+
+    // Finding #4: the keyboard case alone doesn't exercise
+    // pointerdown/pointermove/pointerup — drive the drag path explicitly,
+    // since a real drag must stay just as instant.
+    fireEvent.pointerDown(grip, { clientX: 400 });
+    expect(aside()).not.toHaveAttribute("data-animating");
+    fireEvent(
+      window,
+      new (class extends Event {
+        clientX = 350;
+        constructor() {
+          super("pointermove");
+        }
+      })(),
+    );
+    expect(aside()).not.toHaveAttribute("data-animating");
+    expect(aside()!.className).not.toContain("transition-[width]");
+    fireEvent(window, new Event("pointerup"));
+    expect(aside()).not.toHaveAttribute("data-animating");
+  });
+
+  it("keeps both layer wrappers mounted and inerts the one that is leaving", async () => {
+    mount();
+    await waitFor(() => expect(aside()).not.toBeNull());
+    const full = () => aside()!.querySelector("[data-layer='full']")!;
+    const mini = () => aside()!.querySelector("[data-layer='mini']")!;
+    expect(full()).toBeEmptyDOMElement();
+    expect(full()).toHaveAttribute("inert");
+    expect(mini()).not.toHaveAttribute("inert");
+
+    await openDock();
+    // Mid-toggle: the mini layer is still mounted but out of the a11y tree.
+    expect(mini()).toHaveAttribute("inert");
+    expect(mini()).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    await settled();
+    expect(mini()).toBeEmptyDOMElement();
+    expect(full()).not.toBeEmptyDOMElement();
   });
 });

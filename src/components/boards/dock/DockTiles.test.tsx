@@ -216,8 +216,22 @@ describe("DockTiles — selection follows tab + agentId", () => {
     );
     const ask = () => screen.getByRole("tab", { name: "Ask" });
     expect(ask().className).toContain("after:bg-primary");
-    expect(ask().className).toContain("after:-bottom-3");
-    expect(ask().className).toContain("border-border");
+    // The bar anchors to the BUTTON's own bottom edge (`bottom-0`, inside its
+    // box) rather than a fixed offset below a fixed-size tile — that box
+    // itself stretches to the band's height (`w-8`, no fixed height, inside
+    // an `items-stretch` row), so the bar lands flush with the band for any
+    // tile size or a scrollbar-shrunk row, not just a 32px fine-pointer one.
+    expect(ask().className).toContain("after:bottom-0");
+    expect(ask().className).not.toContain("after:-bottom-3");
+    // `border-border` (the selected fill) lives on the fixed-size face box
+    // now, not this stretched button — see the dedicated chrome-placement
+    // test below.
+    expect(ask().className).not.toContain("border-border");
+    // Width is still pinned (so horizontal spacing is unaffected); height is
+    // deliberately NOT — that is what lets the button stretch.
+    expect(ask().className).toContain("w-8");
+    expect(ask().className).not.toContain("size-8");
+    expect(ask().className).not.toContain("pointer-coarse:size-11");
     expect(
       screen.getByRole("tab", { name: "Morning Brief" }).className,
     ).not.toContain("after:bg-primary");
@@ -232,7 +246,129 @@ describe("DockTiles — selection follows tab + agentId", () => {
       />,
     );
     expect(ask().className).toContain("after:-right-2");
-    expect(ask().className).not.toContain("after:-bottom-3");
+    expect(ask().className).not.toContain("after:bottom-0");
+    // Vertical is unaffected: the rail button stays a fixed square, not a
+    // stretched rectangle.
+    expect(ask().className).toContain("size-8");
+    expect(ask().className).toContain("pointer-coarse:size-11");
+  });
+
+  it("keeps hover/selected/focus chrome on the fixed-size face box, never on the band-stretched button", () => {
+    // Regression guard: the hairline, hover-brighten, selected fill and
+    // focus ring used to live on the outer button — which this task's
+    // horizontal fix deliberately stretches up to the band's full height —
+    // so a border there paints a ~56px-tall halo around a 32px icon.
+    const classesOf = (el: Element) => el.className.split(/\s+/);
+    const { rerender } = render(
+      <DockTiles
+        agents={AGENTS}
+        tab="chat"
+        agentId={null}
+        badge={0}
+        onSelect={() => {}}
+      />,
+    );
+    const ask = () => screen.getByRole("tab", { name: "Ask" }); // selected
+    const askFace = () => ask().firstElementChild as HTMLElement;
+
+    // The outer (band-stretched) button carries NONE of it.
+    for (const cls of [
+      "border",
+      "border-transparent",
+      "border-border",
+      "hover:border-border-hover",
+      "group-hover/tile:border-border-hover",
+      "focus-visible:ring-2",
+      "focus-visible:ring-ring",
+      "group-focus-visible/tile:ring-2",
+      "group-focus-visible/tile:ring-ring",
+    ]) {
+      expect(classesOf(ask())).not.toContain(cls);
+    }
+    // It DOES keep the one focus concern that belongs to whichever element
+    // is really focused: suppressing the native outline.
+    expect(classesOf(ask())).toContain("focus-visible:outline-none");
+
+    // The fixed 32px face box carries all of it, driven by the outer
+    // button's own hover/focus state through the named `group/tile`.
+    expect(classesOf(askFace())).toEqual(
+      expect.arrayContaining([
+        "border",
+        "border-border", // Ask is selected here
+        "group-hover/tile:border-border-hover",
+        "group-focus-visible/tile:ring-ring",
+        "group-focus-visible/tile:ring-2",
+      ]),
+    );
+
+    // An unselected tile keeps the (transparent) hairline but not the
+    // selected fill.
+    const briefFace = () =>
+      screen.getByRole("tab", { name: "Morning Brief" })
+        .firstElementChild as HTMLElement;
+    expect(classesOf(briefFace())).toContain("border-transparent");
+    expect(classesOf(briefFace())).not.toContain("border-border");
+
+    // Vertical (the rail): the outer button is still a fixed 32/44px square
+    // — IDENTICALLY sized to the face box moving the chrome changed nothing
+    // about — so this placement is a no-op there. Confirmed by re-asserting
+    // the same "outer carries none of it" property, and that outer and
+    // inner now share the same fixed-size classes (no visual gap between
+    // the two possible only when they're literally the same box).
+    rerender(
+      <DockTiles
+        agents={AGENTS}
+        tab="chat"
+        agentId={null}
+        badge={0}
+        orientation="vertical"
+        onSelect={() => {}}
+      />,
+    );
+    expect(classesOf(ask())).not.toContain("border-border");
+    expect(classesOf(ask())).not.toContain(
+      "group-hover/tile:border-border-hover",
+    );
+    expect(classesOf(askFace())).toContain("border-border");
+    expect(classesOf(ask())).toEqual(
+      expect.arrayContaining(["size-8", "pointer-coarse:size-11"]),
+    );
+    expect(classesOf(askFace())).toEqual(
+      expect.arrayContaining(["size-8", "pointer-coarse:size-11"]),
+    );
+  });
+
+  it("keeps the face, badge and presence dot pinned to a fixed 32px box even though the horizontal button itself stretches", () => {
+    // Regression guard for the stretch fix above: the visible face/badge/dot
+    // must stay anchored to their own small box, not drift to the edges of
+    // the now taller-or-shorter outer button.
+    render(
+      <DockTiles
+        agents={AGENTS}
+        tab="chat"
+        agentId="a1"
+        badge={2}
+        presence={{ a1: "running" }}
+        onSelect={() => {}}
+      />,
+    );
+    const running = screen.getByRole("tab", {
+      name: "Morning Brief · running",
+    });
+    const innerBox = running.querySelector(
+      "[data-dock-presence]",
+    )!.parentElement!;
+    expect(innerBox.className).toContain("size-8");
+    expect(innerBox.className).toContain("pointer-coarse:size-11");
+    expect(innerBox.className).toContain("relative");
+    // The badge/dot are direct descendants of that fixed inner box, not of
+    // the outer (potentially taller) button.
+    const intel = screen.getByRole("tab", {
+      name: "Intelligence · 2 suggestions",
+    });
+    const badgeParent =
+      intel.querySelector("[data-dock-badge]")!.parentElement!;
+    expect(badgeParent.className).toContain("size-8");
   });
 });
 

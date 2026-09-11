@@ -181,7 +181,14 @@ export function DockTiles({
         onKeyDown={move}
         className={cn(
           "flex min-w-0 shrink-0",
-          vertical ? "flex-col items-center gap-2" : "items-center gap-1",
+          // Horizontal: `items-stretch` (the default, spelled out) lets each
+          // tile's button — see below — stretch to the row's own height,
+          // which DockBody gives a real, definite value (`h-full` on its
+          // scroll wrapper). That is what lets the active bar anchor to the
+          // BUTTON's own bottom edge and land flush with the band regardless
+          // of tile size or a reserved scrollbar. Vertical (the rail) is
+          // unchanged: a fixed square, centred in the column.
+          vertical ? "flex-col items-center gap-2" : "items-stretch gap-1",
         )}
       >
         {tiles.map((tile, i) => {
@@ -205,38 +212,80 @@ export function DockTiles({
                   tabIndex={selected ? 0 : -1}
                   onClick={() => onSelect(tile)}
                   className={cn(
-                    "focus-visible:ring-ring hover:border-border-hover ease-keystone relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors duration-300 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11",
+                    // Only band-anchored concerns live here: the stretch, the
+                    // positioning context for the active bar, and suppressing
+                    // the NATIVE focus outline (a property of whichever
+                    // element is actually focused, so it stays here even
+                    // though the drawn ring below moves). Deliberately NO
+                    // border/hover/ring chrome — this box is up to 56px tall
+                    // in horizontal orientation, and painting a border around
+                    // it would ring a 32px icon with an up-to-56px-tall halo.
+                    // See the fixed-size face box below for where that chrome
+                    // actually lives now.
+                    "group/tile relative flex shrink-0 items-center justify-center focus-visible:outline-none",
+                    // Horizontal: WIDTH only — no fixed height, so the button
+                    // stretches to the row's height (see the tablist's
+                    // `items-stretch` above) instead of staying pinned to the
+                    // 32/44px tile size. That is what keeps the active bar
+                    // (anchored to THIS box, `after:bottom-0` below) flush
+                    // with the band for a 32px fine-pointer tile, a 44px
+                    // coarse-pointer one, or a band with a reserved
+                    // scrollbar — all three shrink this box by construction,
+                    // rather than requiring the bar's fixed offset to happen
+                    // to match whichever one is on screen. Vertical (the
+                    // rail) is untouched: a fixed square, same as before —
+                    // identically sized to the face box below, so moving the
+                    // chrome there changes nothing visually on the rail.
+                    vertical
+                      ? "size-8 pointer-coarse:size-11"
+                      : "w-8 pointer-coarse:w-11",
                     selected &&
-                      "border-border after:bg-primary after:absolute after:content-['']",
-                    // The 3px bar sits flush on the band's bottom edge (tile is
-                    // 32px in a 56px band → 12px below it) or on the rail's
-                    // right edge (32px in a 48px rail → 8px beside it).
+                      "after:bg-primary after:absolute after:content-['']",
                     selected &&
                       (vertical
                         ? "after:inset-y-2 after:-right-2 after:w-[3px] after:rounded-l-full"
-                        : "after:inset-x-2 after:-bottom-3 after:h-[3px] after:rounded-t-full"),
+                        : "after:inset-x-2 after:bottom-0 after:h-[3px] after:rounded-t-full"),
                   )}
                 >
-                  <TileFace tile={tile} agents={agents} />
-                  {tile.kind === "intelligence" && badge > 0 ? (
-                    <span
-                      aria-hidden="true"
-                      data-dock-badge
-                      className="text-primary text-3xs absolute top-0 right-0 translate-x-1/3 -translate-y-1/3 font-semibold tabular-nums"
-                    >
-                      {badge}
-                    </span>
-                  ) : null}
-                  {running ? (
-                    // A 2px `border-border` hairline separates the dot from the
-                    // tile — not a wash-coloured ring, the wash is a gradient
-                    // (spec §7). The pulse is a box-shadow: nothing scales.
-                    <span
-                      aria-hidden="true"
-                      data-dock-presence
-                      className="bg-primary border-border animate-pulse-ring absolute right-0.5 bottom-0.5 size-[9px] rounded-full border-2"
-                    />
-                  ) : null}
+                  {/* The visible face, badge and presence dot — AND the
+                      hairline, hover brighten and focus ring — live in this
+                      FIXED 32/44px box regardless of orientation, centred
+                      inside whatever the outer button's own box is (a fixed
+                      square on the rail, a stretched-height rectangle on the
+                      band). `relative` anchors the badge/dot to THIS box, not
+                      to the taller outer button, so they never drift from the
+                      face they annotate. Hover and focus are driven by the
+                      OUTER button's state via the named `group/tile` — the
+                      whole tall tile is the hit target and should feel like
+                      one control, but the chrome it paints hugs the icon. */}
+                  <span
+                    className={cn(
+                      "ease-keystone group-hover/tile:border-border-hover group-focus-visible/tile:ring-ring relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors duration-300 group-focus-visible/tile:ring-2 pointer-coarse:size-11",
+                      selected && "border-border",
+                    )}
+                  >
+                    <TileFace tile={tile} agents={agents} />
+                    {tile.kind === "intelligence" && badge > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        data-dock-badge
+                        className="text-primary text-3xs absolute top-0 right-0 translate-x-1/3 -translate-y-1/3 font-semibold tabular-nums"
+                      >
+                        {badge}
+                      </span>
+                    ) : null}
+                    {running ? (
+                      // A 2px `border-border` hairline separates the dot from
+                      // the tile — not a wash-coloured ring, the wash is a
+                      // gradient (spec §7). The pulse is a box-shadow:
+                      // nothing scales.
+                      <span
+                        aria-hidden="true"
+                        data-dock-presence
+                        className="bg-primary border-border animate-pulse-ring absolute right-0.5 bottom-0.5 size-[9px] rounded-full border-2"
+                      />
+                    ) : null}
+                  </span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side={vertical ? "left" : "bottom"}>
