@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-11",
+    kind: "new",
+    title: "Board brief and suggestions",
+    description:
+      "Catch me up on any board: the dock's Intelligence tab writes a short brief of the last 7 days with up to five suggestions you can apply in one click and undo for eight seconds.",
+  },
+  {
+    date: "2026-09-11",
     kind: "improved",
     title: "A cleaner, more consistent sidebar",
     description:
@@ -23,13 +30,6 @@ export const GENERATED: ChangelogEntry[] = [
     title: "The sidebar scrolls when you have many boards",
     description:
       "A long list of boards used to push Dashboards, My Time and Trash off the bottom of the screen with no way to reach them. The middle of the sidebar now scrolls while the top and bottom stay in place.",
-  },
-  {
-    date: "2026-09-11",
-    kind: "new",
-    title: "Board brief and suggestions",
-    description:
-      "Catch me up on any board: the dock's Intelligence tab writes a short brief of the last 7 days with up to five suggestions you can apply in one click and undo for eight seconds.",
   },
   {
     date: "2026-09-11",
