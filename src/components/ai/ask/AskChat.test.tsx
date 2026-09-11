@@ -1093,3 +1093,80 @@ describe("AskChat — a viewer of someone else's shared thread", () => {
     expect(screen.queryByText(/only its owner can reply/i)).toBeNull();
   });
 });
+
+// The dock renders this component on the wash (spec §3) and needs to know
+// when a turn is live (presence dot, §2). /ask passes neither and changes not
+// at all.
+describe("AskChat — surface and busy signal", () => {
+  it("defaults to the /ask card: composer strip, muted user bubble, bordered read-only notice", () => {
+    render(
+      <AskChat conversationId="c1" initialMessages={[USER_ROW]} readOnly />,
+    );
+    expect(screen.getByText(USER_ROW.content).className).toBe(
+      "bg-surface-muted max-w-[85%] rounded-lg border px-3.5 py-2 text-sm whitespace-pre-wrap",
+    );
+    const note = screen.getByText(/only its owner can reply/i);
+    expect(note.className).toBe(
+      "text-muted-foreground border-t px-4 py-3 text-sm",
+    );
+  });
+
+  it('threads surface="atmosphere" to the transcript, the composer and the notice', () => {
+    const { rerender } = render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[USER_ROW]}
+        surface="atmosphere"
+      />,
+    );
+    expect(screen.getByText(USER_ROW.content).className).toContain(
+      "bg-chrome-fill",
+    );
+    const form = screen.getByLabelText("Your question").closest("form")!;
+    const wrapper = form.parentElement!.parentElement!;
+    expect(wrapper.className).not.toMatch(/\bborder-t\b|\bbg-background\b/);
+    expect(form.className).toContain("shadow-content-lift");
+
+    rerender(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[USER_ROW]}
+        surface="atmosphere"
+        readOnly
+      />,
+    );
+    const note = screen.getByText(/only its owner can reply/i);
+    expect(note.className).toBe("text-muted-foreground px-3.5 py-3 text-sm");
+  });
+
+  it("reports the turn busy from submit until it settles — including a failed send", async () => {
+    const onBusyChange = vi.fn();
+    const open = holdCreateConversation();
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        onBusyChange={onBusyChange}
+      />,
+    );
+    ask();
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true));
+    expect(onBusyChange).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      open();
+    });
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    expect(onBusyChange).toHaveBeenCalledTimes(2);
+
+    // A refused send is still a settled turn. The thread exists now ("c1"),
+    // so the second send goes through appendUserMessage, not createConversation.
+    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      error: "Couldn't reach the server.",
+    });
+    onBusyChange.mockClear();
+    ask("again");
+    await screen.findByRole("alert");
+    expect(onBusyChange.mock.calls.map((c) => c[0])).toEqual([true, false]);
+  });
+});

@@ -14,6 +14,7 @@ import {
   type MentionTarget,
 } from "@/lib/collaboration/mentions";
 import { resolveAddressedAgent } from "@/lib/ai/ask/persona-routing";
+import type { ChatSurface } from "./surface";
 
 const MIN = 1;
 const MAX = 4000;
@@ -44,6 +45,7 @@ export function Composer({
   error = null,
   onRetry,
   onSubmit,
+  surface = "card",
 }: {
   disabled: boolean;
   /** The owner's agents, addressable by `@handle`. Absent on surfaces that
@@ -68,6 +70,11 @@ export function Composer({
   /** `agentId` is the persona a LEADING typed handle addressed, or null — the
    *  server re-resolves (and applies the sticky fallback) regardless. */
   onSubmit: (text: string, agentId: string | null) => void;
+  /** `card` (/ask, default): a strip on the page background with a top
+   *  hairline and a centred column. `atmosphere` (the board dock): no strip —
+   *  the form itself is the one raised surface on the wash, and it rises into
+   *  place on mount. See `surface.ts`. */
+  surface?: ChatSurface;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
@@ -137,9 +144,16 @@ export function Composer({
     setQuery(null);
   }
 
+  const card = surface === "card";
   return (
-    <div className="bg-background border-t px-4 py-3">
-      <div className="relative mx-auto max-w-3xl">
+    <div
+      className={
+        card
+          ? "bg-background border-t px-4 py-3"
+          : "ease-keystone px-2.5 pb-2.5 transition-[opacity,translate] delay-[200ms] duration-[360ms] starting:translate-y-2.5 starting:opacity-0"
+      }
+    >
+      <div className={card ? "relative mx-auto max-w-3xl" : "relative"}>
         {suggestions.length > 0 && (
           <ul
             aria-label="Agents"
@@ -167,7 +181,11 @@ export function Composer({
           </ul>
         )}
         <form
-          className="bg-surface focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
+          className={
+            card
+              ? "bg-surface focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
+              : "bg-surface border-border shadow-content-lift hover:border-border-hover focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
+          }
           onSubmit={(e) => {
             e.preventDefault();
             send();
@@ -266,7 +284,11 @@ export function Composer({
           a slow turn look broken — and WHO it will reach, so both a typed
           handle and the thread's sticky persona are confirmed before the
           question is spent on the wrong agent. */}
-      <Kicker className="mx-auto mt-1.5 block max-w-3xl px-1">
+      <Kicker
+        className={
+          card ? "mx-auto mt-1.5 block max-w-3xl px-1" : "mt-1.5 block px-1"
+        }
+      >
         {disabled
           ? "Working — one question at a time"
           : answering
