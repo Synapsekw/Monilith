@@ -66,8 +66,9 @@ capabilities, distinct from built-in scheduled board agents and their proposal r
 
 ## Open threads
 
-- Merged to `develop`, not yet promoted: `/promote` is the remaining step (develop → main PR). The
-  new landing is not live on www.monolith.works until then.
+- **Promoted 2026-09-11, PR #120** (11 commits, squash `1875cc34`, healed on `develop`). Verified
+  live: main CI green (run 34597034366), Vercel `state=success`, `www.monolith.works/` serving the
+  Editorial hero, `/updates` serving "A new landing page". `/sync-prod` declined by the owner.
 - The Chrome extension was not connected this session; Playwright stood in
   ([[playwright-screenshots-from-worktree]] in auto-memory).
 - The first neutral re-shoot came out in the Keystone default preset (periwinkle); the owner wanted
@@ -79,4 +80,4 @@ capabilities, distinct from built-in scheduled board agents and their proposal r
 
 ## Next session entry point
 
-Run `/promote` to ship the new landing; verify `www.monolith.works/` renders the Editorial hero and `/updates` carries "A new landing page".
+The landing is live. Next: the owed manual passes against production and E6 Stripe (owner-blocked); the other session's `task/board-intelligence-orient` worktree is in flight.
