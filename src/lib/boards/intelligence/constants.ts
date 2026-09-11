@@ -53,3 +53,14 @@ export const TRANSCRIPT_TOKEN_BUDGET = 6000;
 export const ROSTER_MAX_ITEMS = 120;
 /** Cap on suggestions a single run may return (spec §4.4). */
 export const MAX_SUGGESTIONS = 5;
+
+/** The single source of truth for the five signal kinds a `filter` action may
+ *  target — was independently duplicated as a zod enum in `schema.ts` and a
+ *  guard array in `validate.ts`; both now derive from this tuple. */
+export const SIGNAL_KINDS = [
+  "overdue",
+  "overloaded",
+  "stalled",
+  "changed",
+  "blocked",
+] as const satisfies readonly SignalKind[];

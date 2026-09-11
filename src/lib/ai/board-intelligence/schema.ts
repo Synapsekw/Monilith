@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { SignalKind } from "@/lib/boards/intelligence/types";
-import { MAX_SUGGESTIONS } from "@/lib/boards/intelligence/constants";
+import {
+  MAX_SUGGESTIONS,
+  SIGNAL_KINDS,
+} from "@/lib/boards/intelligence/constants";
 
 /* ── What the MODEL returns. Hand-written JSON Schema (house convention:
    REPORT_NARRATIVE_JSON_SCHEMA in src/lib/reports/ai-draft-schema.ts). Every
@@ -132,13 +135,7 @@ export type RawOutput = z.infer<typeof rawOutputSchema>;
 
 /* ── The CLOSED union that may ever be APPLIED (spec §4.4, §7). ── */
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
-const signalKind = z.enum([
-  "overdue",
-  "overloaded",
-  "stalled",
-  "changed",
-  "blocked",
-]);
+const signalKind = z.enum(SIGNAL_KINDS);
 const label = z.string().min(1).max(60);
 export const actionSchema = z.discriminatedUnion("type", [
   z.object({

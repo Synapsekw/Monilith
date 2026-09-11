@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBoardContext } from "./board-context";
+import { payloadSchema } from "./schema";
 import { toAction, validateIntelligenceOutput } from "./validate";
 import type { BoardPayload } from "@/lib/boards/queries";
 
@@ -53,6 +54,38 @@ const base = {
   message: null,
   signalKind: null,
 };
+
+// A second board whose item/column/member names are unrealistically long
+// (200 chars), to prove a label built from real board data can never exceed
+// the closed union's `label ≤ 60` cap.
+const longName = "L".repeat(200);
+const longPayload = {
+  board: { id: "b2", org_id: "o1", name: "Launch" },
+  groups: [{ id: "g1", name: "Sprint", position: 0 }],
+  columns: [
+    { id: "c-date", name: longName, kind: "date", settings: {} },
+    { id: "c-people", name: "Owner", kind: "people", settings: {} },
+    {
+      id: "c-status",
+      name: "Status",
+      kind: "status",
+      settings: {
+        options: [{ id: "o-long", label: longName, color: "green" }],
+      },
+    },
+  ],
+  items: [{ id: "i-long", name: longName, group_id: "g1", parent_id: null }],
+  cellValues: [],
+  dependencies: [],
+  views: [],
+  attachments: [],
+  timeEntries: [],
+  relationLinks: [],
+  mirrorTargetCells: [],
+  mirrorTargetColumns: [],
+} as unknown as BoardPayload;
+const longMembers = [{ userId: "u-long", fullName: longName }];
+const longCtx = buildBoardContext(longPayload, longMembers);
 
 describe("buildBoardContext", () => {
   it("indexes items, columns with option labels, and member names", () => {
@@ -200,6 +233,56 @@ describe("toAction", () => {
       label: "Nudge Ana Lima",
     });
   });
+  it("caps a label built from a 200-char item/column/member name at 60 chars", () => {
+    const setDue = toAction(
+      {
+        ...base,
+        type: "set_due",
+        itemId: "i-long",
+        columnId: "c-date",
+        date: "2026-09-20",
+      },
+      longCtx,
+    );
+    expect(setDue?.label.length).toBeLessThanOrEqual(60);
+    expect(setDue?.label.endsWith("…")).toBe(true);
+
+    const setStatus = toAction(
+      {
+        ...base,
+        type: "set_status",
+        itemId: "i-long",
+        columnId: "c-status",
+        optionId: "o-long",
+      },
+      longCtx,
+    );
+    expect(setStatus?.label.length).toBeLessThanOrEqual(60);
+
+    const reassign = toAction(
+      {
+        ...base,
+        type: "reassign",
+        itemIds: ["i-long"],
+        columnId: "c-people",
+        toUserId: "u-long",
+      },
+      longCtx,
+    );
+    expect(reassign?.label.length).toBeLessThanOrEqual(60);
+
+    const nudge = toAction(
+      {
+        ...base,
+        type: "nudge",
+        itemId: "i-long",
+        userId: "u-long",
+        message: "Ping",
+      },
+      longCtx,
+    );
+    expect(nudge?.label.length).toBeLessThanOrEqual(60);
+  });
 });
 
 describe("validateIntelligenceOutput", () => {
@@ -267,5 +350,36 @@ describe("validateIntelligenceOutput", () => {
     expect(() =>
       validateIntelligenceOutput({ brief: 1 }, ctx, signals),
     ).toThrow();
+  });
+  it("always builds a payload that round-trips through payloadSchema, even with 200-char board names", () => {
+    const { payload: out } = validateIntelligenceOutput(
+      {
+        brief: "One item is late.",
+        suggestions: [
+          {
+            kind: "overdue",
+            title: "Push it",
+            evidence: "1 overdue",
+            body: "b",
+            evidenceItemIds: ["i-long"],
+            actions: [
+              {
+                ...base,
+                type: "set_due",
+                itemId: "i-long",
+                columnId: "c-date",
+                date: "2026-09-20",
+              },
+            ],
+          },
+        ],
+      },
+      longCtx,
+      signals,
+    );
+    expect(out.suggestions[0]?.actions[0]?.label.length).toBeLessThanOrEqual(
+      60,
+    );
+    expect(payloadSchema.safeParse(out).success).toBe(true);
   });
 });

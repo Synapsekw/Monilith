@@ -1,7 +1,9 @@
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
+import { SIGNAL_KINDS } from "@/lib/boards/intelligence/constants";
 import type { SignalKind } from "@/lib/boards/intelligence/types";
 import type { BoardContext } from "./board-context";
 import {
+  payloadSchema,
   rawOutputSchema,
   type Action,
   type BoardIntelligencePayload,
@@ -9,15 +11,18 @@ import {
 } from "./schema";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const SIGNAL_KINDS: readonly SignalKind[] = [
-  "overdue",
-  "overloaded",
-  "stalled",
-  "changed",
-  "blocked",
-];
 const isSignalKind = (s: string): s is SignalKind =>
   (SIGNAL_KINDS as readonly string[]).includes(s);
+
+/** The action union caps `label` at 60 chars (`actionSchema`/`payloadSchema`).
+ *  Labels are built from real board data — item/column/member names have no
+ *  such cap — so every constructed label MUST be run through this before it
+ *  is returned, or a long name silently makes the whole run fail closed on
+ *  read (`payloadSchema.parse` in the store). */
+const MAX_LABEL = 60;
+function capLabel(text: string): string {
+  return text.length <= MAX_LABEL ? text : `${text.slice(0, MAX_LABEL - 1)}…`;
+}
 
 /** Turn one flat model action into a member of the closed union, or null when
  *  any id is not on the board, the column kind does not fit, or a value is
@@ -39,7 +44,9 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
         itemIds: ids,
         columnId: c.id,
         toUserId: raw.toUserId,
-        label: `Reassign ${ids.length === 1 ? (item(ids[0])?.name ?? "1 item") : `${ids.length} items`} to ${name}`,
+        label: capLabel(
+          `Reassign ${ids.length === 1 ? (item(ids[0])?.name ?? "1 item") : `${ids.length} items`} to ${name}`,
+        ),
       };
     }
     case "set_due": {
@@ -51,7 +58,7 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
         itemId: it.id,
         columnId: c.id,
         date: raw.date,
-        label: `Set ${c.name} to ${raw.date}`,
+        label: capLabel(`Set ${c.name} to ${raw.date}`),
       };
     }
     case "set_status": {
@@ -64,7 +71,7 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
         itemId: it.id,
         columnId: c.id,
         optionId: raw.optionId,
-        label: `Mark ${it.name} as ${opt}`,
+        label: capLabel(`Mark ${it.name} as ${opt}`),
       };
     }
     case "nudge": {
@@ -79,7 +86,7 @@ export function toAction(raw: RawAction, ctx: BoardContext): Action | null {
         itemId: it.id,
         userId: raw.userId,
         message,
-        label: `Nudge ${name}`,
+        label: capLabel(`Nudge ${name}`),
       };
     }
     case "filter": {
@@ -134,8 +141,20 @@ export function validateIntelligenceOutput(
       actions,
     });
   }
-  return {
-    payload: { brief: parsed.brief.trim(), suggestions, signals },
-    warnings,
+  const payload: BoardIntelligencePayload = {
+    brief: parsed.brief.trim(),
+    suggestions,
+    signals,
   };
+  // Safety net: everything above is built from real board data (item/column/
+  // member names have no length cap), so re-run the exact schema the STORE
+  // will parse on read. A payload that fails here would otherwise be written
+  // once and then read back as "no run" forever (payloadSchema fails closed) —
+  // better to throw now, with a message that points at what's wrong.
+  const validated = payloadSchema.safeParse(payload);
+  if (!validated.success)
+    throw new Error(
+      `validateIntelligenceOutput built a payload payloadSchema rejects: ${validated.error.message}`,
+    );
+  return { payload: validated.data, warnings };
 }
