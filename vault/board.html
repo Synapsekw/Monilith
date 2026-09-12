@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-12 09:36",
+  "updated": "2026-09-12 20:01",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "38d0f4c0",
-        "tone": "warn",
-        "note": "Ahead of main by the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher), its whole-branch review repairs, and the Board Intelligence latency fix (effort low instead of the inherited high). Unpromoted. No live worktrees."
+        "value": "7924076f",
+        "tone": "ok",
+        "note": "Equal to main plus the squash heal (50fc72b4) and the vault commit — unpromoted delta 0. No live worktrees."
       },
       {
         "name": "main",
-        "value": "918c38bb",
+        "value": "156565eb",
         "tone": "ok",
-        "note": "PR #122 merged 2026-09-11, 44 commits — Board Intelligence Phases 1 AND 2, the Anthropic instructions fix that ended a four-day structured-output outage, the sidebar Keystone polish, and the intelligence size-clamp fix. Verified live: main CI green (run 34638123154), Vercel state=success. Squash divergence healed (6e47e977, -s ours)."
+        "note": "PR #123 merged 2026-09-12, 51 commits — the Quiet Grid table redesign and the Inter typeface, the Name-column rule plus its stacking and auto-fit fixes, Board Intelligence latency and refusal diagnostics, the lit-seam collapse control and the agent-dock rebuild. Verified live: main CI green (run 34703367857), Vercel state=success. Squash divergence healed (50fc72b4, -s ours)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #122 build — verified: Vercel state=success on 918c38bb, /updates serving \"AI generation on Anthropic works again\" and \"Board brief and suggestions\". /sync-prod not run: DEV migrations including board_intelligence_runs are not on PROD."
+        "note": "Serving the PR #123 build — verified by content, not status: /updates serves \"A calmer board table\", \"A new typeface\" and \"Long item names no longer get cut off\". /sync-prod not run: DEV migrations including board_intelligence_runs are still not on PROD."
       }
     ],
     "gates": [
@@ -190,7 +190,7 @@
   "next": [
     {
       "title": "One authenticated browser pass — it clears four sessions of owed walkthroughs",
-      "why": "Nothing merged in the last four sessions has been seen by a person; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. Start with the lit seam on develop, because it is now the control every other check reaches for: hover the card's left edge, confirm the light rounds both corners, fold and unfold both panels, drag the dock edge to resize without folding it, Tab to the chip. Then the board brief live in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none of them ever exercised and the owner's first two clicks both failed. Then the sidebar and agent-dock passes. While you are in there, time one Catch me up and read board_intelligence_runs.tokens_out against the 5284 baseline — the latency fix is still an unobserved claim, which is why nothing was announced for it.",
+      "why": "Nothing merged in the last five sessions has been seen by a person in an authenticated browser; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. The table redesign is now live in production and is the natural start: open a board, confirm one vertical line beside the item name and unbroken separators across it, expand a parent for the subitem thread, scroll sideways to check the add-item row stays frozen, and confirm long names stop truncating. Then the lit seam on the card edge, then the board brief in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none ever exercised and the owner's first two clicks both failed. The latency fix is now measured and closed (5284 to 1334 output tokens, about two minutes to 21 seconds), so what is left to judge in there is whether the brief READS as well at the lower effort — and the refusal log now names each rejected action, so the answer is in the dev terminal rather than a guess.",
       "tags": [
         "manual",
         "seam",
@@ -382,15 +382,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-0936-lit-seam-collapse-control",
-    "when": "2026-09-12 09:36",
-    "title": "The card's hairline is the collapse control",
+    "id": "2026-09-12-2001-intelligence-refusal-diagnostics",
+    "when": "2026-09-12 20:01",
+    "title": "The refusal log learns to talk",
     "bullets": [
-      "Four rounds of in-browser prototypes before any code — six placements, then variations of the two the owner liked, then four takes on how far the light travels. The owner picked edge-plus-glow.",
-      "The seam is a stroked copy of the content card's outline: two paths per edge, both starting at its middle, so one dash growing from each origin opens the light evenly and reaches both corners together. A div with a height cannot do it — it ends in a straight stub short of the rounded-xl corner.",
-      "Lengths are computed analytically rather than read with getTotalLength, which jsdom does not implement; Chromium's own measurement of the rendered path agrees to 0.005px. A ResizeObserver, not a one-shot measure, because the card is a flex child between two animated widths.",
-      "Both old controls retired. The dock's edge already was its resize grip, so they are now one object: click folds, drag resizes, arrow keys resize, and a pointer past 4px or 400ms is a resize and never a fold.",
-      "Merged at 7bb2d483, 18 files, gates green over 7646 tests. Announced on /updates. Nothing seen in an authenticated browser — the nine-step walkthrough is owed."
+      "The latency complaint is CLOSED and measured on the owner's own run, not felt: 5284 to 1334 output tokens, about two minutes to 21 seconds, with the stored brief slightly LONGER. Different boards, so not a strict A/B, but useful output rose while billed output fell three quarters.",
+      "That run fired the dropped-suggestions warning and the log could not say why, so toActionParse now returns 17 constant reasons, one per failing check, with kept/proposed/model/tokensOut alongside. Missing and invented are deliberately distinct: a null id is a structured-output failure, a wrong one is a grounding failure, and they call for opposite fixes.",
+      "Two of the branch's own guard tests were vacuous and the review caught both — a coverage test asserting size equals 17 against a hardcoded 17 while never referencing the union it claimed to cover, and an agrees-with-toAction tautology over the shared code path. Fixed by keying the case table on the union, exhaustive at compile time and verified by injecting a probe member.",
+      "The same review found the log lying twice over: denominators taken after cappedArray truncated, so a model proposing nine suggestions logged five and a clean-looking run hid four dropped cards; and dropped 0 of 3 printed while one of three had in fact been dropped. Neither was visible to any gate.",
+      "Announced the measured speed-up on /updates — held back at merge time because faster was then an unobserved outcome claim."
     ]
   }
 }

@@ -191,12 +191,24 @@ export const SUBITEM_ROW_HEIGHT = 38;
  * (`.intel-rule`'s host `::after`), and is high enough to win while staying
  * row-local: it only has to beat the Name cell's z-10, never anything above
  * row-level chrome (menus, dialogs). Safe against the two things that live at
- * y=0 inside that cell: `.intel-rule` (globals.css, z-20 but scoped INSIDE
- * NameCell's own z-10 stacking context, so this pseudo's row-level z-20 still
- * paints over the whole cell including it — a deliberate 1px notch at the
- * separator, matching every other column) and NameCell's selected-state
- * accent bar (`before:inset-y-1.5`, i.e. 6px inset top/bottom — it never
- * reaches y=0, so there is no pixel to collide with regardless of z).
+ * y=0 inside that cell: `.intel-rule` (globals.css — `left-0`, `width: 2px`,
+ * so it occupies x=[0, 2]) and NameCell's selected-state accent bar
+ * (`before:inset-y-1.5`, i.e. 6px inset top/bottom — it never reaches y=0, so
+ * there is no pixel to collide with regardless of z).
+ *
+ * CORRECTION (measured, not assumed — see
+ * .superpowers/intel-notch-report.md): an earlier version of this comment
+ * claimed raising this z-index to above `.intel-rule` cuts "a deliberate 1px
+ * notch" into it where the separator crosses. That never happens. This
+ * hairline is inset via `before:left-4` (`--spacing * 4` = 16px), so it
+ * occupies x=[16, row-width] — entirely clear of `.intel-rule`'s x=[0, 2].
+ * The two boxes never share a horizontal pixel, so no z-index relationship
+ * between them is ever evaluated; `before:z-20` only has to (and does) win
+ * against the Name cell's own z-10 background. Verified with a Playwright
+ * repro against the real compiled CSS + component markup: the tone rule
+ * reads as one unbroken 2px bar down every matched row, scrolled or not.
+ * Enforced by the "row hairline clears the frozen intel-rule lane" test
+ * below, which fails if either constant ever moves close enough to overlap.
  */
 export const ROW_HAIRLINE =
   "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:z-20 before:h-px before:bg-border before:opacity-70 before:content-['']";
