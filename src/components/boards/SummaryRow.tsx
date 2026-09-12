@@ -16,34 +16,36 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 
+// NAME_FREEZE_EDGE and NAME_FREEZE_SHADOW below are DELIBERATELY DUPLICATED
+// LITERALS, not one derived from the other at runtime. Tailwind v4 emits a
+// utility only when its exact class name appears literally in a file its
+// scanner reads — it does not execute this module, so a class built by string
+// concatenation/interpolation (e.g. `` `after:${cls}` ``) is invisible to it
+// and silently drops out of the compiled CSS. (Provenance: a production build
+// was checked and both constants' classes ARE currently emitted, but only
+// because the old, pre-refactor literal happens to still exist verbatim in
+// `docs/superpowers/plans/2026-06-21-frozen-name-column.md` — Tailwind scans
+// docs too. That is an accident, not a guarantee; these two constants must
+// each spell out their own classes so the app's OWN source is what keeps them
+// alive.) `shared.test.ts`-style drift is instead caught by a test that
+// derives one from the other and asserts equivalence — see SummaryRow.test.tsx.
+
 // Right-edge shadow for the frozen Name column, as a REAL element's classes
 // (no `after:` prefixes, no `content-['']`). The `group/scroll` ancestor (the
 // scroll container) toggles `data-scrolledx`; the shadow only shows once
 // scrolled, so it reads as a floating frozen pane over the data columns.
 // Table's NameCell spends this directly on a sibling `<span>` — its own
-// `::after` is already claimed by the Quiet Grid hover seam. NAME_FREEZE_EDGE
-// below is generated FROM this string (not hand-duplicated) so the two can
-// never silently desync.
+// `::after` is already claimed by the Quiet Grid hover seam.
 export const NAME_FREEZE_SHADOW =
   "pointer-events-none absolute inset-y-0 right-0 w-4 translate-x-full bg-gradient-to-r from-black/15 to-transparent opacity-0 transition-opacity group-data-[scrolledx=true]/scroll:opacity-100";
 
-/** Rewrites a class as its `after:` form, inserting after the LAST variant
- *  (e.g. `group-data-[x=true]/scroll:opacity-100` -> `…/scroll:after:opacity-100`). */
-function asAfterVariant(cls: string): string {
-  const i = cls.lastIndexOf(":");
-  return i === -1
-    ? `after:${cls}`
-    : `${cls.slice(0, i + 1)}after:${cls.slice(i + 1)}`;
-}
-
 // Right-edge shadow for the frozen Name column, as `::after` pseudo-element
 // utilities for hosts that don't need a dedicated node (SummaryRow's own
-// header cell, GroupHeaderRow, GroupRollupRow).
-export const NAME_FREEZE_EDGE = `name-freeze-edge ${NAME_FREEZE_SHADOW.split(
-  " ",
-)
-  .map(asAfterVariant)
-  .join(" ")} after:content-['']`;
+// header cell, GroupHeaderRow, GroupRollupRow). The `group/scroll` ancestor
+// (the scroll container) toggles `data-scrolledx`; the ::after only shows once
+// scrolled, so it reads as a floating frozen pane over the data columns.
+export const NAME_FREEZE_EDGE =
+  "name-freeze-edge after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/15 after:to-transparent after:opacity-0 after:transition-opacity after:content-[''] group-data-[scrolledx=true]/scroll:after:opacity-100";
 
 /** True when at least one column has a user-assigned footer aggregation. */
 export function hasAssignedSummary(columns: readonly Column[]): boolean {

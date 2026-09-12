@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SummaryRow,
   hasAssignedSummary,
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_SHADOW,
   type SummaryRowProps,
 } from "@/components/boards/SummaryRow";
 import type { Column } from "@/lib/boards/queries";
@@ -181,5 +183,34 @@ describe("SummaryRow", () => {
     render(<SummaryRow {...baseProps({ label: "Group Summary" })} />);
     const row = screen.getByTestId("group-summary-g1");
     expect(row.firstElementChild).toHaveTextContent("Group Summary");
+  });
+});
+
+// NAME_FREEZE_EDGE and NAME_FREEZE_SHADOW are deliberately hand-written,
+// duplicated literals (see the comment above them in SummaryRow.tsx) — each
+// must spell out its own classes so Tailwind's static scanner can see and
+// emit them; a runtime derivation of one from the other is invisible to that
+// scanner and silently drops its utilities from the compiled CSS. This test
+// is what actually stops the two literals from drifting apart: it derives one
+// from the other (with a TEST-ONLY copy of the `after:`-variant rewrite —
+// never used by the app) and asserts they carry the exact same class set.
+describe("NAME_FREEZE_EDGE / NAME_FREEZE_SHADOW stay in lockstep", () => {
+  function asAfterVariantForTest(cls: string): string {
+    const i = cls.lastIndexOf(":");
+    return i === -1
+      ? `after:${cls}`
+      : `${cls.slice(0, i + 1)}after:${cls.slice(i + 1)}`;
+  }
+
+  it("NAME_FREEZE_EDGE is exactly NAME_FREEZE_SHADOW's classes, each as an `after:` variant, plus the marker class and after:content-['']", () => {
+    const derivedFromShadow = new Set([
+      "name-freeze-edge",
+      ...NAME_FREEZE_SHADOW.split(" ").map(asAfterVariantForTest),
+      "after:content-['']",
+    ]);
+    const actualEdge = new Set(NAME_FREEZE_EDGE.split(" "));
+    // Order in the class attribute doesn't affect the compiled cascade, so
+    // this compares the class SETS, not the literal strings.
+    expect(actualEdge).toEqual(derivedFromShadow);
   });
 });

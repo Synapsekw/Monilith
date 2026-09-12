@@ -449,12 +449,16 @@ export function BoardTableInner({
         ? document.createElement("canvas").getContext("2d")
         : null;
     if (ctx) {
-      const fontInterVar =
-        typeof document !== "undefined"
-          ? getComputedStyle(document.documentElement).getPropertyValue(
-              "--font-inter",
-            )
-          : "";
+      // Read once per mount (useMemo's `[]` deps), not hoisted to a module
+      // constant: next/font's generated family name is only ever present as
+      // this custom property's VALUE on <html> at runtime (src/app/layout.tsx)
+      // — it doesn't exist at module-evaluation time, and never exists during
+      // SSR (no `document` at all, which is why this whole block is already
+      // gated on `ctx` — `document` is guaranteed here since `ctx` came from
+      // `document.createElement` above).
+      const fontInterVar = getComputedStyle(
+        document.documentElement,
+      ).getPropertyValue("--font-inter");
       ctx.font = buildNameMeasureFont(fontInterVar);
     }
     return (text: string) => ctx?.measureText(text).width ?? 0;

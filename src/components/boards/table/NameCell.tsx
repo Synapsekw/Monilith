@@ -165,9 +165,11 @@ export const NameCell = memo(function NameCell({
       )}
     >
       {/* Frozen-edge scroll shadow — a real node so it doesn't fight the hover
-          seam for this wrapper's `::after`. NAME_FREEZE_SHADOW is the same
-          constant SummaryRow/GroupHeaderRow/GroupRollupRow derive
-          NAME_FREEZE_EDGE from, so this can never drift from theirs. */}
+          seam for this wrapper's `::after`. NAME_FREEZE_SHADOW is a hand-
+          written literal kept in lockstep with NAME_FREEZE_EDGE (used by
+          SummaryRow/GroupHeaderRow/GroupRollupRow) by a test, not by runtime
+          derivation — see the comment above both constants in SummaryRow.tsx
+          for why. */}
       <span aria-hidden className={NAME_FREEZE_SHADOW} />
       {intelMatch === true && (
         <span aria-hidden data-testid="intel-rule" className="intel-rule" />
