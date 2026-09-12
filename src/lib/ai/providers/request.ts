@@ -50,8 +50,18 @@ export function toRequestArgs(opts: {
  *
  * A feature must never set `effort` unconditionally: Haiku 4.5 rejects the key,
  * which is exactly why `requestShapeFor` leaves it undefined there. So this
- * overrides the LEVEL only where the model already accepts the knob, and leaves
- * the key absent otherwise.
+ * changes the LEVEL only, and never introduces the key where the shape omitted
+ * it.
+ *
+ * Be precise about what that buys you: the guard is "the shape left `effort`
+ * undefined", and `requestShapeFor` decides that from `/haiku/i` alone — which
+ * is NOT the same fact as "this model accepts effort". `ai_models` currently
+ * has active non-Haiku rows that reject the key outright (`claude-sonnet-4.5`,
+ * `claude-sonnet-4`, `claude-opus-4`) and one that rejects adaptive thinking
+ * (`claude-opus-4.5`, pre-4.6). Those already 400 on `develop` via
+ * DEFAULT_SHAPE, for every adapter-routed feature — this helper neither causes
+ * nor fixes it. The real repair is per-model shaping in `model-map.ts`; see
+ * gotcha-104. Do not read this guard as model-safety it does not provide.
  */
 export function withEffort(args: RequestArgs, effort: Effort): RequestArgs {
   return args.effort === undefined ? args : { ...args, effort };

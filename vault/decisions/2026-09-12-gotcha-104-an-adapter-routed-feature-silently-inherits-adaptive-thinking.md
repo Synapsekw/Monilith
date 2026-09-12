@@ -71,10 +71,27 @@ The general rule: **the model's default shape is a property of the MODEL; the re
 decision about the FEATURE.** Only the second belongs at a call site, and only through a knob every
 model in the catalog accepts.
 
-## Still open
+## Still open — and the bigger one this uncovered
 
-`toRequestArgs` has six other callers, none of which state `effort`, and all of which therefore run
-at `"high"`:
+**`requestShapeFor` is a two-bucket split (`/haiku/i` or everything else) over a catalog that has
+five active rows it is wrong about.** The second review pass found this while checking the fix; it
+is **pre-existing on `develop`**, affects *every* adapter-routed feature rather than this one, and
+is armed the same way — an admin picking the model in Settings, months from now:
+
+| Active row | What `DEFAULT_SHAPE` / `HAIKU_SHAPE` sends | Why it 400s |
+| --- | --- | --- |
+| `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-opus-4` | `effort: "high"` | reject `output_config.effort` entirely |
+| `claude-opus-4.5` | `thinking: { type: "adaptive" }` | pre-4.6 — needs the `budget_tokens` form; effort also caps at `high` |
+| `claude-3-haiku` | `thinking: { type: "enabled", budget_tokens: 1024 }` | matches `/haiku/i`, but supports no thinking at all |
+
+This is precisely the rule at the bottom of this ADR turned on its author. The repair is per-model
+shaping in `model-map.ts` — most likely reading the feed's `reasoning_options`, which already
+carries the fact — **not** more guards at call sites. It was deliberately left out of this branch:
+it is a different code path, a different blast radius, and it deserves its own task with its own
+measurement rather than being swept into a latency fix.
+
+`toRequestArgs` also has six other callers, none of which state `effort`, and all of which therefore
+run at `"high"`:
 
 `digest/narrative`, `board-generate`, `automation-generate`, `import-mapping-generate`,
 `ai/generate`, `reports/ai-draft`.
