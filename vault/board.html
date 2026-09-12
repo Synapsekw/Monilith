@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-12 20:01",
+  "updated": "2026-09-12 21:00",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "7924076f",
+        "value": "0a0c898a",
         "tone": "ok",
-        "note": "Equal to main plus the squash heal (50fc72b4) and the vault commit — unpromoted delta 0. No live worktrees."
+        "note": "Heal commit on top of PR #124 — unpromoted delta 0. No live worktrees."
       },
       {
         "name": "main",
-        "value": "156565eb",
+        "value": "4b4828df",
         "tone": "ok",
-        "note": "PR #123 merged 2026-09-12, 51 commits — the Quiet Grid table redesign and the Inter typeface, the Name-column rule plus its stacking and auto-fit fixes, Board Intelligence latency and refusal diagnostics, the lit-seam collapse control and the agent-dock rebuild. Verified live: main CI green (run 34703367857), Vercel state=success. Squash divergence healed (50fc72b4, -s ours)."
+        "note": "PR #124 merged 2026-09-12, 7 commits — the intel-rule geometry correction and its regression test, the board-brief /updates entry, and the vault + plan-board refreshes. Verified live: main CI green (run 34706697074), Vercel state=success. Squash divergence healed (0a0c898a, -s ours). Preceded by PR #123, 51 commits — the Quiet Grid table redesign and Inter."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #123 build — verified by content, not status: /updates serves \"A calmer board table\", \"A new typeface\" and \"Long item names no longer get cut off\". /sync-prod not run: DEV migrations including board_intelligence_runs are still not on PROD."
+        "note": "Serving the PR #124 build — verified by content: /updates serves \"Board briefs arrive in seconds\". THE OWNER RAN A FULL AUTHENTICATED BROWSER PASS ON 2026-09-12 AND REPORTED EVERYTHING OK — the first human verification since the Chrome extension went down, clearing six sessions of owed walkthroughs. /sync-prod not run: DEV migrations including board_intelligence_runs are still not on PROD."
       }
     ],
     "gates": [
@@ -188,16 +188,6 @@
     ]
   },
   "next": [
-    {
-      "title": "One authenticated browser pass — it clears four sessions of owed walkthroughs",
-      "why": "Nothing merged in the last five sessions has been seen by a person in an authenticated browser; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. The table redesign is now live in production and is the natural start: open a board, confirm one vertical line beside the item name and unbroken separators across it, expand a parent for the subitem thread, scroll sideways to check the add-item row stays frozen, and confirm long names stop truncating. Then the lit seam on the card edge, then the board brief in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none ever exercised and the owner's first two clicks both failed. The latency fix is now measured and closed (5284 to 1334 output tokens, about two minutes to 21 seconds), so what is left to judge in there is whether the brief READS as well at the lower effort — and the refusal log now names each rejected action, so the answer is in the dev terminal rather than a guess.",
-      "tags": [
-        "manual",
-        "seam",
-        "intelligence",
-        "critical"
-      ]
-    },
     {
       "title": "Fix requestShapeFor — it is wrong about five active models",
       "why": "Pre-existing on develop and exposing every adapter-routed feature, found while fixing the intelligence latency. The /haiku/i two-bucket split sends effort high to claude-sonnet-4.5, claude-sonnet-4 and claude-opus-4, all of which reject the key; adaptive thinking to claude-opus-4.5, which is pre-4.6 and needs budget_tokens; and budget_tokens to claude-3-haiku, which supports no thinking at all. All five are active catalog rows, and pickModel lets an org default outrank the tier hint, so one Settings change arms a 400. Likely repair: shape per model from the feed's reasoning_options, which already carries the fact.",
@@ -276,6 +266,11 @@
   "risks": [
     {
       "sev": "open",
+      "title": "Verified once, by one person, on one pass",
+      "text": "The owner's 2026-09-12 browser pass cleared six sessions of owed walkthroughs and found nothing — the first human verification since the Chrome extension went down. It is a snapshot, not a standing guarantee: the pass covered the shipped surfaces on one machine, in one theme mix, at one viewport. The failure class it exists to catch is proven real — the Quiet Grid hover seam was dead on every row for an entire branch because a group-hover variant sat on its own group element, invisible to every unit test and to a whole-branch review. Treat the next visual change the same way: a static harness settles geometry, but only a browser settles whether a rule renders at all."
+    },
+    {
+      "sev": "open",
       "title": "A generator judged against limits it was never told",
       "text": "Board Intelligence billed two full model calls and cached nothing because rawOutputSchema rejected a brief over 700 characters and a ninth evidence id — caps that live only in Zod, while the model-facing JSON Schema deliberately carries no lengths. A failed run leaves the input hash unchanged, so every retry paid again. Fixed for this feature (size caps truncate, shape stays strict) but the sibling raw schemas — reports/ai-draft-schema.ts, board-gen-schema.ts, automation-gen-schema.ts — have not been audited for the same .max()-after-payment shape."
     },
@@ -283,11 +278,6 @@
       "sev": "amber",
       "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
       "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
-    },
-    {
-      "sev": "amber",
-      "title": "Three visual batches are live in production, unseen",
-      "text": "The UI polish + presets, the sidebar polish and Board Intelligence Phase 2 all shipped without a browser pass, and Phase 2 is now IN PRODUCTION unverified: dock tab, cards, Apply/Undo, the strip pill. The owner's first two clicks on it failed on a defect no test could see, which is exactly the class a manual pass catches. Every string, role and budget claim is machine-checked; paint order, the 320px two-row dock header and toast timing are eye judgements. The agent-dock rebuild is the same story, one step behind, on develop."
     },
     {
       "sev": "amber",
@@ -390,7 +380,8 @@
       "That run fired the dropped-suggestions warning and the log could not say why, so toActionParse now returns 17 constant reasons, one per failing check, with kept/proposed/model/tokensOut alongside. Missing and invented are deliberately distinct: a null id is a structured-output failure, a wrong one is a grounding failure, and they call for opposite fixes.",
       "Two of the branch's own guard tests were vacuous and the review caught both — a coverage test asserting size equals 17 against a hardcoded 17 while never referencing the union it claimed to cover, and an agrees-with-toAction tautology over the shared code path. Fixed by keying the case table on the union, exhaustive at compile time and verified by injecting a probe member.",
       "The same review found the log lying twice over: denominators taken after cappedArray truncated, so a model proposing nine suggestions logged five and a clean-looking run hid four dropped cards; and dropped 0 of 3 printed while one of three had in fact been dropped. Neither was visible to any gate.",
-      "Announced the measured speed-up on /updates — held back at merge time because faster was then an unobserved outcome claim."
+      "Announced the measured speed-up on /updates — held back at merge time because faster was then an unobserved outcome claim.",
+      "SINCE THEN: the owner ran a full authenticated browser pass across the shipped surfaces and reported everything OK — the first human verification since the Chrome extension went down, clearing six sessions of owed walkthroughs."
     ]
   }
 }
