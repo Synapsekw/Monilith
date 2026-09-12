@@ -139,7 +139,24 @@ export const NameCell = memo(function NameCell({
         // `duration-standard` class compiles to nothing (Tailwind 4.3 has no
         // `--duration-*` utility namespace, only the `--transition-duration`
         // one; see vault/sessions/2026-08-02-2012-keystone-wash-and-polish.md).
-        "after:bg-primary after:ease-keystone after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-[var(--duration-standard)] after:content-[''] group-hover/name:after:scale-y-100",
+        //
+        // Plain `hover:`, NOT `group-hover/name:` — this `after:` pseudo
+        // belongs to the SAME element that carries `group/name`. Tailwind
+        // compiles `group-hover/name:after:scale-y-100` to
+        // `.group-hover\/name\:after\:scale-y-100:is(:where(.group\/name):hover *):after`
+        // — the trailing ` *` requires the styled node to be a DESCENDANT of
+        // the hovered `.group/name`, which this node can never be of itself,
+        // so that rule can never match (verified by reading the compiled CSS
+        // chunk in Chromium: the selector exists, but no node can satisfy
+        // it). The hover seam was consequently dead on every row on this
+        // branch until this fix — a regression jsdom cannot catch, since it
+        // renders no CSS selectors at all. `hover:` targets `:hover` on this
+        // same node directly, which is exactly what "mouse is over this row"
+        // means here; `group/name` stays for the OTHER
+        // `group-hover/name:opacity-100` reveals below (the drag handle, open
+        // and add-subitem buttons), which correctly target DESCENDANT
+        // elements and were unaffected.
+        "after:bg-primary after:ease-keystone after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-[var(--duration-standard)] after:content-[''] hover:after:scale-y-100",
         // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
         // (::before, inset 6px). The bar is pointer-events-none so it never
         // blocks the checkbox/drag targets.

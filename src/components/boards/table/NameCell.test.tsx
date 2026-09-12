@@ -29,7 +29,14 @@ describe("NameCell — Quiet Grid", () => {
     const { container } = render(<NameCell item={item} controls={controls} />);
     const cell = container.firstElementChild as HTMLElement;
     expect(cell.className).toContain("after:bg-primary");
-    expect(cell.className).toContain("group-hover/name:after:scale-y-100");
+    // Plain `hover:`, not `group-hover/name:` — the seam's `after:` belongs to
+    // this same `group/name` element, and Tailwind compiles `group-hover:` to
+    // a selector requiring the styled node to be a DESCENDANT of the hovered
+    // `.group/name`, which this node can never be of itself. That rule was
+    // therefore dead on every row — confirmed by reading the compiled CSS
+    // in Chromium and by direct-pixel screenshots (see task-5-report.md).
+    expect(cell.className).toContain("hover:after:scale-y-100");
+    expect(cell.className).not.toContain("group-hover/name:after:scale-y-100");
   });
 
   it("suppresses the hover seam while the row is selected", () => {

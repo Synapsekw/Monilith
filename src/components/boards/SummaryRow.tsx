@@ -8,6 +8,7 @@ import { Kicker } from "@/components/ui/kicker";
 import { mirrorTargetColumnFor, mirrorFooterValues } from "@/lib/boards/mirror";
 import { cellKey, timeEntriesForCell } from "@/lib/boards/cache";
 import { trackedSeconds } from "@/lib/boards/time-format";
+import { ROW_HAIRLINE } from "@/components/boards/table/shared";
 import type { Column } from "@/lib/boards/queries";
 import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
 import type {
@@ -169,10 +170,29 @@ export function SummaryRow({
   return (
     <div
       data-testid={testId}
+      // ROW_HAIRLINE FIRST: it opens with `relative`, in the same
+      // tailwind-merge conflict group as the board variant's `sticky` below —
+      // listing it first lets `sticky` win the position instead of silently
+      // losing to `relative` (same trap as AddItemRow/AddSubitemRow; `sticky`
+      // still gives the group-variant's `after:` bottom hairline a valid
+      // positioning context on its own via `relative`).
+      //
+      // Both this top hairline and the group variant's bottom one are inset
+      // to `left-4`, matching every other separator in the table (row,
+      // subitem, add-item/add-subitem rows) — a full-bleed `border-t`/
+      // `border-b` here used to redraw the cage the rest of Quiet Grid
+      // removed, and read as a heavier, differently-colored line than the
+      // dim inset hairlines around it (confirmed in Chromium screenshots).
+      // The bottom rule is a hand-written `after:` literal, not derived from
+      // ROW_HAIRLINE, for the same reason NAME_FREEZE_SHADOW/NAME_FREEZE_EDGE
+      // above are duplicated rather than composed: Tailwind only emits a
+      // class whose exact text appears literally in scanned source.
       className={cn(
-        "bg-surface-muted grid border-t",
+        ROW_HAIRLINE,
+        "bg-surface-muted grid",
         variant === "board" && "sticky bottom-0 z-[15]",
-        variant === "group" && "border-b",
+        variant === "group" &&
+          "after:bg-border after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:left-4 after:h-px after:opacity-70 after:content-['']",
       )}
       style={{ gridTemplateColumns: template }}
     >
