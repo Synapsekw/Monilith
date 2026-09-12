@@ -53,12 +53,12 @@
 
 **Task 3 — rows and row states**
 
-| File                                              | Responsibility                                                       |
-| ------------------------------------------------- | -------------------------------------------------------------------- |
-| `src/components/boards/table/shared.ts`           | `ROW_HEIGHT`, `SUBITEM_ROW_HEIGHT`, `CELL_TEXT`, `NAME_MEASURE_FONT` |
-| `src/components/boards/table/ItemRow.tsx`         | Row hairline → inset line; height                                    |
-| `src/components/boards/table/NameCell.tsx`        | Name scale, hover seam, seam-vs-selected precedence                  |
-| `src/components/boards/table/BoardTableInner.tsx` | Canvas measurer reads `NAME_MEASURE_FONT`                            |
+| File                                              | Responsibility                                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/components/boards/table/shared.ts`           | `ROW_HEIGHT`, `SUBITEM_ROW_HEIGHT`, `ROW_HAIRLINE`, `NAME_MEASURE_FONT` |
+| `src/components/boards/table/ItemRow.tsx`         | Row hairline → inset line; height                                       |
+| `src/components/boards/table/NameCell.tsx`        | Name scale, hover seam, seam-vs-selected precedence                     |
+| `src/components/boards/table/BoardTableInner.tsx` | Canvas measurer reads `NAME_MEASURE_FONT`                               |
 
 **Task 4 — subitems, add-rows, group header**
 
