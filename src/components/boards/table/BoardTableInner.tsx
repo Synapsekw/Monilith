@@ -81,6 +81,7 @@ import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
   gridTemplate,
+  NAME_MEASURE_FONT,
   type CellControls,
   type ColumnHeaderControls,
   type GroupControls,
@@ -433,15 +434,17 @@ export function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (Inter 14px / text-sm), used
-  // to auto-fit the Name column to the longest item name across ALL items (not
-  // just the virtualized rows). Pure measurement — no server round-trip.
+  // Offscreen canvas measurer at the Name cell font (500 13.5px Inter /
+  // text-item), used to auto-fit the Name column to the longest item name
+  // across ALL items (not just the virtualized rows). Pure measurement — no
+  // server round-trip. NAME_MEASURE_FONT is the single source of truth shared
+  // with what NameCell actually renders — see its doc comment in ./shared.
   const measureName = useMemo(() => {
     const ctx =
       typeof document !== "undefined"
         ? document.createElement("canvas").getContext("2d")
         : null;
-    if (ctx) ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    if (ctx) ctx.font = NAME_MEASURE_FONT;
     return (text: string) => ctx?.measureText(text).width ?? 0;
   }, []);
   const autoFitWidth = useMemo(

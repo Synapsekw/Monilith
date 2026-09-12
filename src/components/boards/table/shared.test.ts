@@ -149,3 +149,30 @@ describe("rowCellsEqual", () => {
     expect(rowCellsEqual(base, next, ["i1"], columns)).toBe(false);
   });
 });
+
+import {
+  ROW_HEIGHT,
+  SUBITEM_ROW_HEIGHT,
+  NAME_MEASURE_FONT,
+  ROW_HAIRLINE,
+} from "./shared";
+
+describe("Quiet Grid geometry", () => {
+  it("uses 42px item rows and 38px subitem rows", () => {
+    expect(ROW_HEIGHT).toBe(42);
+    expect(SUBITEM_ROW_HEIGHT).toBe(38);
+  });
+
+  it("measures the name column with the rendered name font", () => {
+    // A drifted measurer silently mis-sizes the frozen column; typecheck and
+    // jsdom both stay green, so this string is asserted explicitly.
+    expect(NAME_MEASURE_FONT).toContain("13.5px");
+    expect(NAME_MEASURE_FONT).toContain("Inter");
+    expect(NAME_MEASURE_FONT).not.toContain("14px");
+  });
+
+  it("insets the row hairline so it starts at the name text", () => {
+    expect(ROW_HAIRLINE).toContain("before:left-4");
+    expect(ROW_HAIRLINE).not.toMatch(/\bborder-b\b/);
+  });
+});

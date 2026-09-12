@@ -127,12 +127,17 @@ export const NameCell = memo(function NameCell({
       }
       className={cn(
         "group/name ease-keystone relative sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        // Hover seam: a 2px periwinkle rule that wipes in from the left edge.
+        // `after:` is the seam, `before:` is the selected bar — a selected row
+        // owns x=0, so the seam hides rather than stacking on top of it.
+        "after:bg-primary after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-300 after:content-[''] group-hover/name:after:scale-y-100",
         // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
         // (::before, inset 6px). The bar is pointer-events-none so it never
         // blocks the checkbox/drag targets.
         selected
           ? cn(
               "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded",
+              "after:hidden",
               // The intel rule owns x=0 while a chip is active; the periwinkle
               // wash still says "selected" on its own.
               intelMatch === true && "before:hidden",
@@ -140,9 +145,23 @@ export const NameCell = memo(function NameCell({
           : indented
             ? "bg-surface-sunken hover:bg-surface"
             : "bg-surface hover:bg-surface-muted",
-        NAME_FREEZE_EDGE,
+        // `name-freeze-edge` is a bare marker class (asserted by
+        // BoardTable.test.tsx's "marks the Name header and name cells as the
+        // freeze edge") — its shadow itself is reproduced below as a real
+        // element, NOT via `NAME_FREEZE_EDGE`'s own `after:` rules, because
+        // this wrapper's `::after` is now spoken for by the hover seam above;
+        // stacking both `after:` rule sets on one pseudo-element would collide
+        // (competing left-0/right-0, width, transform and background).
+        "name-freeze-edge",
       )}
     >
+      {/* Frozen-edge scroll shadow — a real node so it doesn't fight the hover
+          seam for this wrapper's `::after`. Mirrors NAME_FREEZE_EDGE's visual
+          exactly (see @/components/boards/SummaryRow). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-4 translate-x-full bg-gradient-to-r from-black/15 to-transparent opacity-0 transition-opacity group-data-[scrolledx=true]/scroll:opacity-100"
+      />
       {intelMatch === true && (
         <span aria-hidden data-testid="intel-rule" className="intel-rule" />
       )}
@@ -162,7 +181,7 @@ export const NameCell = memo(function NameCell({
         }}
         aria-disabled={pending || undefined}
         className={cn(
-          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          "focus-visible:ring-ring text-item flex h-full min-w-0 flex-1 items-center truncate font-medium tracking-[-0.011em] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
           pending ? "cursor-default opacity-60" : "cursor-pointer",
           indented ? "pl-8" : "px-4",
         )}

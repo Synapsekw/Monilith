@@ -28,6 +28,7 @@ import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
 import { RowSelectCheckbox } from "./RowSelectCheckbox";
 import {
+  ROW_HAIRLINE,
   ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
@@ -260,10 +261,9 @@ export const ItemRow = memo(function ItemRow({
     <div
       ref={setNodeRef}
       className={cn(
-        "ease-keystone border-border grid w-full border-b transition-colors",
-        selected
-          ? "bg-primary/[0.08]"
-          : "hover:bg-foreground/[0.025] hover:border-border-hover",
+        "ease-keystone grid w-full transition-colors",
+        ROW_HAIRLINE,
+        selected ? "bg-primary/[0.08]" : "hover:bg-state-hover",
         isDragging && "shadow-drag relative z-10",
         intelRowClasses(intelMatch),
       )}

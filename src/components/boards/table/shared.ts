@@ -171,7 +171,28 @@ export function rowCellsEqual(
   return true;
 }
 
-export const ROW_HEIGHT = 36; // direction C density
+/** Item-row height. Quiet Grid density (was 36 — "direction C"). */
+export const ROW_HEIGHT = 42;
+
+/** Subitem rows sit one step tighter than their parent. */
+export const SUBITEM_ROW_HEIGHT = 38;
+
+/**
+ * The row separator. Quiet Grid has NO vertical rules, so the horizontal one
+ * is inset to start at the name text (16px) rather than the frame edge, at 70%
+ * alpha — a full-bleed `border-b` re-draws the cage this design removes.
+ */
+export const ROW_HAIRLINE =
+  "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:h-px before:bg-border before:opacity-70 before:content-['']";
+
+/**
+ * Canvas font for the Name-column auto-fit measurement in BoardTableInner.
+ * MUST stay in sync with what NameCell actually renders (13.5px / 500 Inter);
+ * a drift here mis-sizes the frozen column on every board that has never had
+ * its width set by hand, and nothing in typecheck or jsdom catches it.
+ */
+export const NAME_MEASURE_FONT =
+  "500 13.5px Inter, ui-sans-serif, system-ui, sans-serif";
 
 export const VALUE_COL_WIDTH = 180;
 const ADD_COL_WIDTH = 44;
