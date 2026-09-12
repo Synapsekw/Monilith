@@ -6,6 +6,27 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-12",
     kind: "improved",
+    title: "A calmer board table",
+    description:
+      "Board tables lost their vertical grid lines — columns are now separated by alignment and a single hairline beside the item name. Rows are taller, hover and selection are clearer, and subitems hang off a thread line under their parent.",
+  },
+  {
+    date: "2026-09-12",
+    kind: "improved",
+    title: "A new typeface",
+    description:
+      "Monolith now uses Inter throughout, which stays crisp at the smaller sizes board tables use and lines numbers up in currency and number columns.",
+  },
+  {
+    date: "2026-09-12",
+    kind: "fixed",
+    title: "Long item names no longer get cut off",
+    description:
+      "The Name column now measures the space its own controls take, so a name that fits is no longer truncated with empty space beside it.",
+  },
+  {
+    date: "2026-09-12",
+    kind: "improved",
     title: "Collapse a panel from the edge it moves",
     description:
       "The sidebar and the agent dock no longer have collapse buttons tucked in their corners. Reach for the edge of the page beside the panel and it lights up along its whole length; click to fold it away, click again to bring it back. On the dock side that same edge still drags to resize, and Cmd+\\ still folds the sidebar.",
