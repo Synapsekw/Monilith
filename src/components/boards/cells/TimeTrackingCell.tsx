@@ -73,12 +73,21 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
           <button
             type="button"
             aria-label="Open time tracking"
-            className={cn(
-              "text-cell flex items-center gap-1 rounded px-1 py-0.5 transition-colors",
+            // `text-cell` is kept OUT of the cn() call on purpose: tailwind-merge
+            // 3.6.0 classifies `text-cell` (a custom `--text-*` theme key, meant
+            // to set font-size) as belonging to the text-COLOR group, since
+            // custom `--text-*` keys are invisible to its size-group detection.
+            // Passed through cn() alongside `text-foreground`/`text-muted-foreground`,
+            // twMerge would treat them as conflicting members of one group and
+            // silently drop whichever came first — see GroupHeaderRow.tsx for the
+            // same fix. Keeping it as a separate plain literal here sidesteps the
+            // merge entirely instead of relying on argument order.
+            className={`text-cell ${cn(
+              "flex items-center gap-1 rounded px-1 py-0.5 transition-colors",
               "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
               isEmpty && "text-muted-foreground/40",
               !isEmpty && "text-foreground",
-            )}
+            )}`}
           >
             {running && (
               <span

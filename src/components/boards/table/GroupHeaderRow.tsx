@@ -113,10 +113,20 @@ export function GroupHeaderRow({
     >
       {/* Frozen group/Name cell — group controls + Name-column resize handle. */}
       <div
-        className={cn(
-          "bg-surface text-foreground text-item relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
+        // `text-item` is kept OUT of the cn() call on purpose: tailwind-merge
+        // 3.6.0 classifies `text-item` (a custom `--text-*` theme key, meant to
+        // set font-size) as belonging to the text-COLOR group, since custom
+        // `--text-*` keys are invisible to its size-group detection. Passed
+        // through cn() alongside `text-foreground`, twMerge treats them as
+        // conflicting members of one group and drops whichever came first —
+        // here it silently deleted `text-foreground`, so this cell inherited
+        // the parent row's `text-muted-foreground` and every group name
+        // rendered muted grey instead of full foreground. See
+        // TimeTrackingCell.tsx for the same fix.
+        className={`text-item ${cn(
+          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
           NAME_FREEZE_EDGE,
-        )}
+        )}`}
       >
         {selectAll}
         <button
