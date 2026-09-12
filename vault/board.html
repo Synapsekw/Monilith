@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-12 07:45",
+  "updated": "2026-09-12 08:20",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "bda5fa36",
+        "value": "38d0f4c0",
         "tone": "warn",
-        "note": "Ahead of main by the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher) and its whole-branch review repairs — user-visible, announced on /updates, unpromoted. Everything else on develop shipped in PR #122. No live worktrees."
+        "note": "Ahead of main by the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher), its whole-branch review repairs, and the Board Intelligence latency fix (effort low instead of the inherited high). Unpromoted. No live worktrees."
       },
       {
         "name": "main",
@@ -190,7 +190,7 @@
   "next": [
     {
       "title": "Walk the board brief in a real browser — it is live in production and unproven",
-      "why": "Apply, Undo, Dismiss, Show rows, viewer mode and Nudge have never been exercised by a person: the Chrome extension was disconnected for the build session and the e2e provisioner refuses DEV by design. The owner's first two clicks on the shipped feature both failed, and no test saw it. Steps 4-12 of the Phase 2 session note are the script.",
+      "why": "Apply, Undo, Dismiss, Show rows, viewer mode and Nudge have never been exercised by a person: the Chrome extension was disconnected for the build session and the e2e provisioner refuses DEV by design. The owner's first two clicks on the shipped feature both failed, and no test saw it. Steps 4-12 of the Phase 2 session note are the script. This pass now also collects the latency measurement the effort fix is owed: time one Catch me up, then read board_intelligence_runs.tokens_out against the 5284 baseline. Nothing was announced on /updates because faster is an outcome claim nobody has observed yet.",
       "tags": [
         "intelligence",
         "manual",
@@ -198,12 +198,12 @@
       ]
     },
     {
-      "title": "Give board_intelligence an explicit thinking budget",
-      "why": "The brief takes about two minutes and the owner has raised it. Measured, not guessed: the stored payload is ~700 output tokens of JSON against ~5300 billed, so ~85% is adaptive thinking nobody chose — generate.ts passes no thinking, so requestShapeFor hands it the default of adaptive plus effort high. ask/context.ts and write/propose.ts both opt out explicitly, with the reasoning in comments. A tier change cannot fix it: pickModel puts the org default model above the tier hint.",
+      "title": "Fix requestShapeFor — it is wrong about five active models",
+      "why": "Pre-existing on develop and exposing every adapter-routed feature, found while fixing the intelligence latency. The /haiku/i two-bucket split sends effort high to claude-sonnet-4.5, claude-sonnet-4 and claude-opus-4, all of which reject the key; adaptive thinking to claude-opus-4.5, which is pre-4.6 and needs budget_tokens; and budget_tokens to claude-3-haiku, which supports no thinking at all. All five are active catalog rows, and pickModel lets an org default outrank the tier hint, so one Settings change arms a 400. Likely repair: shape per model from the feed's reasoning_options, which already carries the fact.",
       "tags": [
-        "intelligence",
-        "latency",
-        "small"
+        "ai",
+        "latent",
+        "providers"
       ]
     },
     {
@@ -380,14 +380,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-0745-intelligence-size-clamp-and-promote-122",
-    "when": "2026-09-12 07:45",
-    "title": "Catch me up fixed at the root, and Phase 2 promoted to production",
+    "id": "2026-09-12-0820-intelligence-latency-effort-fix",
+    "when": "2026-09-12 08:20",
+    "title": "Board Intelligence latency — effort, not disabled thinking",
     "bullets": [
-      "Root-caused the failure from the data before touching code: two ai_usage rows and zero board_intelligence_runs rows proved the model call completed and the fault was downstream; the logged ZodError named the fields.",
-      "Size caps in rawOutputSchema now truncate instead of reject, title/actions lost min(1) (validate drops those cards), the stored schemas stay strict, and the prompt states every budget. ADR gotcha-103.",
-      "Promoted develop to main as PR #122, 44 commits — Board Intelligence Phases 1 and 2, the Anthropic instructions fix, the sidebar Keystone polish. Verified live on 918c38bb, squash divergence healed.",
-      "Measured the latency complaint: ~85% of the brief's output tokens are adaptive thinking nobody chose. Deferred by the owner; the fix is an explicit thinking config in generate.ts."
+      "Diagnosed from data: 5284 billed output tokens against a 2614-character payload, so ~85% of the cost and of the two-minute wait was reasoning the call site never asked for and could not see.",
+      "The first fix was WRONG and the whole-branch review caught it, sixth session running: thinking type disabled follows four in-repo precedents and passes all four gates, but Claude Fable 5/5.1 reject it with a 400 and both are active catalog rows, so one admin picking Fable in Settings would have failed every run.",
+      "Shipped the portable lever instead — effort low via a new withEffort helper, thinking left on the model's own shape. Merged at 38d0f4c0. ADR gotcha-104.",
+      "That ADR's own rule then turned on its author: requestShapeFor's /haiku/i split is wrong about five active models, pre-existing on develop and exposing every adapter-routed feature. Left for its own task.",
+      "Nothing announced on /updates: faster is an outcome claim and nobody has observed it yet. The measurement rides the owed browser pass."
     ]
   }
 }
