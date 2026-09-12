@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-12",
     kind: "improved",
+    title: "Collapse a panel from the edge it moves",
+    description:
+      "The sidebar and the agent dock no longer have collapse buttons tucked in their corners. Reach for the edge of the page beside the panel and it lights up along its whole length; click to fold it away, click again to bring it back. On the dock side that same edge still drags to resize, and Cmd+\\ still folds the sidebar.",
+  },
+  {
+    date: "2026-09-12",
+    kind: "improved",
     title: "Your agents front and centre in the board dock",
     description:
       "The board's agent dock now sits beside the board on the app background and puts Intelligence, Ask and each of your agents in one row of tiles. Tap an agent to start talking to it, watch its dot pulse while it answers, fold the thread list out of the way, and collapse the whole dock to a thin rail of the same tiles.",
