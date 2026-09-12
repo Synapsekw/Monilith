@@ -20,6 +20,22 @@ export async function generateBoardIntelligence(
   const { data, usage, model } = await opts.adapter.generateStructured<unknown>(
     {
       ...toRequestArgs(opts),
+      // MUST be explicit. `toRequestArgs` hands a Sonnet/Opus-tier model
+      // DEFAULT_SHAPE — adaptive thinking at effort "high" — and the first
+      // real run billed 5284 output tokens for a stored payload of ~700: about
+      // 85% of both the cost and the ~2-minute wait was extended thinking
+      // nobody chose. Unlike the other features that disable it, the reason
+      // here is NOT a tight max_tokens (the adapter allows 16000) — it is
+      // latency on a foreground, user-initiated action.
+      //
+      // Disabled rather than a small budget because degradation is VISIBLE:
+      // `validateIntelligenceOutput` drops any suggestion that isn't grounded
+      // in a real item id and logs "[intelligence] dropped suggestions", so a
+      // thinking-off model that grounds worse announces itself in the logs
+      // instead of quietly shipping a worse brief. `effort` is deliberately
+      // left on the model's own shape — it is an output_config knob, and Haiku
+      // rejects the key entirely.
+      thinking: { type: "disabled" },
       system: systemPrompt(),
       user: buildUserPrompt(input),
       schema: BOARD_INTELLIGENCE_JSON_SCHEMA,

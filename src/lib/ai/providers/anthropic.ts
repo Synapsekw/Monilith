@@ -27,9 +27,14 @@ const MAX_OUTPUT_TOKENS = 16000;
  */
 function toSdkThinking(thinking: ThinkingConfig | undefined) {
   if (!thinking) return undefined;
-  return thinking.type === "adaptive"
-    ? { type: "adaptive" as const }
-    : { type: "enabled" as const, budgetTokens: thinking.budget_tokens };
+  switch (thinking.type) {
+    case "adaptive":
+      return { type: "adaptive" as const };
+    case "disabled":
+      return { type: "disabled" as const };
+    case "enabled":
+      return { type: "enabled" as const, budgetTokens: thinking.budget_tokens };
+  }
 }
 
 export const anthropicAdapter: ProviderAdapter = {
