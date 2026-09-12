@@ -190,7 +190,7 @@
   "next": [
     {
       "title": "One authenticated browser pass — it clears four sessions of owed walkthroughs",
-      "why": "Nothing merged in the last five sessions has been seen by a person in an authenticated browser; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. The table redesign is now live in production and is the natural start: open a board, confirm one vertical line beside the item name and unbroken separators across it, expand a parent for the subitem thread, scroll sideways to check the add-item row stays frozen, and confirm long names stop truncating. Then the lit seam on the card edge, then the board brief in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none ever exercised and the owner's first two clicks both failed. While you are in there, time one Catch me up and read board_intelligence_runs.tokens_out against the 5284 baseline; the latency fix is still an unobserved claim.",
+      "why": "Nothing merged in the last five sessions has been seen by a person in an authenticated browser; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. The table redesign is now live in production and is the natural start: open a board, confirm one vertical line beside the item name and unbroken separators across it, expand a parent for the subitem thread, scroll sideways to check the add-item row stays frozen, and confirm long names stop truncating. Then the lit seam on the card edge, then the board brief in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none ever exercised and the owner's first two clicks both failed. The latency fix is now measured and closed (5284 to 1334 output tokens, about two minutes to 21 seconds), so what is left to judge in there is whether the brief READS as well at the lower effort — and the refusal log now names each rejected action, so the answer is in the dev terminal rather than a guess.",
       "tags": [
         "manual",
         "seam",
@@ -382,15 +382,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-1957-name-rule-width-and-promote-123",
-    "when": "2026-09-12 19:57",
-    "title": "Quiet Grid shipped, then one vertical line back",
+    "id": "2026-09-12-2001-intelligence-refusal-diagnostics",
+    "when": "2026-09-12 20:01",
+    "title": "The refusal log learns to talk",
     "bullets": [
-      "The board table lost every vertical cell rule and gained 42px rows, an inset separator, a hover seam, threaded subitems and a group dot; Nunito Sans became Inter everywhere but the wordmark. Chosen from live in-browser prototypes: four table directions, then four build-outs crossed with four type systems.",
-      "The owner asked for exactly one vertical line back — a permanent hairline at the frozen Name column — and that change exposed two defects the redesign had hidden: row separators were being painted over by the frozen cell (z-10 against an unlayered pseudo-element), and the auto-fit reserved 60px of chrome that actually measures 197px, truncating names with space beside them.",
-      "Three defects on the redesign branch shared one shape — the class is right in the source and absent from the rendered page. A group-hover variant sat on its own group element, so the hover seam was dead on every row for the whole branch; tailwind-merge classifies our custom --text-* tokens as colours, so cn() greyed out every group name; and a generated class string reached the CSS bundle only because a 15-week-old plan doc still held the literal.",
-      "Five green task reviews still missed three blockers the whole-branch review caught, including ItemRow still drawing the vertical rules the redesign exists to remove. Two ADRs written: gotcha-105 and gotcha-106.",
-      "Promoted as PR #123, 51 commits, verified live by content rather than status. Both of the last two fixes were proven against a static CSS harness, not a live board — the DEV fixture tenants have no items."
+      "The latency complaint is CLOSED and measured on the owner's own run, not felt: 5284 to 1334 output tokens, about two minutes to 21 seconds, with the stored brief slightly LONGER. Different boards, so not a strict A/B, but useful output rose while billed output fell three quarters.",
+      "That run fired the dropped-suggestions warning and the log could not say why, so toActionParse now returns 17 constant reasons, one per failing check, with kept/proposed/model/tokensOut alongside. Missing and invented are deliberately distinct: a null id is a structured-output failure, a wrong one is a grounding failure, and they call for opposite fixes.",
+      "Two of the branch's own guard tests were vacuous and the review caught both — a coverage test asserting size equals 17 against a hardcoded 17 while never referencing the union it claimed to cover, and an agrees-with-toAction tautology over the shared code path. Fixed by keying the case table on the union, exhaustive at compile time and verified by injecting a probe member.",
+      "The same review found the log lying twice over: denominators taken after cappedArray truncated, so a model proposing nine suggestions logged five and a clean-looking run hid four dropped cards; and dropped 0 of 3 printed while one of three had in fact been dropped. Neither was visible to any gate.",
+      "Announced the measured speed-up on /updates — held back at merge time because faster was then an unobserved outcome claim."
     ]
   }
 }
