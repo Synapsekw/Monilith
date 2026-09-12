@@ -1,22 +1,18 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Brand } from "@/components/brand/brand";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 
 /**
- * Static sidebar frame: brand + collapse toggle + a `navSlot` for the streamed
- * per-user nav (boards/dashboards/workspaces/platform). The frame is part of the
- * prerendered shell; the slot is Suspense-wrapped by the caller and streams in.
+ * Static sidebar frame: brand + a `navSlot` for the streamed per-user nav
+ * (boards/dashboards/workspaces/platform). The frame is part of the prerendered
+ * shell; the slot is Suspense-wrapped by the caller and streams in.
+ *
+ * The rail owns the ⌘\ shortcut but not a visible toggle: the collapse control
+ * is the card's left seam (`SidebarSeam`), mounted by the shell.
  */
 export function Sidebar({ navSlot }: { navSlot: ReactNode }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -48,37 +44,16 @@ export function Sidebar({ navSlot }: { navSlot: ReactNode }) {
           isCollapsed ? "w-14" : "w-60",
         )}
       >
+        {/* Brand alone. The collapse chevron that used to sit here moved to the
+            seam it actually operates — `SidebarSeam`, on the card's left edge —
+            so the row no longer has to reflow into a two-item column at 56px. */}
         <div
           className={cn(
-            "flex min-h-14 gap-1 px-3 py-2",
-            isCollapsed
-              ? "flex-col items-center px-0"
-              : "items-center justify-between",
+            "flex min-h-14 items-center gap-1 px-3 py-2",
+            isCollapsed && "justify-center px-0",
           )}
         >
           <Brand collapsed={isCollapsed} />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-expanded={!isCollapsed}
-                onClick={toggleSidebar}
-                className="text-muted-foreground hover:text-foreground size-8 shrink-0"
-              >
-                {isCollapsed ? (
-                  <ChevronsRight className="size-4" />
-                ) : (
-                  <ChevronsLeft className="size-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {isCollapsed ? "Expand sidebar" : "Collapse sidebar"} (⌘\)
-            </TooltipContent>
-          </Tooltip>
         </div>
 
         {navSlot}

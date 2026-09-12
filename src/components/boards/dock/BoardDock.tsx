@@ -21,6 +21,7 @@ import {
 } from "@/stores/board-intelligence";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
 import { DockBody, type DockBodyProps } from "./DockBody";
+import { DockSeam } from "./DockSeam";
 import { cn } from "@/lib/utils";
 import {
   DockTiles,
@@ -34,8 +35,6 @@ import {
   clampDockWidth,
   useDockState,
   useNarrowViewport,
-  DOCK_MAX_WIDTH,
-  DOCK_MIN_WIDTH,
   DOCK_RAIL_WIDTH,
 } from "./use-dock-state";
 
@@ -192,14 +191,12 @@ export function BoardDock({
     const want = focusAfterFold.current;
     if (!want) return;
     focusAfterFold.current = null;
-    // Scoped to the portalled aside: the Sheet (narrow) has neither layer, and
-    // an open request arriving on a phone must not hunt for a rail.
+    // Closing lands on the seam's own button. It is NOT inside the aside any
+    // more — the seam is portalled onto the content card — so this looks it up
+    // by its marker rather than scoping to the aside. A phone has no seam, and
+    // `document.querySelector` simply finds nothing there.
     if (want === "rail") {
-      asideRef.current
-        ?.querySelector<HTMLElement>(
-          "[data-layer='mini'] button[aria-label='Open agent dock']",
-        )
-        ?.focus();
+      document.querySelector<HTMLElement>("[data-dock-seam-toggle]")?.focus();
       return;
     }
     const full = asideRef.current?.querySelector("[data-layer='full']");
@@ -627,7 +624,7 @@ export function BoardDock({
   const shownWidth = dragWidth ?? width;
 
   const startResize = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
+    (e: React.PointerEvent<HTMLElement>) => {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = width;
@@ -728,7 +725,7 @@ export function BoardDock({
   // rendered.
   if (!slot) return null;
 
-  return createPortal(
+  const aside = createPortal(
     <aside
       ref={asideRef}
       aria-label="Agent dock"
@@ -753,33 +750,10 @@ export function BoardDock({
         aria-hidden={open ? undefined : true}
         className={cn(LAYER, open ? FULL_IN : FULL_OUT)}
       >
-        {open || animating ? (
-          <>
-            {/* Hairlines brighten rather than thicken: the grip is invisible
-                until you reach for it, then it is the border going bright. */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize agent dock"
-              aria-valuenow={shownWidth}
-              aria-valuemin={DOCK_MIN_WIDTH}
-              aria-valuemax={DOCK_MAX_WIDTH}
-              tabIndex={0}
-              onPointerDown={startResize}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  setWidth(width + RESIZE_STEP);
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  setWidth(width - RESIZE_STEP);
-                }
-              }}
-              className="hover:bg-border-hover focus-visible:bg-border-bright absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize touch-none bg-transparent outline-none"
-            />
-            <DockBody {...body} onClose={() => toggleOpen(false)} />
-          </>
-        ) : null}
+        {/* No close button and no resize grip in here any more: both are the
+            card's right seam (DockSeam), which is one control on one edge —
+            lit on approach, folding on click, resizing on drag. */}
+        {open || animating ? <DockBody {...body} /> : null}
       </div>
       <div
         data-layer="mini"
@@ -793,15 +767,8 @@ export function BoardDock({
       >
         {!open || animating ? (
           <>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Open agent dock"
-              className="text-muted-foreground hover:text-foreground size-8 shrink-0"
-              onClick={() => toggleOpen(true)}
-            >
-              <PanelRightOpen className="size-4" />
-            </Button>
+            {/* Opening is the seam's job now — the rail carries only the tiles,
+                and each still opens the dock ON the tile it names. */}
             {/* The same tiles, vertical (§4): any tile opens the dock ON it. */}
             <DockTiles
               agents={agents}
@@ -826,5 +793,20 @@ export function BoardDock({
       </div>
     </aside>,
     slot,
+  );
+
+  return (
+    <>
+      {aside}
+      {/* The control for this edge lives ON the card, not in the dock — it is
+          the card's own hairline. It portals itself into the shell's seam slot. */}
+      <DockSeam
+        open={open}
+        width={shownWidth}
+        onToggle={toggleOpen}
+        onResizeStart={startResize}
+        onResizeStep={(delta: number) => setWidth(width + delta * RESIZE_STEP)}
+      />
+    </>
   );
 }

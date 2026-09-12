@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
+import { SidebarSeam } from "@/components/shell/sidebar-seam";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -33,7 +34,7 @@ export function AppShell({
   commandPalette,
 }: AppShellProps) {
   return (
-    <div className="app-wash flex h-svh w-full overflow-hidden [&:has(#app-dock-slot:not(:empty))>div>main]:mr-1">
+    <div className="app-wash flex h-svh w-full overflow-hidden [&:has(#app-dock-slot:not(:empty))_#app-card-frame]:mr-1">
       <Sidebar navSlot={sidebarNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -48,9 +49,25 @@ export function AppShell({
             {headerUser}
           </div>
         </header>
-        <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 min-h-0 flex-1 overflow-auto rounded-xl border">
-          {children}
-        </main>
+        {/* The card gets a positioned FRAME of its own so the lit seam can lay
+            itself over the card's outline (CardSeam is `absolute inset-0`).
+            The frame carries the gutter; <main> fills it and keeps its own
+            radius, border, shadow and scrolling, so nothing that measures or
+            scrolls inside the card changes. The root's dock variant above
+            narrows this frame, not <main>. */}
+        <div
+          id="app-card-frame"
+          className="relative mr-2 mb-2 ml-1 min-h-0 min-w-0 flex-1"
+        >
+          <main className="bg-content-surface border-content-edge shadow-content-lift absolute inset-0 overflow-auto rounded-xl border">
+            {children}
+          </main>
+          <SidebarSeam />
+          {/* The board dock portals its own seam here (DockSeam.tsx) so the
+              card's right edge folds the dock the way the left edge folds the
+              rail. Static and empty on purpose, exactly like #app-dock-slot. */}
+          <div id="card-seam-slot" />
+        </div>
       </div>
       {/* The board page's agent dock portals its <aside> in here (BoardDock.tsx),
           so the dock sits on the wash as the sidebar's twin — rail | card | dock —
