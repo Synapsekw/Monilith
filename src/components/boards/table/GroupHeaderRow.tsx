@@ -119,11 +119,6 @@ export function GroupHeaderRow({
         )}
       >
         {selectAll}
-        <span
-          aria-hidden
-          className="size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: group.color }}
-        />
         <button
           type="button"
           aria-label={`Reorder ${group.name}`}
@@ -146,6 +141,14 @@ export function GroupHeaderRow({
             <ChevronDown className="size-4" />
           )}
         </button>
+        {/* Group color, right next to the name it labels — not left of the
+            drag/collapse controls, which would read as attached to the
+            select-all checkbox instead. */}
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: group.color }}
+        />
         {renaming ? (
           <Input
             autoFocus

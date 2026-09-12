@@ -55,7 +55,13 @@ describe("subitem rows — Quiet Grid", () => {
 
   it("draws a thread line so the parent link survives without vertical rules", () => {
     renderSubitem();
-    expect(screen.getByTestId("subitem-thread")).toBeInTheDocument();
+    const thread = screen.getByTestId("subitem-thread");
+    expect(thread).toBeInTheDocument();
+    // Not just present — actually drawn: a 1px line hung at the fixed 26px
+    // offset. A testid alone would pass on an invisible/zero-size span.
+    expect(thread.className).toContain("bg-border");
+    expect(thread.className).toContain("w-px");
+    expect(thread.className).toContain("left-[26px]");
   });
 
   it("indents the subitem name to 40px", () => {

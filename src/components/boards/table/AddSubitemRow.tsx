@@ -47,9 +47,15 @@ export function AddSubitemRow({
 
   return (
     <div
+      // ROW_HAIRLINE FIRST: it opens with `relative`, which is in the same
+      // tailwind-merge conflict group as `sticky` below — putting the literal
+      // string second makes `sticky` the later (winning) class instead of
+      // silently losing to `relative`. `sticky` still establishes a valid
+      // positioning context for the hairline's `before:` pseudo-element, so
+      // nothing here needs a separate `relative`.
       className={cn(
-        "group/add bg-surface-sunken sticky left-0 flex flex-col py-1.5 pr-4 pl-10",
         ROW_HAIRLINE,
+        "group/add bg-surface-sunken sticky left-0 flex flex-col py-1.5 pr-4 pl-10",
       )}
     >
       <div className="flex items-center gap-2">
