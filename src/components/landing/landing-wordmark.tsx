@@ -6,6 +6,10 @@ import styles from "./editorial-landing.module.css";
  * geometry as the app's nav `Brand` (Nunito 800, tracking .025em, the slab
  * glyph recut as the letter I at 0.72em), just sized by the landing's own
  * CSS. Renders as a plain span; wrap it in the link the context needs.
+ *
+ * Nunito 800 here is the WORDMARK face, not the UI font: the product type is
+ * Inter (see src/app/layout.tsx). This divergence is deliberate — the logotype
+ * keeps its rounded ExtraBold identity. Do not "unify" it.
  */
 export function LandingWordmark({ className }: { className?: string }) {
   return (

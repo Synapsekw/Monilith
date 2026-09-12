@@ -51,7 +51,7 @@ for (const key of ["localStorage", "sessionStorage"] as const) {
 vi.mock("next/font/google", () => {
   const font = () => ({ className: "font-mock", variable: "", style: {} });
   return {
-    Nunito_Sans: font,
+    Inter: font,
     Nunito: font,
     JetBrains_Mono: font,
     Geist: font,

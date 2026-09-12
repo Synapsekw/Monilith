@@ -433,7 +433,7 @@ export function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (Nunito Sans 14px / text-sm), used
+  // Offscreen canvas measurer at the Name cell font (Inter 14px / text-sm), used
   // to auto-fit the Name column to the longest item name across ALL items (not
   // just the virtualized rows). Pure measurement — no server round-trip.
   const measureName = useMemo(() => {
