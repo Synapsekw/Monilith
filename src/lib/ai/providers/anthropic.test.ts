@@ -51,25 +51,6 @@ describe("anthropicAdapter.generateStructured request shape", () => {
     expect(anthropicOptions(captured[0]).effort).toBe("high");
   });
 
-  it("sends a feature's thinking:disabled override through to the SDK", async () => {
-    // A feature can override the model's default shape to turn thinking OFF
-    // (board-intelligence does, for latency). This asserts only that our own
-    // translation emits the SDK's camelCase shape — the fake stands in for
-    // generateObject, so no zod parse runs here. Whether the SDK actually
-    // honours it on the wire is the real-generateObject test below.
-    const captured: CapturedCall[] = [];
-    await anthropicAdapter.generateStructured({
-      ...argsFor("claude-sonnet-5"),
-      thinking: { type: "disabled" },
-      client: { generateObject: fakeGenerateObject(captured) },
-    });
-    expect(anthropicOptions(captured[0]).thinking).toEqual({
-      type: "disabled",
-    });
-    // Disabling thinking must not disturb the orthogonal output_config knob.
-    expect(anthropicOptions(captured[0]).effort).toBe("high");
-  });
-
   it("marks the system prompt as an ephemeral cache breakpoint", async () => {
     // The system prompt is frozen per feature and is the prompt-cache prefix.
     // It is sent as a system MESSAGE precisely because cache_control can only
@@ -199,52 +180,5 @@ describe("anthropicAdapter.generateStructured through the REAL generateObject", 
     ]);
     expect(res.data).toEqual({ ok: true });
     expect(res.usage).toMatchObject({ inputTokens: 11, outputTokens: 7 });
-  });
-
-  it("puts thinking:disabled on the wire, and adaptive when not overridden", async () => {
-    // The one assertion that can actually catch the defect class that took
-    // production down for four days: providerOptions are parsed by a zod
-    // schema that STRIPS unknown keys instead of throwing, so a thinking shape
-    // the SDK doesn't recognise disappears with no error — the code reads as
-    // "thinking off" while the model keeps thinking at effort "high" and the
-    // user keeps waiting two minutes. Only a real-SDK round trip sees it.
-    const bodies: Record<string, unknown>[] = [];
-    const fetchImpl = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      bodies.push(
-        JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-      );
-      return new Response(
-        JSON.stringify({
-          id: "msg_1",
-          type: "message",
-          role: "assistant",
-          model: "claude-sonnet-5",
-          content: [{ type: "text", text: '{"ok":true}' }],
-          stop_reason: "end_turn",
-          stop_sequence: null,
-          usage: { input_tokens: 1, output_tokens: 1 },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    }) as typeof globalThis.fetch;
-
-    await anthropicAdapter.generateStructured({
-      ...argsFor("claude-sonnet-5"),
-      thinking: { type: "disabled" },
-      client: { fetch: fetchImpl },
-    });
-    expect(bodies[0].thinking).toEqual({ type: "disabled" });
-
-    // The control: the same call WITHOUT the override still thinks. Without
-    // this half, a regression that dropped `thinking` entirely would leave the
-    // assertion above passing for the wrong reason.
-    await anthropicAdapter.generateStructured({
-      ...argsFor("claude-sonnet-5"),
-      client: { fetch: fetchImpl },
-    });
-    expect(bodies[1].thinking).toEqual({ type: "adaptive" });
   });
 });

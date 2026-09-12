@@ -67,13 +67,13 @@ describe("generateBoardIntelligence", () => {
     });
   });
 
-  it("disables thinking even on a model whose default shape enables it", async () => {
+  it("lowers effort below the model's default shape", async () => {
     // claude-sonnet-5 resolves to DEFAULT_SHAPE = adaptive thinking at effort
     // "high". Measured on the first real run: 5284 billed output tokens for a
     // ~700-token stored payload — roughly 85% of the bill, and of the two
-    // minutes the user waits, was extended thinking nobody asked for. Assert
-    // the override at the seam where it is written, so a refactor of
-    // toRequestArgs cannot silently reinstate adaptive thinking here.
+    // minutes the user waits, was reasoning nobody asked for. Effort is the
+    // lever; assert it at the seam, so a refactor of toRequestArgs cannot
+    // silently restore "high" here.
     const { adapter, generateStructured } = stubAdapter("claude-sonnet-5");
     await generateBoardIntelligence(EMPTY_INPUT, {
       adapter,
@@ -82,18 +82,36 @@ describe("generateBoardIntelligence", () => {
       model: "claude-sonnet-5",
     });
     const args = generateStructured.mock.calls[0][0];
-    expect(requestShapeFor("claude-sonnet-5").thinking).toEqual({
-      type: "adaptive",
-    });
-    expect(args.thinking).toEqual({ type: "disabled" });
-    // `effort` is an output_config knob, not a thinking knob — it must keep
-    // riding the model's own shape.
-    expect(args.effort).toBe(requestShapeFor("claude-sonnet-5").effort);
+    expect(requestShapeFor("claude-sonnet-5").effort).toBe("high");
+    expect(args.effort).toBe("low");
   });
 
-  it("keeps omitting effort on a model that rejects it", async () => {
-    // Haiku 4.5 has no effort knob (HAIKU_SHAPE omits it). Overriding thinking
-    // must not accidentally reintroduce the key the model rejects.
+  it("never turns thinking off — Fable rejects that with a 400", async () => {
+    // The regression this test exists for: an earlier version of this fix sent
+    // `thinking: { type: "disabled" }`. Claude Fable 5/5.1 reject that outright
+    // (400), and both are ACTIVE rows in the model catalog — `pickModel` puts
+    // an org's default model above the feature's tier hint, so a single admin
+    // picking Fable in Settings would have made every run fail. Whatever this
+    // feature overrides, it must leave the model's own thinking shape alone.
+    for (const model of ["claude-fable-5.1", "claude-opus-5"]) {
+      const { adapter, generateStructured } = stubAdapter(model);
+      await generateBoardIntelligence(EMPTY_INPUT, {
+        adapter,
+        apiKey: "k",
+        baseUrl: null,
+        model,
+      });
+      const args = generateStructured.mock.calls[0][0];
+      expect(args.thinking).toEqual(requestShapeFor(model).thinking);
+      expect(args.thinking).not.toEqual({ type: "disabled" });
+    }
+  });
+
+  it("keeps omitting effort on a model that rejects the key", async () => {
+    // Haiku 4.5 has no effort knob (HAIKU_SHAPE omits it), and sending the key
+    // at all is a 400 — so the override must not introduce it. `toBeUndefined`
+    // would pass for a present-and-undefined key too, which is the regression
+    // this guards, hence the `in` check.
     const { adapter, generateStructured } = stubAdapter(
       "claude-haiku-4-5-20251001",
     );
@@ -104,7 +122,7 @@ describe("generateBoardIntelligence", () => {
       model: "claude-haiku-4-5-20251001",
     });
     const args = generateStructured.mock.calls[0][0];
-    expect(args.thinking).toEqual({ type: "disabled" });
-    expect(args.effort).toBeUndefined();
+    expect("effort" in args && args.effort !== undefined).toBe(false);
+    expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 1024 });
   });
 });

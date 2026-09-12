@@ -1,5 +1,10 @@
-import { requestShapeFor } from "@/lib/ai/model-map";
+import { requestShapeFor, type Effort } from "@/lib/ai/model-map";
 import type { GenerateArgs } from "@/lib/ai/providers/types";
+
+type RequestArgs = Pick<
+  GenerateArgs,
+  "apiKey" | "baseUrl" | "model" | "thinking" | "effort"
+>;
 
 /**
  * Flatten a resolved model into the adapter's request arguments.
@@ -20,7 +25,7 @@ export function toRequestArgs(opts: {
   /** Non-null only for openai-compatible providers. */
   baseUrl?: string | null;
   model: string;
-}): Pick<GenerateArgs, "apiKey" | "baseUrl" | "model" | "thinking" | "effort"> {
+}): RequestArgs {
   const shape = requestShapeFor(opts.model);
   return {
     apiKey: opts.apiKey,
@@ -29,4 +34,25 @@ export function toRequestArgs(opts: {
     thinking: shape.thinking,
     effort: shape.effort,
   };
+}
+
+/**
+ * Lower (or raise) the reasoning effort for ONE feature, without touching the
+ * model-shape seam that decides whether the knob exists at all.
+ *
+ * `effort` is the portable way to spend fewer thinking tokens. Turning thinking
+ * off outright is NOT portable and must not be done here: Claude Fable 5/5.1
+ * reject `thinking: { type: "disabled" }` with a 400 outright, and Opus 5
+ * accepts it only at effort "high" or below — and even there, disabling
+ * thinking is documented to make the model occasionally write a tool call into
+ * its visible text and leak `<thinking>` tags. Lowering effort is the remedy
+ * Anthropic actually recommends, and it works on every family we route to.
+ *
+ * A feature must never set `effort` unconditionally: Haiku 4.5 rejects the key,
+ * which is exactly why `requestShapeFor` leaves it undefined there. So this
+ * overrides the LEVEL only where the model already accepts the knob, and leaves
+ * the key absent otherwise.
+ */
+export function withEffort(args: RequestArgs, effort: Effort): RequestArgs {
+  return args.effort === undefined ? args : { ...args, effort };
 }

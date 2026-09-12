@@ -58,19 +58,8 @@ export function tierForFeature(feature: string): ModelTier {
  * rather than handing adapters a shape object: the other three wire formats
  * ignore them entirely.
  */
-/**
- * `disabled` is never produced by {@link requestShapeFor} — no model's DEFAULT
- * shape turns thinking off. It exists so a FEATURE can override the model's
- * shape at the call site, the way the direct-client features already do
- * (`ask/context`, `write/propose`, `summarize`, `agentic/decide` all send
- * `thinking: { type: "disabled" }` straight to the Anthropic SDK). Without this
- * member an adapter-routed feature had no way to say it, and silently inherited
- * adaptive thinking at effort "high".
- */
 export type ThinkingConfig =
-  | { type: "adaptive" }
-  | { type: "enabled"; budget_tokens: number }
-  | { type: "disabled" };
+  { type: "adaptive" } | { type: "enabled"; budget_tokens: number };
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
