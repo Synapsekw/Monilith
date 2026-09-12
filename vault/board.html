@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-12 01:00",
+  "updated": "2026-09-12 07:45",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "348dd546",
+        "value": "bda5fa36",
         "tone": "warn",
-        "note": "Ahead of main: Board Intelligence Phase 2 (Advise, 19 commits, migration board_intelligence_runs on DEV), the sidebar Keystone polish (8 commits) and the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher, 5 commits), each announced on /updates. All user-visible and unpromoted; /promote is the next step. No live worktrees."
+        "note": "Ahead of main by the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher) and its whole-branch review repairs — user-visible, announced on /updates, unpromoted. Everything else on develop shipped in PR #122. No live worktrees."
       },
       {
         "name": "main",
-        "value": "148b3c6f",
+        "value": "918c38bb",
         "tone": "ok",
-        "note": "PR #121 merged 2026-09-11 — Board Intelligence Phase 1: the Intelligence strip with overdue / blocked / overloaded / stalled / changed-since chips under every board header. Verified live: main CI green (run 34611243080), Vercel state=success. PR #119 and #118 before it."
+        "note": "PR #122 merged 2026-09-11, 44 commits — Board Intelligence Phases 1 AND 2, the Anthropic instructions fix that ended a four-day structured-output outage, the sidebar Keystone polish, and the intelligence size-clamp fix. Verified live: main CI green (run 34638123154), Vercel state=success. Squash divergence healed (6e47e977, -s ours)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #121 build — verified: Vercel state=success on 148b3c6f, www.monolith.works/updates serving \"Board intelligence strip\". /sync-prod not run: five DEV migrations are not yet on PROD."
+        "note": "Serving the PR #122 build — verified: Vercel state=success on 918c38bb, /updates serving \"AI generation on Anthropic works again\" and \"Board brief and suggestions\". /sync-prod not run: DEV migrations including board_intelligence_runs are not on PROD."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7520 passing, 1 skipped, on task/board-intelligence-advise before merge (finish-task re-ran all four gates on the rebased branch). New suites: schema/validate/transcript/prompt/generate/run/apply for the board brief, the bridge store, dock tabs + Intelligence tab + hook, the strip's Catch me up, the RLS + RPC integration probes (skip without PULSE_TEST_DB).",
+        "note": "7554 passing, 1 skipped, on task/intelligence-size-clamp before merge (finish-task re-ran all four gates on the rebased branch). New cases: over-cap model output truncates on every field, an untitled suggestion is dropped with contiguous ids, a bad shape still throws, and the system prompt states its budgets.",
         "label": "test"
       },
       {
@@ -189,13 +189,29 @@
   },
   "next": [
     {
-      "title": "/promote — Board Intelligence Phase 2, the sidebar Keystone polish and the agent-dock-atmosphere rebuild are merged and not yet live, then run all four walkthroughs",
-      "why": "Three user-visible batches sit on develop with /updates entries: the board brief with one-click Apply and Undo (the whole-branch review's Critical: more than ten signals on a big board failed the server's own schema after paying for the model call), the sidebar polish, and the agent dock's tile band replacing the pill-tab row and native persona select. None of the three has been seen in an authenticated browser. Check Catch me up → Apply → Undo and the frozen-column rule at scrollLeft > 0, the collapsed rail, the dock tile keyboard nav + agent pulse + collapse-to-rail, then plan Phase 3 (Act: assign_person automation + Always do this) and decide board_intelligence_runs retention.",
+      "title": "Walk the board brief in a real browser — it is live in production and unproven",
+      "why": "Apply, Undo, Dismiss, Show rows, viewer mode and Nudge have never been exercised by a person: the Chrome extension was disconnected for the build session and the e2e provisioner refuses DEV by design. The owner's first two clicks on the shipped feature both failed, and no test saw it. Steps 4-12 of the Phase 2 session note are the script.",
       "tags": [
-        "owner",
-        "board-intelligence",
-        "sidebar",
-        "promote"
+        "intelligence",
+        "manual",
+        "critical"
+      ]
+    },
+    {
+      "title": "Give board_intelligence an explicit thinking budget",
+      "why": "The brief takes about two minutes and the owner has raised it. Measured, not guessed: the stored payload is ~700 output tokens of JSON against ~5300 billed, so ~85% is adaptive thinking nobody chose — generate.ts passes no thinking, so requestShapeFor hands it the default of adaptive plus effort high. ask/context.ts and write/propose.ts both opt out explicitly, with the reasoning in comments. A tier change cannot fix it: pickModel puts the org default model above the tier hint.",
+      "tags": [
+        "intelligence",
+        "latency",
+        "small"
+      ]
+    },
+    {
+      "title": "Promote the agent-dock rebuild",
+      "why": "The tile band that replaced the pill tabs and the native persona select is merged at bda5fa36 with an /updates entry, and its whole-branch review repairs landed on top. It is the only unpromoted work on develop, and nobody has seen it in an authenticated browser either.",
+      "tags": [
+        "promote",
+        "dock"
       ]
     },
     {
@@ -257,14 +273,19 @@
   ],
   "risks": [
     {
+      "sev": "open",
+      "title": "A generator judged against limits it was never told",
+      "text": "Board Intelligence billed two full model calls and cached nothing because rawOutputSchema rejected a brief over 700 characters and a ninth evidence id — caps that live only in Zod, while the model-facing JSON Schema deliberately carries no lengths. A failed run leaves the input hash unchanged, so every retry paid again. Fixed for this feature (size caps truncate, shape stays strict) but the sibling raw schemas — reports/ai-draft-schema.ts, board-gen-schema.ts, automation-gen-schema.ts — have not been audited for the same .max()-after-payment shape."
+    },
+    {
       "sev": "amber",
       "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
       "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
     },
     {
       "sev": "amber",
-      "title": "A whole visual batch shipped without anyone seeing it",
-      "text": "Now three batches in a row: the UI polish + presets, the sidebar polish, and Board Intelligence Phase 2 (dock tab, cards, Apply/Undo, strip pill) all landed on develop with the Chrome extension disconnected and the e2e provisioner refusing DEV. Every string, role and budget claim is machine-checked, but paint order, the 320px two-row dock header and the toast timing are eye judgements no test makes. The whole-branch review found the blocking defect for the fifth session running; assume the manual pass will find something too."
+      "title": "Three visual batches are live in production, unseen",
+      "text": "The UI polish + presets, the sidebar polish and Board Intelligence Phase 2 all shipped without a browser pass, and Phase 2 is now IN PRODUCTION unverified: dock tab, cards, Apply/Undo, the strip pill. The owner's first two clicks on it failed on a defect no test could see, which is exactly the class a manual pass catches. Every string, role and budget claim is machine-checked; paint order, the 320px two-row dock header and toast timing are eye judgements. The agent-dock rebuild is the same story, one step behind, on develop."
     },
     {
       "sev": "amber",
@@ -359,14 +380,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-0100-agent-dock-atmosphere-retire",
-    "when": "2026-09-12 01:00",
-    "title": "Agent dock atmosphere closed: DockTabs/AgentSwitcher retired, plan merged",
+    "id": "2026-09-12-0745-intelligence-size-clamp-and-promote-122",
+    "when": "2026-09-12 07:45",
+    "title": "Catch me up fixed at the root, and Phase 2 promoted to production",
     "bullets": [
-      "Deleted DockTabs.tsx and AgentSwitcher.tsx (+ tests) once Task 4 had re-pointed DockBody's DockAgent import to DockTiles; grep proved no other reference remained.",
-      "Committed the retirement with a user-facing /updates trailer (\"Your agents front and centre in the board dock\") and regenerated generated.ts.",
-      "Full gate green pre- and post-rebase: typecheck clean, lint 0 errors, 809 test files / 7610 tests passed, build succeeded (67 pages).",
-      "finish-task.sh merged task/agent-dock-atmosphere into develop (348dd546), pushed, removed the worktree + branch — closes the 5-task plan. Browser walkthrough still owed."
+      "Root-caused the failure from the data before touching code: two ai_usage rows and zero board_intelligence_runs rows proved the model call completed and the fault was downstream; the logged ZodError named the fields.",
+      "Size caps in rawOutputSchema now truncate instead of reject, title/actions lost min(1) (validate drops those cards), the stored schemas stay strict, and the prompt states every budget. ADR gotcha-103.",
+      "Promoted develop to main as PR #122, 44 commits — Board Intelligence Phases 1 and 2, the Anthropic instructions fix, the sidebar Keystone polish. Verified live on 918c38bb, squash divergence healed.",
+      "Measured the latency complaint: ~85% of the brief's output tokens are adaptive thinking nobody chose. Deferred by the owner; the fix is an explicit thinking config in generate.ts."
     ]
   }
 }
