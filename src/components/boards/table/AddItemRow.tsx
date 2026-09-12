@@ -91,7 +91,7 @@ export function AddItemRow({
             }}
             placeholder="Add Item"
             aria-label="Add item"
-            className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
+            className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring text-cell w-full bg-transparent outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
             {...status.controlProps}
           />
         </div>

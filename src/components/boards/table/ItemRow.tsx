@@ -336,13 +336,13 @@ export const ItemRow = memo(function ItemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center px-4">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center px-4">
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>

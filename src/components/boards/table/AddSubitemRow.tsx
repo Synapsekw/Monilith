@@ -76,7 +76,7 @@ export function AddSubitemRow({
           }}
           placeholder="Add subitem"
           aria-label="Add subitem"
-          className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none disabled:opacity-50"
+          className="text-foreground placeholder:text-muted-foreground text-cell w-full bg-transparent outline-none disabled:opacity-50"
           {...status.controlProps}
         />
       </div>

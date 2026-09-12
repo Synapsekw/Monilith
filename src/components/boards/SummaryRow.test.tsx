@@ -100,16 +100,22 @@ describe("SummaryRow", () => {
     expect(row).not.toHaveTextContent("6");
   });
 
-  it("group variant paints the group color bar on the frozen name track", () => {
+  it("group variant renders the group color as a dot on the frozen name track, not a rule", () => {
     render(<SummaryRow {...baseProps({ groupColor: "#f00" })} />);
-    // name track carries the inset box-shadow like GroupHeaderRow/GroupRollupRow
+    // Same encoding as GroupHeaderRow/GroupRollupRow's dot — no vertical
+    // rule/box-shadow bar (that was the "vertical rule in disguise" removed
+    // by the whole-branch review's Blocker 2).
     const row = screen.getByTestId("group-summary-g1");
     const nameTrack = row.firstElementChild as HTMLElement;
     expect(nameTrack).toHaveTextContent("Summary");
-    expect(nameTrack).toHaveStyle({ boxShadow: "inset 3px 0 0 0 #f00" });
+    expect(nameTrack.style.boxShadow).toBe("");
+    const dot = nameTrack.querySelector("[aria-hidden]") as HTMLElement;
+    expect(dot).toBeInTheDocument();
+    expect(dot.className).toContain("rounded-full");
+    expect(dot).toHaveStyle({ backgroundColor: "#f00" });
   });
 
-  it("board variant is sticky at the bottom and skips the color bar", () => {
+  it("board variant is sticky at the bottom and skips the color dot", () => {
     render(
       <SummaryRow
         {...baseProps({ variant: "board", testId: "board-summary-footer" })}
@@ -119,6 +125,7 @@ describe("SummaryRow", () => {
     expect(row.className).toContain("sticky");
     const nameTrack = row.firstElementChild as HTMLElement;
     expect(nameTrack.style.boxShadow).toBe("");
+    expect(nameTrack.querySelector("[aria-hidden]")).not.toBeInTheDocument();
   });
 
   it("editors can pick an aggregation; onChange fires with the column + choice", async () => {

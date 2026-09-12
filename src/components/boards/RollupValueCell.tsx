@@ -78,7 +78,7 @@ export function RollupValueCell({
     );
     return (
       <div className={CELL_CLASS}>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-cell">
           {relationRollup(links)}
         </span>
       </div>

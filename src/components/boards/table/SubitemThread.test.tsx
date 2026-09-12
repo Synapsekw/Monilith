@@ -70,4 +70,13 @@ describe("subitem rows — Quiet Grid", () => {
       "pl-10",
     );
   });
+
+  it("renders the subitem name at the 13px/400 cell scale, not the item scale", () => {
+    // Blocker 3: subitem names must read as a step below item names — the
+    // spec's T2 scale — not just via the thread line and indent.
+    renderSubitem();
+    const name = screen.getByLabelText(`${sub.name} name`);
+    expect(name.className).toContain("text-cell");
+    expect(name.className).not.toContain("text-item");
+  });
 });

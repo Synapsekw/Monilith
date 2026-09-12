@@ -113,7 +113,7 @@ export type SummaryRowProps = {
   variant: "board" | "group";
   /** Frozen Name-track label. Default "Summary". */
   label?: string;
-  /** Group color for the 3px inset bar (group variant only). */
+  /** Group color for the group-identity dot (group variant only). */
   groupColor?: string;
   /** data-testid for the row root. */
   testId: string;
@@ -198,14 +198,18 @@ export function SummaryRow({
     >
       <div
         className={cn(
-          "bg-surface-muted sticky left-0 z-10 flex items-center px-4 py-1.5",
+          "bg-surface-muted sticky left-0 z-10 flex items-center gap-2 px-4 py-1.5",
           NAME_FREEZE_EDGE,
         )}
-        style={{
-          width: nameWidth,
-          ...(groupColor ? { boxShadow: `inset 3px 0 0 0 ${groupColor}` } : {}),
-        }}
+        style={{ width: nameWidth }}
       >
+        {groupColor && (
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: groupColor }}
+          />
+        )}
         <Kicker size="xs">{label}</Kicker>
       </div>
       {perColumn.map(({ col, meta, values, current }) => (

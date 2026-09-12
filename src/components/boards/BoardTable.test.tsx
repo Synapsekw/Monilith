@@ -834,6 +834,26 @@ describe("BoardTable item drag handle", () => {
   });
 });
 
+describe("BoardTable item row — Quiet Grid (no vertical rules)", () => {
+  it("renders no cell in an item row with a border-l class", () => {
+    // Regression for the whole-branch review's Blocker 1: the created-by and
+    // created-at trailing cells in ItemRow were the only surviving vertical
+    // rules in the board table (SortableSubitemRow already dropped theirs).
+    // Assert on real rendered output — every item row (`data-intel-rule`
+    // marks the row) and every element inside it — not just the one column
+    // header ColumnHeader.test.tsx already covers.
+    const { container } = renderTwoItems();
+    const rows = container.querySelectorAll('[data-intel-rule="cell"]');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.getAttribute("class") ?? "").not.toMatch(/\bborder-l\b/);
+      for (const cell of row.querySelectorAll("*")) {
+        expect(cell.getAttribute("class") ?? "").not.toMatch(/\bborder-l\b/);
+      }
+    }
+  });
+});
+
 describe("BoardTable rollup", () => {
   it("shows a summed rollup on the collapsed parent and the children on expand", () => {
     const qc = new QueryClient();

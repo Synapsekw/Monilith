@@ -207,7 +207,13 @@ export const NameCell = memo(function NameCell({
         }}
         aria-disabled={pending || undefined}
         className={cn(
-          "focus-visible:ring-ring text-item flex h-full min-w-0 flex-1 items-center truncate font-medium tracking-[-0.011em] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          // Subitem names step down to the 13px/400 cell scale (spec T2);
+          // item names stay at 13.5px/500 — the only remaining hierarchy cue
+          // besides the thread line and indent (Blocker 3).
+          indented
+            ? "text-cell font-normal"
+            : "text-item font-medium tracking-[-0.011em]",
           pending ? "cursor-default opacity-60" : "cursor-pointer",
           indented ? "pl-10" : "px-4",
         )}

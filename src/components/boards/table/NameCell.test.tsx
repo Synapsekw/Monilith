@@ -25,6 +25,16 @@ describe("NameCell — Quiet Grid", () => {
     );
   });
 
+  it("steps subitem names down to the 13px/400 cell scale when indented", () => {
+    // Blocker 3: a parent and its children must not be typographically
+    // identical — indented (subitem) rows drop to `text-cell` at normal
+    // weight, unlike the item scale above.
+    render(<NameCell item={item} controls={controls} indented />);
+    const name = screen.getByLabelText(`${item.name} name`);
+    expect(name.className).toContain("text-cell");
+    expect(name.className).not.toContain("text-item");
+  });
+
   it("wipes in a hover seam when not selected", () => {
     const { container } = render(<NameCell item={item} controls={controls} />);
     const cell = container.firstElementChild as HTMLElement;

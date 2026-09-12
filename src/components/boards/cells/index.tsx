@@ -15,6 +15,10 @@ import { MemberAvatar } from "./member-avatar";
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
 /**
+ * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
+ * resting view strips the syntax and flattens to one line — this renderer also
+ * backs Mirror and Rollup cells.
+ *
  * Board cells render at the `text-cell` token (13px, see `--text-cell` in
  * globals.css) — the Quiet Grid data scale (see the spec at
  * docs/superpowers/specs/2026-09-12-quiet-grid-inter-design.md). This is one
@@ -23,12 +27,6 @@ type Settings = Record<string, unknown> & { options?: ColumnOption[] };
  * token, not an arbitrary pixel value, because `scripts/check-px-text.mjs`
  * bans those repo-wide — rem tokens respond to the reader's browser
  * font-size setting.
- */
-
-/**
- * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
- * resting view strips the syntax and flattens to one line — this renderer also
- * backs Mirror and Rollup cells.
  */
 export function TextCell({
   value,
