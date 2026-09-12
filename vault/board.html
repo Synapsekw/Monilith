@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-12 08:20",
+  "updated": "2026-09-12 09:36",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -189,11 +189,12 @@
   },
   "next": [
     {
-      "title": "Walk the board brief in a real browser — it is live in production and unproven",
-      "why": "Apply, Undo, Dismiss, Show rows, viewer mode and Nudge have never been exercised by a person: the Chrome extension was disconnected for the build session and the e2e provisioner refuses DEV by design. The owner's first two clicks on the shipped feature both failed, and no test saw it. Steps 4-12 of the Phase 2 session note are the script. This pass now also collects the latency measurement the effort fix is owed: time one Catch me up, then read board_intelligence_runs.tokens_out against the 5284 baseline. Nothing was announced on /updates because faster is an outcome claim nobody has observed yet.",
+      "title": "One authenticated browser pass — it clears four sessions of owed walkthroughs",
+      "why": "Nothing merged in the last four sessions has been seen by a person; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. Start with the lit seam on develop, because it is now the control every other check reaches for: hover the card's left edge, confirm the light rounds both corners, fold and unfold both panels, drag the dock edge to resize without folding it, Tab to the chip. Then the board brief live in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none of them ever exercised and the owner's first two clicks both failed. Then the sidebar and agent-dock passes. While you are in there, time one Catch me up and read board_intelligence_runs.tokens_out against the 5284 baseline — the latency fix is still an unobserved claim, which is why nothing was announced for it.",
       "tags": [
-        "intelligence",
         "manual",
+        "seam",
+        "intelligence",
         "critical"
       ]
     },
@@ -207,11 +208,12 @@
       ]
     },
     {
-      "title": "Promote the agent-dock rebuild",
-      "why": "The tile band that replaced the pill tabs and the native persona select is merged at bda5fa36 with an /updates entry, and its whole-branch review repairs landed on top. It is the only unpromoted work on develop, and nobody has seen it in an authenticated browser either.",
+      "title": "Promote develop — the dock rebuild, the latency fix and the lit seam",
+      "why": "Three merges are stacked unpromoted: the tile band that replaced the pill tabs and the persona select (bda5fa36), the Board Intelligence effort fix (38d0f4c0) and the lit-seam collapse control (7bb2d483). Two of the three carry /updates entries. None of them has been seen in an authenticated browser, so this waits on the pass above rather than going first.",
       "tags": [
         "promote",
-        "dock"
+        "dock",
+        "seam"
       ]
     },
     {
@@ -380,15 +382,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-0820-intelligence-latency-effort-fix",
-    "when": "2026-09-12 08:20",
-    "title": "Board Intelligence latency — effort, not disabled thinking",
+    "id": "2026-09-12-0936-lit-seam-collapse-control",
+    "when": "2026-09-12 09:36",
+    "title": "The card's hairline is the collapse control",
     "bullets": [
-      "Diagnosed from data: 5284 billed output tokens against a 2614-character payload, so ~85% of the cost and of the two-minute wait was reasoning the call site never asked for and could not see.",
-      "The first fix was WRONG and the whole-branch review caught it, sixth session running: thinking type disabled follows four in-repo precedents and passes all four gates, but Claude Fable 5/5.1 reject it with a 400 and both are active catalog rows, so one admin picking Fable in Settings would have failed every run.",
-      "Shipped the portable lever instead — effort low via a new withEffort helper, thinking left on the model's own shape. Merged at 38d0f4c0. ADR gotcha-104.",
-      "That ADR's own rule then turned on its author: requestShapeFor's /haiku/i split is wrong about five active models, pre-existing on develop and exposing every adapter-routed feature. Left for its own task.",
-      "Nothing announced on /updates: faster is an outcome claim and nobody has observed it yet. The measurement rides the owed browser pass."
+      "Four rounds of in-browser prototypes before any code — six placements, then variations of the two the owner liked, then four takes on how far the light travels. The owner picked edge-plus-glow.",
+      "The seam is a stroked copy of the content card's outline: two paths per edge, both starting at its middle, so one dash growing from each origin opens the light evenly and reaches both corners together. A div with a height cannot do it — it ends in a straight stub short of the rounded-xl corner.",
+      "Lengths are computed analytically rather than read with getTotalLength, which jsdom does not implement; Chromium's own measurement of the rendered path agrees to 0.005px. A ResizeObserver, not a one-shot measure, because the card is a flex child between two animated widths.",
+      "Both old controls retired. The dock's edge already was its resize grip, so they are now one object: click folds, drag resizes, arrow keys resize, and a pointer past 4px or 400ms is a resize and never a fold.",
+      "Merged at 7bb2d483, 18 files, gates green over 7646 tests. Announced on /updates. Nothing seen in an authenticated browser — the nine-step walkthrough is owed."
     ]
   }
 }
