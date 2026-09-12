@@ -177,6 +177,16 @@ describe("Quiet Grid geometry", () => {
     expect(ROW_HAIRLINE).not.toMatch(/\bborder-b\b/);
   });
 
+  it("raises the row hairline above the frozen z-10 Name cell", () => {
+    // Without this, the sticky/opaque Name cell (NameCell: `sticky left-0
+    // z-10`) paints over the separator's `::before` for the width of the
+    // Name column, since the row itself is only `relative` (z-auto) and
+    // doesn't open its own stacking context — the pseudo and the sticky cell
+    // compete directly. `before:z-20` matches the precedent in globals.css
+    // for "rule above a z-10 frozen column" (`.intel-rule`'s host `::after`).
+    expect(ROW_HAIRLINE).toContain("before:z-20");
+  });
+
   describe("buildNameMeasureFont", () => {
     it("resolves the LIVE --font-inter family, not a bare literal", () => {
       // next/font self-hosts Inter under a generated family name exposed only
