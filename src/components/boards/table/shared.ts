@@ -181,9 +181,25 @@ export const SUBITEM_ROW_HEIGHT = 38;
  * The row separator. Quiet Grid has NO vertical rules, so the horizontal one
  * is inset to start at the name text (16px) rather than the frame edge, at 70%
  * alpha — a full-bleed `border-b` re-draws the cage this design removes.
+ *
+ * `before:z-20`: the frozen Name cell is `sticky left-0 z-10` with an opaque
+ * background (NameCell), so without a z the row's own `::before` — a sibling
+ * box in the SAME stacking context, since this element is only `relative`
+ * (z-auto), which does not open one of its own — loses to that z-10 cell and
+ * the 1px line reads as missing for the Name column's width. `z-20` matches
+ * the precedent already in globals.css for "rule above a z-10 frozen column"
+ * (`.intel-rule`'s host `::after`), and is high enough to win while staying
+ * row-local: it only has to beat the Name cell's z-10, never anything above
+ * row-level chrome (menus, dialogs). Safe against the two things that live at
+ * y=0 inside that cell: `.intel-rule` (globals.css, z-20 but scoped INSIDE
+ * NameCell's own z-10 stacking context, so this pseudo's row-level z-20 still
+ * paints over the whole cell including it — a deliberate 1px notch at the
+ * separator, matching every other column) and NameCell's selected-state
+ * accent bar (`before:inset-y-1.5`, i.e. 6px inset top/bottom — it never
+ * reaches y=0, so there is no pixel to collide with regardless of z).
  */
 export const ROW_HAIRLINE =
-  "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:h-px before:bg-border before:opacity-70 before:content-['']";
+  "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:z-20 before:h-px before:bg-border before:opacity-70 before:content-['']";
 
 /**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what

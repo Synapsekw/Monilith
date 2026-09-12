@@ -463,13 +463,18 @@ export function BoardTableInner({
     }
     return (text: string) => ctx?.measureText(text).width ?? 0;
   }, []);
+  // `items` is the FULL flat list of every item on the board — top-level rows
+  // AND subitems alike (see useBoardCache / bucketItems, which partitions this
+  // same list by `parent_id`) — so a long subitem name is measured too, with
+  // its indented row's own (larger) chrome reserve via `indented`.
   const autoFitWidth = useMemo(
     () =>
       fitNameColumnWidth(
-        items.map((it) => it.name),
+        items.map((it) => ({ name: it.name, indented: it.parent_id != null })),
         measureName,
+        access !== "viewer",
       ),
-    [items, measureName],
+    [items, measureName, access],
   );
 
   // null = follow board.name_column_width (or auto-fit). Set live during a drag.
