@@ -17,7 +17,7 @@ const base = { streamingText: null, status: null };
 function renderList(messages: UIMessage[], overrides = {}) {
   const onApprove = vi.fn();
   const onCancel = vi.fn();
-  render(
+  const { container, unmount } = render(
     <MessageList
       {...base}
       messages={messages}
@@ -26,7 +26,7 @@ function renderList(messages: UIMessage[], overrides = {}) {
       {...overrides}
     />,
   );
-  return { onApprove, onCancel };
+  return { onApprove, onCancel, container, unmount };
 }
 
 describe("MessageList proposals", () => {
@@ -364,5 +364,108 @@ describe("MessageList — per-turn attribution", () => {
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent("Thinking…");
+  });
+});
+
+// Spec §3: the dock's transcript sits on the wash — no card, no centring —
+// and an agent's turn carries the same initial tile as its band tile. `/ask`
+// keeps the card, byte-for-byte.
+describe("MessageList — surface", () => {
+  const TURNS: UIMessage[] = [
+    { id: "m1", role: "user", content: "what slipped?" },
+    { id: "m2", role: "assistant", content: "Three items.", agentId: "a-ops" },
+    { id: "m3", role: "assistant", content: "Plain answer.", agentId: null },
+  ];
+
+  it("keeps the /ask card byte-for-byte by default", () => {
+    const { container } = renderList(TURNS, { agents });
+    const column = container.querySelector("[data-scroll-container] > div")!;
+    expect(column.className).toBe(
+      "mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6",
+    );
+    expect(screen.getByText("what slipped?").className).toBe(
+      "bg-surface-muted max-w-[85%] rounded-lg border px-3.5 py-2 text-sm whitespace-pre-wrap",
+    );
+    const turn = container.querySelector("[data-turn]")!;
+    expect(turn.className).toBe("flex flex-col gap-3");
+    // Both assistant tiles are the Ask AI mark on a raised surface.
+    const tiles = [...container.querySelectorAll("[data-turn-tile]")];
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      expect(tile.className).toBe(
+        "bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border",
+      );
+      expect(tile.querySelector("svg")).not.toBeNull();
+    }
+  });
+
+  it("on the wash: full-width column, chrome-fill user pill, initial tile for a persona, mark for plain Ask", () => {
+    const { container } = renderList(TURNS, { agents, surface: "atmosphere" });
+    const column = container.querySelector("[data-scroll-container] > div")!;
+    expect(column.className).not.toContain("max-w-3xl");
+    expect(column.className).toContain("px-3.5");
+    const pill = screen.getByText("what slipped?");
+    expect(pill.className).toContain("bg-chrome-fill");
+    expect(pill.className).toContain("border-border");
+    expect(pill.className).not.toContain("bg-surface-muted");
+    // Ops answered → its initial on the brand tint, like the band tile.
+    const opsTile = screen
+      .getByText("Three items.")
+      .closest("[data-turn]")!
+      .querySelector("[data-turn-tile]")!;
+    expect(opsTile).toHaveTextContent("O");
+    expect(opsTile.className).toContain("bg-primary/15");
+    expect(opsTile.querySelector("svg")).toBeNull();
+    // Nobody on record → the Ask AI mark, on the chrome fill (no card).
+    const plainTile = screen
+      .getByText("Plain answer.")
+      .closest("[data-turn]")!
+      .querySelector("[data-turn-tile]")!;
+    expect(plainTile.querySelector("svg")).not.toBeNull();
+    expect(plainTile.className).toContain("bg-chrome-fill");
+    expect(plainTile.className).not.toContain("bg-surface");
+  });
+
+  it("uses the initial tile for the live streaming bubble too, when its agent is known", () => {
+    const { container } = renderList([], {
+      agents,
+      streamingText: "Working on it",
+      streamingAgentId: "a-ops",
+      surface: "atmosphere",
+    });
+    expect(container.querySelector("[data-turn-tile]")).toHaveTextContent("O");
+  });
+
+  it("slides each turn in on the wash, the first three staggered — and never on /ask", () => {
+    const { container, unmount } = renderList(TURNS, { surface: "atmosphere" });
+    const turns = [...container.querySelectorAll("[data-turn]")];
+    expect(turns[0].className).toContain("starting:translate-x-3.5");
+    expect(turns[0].className).toContain("transition-[opacity,translate]");
+    expect(turns[0].className).toContain("[&:nth-child(1)]:delay-[120ms]");
+    expect(turns[0].className).toContain("[&:nth-child(3)]:delay-[240ms]");
+    unmount();
+    renderList(TURNS);
+    expect(document.querySelector("[data-turn]")!.className).not.toContain(
+      "starting:",
+    );
+  });
+
+  // Confirmed gap: the empty state (a fresh, message-less thread — the first
+  // thing a viewer sees on tapping an agent tile in the dock) used to render
+  // the /ask hero unconditionally: a bordered `bg-surface` card floating on
+  // the wash. It must use the same wash grammar as an assistant's persona
+  // tile, with no card behind it.
+  it("keeps the empty-state hero un-carded on the wash", () => {
+    const { container } = renderList([], { agents, surface: "atmosphere" });
+    const wrapper = container.querySelector(
+      "[data-scroll-container] > div > div",
+    )!;
+    expect(wrapper.className).not.toContain("mt-[12vh]");
+    const tile = wrapper.querySelector("span")!;
+    expect(tile.className).not.toContain("bg-surface");
+    expect(tile.className).not.toContain("border");
+    expect(tile.className).toContain("bg-primary/15");
+    expect(tile.className).toContain("text-primary");
+    expect(tile.className).toContain("rounded-sm");
   });
 });

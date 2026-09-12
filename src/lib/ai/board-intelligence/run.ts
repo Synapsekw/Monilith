@@ -188,16 +188,28 @@ export async function runBoardIntelligence(input: {
         return { result: { raw, usage, model: used }, usage };
       },
     );
-    const { payload: out, warnings } = validateIntelligenceOutput(
-      generated.raw,
-      ctx,
-      topSignals,
-    );
+    const {
+      payload: out,
+      warnings,
+      proposed,
+    } = validateIntelligenceOutput(generated.raw, ctx, topSignals);
     // Not user-facing (the brief is still good), but a run that silently drops
     // half the model's suggestions is the only trace that the prompt and the
-    // board have drifted apart.
+    // board have drifted apart — and the only evidence for whether the
+    // reasoning-effort level this feature asks for is grounding well enough.
+    // The model and token counts ride along for exactly that: a drop rate is
+    // only interpretable next to which model produced it and how much it
+    // reasoned. `kept`/`proposed` make the rate readable without counting
+    // warning lines.
     if (warnings.length)
-      console.warn("[intelligence] dropped suggestions", { boardId, warnings });
+      console.warn("[intelligence] dropped suggestions", {
+        boardId,
+        model: generated.model,
+        tokensOut: generated.usage.outputTokens,
+        kept: out.suggestions.length,
+        proposed,
+        warnings,
+      });
 
     const { data: row, error } = await supabase
       .from("board_intelligence_runs")

@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SummaryRow,
   hasAssignedSummary,
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
+  NAME_FREEZE_SHADOW,
   type SummaryRowProps,
 } from "@/components/boards/SummaryRow";
 import type { Column } from "@/lib/boards/queries";
@@ -98,16 +101,22 @@ describe("SummaryRow", () => {
     expect(row).not.toHaveTextContent("6");
   });
 
-  it("group variant paints the group color bar on the frozen name track", () => {
+  it("group variant renders the group color as a dot on the frozen name track, not a rule", () => {
     render(<SummaryRow {...baseProps({ groupColor: "#f00" })} />);
-    // name track carries the inset box-shadow like GroupHeaderRow/GroupRollupRow
+    // Same encoding as GroupHeaderRow/GroupRollupRow's dot — no vertical
+    // rule/box-shadow bar (that was the "vertical rule in disguise" removed
+    // by the whole-branch review's Blocker 2).
     const row = screen.getByTestId("group-summary-g1");
     const nameTrack = row.firstElementChild as HTMLElement;
     expect(nameTrack).toHaveTextContent("Summary");
-    expect(nameTrack).toHaveStyle({ boxShadow: "inset 3px 0 0 0 #f00" });
+    expect(nameTrack.style.boxShadow).toBe("");
+    const dot = nameTrack.querySelector("[aria-hidden]") as HTMLElement;
+    expect(dot).toBeInTheDocument();
+    expect(dot.className).toContain("rounded-full");
+    expect(dot).toHaveStyle({ backgroundColor: "#f00" });
   });
 
-  it("board variant is sticky at the bottom and skips the color bar", () => {
+  it("board variant is sticky at the bottom and skips the color dot", () => {
     render(
       <SummaryRow
         {...baseProps({ variant: "board", testId: "board-summary-footer" })}
@@ -117,6 +126,7 @@ describe("SummaryRow", () => {
     expect(row.className).toContain("sticky");
     const nameTrack = row.firstElementChild as HTMLElement;
     expect(nameTrack.style.boxShadow).toBe("");
+    expect(nameTrack.querySelector("[aria-hidden]")).not.toBeInTheDocument();
   });
 
   it("editors can pick an aggregation; onChange fires with the column + choice", async () => {
@@ -181,5 +191,55 @@ describe("SummaryRow", () => {
     render(<SummaryRow {...baseProps({ label: "Group Summary" })} />);
     const row = screen.getByTestId("group-summary-g1");
     expect(row.firstElementChild).toHaveTextContent("Group Summary");
+  });
+
+  it("carries the permanent Name-column right-edge hairline (NAME_FREEZE_RULE), in both variants", () => {
+    const group = render(<SummaryRow {...baseProps()} />);
+    const groupNameTrack = group.getByTestId("group-summary-g1")
+      .firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(groupNameTrack.className).toContain(cls);
+    }
+    group.unmount();
+
+    const board = render(
+      <SummaryRow
+        {...baseProps({ variant: "board", testId: "board-summary-footer" })}
+      />,
+    );
+    const boardNameTrack = board.getByTestId("board-summary-footer")
+      .firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(boardNameTrack.className).toContain(cls);
+    }
+  });
+});
+
+// NAME_FREEZE_EDGE and NAME_FREEZE_SHADOW are deliberately hand-written,
+// duplicated literals (see the comment above them in SummaryRow.tsx) — each
+// must spell out its own classes so Tailwind's static scanner can see and
+// emit them; a runtime derivation of one from the other is invisible to that
+// scanner and silently drops its utilities from the compiled CSS. This test
+// is what actually stops the two literals from drifting apart: it derives one
+// from the other (with a TEST-ONLY copy of the `after:`-variant rewrite —
+// never used by the app) and asserts they carry the exact same class set.
+describe("NAME_FREEZE_EDGE / NAME_FREEZE_SHADOW stay in lockstep", () => {
+  function asAfterVariantForTest(cls: string): string {
+    const i = cls.lastIndexOf(":");
+    return i === -1
+      ? `after:${cls}`
+      : `${cls.slice(0, i + 1)}after:${cls.slice(i + 1)}`;
+  }
+
+  it("NAME_FREEZE_EDGE is exactly NAME_FREEZE_SHADOW's classes, each as an `after:` variant, plus the marker class and after:content-['']", () => {
+    const derivedFromShadow = new Set([
+      "name-freeze-edge",
+      ...NAME_FREEZE_SHADOW.split(" ").map(asAfterVariantForTest),
+      "after:content-['']",
+    ]);
+    const actualEdge = new Set(NAME_FREEZE_EDGE.split(" "));
+    // Order in the class attribute doesn't affect the compiled cascade, so
+    // this compares the class SETS, not the literal strings.
+    expect(actualEdge).toEqual(derivedFromShadow);
   });
 });

@@ -34,7 +34,13 @@ const NEW_TOKENS = [
  * theme. `--radius` is the only pre-existing one; keep this list short and
  * justified — it is the escape hatch that could hide a real parity bug.
  */
-const THEME_INVARIANT = new Set(["--radius"]);
+const THEME_INVARIANT = new Set([
+  "--radius",
+  // The lit-seam bloom is written in terms of `var(--foreground)`, which every
+  // theme and preset already redefines. Declaring it twice would be the same
+  // string twice, and a second copy is a second thing to forget.
+  "--seam-glow",
+]);
 
 describe("Keystone token contract", () => {
   it("declares every wash/state token in both themes", () => {

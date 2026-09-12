@@ -1,0 +1,82 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { NameCell } from "@/components/boards/table/NameCell";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
+import type { Item } from "@/lib/boards/queries";
+import type { CellControls } from "@/components/boards/table/shared";
+
+const item = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: "Draft the Q4 positioning brief",
+  group_id: "g1",
+  created_by: "u1",
+  created_at: "2026-09-01T00:00:00Z",
+} as Item;
+
+const controls = {
+  renameItemInCache: vi.fn(),
+  members: [],
+} as unknown as CellControls;
+
+describe("NameCell — Quiet Grid", () => {
+  it("renders the name at the 13.5px table scale", () => {
+    render(<NameCell item={item} controls={controls} />);
+    expect(screen.getByLabelText(`${item.name} name`).className).toContain(
+      "text-item",
+    );
+  });
+
+  it("steps subitem names down to the 13px/400 cell scale when indented", () => {
+    // Blocker 3: a parent and its children must not be typographically
+    // identical — indented (subitem) rows drop to `text-cell` at normal
+    // weight, unlike the item scale above.
+    render(<NameCell item={item} controls={controls} indented />);
+    const name = screen.getByLabelText(`${item.name} name`);
+    expect(name.className).toContain("text-cell");
+    expect(name.className).not.toContain("text-item");
+  });
+
+  it("wipes in a hover seam when not selected", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    expect(cell.className).toContain("after:bg-primary");
+    // Plain `hover:`, not `group-hover/name:` — the seam's `after:` belongs to
+    // this same `group/name` element, and Tailwind compiles `group-hover:` to
+    // a selector requiring the styled node to be a DESCENDANT of the hovered
+    // `.group/name`, which this node can never be of itself. That rule was
+    // therefore dead on every row — confirmed by reading the compiled CSS
+    // in Chromium and by direct-pixel screenshots (see task-5-report.md).
+    expect(cell.className).toContain("hover:after:scale-y-100");
+    expect(cell.className).not.toContain("group-hover/name:after:scale-y-100");
+  });
+
+  it("suppresses the hover seam while the row is selected", () => {
+    const { container } = render(
+      <NameCell item={item} controls={controls} selected />,
+    );
+    const cell = container.firstElementChild as HTMLElement;
+    expect(cell.className).toContain("before:bg-primary"); // the 3px selected bar
+    expect(cell.className).toContain("after:hidden"); // seam yields to it
+  });
+
+  it("carries the permanent Name-column right-edge hairline in the non-editing wrapper", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(cell.className).toContain(cls);
+    }
+  });
+
+  it("carries the permanent Name-column right-edge hairline in the editing wrapper too", () => {
+    const { container } = render(
+      <NameCell item={item} controls={controls} autoFocusRename />,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    // autoFocusRename opens straight into the editing branch — a different
+    // element than the non-editing wrapper above.
+    expect(wrapper.querySelector("input")).toBeInTheDocument();
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(wrapper.className).toContain(cls);
+    }
+  });
+});

@@ -51,7 +51,7 @@ for (const key of ["localStorage", "sessionStorage"] as const) {
 vi.mock("next/font/google", () => {
   const font = () => ({ className: "font-mock", variable: "", style: {} });
   return {
-    Nunito_Sans: font,
+    Inter: font,
     Nunito: font,
     JetBrains_Mono: font,
     Geist: font,
@@ -238,6 +238,39 @@ if (typeof Uint8Array.prototype.toHex !== "function") {
   Uint8Array.prototype.toBase64 = function () {
     return bytesOf(this).toString("base64");
   };
+}
+
+// jsdom 30 ships a ResizeObserver, but it is inert: jsdom lays nothing out, so
+// it never reports a box and never calls back. A component that redraws from
+// its own size (CardSeam) would therefore be untestable. This double REPLACES
+// it — unconditionally, not `??=`, or jsdom's own would win — and records its
+// targets so a test can drive a resize by hand.
+class TestResizeObserver implements ResizeObserver {
+  static instances: TestResizeObserver[] = [];
+  readonly targets = new Set<Element>();
+  constructor(readonly callback: ResizeObserverCallback) {
+    TestResizeObserver.instances.push(this);
+  }
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+  disconnect() {
+    this.targets.clear();
+  }
+  /** Re-run the callback as if every observed box had changed. */
+  trigger() {
+    this.callback([], this);
+  }
+}
+for (const target of [globalThis, window]) {
+  Object.defineProperty(target, "ResizeObserver", {
+    value: TestResizeObserver,
+    configurable: true,
+    writable: true,
+  });
 }
 
 // Provide placeholder public env vars so modules that import the validated env

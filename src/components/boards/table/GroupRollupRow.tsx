@@ -3,10 +3,13 @@
 import { useState } from "react";
 import type { Column, Group, Item } from "@/lib/boards/queries";
 import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
+} from "@/components/boards/SummaryRow";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
-import { ROW_HEIGHT } from "./shared";
+import { ROW_HAIRLINE, ROW_HEIGHT } from "./shared";
 
 /**
  * Read-only per-column rollup row shown under a collapsed group's header, so a
@@ -33,16 +36,24 @@ export function GroupRollupRow({
   const [nowMs] = useState(() => Date.now());
   return (
     <div
-      className="bg-surface grid w-full border-b"
+      // No bottom rule: the row above (GroupHeaderRow) never paints one either
+      // — this row draws its OWN top hairline, same convention as every other
+      // Quiet Grid row (see ROW_HAIRLINE).
+      className={cn("bg-surface grid w-full", ROW_HAIRLINE)}
       style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
     >
       <div
         className={cn(
-          "bg-surface text-muted-foreground sticky left-0 z-10 flex items-center px-3 text-xs",
+          "bg-surface text-muted-foreground sticky left-0 z-10 flex items-center gap-2 px-4 text-xs",
           NAME_FREEZE_EDGE,
+          NAME_FREEZE_RULE,
         )}
-        style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: group.color }}
+        />
         Average
       </div>
       {columns.map((col) => (

@@ -106,6 +106,10 @@ export default async function BoardPage({
           lastSeenAt={lastSeenAt}
         />
       </div>
+      {/* Rendered here (it needs the page's roster, access and latest run) but
+          NOT laid out here: on the wide surface it portals its <aside> into the
+          shell's `#app-dock-slot`, beside the content card. This flex row only
+          ever holds the board column. */}
       <BoardDock
         boardId={boardId}
         agents={agentRows ?? []}

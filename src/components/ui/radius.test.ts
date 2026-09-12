@@ -7,7 +7,14 @@ import { execFileSync } from "node:child_process";
  * radius" — everything else uses `--radius` (`rounded-lg`) directly, never
  * the 1.4x `rounded-xl` step.
  */
-const ALLOW = ["src/components/app-shell.tsx", "src/app/ask/layout.tsx"];
+const ALLOW = [
+  "src/components/app-shell.tsx",
+  "src/app/ask/layout.tsx",
+  // Not a card: the lit seam is a STROKED COPY of the content card's outline,
+  // so it has to declare the same radius — it reads its own computed
+  // `borderTopLeftRadius` to build the path that follows the card's corners.
+  "src/components/shell/card-seam.tsx",
+];
 
 describe("one card radius", () => {
   it("no rounded-xl outside the content card", () => {

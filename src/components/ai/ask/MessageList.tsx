@@ -15,6 +15,7 @@ import {
   isAgentMention,
   type MentionTarget,
 } from "@/lib/collaboration/mentions";
+import type { ChatSurface } from "./surface";
 
 /** What an assistant turn is called when it has no agent on record — a legacy
  *  row, or a thread never handed to a persona. Distinct from `ThreadHeader`'s
@@ -43,23 +44,48 @@ export type UIMessage = {
   agentId?: string | null;
 };
 
-/** A single chat turn. User turns sit right in a muted bubble; assistant turns
- *  sit left, full-width, chrome-neutral — named by a `Kicker` above the text
- *  so the mark (gutter) and the name (label) each do one job. */
+/** Atmosphere entrance (spec §5): each turn slides in 14px from the right on
+ *  mount via `@starting-style`, the first three staggered, the rest flat.
+ *  Transitions on `translate` (Tailwind v4's translate utilities write the
+ *  `translate` property, not `transform`), so the global reduced-motion rule
+ *  collapses them like everything else. */
+const TURN_ENTRANCE =
+  "starting:translate-x-3.5 starting:opacity-0 ease-keystone transition-[opacity,translate] duration-[360ms] [&:nth-child(1)]:delay-[120ms] [&:nth-child(2)]:delay-[180ms] [&:nth-child(3)]:delay-[240ms]";
+
+/** A single chat turn. User turns sit right in a bubble; assistant turns sit
+ *  left, full-width, chrome-neutral — named by a `Kicker` above the text so
+ *  the mark (gutter) and the name (label) each do one job.
+ *
+ *  On the wash (`atmosphere`) the user bubble is the chrome fill rather than a
+ *  muted card, and an assistant turn with a real persona carries that agent's
+ *  brand-tinted initial — the same tile as its band tile (DockTiles) — while a
+ *  plain assistant turn keeps the Ask AI mark. */
 function Bubble({
   role,
   content,
   agentName,
+  persona = false,
+  surface = "card",
 }: {
   role: UIMessage["role"];
   content: string;
   /** Assistant turns only — who answered. Ignored for user turns. */
   agentName?: string;
+  /** `agentName` is a real agent (resolved from the roster or the historical
+   *  names), not the plain-assistant fallback. */
+  persona?: boolean;
+  surface?: ChatSurface;
 }) {
   if (role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="bg-surface-muted max-w-[85%] rounded-lg border px-3.5 py-2 text-sm whitespace-pre-wrap">
+        <div
+          className={
+            surface === "card"
+              ? "bg-surface-muted max-w-[85%] rounded-lg border px-3.5 py-2 text-sm whitespace-pre-wrap"
+              : "bg-chrome-fill border-border max-w-[85%] rounded-lg border px-3 py-1.5 text-sm whitespace-pre-wrap"
+          }
+        >
           {content}
         </div>
       </div>
@@ -67,9 +93,26 @@ function Bubble({
   }
   return (
     <div className="flex items-start gap-3">
-      <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
-        <AskAiMark className="size-3.5" />
-      </span>
+      {surface === "atmosphere" && persona ? (
+        <span
+          data-turn-tile
+          aria-hidden="true"
+          className="bg-primary/15 text-primary text-2xs mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm font-bold uppercase"
+        >
+          {agentName?.slice(0, 1)}
+        </span>
+      ) : (
+        <span
+          data-turn-tile
+          className={
+            surface === "card"
+              ? "bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border"
+              : "bg-chrome-fill text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm border"
+          }
+        >
+          <AskAiMark className="size-3.5" />
+        </span>
+      )}
       <div className="min-w-0 flex-1 pt-0.5">
         {agentName ? <Kicker className="mb-1 block">{agentName}</Kicker> : null}
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
@@ -102,6 +145,7 @@ export function MessageList({
   agentNames = EMPTY_NAMES,
   streamingAgentId = null,
   readOnly = false,
+  surface = "card",
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -130,6 +174,9 @@ export function MessageList({
    *  transcript still reads; the decisions belong to the owner, and their RLS
    *  scope is what would refuse them anyway. */
   readOnly?: boolean;
+  /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
+   *  Purely presentational — see `surface.ts`. */
+  surface?: ChatSurface;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -143,10 +190,12 @@ export function MessageList({
   // Filtered ONCE per render; `nameOf` and the empty-state list both scan
   // this array rather than re-filtering `agents` on every call.
   const agentHandles = agents.filter(isAgentMention);
-  const nameOf = (id?: string | null) =>
+  // A real name, or nothing — the roster first, then the historical names.
+  const resolvedName = (id?: string | null) =>
     agentHandles.find((a) => a.agentId === id)?.name ??
-    (id ? agentNames[id] : undefined) ??
-    PLAIN_ASSISTANT_NAME;
+    (id ? agentNames[id] : undefined);
+  const nameOf = (id?: string | null) =>
+    resolvedName(id) ?? PLAIN_ASSISTANT_NAME;
   // Unlike `nameOf`, no "Monolith" fallback: the thinking indicator's own
   // generic label already covers "no agent on record" — this is only truthy
   // when there is a real name to announce.
@@ -156,10 +205,28 @@ export function MessageList({
 
   return (
     <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
+      <div
+        className={
+          surface === "card"
+            ? "mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6"
+            : "flex flex-col gap-3.5 px-3.5 py-2"
+        }
+      >
         {empty ? (
-          <div className="mt-[12vh] flex flex-col items-center gap-3 text-center">
-            <span className="bg-surface text-brand flex size-11 items-center justify-center rounded-lg border">
+          <div
+            className={
+              surface === "card"
+                ? "mt-[12vh] flex flex-col items-center gap-3 text-center"
+                : "mt-8 flex flex-col items-center gap-3 text-center"
+            }
+          >
+            <span
+              className={
+                surface === "card"
+                  ? "bg-surface text-brand flex size-11 items-center justify-center rounded-lg border"
+                  : "bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm"
+              }
+            >
               <AskAiMark className="size-5" />
             </span>
             <Kicker>Agents</Kicker>
@@ -201,13 +268,25 @@ export function MessageList({
               ? { state: "done" as const, note: OWNER_DECIDES_NOTE }
               : resolvedStatus;
           return (
-            <div key={m.id} className="flex flex-col gap-3">
+            <div
+              key={m.id}
+              data-turn
+              className={cn(
+                "flex flex-col gap-3",
+                surface === "atmosphere" && TURN_ENTRANCE,
+              )}
+            >
               <Bubble
                 role={m.role}
                 content={m.content}
                 agentName={
                   m.role === "assistant" ? nameOf(m.agentId) : undefined
                 }
+                persona={
+                  m.role === "assistant" &&
+                  resolvedName(m.agentId) !== undefined
+                }
+                surface={surface}
               />
               {actions.length > 0 && proposalStatus ? (
                 // Indented to the assistant gutter (size-7 mark + gap-3), so the
@@ -257,6 +336,8 @@ export function MessageList({
             role="assistant"
             content={streamingText}
             agentName={nameOf(streamingAgentId)}
+            persona={resolvedName(streamingAgentId) !== undefined}
+            surface={surface}
           />
         ) : null}
 

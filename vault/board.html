@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-11 21:24",
+  "updated": "2026-09-12 09:36",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "1dbc19fd",
+        "value": "38d0f4c0",
         "tone": "warn",
-        "note": "Ahead of main: Board Intelligence Phase 2 (Advise, 19 commits, migration board_intelligence_runs on DEV) and the sidebar Keystone polish (8 commits), each announced on /updates. Both user-visible and unpromoted; /promote is the next step. No live worktrees."
+        "note": "Ahead of main by the agent-dock-atmosphere rebuild (tile band replacing DockTabs/AgentSwitcher), its whole-branch review repairs, and the Board Intelligence latency fix (effort low instead of the inherited high). Unpromoted. No live worktrees."
       },
       {
         "name": "main",
-        "value": "148b3c6f",
+        "value": "918c38bb",
         "tone": "ok",
-        "note": "PR #121 merged 2026-09-11 — Board Intelligence Phase 1: the Intelligence strip with overdue / blocked / overloaded / stalled / changed-since chips under every board header. Verified live: main CI green (run 34611243080), Vercel state=success. PR #119 and #118 before it."
+        "note": "PR #122 merged 2026-09-11, 44 commits — Board Intelligence Phases 1 AND 2, the Anthropic instructions fix that ended a four-day structured-output outage, the sidebar Keystone polish, and the intelligence size-clamp fix. Verified live: main CI green (run 34638123154), Vercel state=success. Squash divergence healed (6e47e977, -s ours)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #121 build — verified: Vercel state=success on 148b3c6f, www.monolith.works/updates serving \"Board intelligence strip\". /sync-prod not run: five DEV migrations are not yet on PROD."
+        "note": "Serving the PR #122 build — verified: Vercel state=success on 918c38bb, /updates serving \"AI generation on Anthropic works again\" and \"Board brief and suggestions\". /sync-prod not run: DEV migrations including board_intelligence_runs are not on PROD."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7520 passing, 1 skipped, on task/board-intelligence-advise before merge (finish-task re-ran all four gates on the rebased branch). New suites: schema/validate/transcript/prompt/generate/run/apply for the board brief, the bridge store, dock tabs + Intelligence tab + hook, the strip's Catch me up, the RLS + RPC integration probes (skip without PULSE_TEST_DB).",
+        "note": "7554 passing, 1 skipped, on task/intelligence-size-clamp before merge (finish-task re-ran all four gates on the rebased branch). New cases: over-cap model output truncates on every field, an untitled suggestion is dropped with contiguous ids, a bad shape still throws, and the system prompt states its budgets.",
         "label": "test"
       },
       {
@@ -189,13 +189,31 @@
   },
   "next": [
     {
-      "title": "/promote — Board Intelligence Phase 2 and the sidebar Keystone polish are merged and not yet live, then run all three walkthroughs",
-      "why": "Two user-visible batches sit on develop with /updates entries: the board brief with one-click Apply and Undo (the whole-branch review's Critical: more than ten signals on a big board failed the server's own schema after paying for the model call) and the sidebar polish. Neither Phase 2 nor the sidebar has been seen in an authenticated browser. Check Catch me up → Apply → Undo and the frozen-column rule at scrollLeft > 0, then the collapsed rail, then plan Phase 3 (Act: assign_person automation + Always do this) and decide board_intelligence_runs retention.",
+      "title": "One authenticated browser pass — it clears four sessions of owed walkthroughs",
+      "why": "Nothing merged in the last four sessions has been seen by a person; the Chrome extension was down for every build and the e2e provisioner refuses DEV by design. Start with the lit seam on develop, because it is now the control every other check reaches for: hover the card's left edge, confirm the light rounds both corners, fold and unfold both panels, drag the dock edge to resize without folding it, Tab to the chip. Then the board brief live in production — Apply, Undo, Dismiss, Show rows, viewer, Nudge, none of them ever exercised and the owner's first two clicks both failed. Then the sidebar and agent-dock passes. While you are in there, time one Catch me up and read board_intelligence_runs.tokens_out against the 5284 baseline — the latency fix is still an unobserved claim, which is why nothing was announced for it.",
       "tags": [
-        "owner",
-        "board-intelligence",
-        "sidebar",
-        "promote"
+        "manual",
+        "seam",
+        "intelligence",
+        "critical"
+      ]
+    },
+    {
+      "title": "Fix requestShapeFor — it is wrong about five active models",
+      "why": "Pre-existing on develop and exposing every adapter-routed feature, found while fixing the intelligence latency. The /haiku/i two-bucket split sends effort high to claude-sonnet-4.5, claude-sonnet-4 and claude-opus-4, all of which reject the key; adaptive thinking to claude-opus-4.5, which is pre-4.6 and needs budget_tokens; and budget_tokens to claude-3-haiku, which supports no thinking at all. All five are active catalog rows, and pickModel lets an org default outrank the tier hint, so one Settings change arms a 400. Likely repair: shape per model from the feed's reasoning_options, which already carries the fact.",
+      "tags": [
+        "ai",
+        "latent",
+        "providers"
+      ]
+    },
+    {
+      "title": "Promote develop — the dock rebuild, the latency fix and the lit seam",
+      "why": "Three merges are stacked unpromoted: the tile band that replaced the pill tabs and the persona select (bda5fa36), the Board Intelligence effort fix (38d0f4c0) and the lit-seam collapse control (7bb2d483). Two of the three carry /updates entries. None of them has been seen in an authenticated browser, so this waits on the pass above rather than going first.",
+      "tags": [
+        "promote",
+        "dock",
+        "seam"
       ]
     },
     {
@@ -257,14 +275,19 @@
   ],
   "risks": [
     {
+      "sev": "open",
+      "title": "A generator judged against limits it was never told",
+      "text": "Board Intelligence billed two full model calls and cached nothing because rawOutputSchema rejected a brief over 700 characters and a ninth evidence id — caps that live only in Zod, while the model-facing JSON Schema deliberately carries no lengths. A failed run leaves the input hash unchanged, so every retry paid again. Fixed for this feature (size caps truncate, shape stays strict) but the sibling raw schemas — reports/ai-draft-schema.ts, board-gen-schema.ts, automation-gen-schema.ts — have not been audited for the same .max()-after-payment shape."
+    },
+    {
       "sev": "amber",
       "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
       "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
     },
     {
       "sev": "amber",
-      "title": "A whole visual batch shipped without anyone seeing it",
-      "text": "Now three batches in a row: the UI polish + presets, the sidebar polish, and Board Intelligence Phase 2 (dock tab, cards, Apply/Undo, strip pill) all landed on develop with the Chrome extension disconnected and the e2e provisioner refusing DEV. Every string, role and budget claim is machine-checked, but paint order, the 320px two-row dock header and the toast timing are eye judgements no test makes. The whole-branch review found the blocking defect for the fifth session running; assume the manual pass will find something too."
+      "title": "Three visual batches are live in production, unseen",
+      "text": "The UI polish + presets, the sidebar polish and Board Intelligence Phase 2 all shipped without a browser pass, and Phase 2 is now IN PRODUCTION unverified: dock tab, cards, Apply/Undo, the strip pill. The owner's first two clicks on it failed on a defect no test could see, which is exactly the class a manual pass catches. Every string, role and budget claim is machine-checked; paint order, the 320px two-row dock header and toast timing are eye judgements. The agent-dock rebuild is the same story, one step behind, on develop."
     },
     {
       "sev": "amber",
@@ -359,18 +382,19 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-11-2124-board-intelligence-phase2-advise",
-    "when": "2026-09-11 21:24",
-    "title": "Board Intelligence Phase 2 (Advise) built and merged; Phase 1 promoted",
+    "id": "2026-09-12-0936-lit-seam-collapse-control",
+    "when": "2026-09-12 09:36",
+    "title": "The card's hairline is the collapse control",
     "bullets": [
-      "Promoted develop → main as PR #121 (Phase 1 strip); verified live on Vercel and /updates; squash divergence healed.",
-      "Planned and built Phase 2 subagent-driven in parallel per-task worktrees: runs cache + activity source + one-transaction apply RPC, the board-checked validation layer, a per-user cached brief through runAi, the dock's Intelligence tab with Apply/Undo/Dismiss, the strip's Catch me up.",
-      "Eight task reviews each found something real; the whole-branch review found the Critical none could (signal cap vs the server's own payload) plus a plan defect (set_due kept the end date). One fix wave, one re-review, then finish-task.",
-      "Owed: the browser walkthrough (no authenticated browser this session), promotion, and a retention decision for board_intelligence_runs."
+      "Four rounds of in-browser prototypes before any code — six placements, then variations of the two the owner liked, then four takes on how far the light travels. The owner picked edge-plus-glow.",
+      "The seam is a stroked copy of the content card's outline: two paths per edge, both starting at its middle, so one dash growing from each origin opens the light evenly and reaches both corners together. A div with a height cannot do it — it ends in a straight stub short of the rounded-xl corner.",
+      "Lengths are computed analytically rather than read with getTotalLength, which jsdom does not implement; Chromium's own measurement of the rendered path agrees to 0.005px. A ResizeObserver, not a one-shot measure, because the card is a flex child between two animated widths.",
+      "Both old controls retired. The dock's edge already was its resize grip, so they are now one object: click folds, drag resizes, arrow keys resize, and a pointer past 4px or 400ms is a resize and never a fold.",
+      "Merged at 7bb2d483, 18 files, gates green over 7646 tests. Announced on /updates. Nothing seen in an authenticated browser — the nine-step walkthrough is owed."
     ]
   }
 }
-    </script>
+</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────

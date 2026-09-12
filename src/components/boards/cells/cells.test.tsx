@@ -650,3 +650,19 @@ describe("PriorityCell", () => {
     expect(container).not.toHaveTextContent("Normal");
   });
 });
+
+describe("cell renderers — Quiet Grid scale", () => {
+  it("renders text values at the 13px table scale, not text-sm", () => {
+    render(
+      <CellRenderer
+        kind="text"
+        value={{ text: "Hello" }}
+        settings={{}}
+        members={[]}
+      />,
+    );
+    const span = screen.getByText("Hello");
+    expect(span.className).toContain("text-cell");
+    expect(span.className).not.toMatch(/\btext-sm\b/);
+  });
+});

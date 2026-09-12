@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AddItemRow } from "./AddItemRow";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 import type { CellControls } from "./shared";
 
 // AddItemRow only ever touches `controls.addItem`; the rest of the bundle is
@@ -117,5 +118,46 @@ describe("AddItemRow", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       `Couldn't add "First" — boom`,
     );
+  });
+
+  it("renders the dashed add affordance", () => {
+    const { container } = render(
+      <AddItemRow groupId="g1" controls={controls} nameWidth={240} canEdit />,
+    );
+    const plus = container.querySelector("[data-testid='add-affordance']");
+    expect(plus?.className).toContain("border-dashed");
+  });
+
+  it("keeps the frozen name-column element sticky under a full-width separator host", () => {
+    const { container } = render(
+      <AddItemRow groupId="g1" controls={controls} nameWidth={240} canEdit />,
+    );
+    // Regression guard for a tailwind-merge trap: ROW_HAIRLINE opens with
+    // `relative`, which shares a conflict group with `sticky` — merging both
+    // onto one element's class list drops whichever loses the group, so the
+    // hairline lives on a full-width OUTER host and `sticky` stays on the
+    // INNER, name-width-constrained element untouched.
+    const host = container.firstElementChild as HTMLElement;
+    expect(host.className).toContain("before:left-4");
+    expect(host.className).toContain("w-full");
+    const sticky = host.querySelector(".sticky") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.className).toContain("sticky");
+    expect(sticky!.className).toContain("left-0");
+  });
+
+  it("puts the permanent Name-column right-edge hairline on the inner sticky element, not the full-width host", () => {
+    const { container } = render(
+      <AddItemRow groupId="g1" controls={controls} nameWidth={240} canEdit />,
+    );
+    const host = container.firstElementChild as HTMLElement;
+    const sticky = host.querySelector(".sticky") as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(sticky.className).toContain(cls);
+    }
+    // The full-width host spans the whole row — a border here would draw a
+    // stray vertical line at the far right of the board, not at the Name
+    // column's edge (the same reason AddSubitemRow is excluded entirely).
+    expect(host.className).not.toMatch(/\bborder-r\b/);
   });
 });

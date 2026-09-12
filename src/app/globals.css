@@ -18,9 +18,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-nunito-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
-  --font-heading: var(--font-nunito-sans);
+  --font-heading: var(--font-inter);
 
   /* Brand highlight (semantic alias of the configurable accent) */
   --color-brand: var(--brand);
@@ -54,6 +54,8 @@
   /* The two missing small type steps */
   --text-3xs: 0.625rem; /* 10px */
   --text-2xs: 0.6875rem; /* 11px */
+  --text-cell: 0.8125rem; /* 13px — board table data cells */
+  --text-item: 0.84375rem; /* 13.5px — board table item + group names */
 
   /* Surfaces (brief's semantic names) */
   --color-surface: var(--surface);
@@ -132,6 +134,10 @@
      wave; the reduced-motion block below stands it down. */
   --animate-thinking-dot: thinking-dot 1.2s cubic-bezier(0.16, 1, 0.3, 1)
     infinite;
+  /* Agent presence (board dock): the answering agent's dot breathes while its
+     turn streams. A box-shadow ring 0 → 6px — nothing scales — on the keystone
+     curve; the reduced-motion block below collapses it like every animation. */
+  --animate-pulse-ring: pulse-ring 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 @keyframes fadein {
@@ -175,6 +181,16 @@
   35% {
     opacity: 1;
     transform: translateY(-3px);
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 55%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 6px transparent;
   }
 }
 
@@ -246,6 +262,11 @@
   --content-edge: rgb(0 0 0 / 12%);
   --content-lift:
     -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
+  /* The bloom on a lit seam (`.seam-line` below). Derived from --foreground, so
+     it is declared ONCE and every theme and preset resolves it for free — a
+     white haze on the near-black card, an ink haze on the paper one. Not a
+     seed token: preset blocks must not redeclare it. */
+  --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
 
   --state-hover: rgb(0 0 0 / 4%);
   --state-active: rgb(0 0 0 / 7%);
@@ -807,6 +828,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-optical-sizing: auto;
+  }
+  /* Inter runs wider than the Nunito Sans it replaced. Display sizes need
+     negative tracking to hold the same optical rhythm; UI-sized text is tuned
+     per surface (the board table sets its own in table/shared.ts). */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
   }
   html {
     @apply font-sans;
@@ -903,6 +933,55 @@
       black calc(100% - 14px),
       transparent
     );
+  }
+  /*
+   * Keystone signature: the card's own hairline IS the collapse control.
+   *
+   * At rest each edge shows a 30px tick at its middle (two paths, 15px each).
+   * Reaching for the seam opens that tick from its own middle in both
+   * directions until it covers the whole edge, corners included, and lights it.
+   * Hairlines brighten, never thicken — the stroke width never changes, only
+   * its colour, its length and its bloom.
+   *
+   * The state is CSS, not React: a pointer crossing the gutter must not cost a
+   * render. `:has()` is what lets the stroke react to a hover on a sibling hit
+   * strip; `--seam-len` / `--seam-gap` are written per path by `CardSeam`,
+   * because only it knows how long each half is.
+   */
+  .seam-line {
+    fill: none;
+    stroke: var(--border-bright);
+    stroke-width: 1;
+    stroke-linecap: round;
+    stroke-dasharray: var(--seam-rest) var(--seam-gap);
+    transition:
+      stroke-dasharray 460ms var(--ease-keystone),
+      stroke 240ms var(--ease-keystone),
+      filter 300ms var(--ease-keystone);
+  }
+  .seam:has(.seam-hit:hover) .seam-line,
+  .seam:has(.seam-hit:focus-visible) .seam-line,
+  /* The dock's cap is a button INSIDE the separator, so the strip itself is
+     never the focused element — match a focused descendant too. */
+  .seam:has(.seam-hit :focus-visible) .seam-line {
+    stroke: var(--foreground);
+    stroke-dasharray: var(--seam-len) var(--seam-gap);
+    filter: drop-shadow(var(--seam-glow));
+  }
+  .seam-cap {
+    opacity: 0;
+    transition: opacity 180ms var(--ease-keystone);
+  }
+  .seam-hit:hover .seam-cap,
+  .seam-hit:focus-visible .seam-cap,
+  .seam-hit:has(:focus-visible) .seam-cap {
+    opacity: 1;
+  }
+  /* No hover to reveal it with, so the chevron simply stays. */
+  @media (pointer: coarse) {
+    .seam-cap {
+      opacity: 1;
+    }
   }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {

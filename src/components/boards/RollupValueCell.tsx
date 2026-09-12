@@ -17,7 +17,7 @@ import { RollupCell } from "@/components/boards/RollupCell";
 import { CellRenderer } from "@/components/boards/cells";
 import type { ColumnOption } from "@/lib/validations/boards";
 
-const CELL_CLASS = "flex h-full items-center truncate border-l px-3";
+const CELL_CLASS = "flex h-full items-center truncate px-4";
 
 /**
  * One column's read-only rollup over a set of items — the cell shown for a
@@ -61,8 +61,7 @@ export function RollupValueCell({
         (c) =>
           (
             cellMap.get(cellKey(c.id, col.id)) as
-              | { estimateSeconds?: number }
-              | undefined
+              { estimateSeconds?: number } | undefined
           )?.estimateSeconds,
       )
       .filter((n): n is number => typeof n === "number");
@@ -79,7 +78,7 @@ export function RollupValueCell({
     );
     return (
       <div className={CELL_CLASS}>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-cell">
           {relationRollup(links)}
         </span>
       </div>
@@ -112,11 +111,11 @@ export function RollupValueCell({
             }
           />
         ) : r.kind === "count" ? (
-          <span className="text-muted-foreground text-sm">
+          <span className="text-muted-foreground text-cell">
             {r.count} {r.count === 1 ? "item" : "items"}
           </span>
         ) : (
-          <span className="text-sm" />
+          <span className="text-cell" />
         )}
       </div>
     );

@@ -25,7 +25,8 @@ import { EditableCell } from "./EditableCell";
 import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
 import {
-  ROW_HEIGHT,
+  ROW_HAIRLINE,
+  SUBITEM_ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
@@ -137,6 +138,20 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
     </button>
   );
 
+  const threadedLeading = (
+    <>
+      {/* Parent↔child link. Quiet Grid has no vertical rules, so the thread —
+            a 1px line with a short elbow into the name — is what says "this row
+            belongs to the one above". */}
+      <span
+        aria-hidden
+        data-testid="subitem-thread"
+        className="bg-border before:bg-border pointer-events-none absolute inset-y-0 left-[26px] w-px before:absolute before:top-1/2 before:left-0 before:h-px before:w-2 before:content-['']"
+      />
+      {dragHandle}
+    </>
+  );
+
   return (
     <div
       ref={setNodeRef}
@@ -145,11 +160,12 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         // rows don't stretch/squish during drag (gotcha-20).
         transform: CSS.Translate.toString(transform),
         transition,
-        height: ROW_HEIGHT,
+        height: SUBITEM_ROW_HEIGHT,
         gridTemplateColumns: template,
       }}
       className={cn(
-        "ease-keystone border-border hover:border-border-hover hover:bg-foreground/[0.025] grid w-full border-b transition-colors",
+        "ease-keystone hover:bg-state-hover grid w-full transition-colors",
+        ROW_HAIRLINE,
         isDragging && "shadow-drag relative z-10",
         intelRowClasses(intelMatch),
       )}
@@ -158,7 +174,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
       <NameCell
         item={sub}
         controls={controls}
-        leading={dragHandle}
+        leading={threadedLeading}
         indented
         intelMatch={intelMatch}
         autoFocusRename={sub.id === renamingItemId}
@@ -202,13 +218,13 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center px-4">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center px-4">
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>

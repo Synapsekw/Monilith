@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import type { CellControls } from "./shared";
+import { cn } from "@/lib/utils";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
+import { ROW_HAIRLINE, type CellControls } from "./shared";
 
 export function AddItemRow({
   groupId,
@@ -59,28 +61,50 @@ export function AddItemRow({
   if (!canEdit) return null;
 
   return (
-    <div
-      className="bg-surface sticky left-0 flex flex-col border-b px-4 py-1.5"
-      style={{ width: nameWidth }}
-    >
-      <div className="flex items-center gap-2">
-        <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit();
-            }
-          }}
-          placeholder="Add Item"
-          aria-label="Add item"
-          className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
-          {...status.controlProps}
-        />
+    // Full-width separator host: `AddItemRow`'s actual content is pinned to
+    // the frozen Name column (`sticky left-0` + `width: nameWidth` below), but
+    // the row's top hairline must span the WHOLE row like every other row's,
+    // not just the Name column's width. Splitting the hairline onto this outer
+    // wrapper (rather than merging it into the sticky element's own class
+    // list) also sidesteps a tailwind-merge trap: `ROW_HAIRLINE` starts with
+    // `relative`, which is in the same conflict group as `sticky` — on one
+    // element the later class wins and silently drops the other.
+    <div className={cn("w-full", ROW_HAIRLINE)}>
+      <div
+        // Permanent 1px right-edge hairline — the Name column's rule,
+        // carried by THIS inner sticky element (which actually spans just
+        // the Name column's width) rather than the full-width hairline host
+        // above. See NAME_FREEZE_RULE in SummaryRow.tsx.
+        className={cn(
+          "group/add bg-surface sticky left-0 flex flex-col px-4 py-1.5",
+          NAME_FREEZE_RULE,
+        )}
+        style={{ width: nameWidth }}
+      >
+        <div className="flex items-center gap-2">
+          <span
+            data-testid="add-affordance"
+            className="border-border-bright text-muted-foreground group-hover/add:border-primary group-hover/add:text-primary grid size-[18px] shrink-0 place-items-center rounded-md border border-dashed transition-colors"
+          >
+            <Plus className="size-3" aria-hidden />
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              }
+            }}
+            placeholder="Add Item"
+            aria-label="Add item"
+            className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring text-cell w-full bg-transparent outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
+            {...status.controlProps}
+          />
+        </div>
+        <FieldStatus field={status} />
       </div>
-      <FieldStatus field={status} />
     </div>
   );
 }

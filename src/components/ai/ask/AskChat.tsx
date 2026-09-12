@@ -23,6 +23,7 @@ import type { PendingProposal } from "@/lib/agents/proposal-display";
 import type { DropState } from "./StreamDropNotice";
 import type { MentionTarget } from "@/lib/collaboration/mentions";
 import { Composer } from "./Composer";
+import type { ChatSurface } from "./surface";
 
 /**
  * Client controller for a single chat surface.
@@ -78,6 +79,8 @@ export function AskChat({
   readOnly = false,
   onStarted,
   onTurnComplete,
+  surface = "card",
+  onBusyChange,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
@@ -126,6 +129,13 @@ export function AskChat({
    *  this to update its own thread list; refreshing would re-run the board's
    *  server query for data the client already has (gotcha-09). */
   onTurnComplete?: () => void;
+  /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
+   *  Threaded to `MessageList` and `Composer`; see `surface.ts`. */
+  surface?: ChatSurface;
+  /** `true` the moment a turn is accepted (before the first Server Action),
+   *  `false` when it settles on ANY path — done, error, refused send, drop
+   *  recovery. The dock reads it for the answering agent's presence dot. */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -212,6 +222,7 @@ export function AskChat({
     if (turnInFlight.current) return;
     turnInFlight.current = true;
     setTurnBusy(true);
+    onBusyChange?.(true);
     try {
       let convId = activeId;
       setDropState("none");
@@ -318,9 +329,11 @@ export function AskChat({
       if (outcome === "dropped") await recoverAfterDrop(convId);
     } finally {
       // Released on every path — a stuck flag would strand the composer, which
-      // is the failure mode this guard exists to avoid, not to create.
+      // is the failure mode this guard exists to avoid, not to create. The
+      // surface hears the same release, so a presence dot can never stick.
       turnInFlight.current = false;
       setTurnBusy(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -425,11 +438,21 @@ export function AskChat({
         agentNames={agentNames}
         streamingAgentId={personaId}
         readOnly={readOnly}
+        surface={surface}
       />
       {/* The run's queued approvals, between the report and the composer: the
           owner reads what the agent did, then decides what it could not. */}
       {agentProposals.length > 0 ? (
-        <div className="flex flex-col gap-2 px-4 pb-2">
+        <div
+          className={
+            surface === "card"
+              ? "flex flex-col gap-2 px-4 pb-2"
+              : // On the wash every other block — title row, ledger, transcript,
+                // notice, error banner — is `px-3.5`; `px-4` left the cards 2px
+                // out of the column.
+                "flex flex-col gap-2 px-3.5 pb-2"
+          }
+        >
           {agentProposals.map((p) => (
             <ProposalCard key={p.id} proposal={p} />
           ))}
@@ -443,7 +466,13 @@ export function AskChat({
           field that only produces a refusal is a lie about what they can do
           (the board dock says the same sentence, for the same reason). */}
       {readOnly ? (
-        <p className="text-muted-foreground border-t px-4 py-3 text-sm">
+        <p
+          className={
+            surface === "card"
+              ? "text-muted-foreground border-t px-4 py-3 text-sm"
+              : "text-muted-foreground px-3.5 py-3 text-sm"
+          }
+        >
           This thread was shared with the board. You can read it, but only its
           owner can reply.
         </p>
@@ -455,6 +484,7 @@ export function AskChat({
           error={composerError}
           onRetry={retryLastSend}
           onSubmit={onSubmit}
+          surface={surface}
         />
       )}
     </div>
