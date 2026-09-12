@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-12",
     kind: "improved",
+    title: "Board briefs arrive in seconds",
+    description:
+      "Catch me up now returns in about twenty seconds instead of a couple of minutes. The brief asks the model for less internal deliberation and the same answer, so it costs less and reads the same.",
+  },
+  {
+    date: "2026-09-12",
+    kind: "improved",
     title: "A calmer board table",
     description:
       "Board tables lost their vertical grid lines — columns are now separated by alignment and a single hairline beside the item name. Rows are taller, hover and selection are clearer, and subitems hang off a thread line under their parent.",
