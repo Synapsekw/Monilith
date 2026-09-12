@@ -298,30 +298,39 @@ export function validateIntelligenceOutput(
     // `suggestionSchema` does, so an untitled card is dropped below, like one
     // with no valid action, rather than tripping the safety net at the end.
     const title = sanitizeInline(s.title).trim().slice(0, 80);
+    // Checked BEFORE the actions: an untitled card is dropped whatever its
+    // actions do, so testing it here emits one attributable line instead of
+    // two — the first of which used to describe a card called "" as though it
+    // had survived.
+    if (title.length === 0) {
+      warnings.push("Dropped an untitled suggestion");
+      continue;
+    }
     const parses = s.actions.map((a) => toActionParse(a, ctx));
     const actions = parses.flatMap((p) => (p.ok ? [p.action] : []));
     const rejections = parses.flatMap((p) => (p.ok ? [] : [p.reason]));
     // Same reasoning as `proposed` above: `s.actions.length` is already
     // truncated, so quoting it would understate what the model actually sent.
     const proposedActions = counts.actions[i] ?? s.actions.length;
-    const capped =
-      proposedActions > s.actions.length
-        ? ` (${proposedActions - s.actions.length} more were dropped by the schema cap)`
-        : "";
+    const cappedOut = Math.max(0, proposedActions - s.actions.length);
+    // The cap counts as a loss like any other, so it belongs in the reason
+    // list. Reporting "kept X of Y" rather than "dropped X of Y" keeps the two
+    // numbers over the SAME population: a rejection count measured against a
+    // proposal count that also includes cap-truncated actions read as
+    // "dropped 0 of 3" while one of the three was in fact dropped.
+    const notes = cappedOut
+      ? [...rejections, `${cappedOut} more dropped by the schema cap`]
+      : rejections;
     if (actions.length === 0) {
       warnings.push(
-        `Dropped "${title}": no valid action — ${rejections.join("; ") || "the model proposed none"}${capped}`,
+        `Dropped "${title}": no valid action — ${notes.join("; ") || "the model proposed none"}`,
       );
       continue;
     }
-    if (rejections.length || capped)
+    if (notes.length)
       warnings.push(
-        `"${title}": dropped ${rejections.length} of ${proposedActions} action(s) — ${rejections.join("; ") || "none rejected"}${capped}`,
+        `"${title}": kept ${actions.length} of ${proposedActions} action(s) — ${notes.join("; ")}`,
       );
-    if (title.length === 0) {
-      warnings.push("Dropped an untitled suggestion");
-      continue;
-    }
     const evidenceRows = s.evidenceItemIds.flatMap((id) => {
       const it = ctx.items.get(id);
       return it ? [{ itemId: it.id, name: it.name, detail: "" }] : [];

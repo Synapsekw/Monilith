@@ -6,6 +6,7 @@ import {
   toActionParse,
   validateIntelligenceOutput,
 } from "./validate";
+import type { ActionRejection } from "./validate";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { Signal } from "@/lib/boards/intelligence/types";
 
@@ -544,141 +545,132 @@ describe("validateIntelligenceOutput", () => {
 // names the check that actually fired and not an earlier one. Shared by both
 // tests below: the second drives the SAME table through `toAction`, which is
 // what would catch the two implementations being re-forked.
-const rejectionCases: [Record<string, unknown>, string][] = [
-  [
-    { type: "set_due", itemId: "nope", columnId: "c-date", date: "2026-09-20" },
-    "set_due: itemId is not on this board",
-  ],
-  [
-    // A real column, but the wrong KIND — the mistake a model actually makes,
-    // and the one a bare null could never tell apart from a hallucinated id.
-    {
-      type: "set_due",
-      itemId: "i1",
-      columnId: "c-status",
-      date: "2026-09-20",
-    },
-    "set_due: columnId is not a date column on this board",
-  ],
-  [
-    { type: "set_due", itemId: "i1", columnId: "c-date", date: "20 Sep 2026" },
-    "set_due: date is missing or not YYYY-MM-DD",
-  ],
-  [
-    // MISSING, not invented: every action field is required-and-nullable in the
-    // model-facing schema, so a null optionId is a structured-output failure
-    // while a wrong one is a grounding failure. Opposite fixes, separate
-    // reasons — collapsing them would answer the wrong question.
-    { type: "set_status", itemId: "i1", columnId: "c-status", optionId: null },
-    "set_status: optionId is missing",
-  ],
-  [
-    {
-      type: "set_status",
-      itemId: "i1",
-      columnId: "c-status",
-      optionId: "o-ghost",
-    },
-    "set_status: optionId is not an option on that column",
-  ],
-  [
-    {
-      type: "reassign",
-      itemIds: ["ghost"],
-      columnId: "c-people",
-      toUserId: "u-ana",
-    },
-    "reassign: no itemIds on this board",
-  ],
-  [
-    {
-      type: "reassign",
-      itemIds: ["i1"],
-      columnId: "c-date",
-      toUserId: "u-ana",
-    },
-    "reassign: columnId is not a people column on this board",
-  ],
-  [
-    {
-      type: "set_status",
-      itemId: "ghost",
-      columnId: "c-status",
-      optionId: "o-done",
-    },
-    "set_status: itemId is not on this board",
-  ],
-  [
-    {
-      type: "set_status",
-      itemId: "i1",
-      columnId: "c-date",
-      optionId: "o-done",
-    },
-    "set_status: columnId is not a status column on this board",
-  ],
-  [
-    { type: "nudge", itemId: "ghost", userId: "u-ana", message: "hi" },
-    "nudge: itemId is not on this board",
-  ],
-  [
-    {
-      type: "reassign",
-      itemIds: ["i1"],
-      columnId: "c-people",
-      toUserId: null,
-    },
-    "reassign: toUserId is missing",
-  ],
-  [
-    {
-      type: "reassign",
-      itemIds: ["i1"],
-      columnId: "c-people",
-      toUserId: "u-ghost",
-    },
-    "reassign: toUserId is not a member of this org",
-  ],
-  [
-    { type: "nudge", itemId: "i1", userId: null, message: "hi" },
-    "nudge: userId is missing",
-  ],
-  [
-    { type: "nudge", itemId: "i1", userId: "u-ghost", message: "hi" },
-    "nudge: userId is not a member of this org",
-  ],
-  [
-    { type: "nudge", itemId: "i1", userId: "u-ana", message: "   " },
-    "nudge: message is empty after sanitising",
-  ],
-  [
-    { type: "filter", signalKind: "urgent" },
-    "filter: signalKind is not a known signal",
-  ],
-  [
-    // `ctx` (not `signalCtx`) carries no signals, so an overloaded filter has
-    // no subject to name and would render a button that does nothing.
-    { type: "filter", signalKind: "overloaded" },
-    "filter: overloaded, but this run has no overloaded signal",
-  ],
-];
+//
+// Keyed by `ActionRejection`, which makes the table EXHAUSTIVE AT COMPILE TIME:
+// adding a member to the union without adding its case here fails typecheck. A
+// runtime "the table has 17 entries" assertion looked like the same guarantee
+// and was not — it passed happily against a hardcoded count while an 18th
+// reason went unexercised.
+const rejectionCases: Record<ActionRejection, Record<string, unknown>> = {
+  "reassign: no itemIds on this board": {
+    type: "reassign",
+    itemIds: ["ghost"],
+    columnId: "c-people",
+    toUserId: "u-ana",
+  },
+  "reassign: columnId is not a people column on this board": {
+    type: "reassign",
+    itemIds: ["i1"],
+    columnId: "c-date",
+    toUserId: "u-ana",
+  },
+  // MISSING, not invented: every action field is required-and-nullable in the
+  // model-facing schema, so a null id is a structured-output failure while a
+  // wrong one is a grounding failure. Opposite fixes, separate reasons —
+  // collapsing them would answer the wrong question.
+  "reassign: toUserId is missing": {
+    type: "reassign",
+    itemIds: ["i1"],
+    columnId: "c-people",
+    toUserId: null,
+  },
+  "reassign: toUserId is not a member of this org": {
+    type: "reassign",
+    itemIds: ["i1"],
+    columnId: "c-people",
+    toUserId: "u-ghost",
+  },
+  "set_due: itemId is not on this board": {
+    type: "set_due",
+    itemId: "nope",
+    columnId: "c-date",
+    date: "2026-09-20",
+  },
+  // A real column, but the wrong KIND — the mistake a model actually makes,
+  // and the one a bare null could never tell apart from a hallucinated id.
+  "set_due: columnId is not a date column on this board": {
+    type: "set_due",
+    itemId: "i1",
+    columnId: "c-status",
+    date: "2026-09-20",
+  },
+  "set_due: date is missing or not YYYY-MM-DD": {
+    type: "set_due",
+    itemId: "i1",
+    columnId: "c-date",
+    date: "20 Sep 2026",
+  },
+  "set_status: itemId is not on this board": {
+    type: "set_status",
+    itemId: "ghost",
+    columnId: "c-status",
+    optionId: "o-done",
+  },
+  "set_status: columnId is not a status column on this board": {
+    type: "set_status",
+    itemId: "i1",
+    columnId: "c-date",
+    optionId: "o-done",
+  },
+  "set_status: optionId is missing": {
+    type: "set_status",
+    itemId: "i1",
+    columnId: "c-status",
+    optionId: null,
+  },
+  "set_status: optionId is not an option on that column": {
+    type: "set_status",
+    itemId: "i1",
+    columnId: "c-status",
+    optionId: "o-ghost",
+  },
+  "nudge: itemId is not on this board": {
+    type: "nudge",
+    itemId: "ghost",
+    userId: "u-ana",
+    message: "hi",
+  },
+  "nudge: userId is missing": {
+    type: "nudge",
+    itemId: "i1",
+    userId: null,
+    message: "hi",
+  },
+  "nudge: userId is not a member of this org": {
+    type: "nudge",
+    itemId: "i1",
+    userId: "u-ghost",
+    message: "hi",
+  },
+  "nudge: message is empty after sanitising": {
+    type: "nudge",
+    itemId: "i1",
+    userId: "u-ana",
+    message: "   ",
+  },
+  "filter: signalKind is not a known signal": {
+    type: "filter",
+    signalKind: "urgent",
+  },
+  // `ctx` (not `signalCtx`) carries no signals, so an overloaded filter has no
+  // subject to name and would render a button that does nothing.
+  "filter: overloaded, but this run has no overloaded signal": {
+    type: "filter",
+    signalKind: "overloaded",
+  },
+};
 
 describe("toActionParse — why an action was refused", () => {
   it("names the failing check rather than returning a bare null", () => {
-    for (const [raw, reason] of rejectionCases) {
+    // Exhaustiveness is the TYPE's job (see the table): if a reason existed
+    // with no case, this file would not compile. What this asserts is that each
+    // case actually produces the reason it is filed under — a table keyed by
+    // the union still permits every entry pointing at the wrong scenario.
+    for (const [reason, raw] of Object.entries(rejectionCases)) {
       const parsed = toActionParse({ ...base, ...raw } as never, ctx);
       expect(parsed.ok, `expected ${reason}`).toBe(false);
       expect(parsed.ok ? null : parsed.reason).toBe(reason);
     }
-  });
-
-  it("covers every rejection reason the union declares", () => {
-    // Without this, adding a reason and forgetting to exercise it would leave
-    // the table above silently partial — and a reason nobody tests is a reason
-    // nobody has read in a log.
-    const covered = new Set(rejectionCases.map(([, reason]) => reason));
-    expect(covered.size).toBe(rejectionCases.length);
-    expect(covered.size).toBe(17);
   });
 
   it("agrees with toAction on every rejection case, so the two cannot be re-forked", () => {
@@ -686,7 +678,7 @@ describe("toActionParse — why an action was refused", () => {
     // thin unwrap so this holds trivially; it exists for the day someone
     // reintroduces a second implementation, which is exactly how the null-only
     // version drifted out of usefulness in the first place.
-    for (const [raw, reason] of rejectionCases) {
+    for (const [reason, raw] of Object.entries(rejectionCases)) {
       const args = { ...base, ...raw } as never;
       expect(toAction(args, ctx), `expected null for ${reason}`).toBeNull();
       expect(toActionParse(args, ctx).ok).toBe(false);
@@ -769,7 +761,7 @@ describe("validateIntelligenceOutput warnings", () => {
     // The surviving action keeps the card; the failure is still explained.
     expect(out.suggestions).toHaveLength(1);
     expect(out.suggestions[0]?.actions).toHaveLength(1);
-    expect(warnings[0]).toContain("dropped 1 of 2 action(s)");
+    expect(warnings[0]).toContain("kept 1 of 2 action(s)");
     expect(warnings[0]).toContain(
       "set_status: columnId is not a status column on this board",
     );
@@ -905,7 +897,51 @@ describe("validateIntelligenceOutput warnings", () => {
     );
     // 4 sent, 2 kept by the cap, 1 of those rejected — the denominator is the
     // model's 4, and the cap's share is stated rather than hidden.
-    expect(warnings[0]).toContain("dropped 1 of 4 action(s)");
-    expect(warnings[0]).toContain("2 more were dropped by the schema cap");
+    expect(warnings[0]).toContain("kept 1 of 4 action(s)");
+    expect(warnings[0]).toContain("2 more dropped by the schema cap");
+  });
+
+  it("counts the cap as a loss, so the two numbers cover the same population", () => {
+    // 3 valid actions, cap keeps 2, none rejected. Reporting "dropped 0 of 3"
+    // was true of rejections and false of the card: one action WAS lost. "kept
+    // 2 of 3" cannot be read that way.
+    const valid = { ...base, type: "filter", signalKind: "overdue" };
+    const { warnings } = validateIntelligenceOutput(
+      {
+        brief: "b",
+        suggestions: [suggestion("Capped", [valid, valid, valid])],
+      },
+      ctx,
+      [overdueSignal],
+    );
+    expect(warnings[0]).toContain("kept 2 of 3 action(s)");
+    expect(warnings[0]).toContain("1 more dropped by the schema cap");
+    expect(warnings[0]).not.toContain("dropped 0");
+  });
+
+  it("attributes an untitled card once, not twice", () => {
+    // The card is dropped for having no title; it previously ALSO emitted an
+    // action-level warning first, naming the card `""` as though it survived.
+    const { warnings, payload: out } = validateIntelligenceOutput(
+      {
+        brief: "b",
+        suggestions: [
+          suggestion("   ", [
+            { ...base, type: "filter", signalKind: "overdue" },
+            {
+              ...base,
+              type: "set_due",
+              itemId: "ghost",
+              columnId: "c-date",
+              date: "2026-09-20",
+            },
+          ]),
+        ],
+      },
+      ctx,
+      [overdueSignal],
+    );
+    expect(out.suggestions).toHaveLength(0);
+    expect(warnings).toEqual(["Dropped an untitled suggestion"]);
   });
 });
