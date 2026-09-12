@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   cellKey,
@@ -185,6 +187,33 @@ describe("Quiet Grid geometry", () => {
     // compete directly. `before:z-20` matches the precedent in globals.css
     // for "rule above a z-10 frozen column" (`.intel-rule`'s host `::after`).
     expect(ROW_HAIRLINE).toContain("before:z-20");
+  });
+
+  it("keeps the row hairline clear of the frozen intel-rule lane (no notch)", () => {
+    // Regression guard for a diagnosed-and-corrected claim in ROW_HAIRLINE's
+    // own doc comment: raising the hairline's z-index above `.intel-rule`
+    // does NOT put a notch in the Board Intelligence tone rule, because the
+    // two boxes never share a horizontal pixel — the hairline starts at
+    // `before:left-4` (16px) while `.intel-rule` (globals.css) is a 2px-wide
+    // bar pinned at `left: 0`. This reads the ACTUAL width out of
+    // globals.css (not a restated literal) so a future change that widens
+    // `.intel-rule` past the hairline's inset fails here, not silently in
+    // production.
+    const globalsCssPath = path.join(process.cwd(), "src/app/globals.css");
+    const css = fs.readFileSync(globalsCssPath, "utf8");
+    const intelRuleBlock = css.match(/\.intel-rule\s*\{([^}]*)\}/);
+    expect(intelRuleBlock).not.toBeNull();
+    const widthMatch = intelRuleBlock![1].match(/width:\s*(\d+)px/);
+    expect(widthMatch).not.toBeNull();
+    const intelRuleWidthPx = Number(widthMatch![1]);
+
+    // Tailwind v4's default spacing unit (`--spacing`) is 4px, unoverridden
+    // in this app's theme (confirmed against the compiled CSS chunk) — so
+    // `left-4` insets by 4 * 4 = 16px. `before:left-4` is asserted above.
+    const TAILWIND_SPACING_UNIT_PX = 4;
+    const hairlineInsetPx = 4 * TAILWIND_SPACING_UNIT_PX;
+
+    expect(hairlineInsetPx).toBeGreaterThanOrEqual(intelRuleWidthPx);
   });
 
   describe("buildNameMeasureFont", () => {
