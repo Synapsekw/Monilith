@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { cn } from "@/lib/utils";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 import { ROW_HAIRLINE, type CellControls } from "./shared";
 
 export function AddItemRow({
@@ -70,7 +71,14 @@ export function AddItemRow({
     // element the later class wins and silently drops the other.
     <div className={cn("w-full", ROW_HAIRLINE)}>
       <div
-        className="group/add bg-surface sticky left-0 flex flex-col px-4 py-1.5"
+        // Permanent 1px right-edge hairline — the Name column's rule,
+        // carried by THIS inner sticky element (which actually spans just
+        // the Name column's width) rather than the full-width hairline host
+        // above. See NAME_FREEZE_RULE in SummaryRow.tsx.
+        className={cn(
+          "group/add bg-surface sticky left-0 flex flex-col px-4 py-1.5",
+          NAME_FREEZE_RULE,
+        )}
         style={{ width: nameWidth }}
       >
         <div className="flex items-center gap-2">

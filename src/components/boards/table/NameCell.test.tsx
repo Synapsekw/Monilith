@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NameCell } from "@/components/boards/table/NameCell";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 import type { Item } from "@/lib/boards/queries";
 import type { CellControls } from "@/components/boards/table/shared";
 
@@ -56,5 +57,26 @@ describe("NameCell — Quiet Grid", () => {
     const cell = container.firstElementChild as HTMLElement;
     expect(cell.className).toContain("before:bg-primary"); // the 3px selected bar
     expect(cell.className).toContain("after:hidden"); // seam yields to it
+  });
+
+  it("carries the permanent Name-column right-edge hairline in the non-editing wrapper", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(cell.className).toContain(cls);
+    }
+  });
+
+  it("carries the permanent Name-column right-edge hairline in the editing wrapper too", () => {
+    const { container } = render(
+      <NameCell item={item} controls={controls} autoFocusRename />,
+    );
+    const wrapper = container.firstElementChild as HTMLElement;
+    // autoFocusRename opens straight into the editing branch — a different
+    // element than the non-editing wrapper above.
+    expect(wrapper.querySelector("input")).toBeInTheDocument();
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(wrapper.className).toContain(cls);
+    }
   });
 });

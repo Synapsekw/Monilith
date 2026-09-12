@@ -102,4 +102,19 @@ describe("AddSubitemRow", () => {
     expect(row.className).toContain("left-0");
     expect(row.className).toContain("before:left-4");
   });
+
+  it("does NOT get the Name-column right-edge hairline — this element spans the full table width", () => {
+    // Unlike AddItemRow's inner sticky element (pinned to `width: nameWidth`),
+    // AddSubitemRow's sticky root has no width cap: it fills the row. A
+    // `border-r` here would draw a stray vertical line at the far right of
+    // the board, not at the Name column's edge.
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+      />,
+    );
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.className).not.toMatch(/\bborder-r\b/);
+  });
 });

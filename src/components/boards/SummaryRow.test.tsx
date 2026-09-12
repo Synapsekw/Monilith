@@ -5,6 +5,7 @@ import {
   SummaryRow,
   hasAssignedSummary,
   NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
   NAME_FREEZE_SHADOW,
   type SummaryRowProps,
 } from "@/components/boards/SummaryRow";
@@ -190,6 +191,27 @@ describe("SummaryRow", () => {
     render(<SummaryRow {...baseProps({ label: "Group Summary" })} />);
     const row = screen.getByTestId("group-summary-g1");
     expect(row.firstElementChild).toHaveTextContent("Group Summary");
+  });
+
+  it("carries the permanent Name-column right-edge hairline (NAME_FREEZE_RULE), in both variants", () => {
+    const group = render(<SummaryRow {...baseProps()} />);
+    const groupNameTrack = group.getByTestId("group-summary-g1")
+      .firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(groupNameTrack.className).toContain(cls);
+    }
+    group.unmount();
+
+    const board = render(
+      <SummaryRow
+        {...baseProps({ variant: "board", testId: "board-summary-footer" })}
+      />,
+    );
+    const boardNameTrack = board.getByTestId("board-summary-footer")
+      .firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(boardNameTrack.className).toContain(cls);
+    }
   });
 });
 

@@ -17,7 +17,10 @@ import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import type { Column, Group } from "@/lib/boards/queries";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
+} from "@/components/boards/SummaryRow";
 import { Input } from "@/components/ui/input";
 import { Kicker } from "@/components/ui/kicker";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
@@ -126,6 +129,7 @@ export function GroupHeaderRow({
         className={`text-item ${cn(
           "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
           NAME_FREEZE_EDGE,
+          NAME_FREEZE_RULE,
         )}`}
       >
         {selectAll}
