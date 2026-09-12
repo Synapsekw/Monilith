@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import type { CellControls } from "./shared";
+import { cn } from "@/lib/utils";
+import { ROW_HAIRLINE, type CellControls } from "./shared";
 
 export function AddItemRow({
   groupId,
@@ -60,11 +61,19 @@ export function AddItemRow({
 
   return (
     <div
-      className="bg-surface sticky left-0 flex flex-col border-b px-4 py-1.5"
+      className={cn(
+        "group/add bg-surface sticky left-0 flex flex-col px-4 py-1.5",
+        ROW_HAIRLINE,
+      )}
       style={{ width: nameWidth }}
     >
       <div className="flex items-center gap-2">
-        <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+        <span
+          data-testid="add-affordance"
+          className="border-border-bright text-muted-foreground group-hover/add:border-primary group-hover/add:text-primary grid size-[18px] shrink-0 place-items-center rounded-md border border-dashed transition-colors"
+        >
+          <Plus className="size-3" aria-hidden />
+        </span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}

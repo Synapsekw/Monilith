@@ -74,4 +74,15 @@ describe("AddSubitemRow", () => {
     );
     expect(input).toHaveAttribute("aria-invalid", "true");
   });
+
+  it("renders the dashed add affordance", () => {
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+      />,
+    );
+    const plus = container.querySelector("[data-testid='add-affordance']");
+    expect(plus?.className).toContain("border-dashed");
+  });
 });

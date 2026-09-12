@@ -192,7 +192,7 @@ export const NameCell = memo(function NameCell({
         className={cn(
           "focus-visible:ring-ring text-item flex h-full min-w-0 flex-1 items-center truncate font-medium tracking-[-0.011em] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
           pending ? "cursor-default opacity-60" : "cursor-pointer",
-          indented ? "pl-8" : "px-4",
+          indented ? "pl-10" : "px-4",
         )}
       >
         {item.name}
