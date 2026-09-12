@@ -28,6 +28,7 @@ import { BoardViewPrefsProvider } from "@/lib/boards/view-prefs-context";
 import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
 import { BoardIntelligenceProvider } from "@/lib/boards/intelligence/context";
 import { localTodayISO } from "@/lib/boards/overdue";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -958,6 +959,13 @@ describe("BoardTable collapsed-group rollup", () => {
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
       "60",
     );
+    // GroupRollupRow's frozen label cell keeps the permanent Name-column
+    // right-edge hairline (it's a `.name-freeze-edge` element already
+    // covered above, but exercised here specifically via the "Average" row).
+    const rollupNameCell = screen.getByText("Average");
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(rollupNameCell.className).toContain(cls);
+    }
   });
 });
 
@@ -1169,6 +1177,13 @@ describe("BoardTable collapsed-group summary", () => {
     expect(screen.getByTestId("group-summary-g1")).toHaveTextContent("3");
     // …and the hardcoded GroupRollupRow strip (labeled "Average") is gone.
     expect(screen.queryByText("Average")).not.toBeInTheDocument();
+    // The collapsed group's SummaryRow frozen name track also carries the
+    // permanent Name-column right-edge hairline.
+    const nameTrack = screen.getByTestId("group-summary-g1")
+      .firstElementChild as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(nameTrack.className).toContain(cls);
+    }
   });
 
   it("collapsed group without any assigned summary keeps the legacy rollup strip", () => {
@@ -1423,6 +1438,17 @@ describe("BoardTable frozen Name column", () => {
     renderMany(1);
     const headers = document.querySelectorAll(".name-freeze-edge");
     expect(headers.length).toBeGreaterThan(0);
+  });
+
+  it("gives every frozen Name-column element the permanent right-edge hairline (GroupHeaderRow + item NameCells)", () => {
+    renderMany(1);
+    const cells = document.querySelectorAll(".name-freeze-edge");
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      for (const cls of NAME_FREEZE_RULE.split(" ")) {
+        expect(cell.className).toContain(cls);
+      }
+    }
   });
 
   it("flips data-scrolledx on the scroll container during horizontal scroll", () => {

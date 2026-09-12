@@ -5,6 +5,7 @@ import { Maximize2 } from "lucide-react";
 import type { Item } from "@/lib/boards/queries";
 import {
   NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
   NAME_FREEZE_SHADOW,
 } from "@/components/boards/SummaryRow";
 import { Input } from "@/components/ui/input";
@@ -83,6 +84,7 @@ export const NameCell = memo(function NameCell({
           "sticky left-0 z-10 flex items-center px-4",
           indented ? "bg-surface-sunken" : "bg-surface",
           NAME_FREEZE_EDGE,
+          NAME_FREEZE_RULE,
         )}
       >
         {intelMatch === true && (
@@ -179,6 +181,10 @@ export const NameCell = memo(function NameCell({
         // stacking both `after:` rule sets on one pseudo-element would collide
         // (competing left-0/right-0, width, transform and background).
         "name-freeze-edge",
+        // Permanent 1px right-edge hairline — a real border, not another
+        // `::after` (this wrapper's is the hover seam above). See
+        // NAME_FREEZE_RULE in SummaryRow.tsx.
+        NAME_FREEZE_RULE,
       )}
     >
       {/* Frozen-edge scroll shadow — a real node so it doesn't fight the hover

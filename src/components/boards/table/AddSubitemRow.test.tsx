@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AddSubitemRow } from "./AddSubitemRow";
+import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 import type { CellControls } from "./shared";
 
 // AddSubitemRow only ever touches `controls.addSubitem`.
@@ -10,6 +11,7 @@ function renderRow(addSubitem: CellControls["addSubitem"]) {
     <AddSubitemRow
       parentId="p1"
       controls={{ addSubitem } as unknown as CellControls}
+      nameWidth={240}
     />,
   );
   return screen.getByLabelText("Add subitem");
@@ -80,26 +82,67 @@ describe("AddSubitemRow", () => {
       <AddSubitemRow
         parentId="p1"
         controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+        nameWidth={240}
       />,
     );
     const plus = container.querySelector("[data-testid='add-affordance']");
     expect(plus?.className).toContain("border-dashed");
   });
 
-  it("keeps the row sticky under its own top hairline", () => {
+  it("keeps the frozen name-column element sticky under a full-width separator host", () => {
+    // Same shape as AddItemRow: the OUTER host spans the full row width and
+    // carries only the top hairline; the INNER element is `sticky` and
+    // capped to `width: nameWidth`.
     const { container } = render(
       <AddSubitemRow
         parentId="p1"
         controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+        nameWidth={240}
       />,
     );
-    // Regression guard for a tailwind-merge trap: ROW_HAIRLINE opens with
-    // `relative`, which shares a conflict group with `sticky` — ROW_HAIRLINE
-    // must come FIRST in the cn() call so the literal `sticky` (later in the
-    // list) wins the group instead of being silently dropped.
-    const row = container.firstElementChild as HTMLElement;
-    expect(row.className).toContain("sticky");
-    expect(row.className).toContain("left-0");
-    expect(row.className).toContain("before:left-4");
+    const host = container.firstElementChild as HTMLElement;
+    expect(host.className).toContain("before:left-4");
+    expect(host.className).toContain("w-full");
+    const sticky = host.querySelector(".sticky") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.className).toContain("sticky");
+    expect(sticky!.className).toContain("left-0");
+  });
+
+  it("puts the permanent Name-column right-edge hairline on the inner sticky element, not the full-width host", () => {
+    // Regression guard: a bare `border-r` on the full-width host (or no rule
+    // at all) is exactly the "hole in the line" bug — the Name-column
+    // hairline must be continuous through this row too, not just skip it.
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+        nameWidth={240}
+      />,
+    );
+    const host = container.firstElementChild as HTMLElement;
+    const sticky = host.querySelector(".sticky") as HTMLElement;
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(sticky.className).toContain(cls);
+    }
+    // The full-width host itself must NOT carry the rule — that was the
+    // original (correct) reasoning for excluding this element entirely,
+    // before the fix moved the rule onto the inner, Name-width-capped node.
+    expect(host.className).not.toMatch(/\bborder-r\b/);
+  });
+
+  it("keeps the sunken background and left indent unchanged on the inner element", () => {
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+        nameWidth={240}
+      />,
+    );
+    const host = container.firstElementChild as HTMLElement;
+    const sticky = host.querySelector(".sticky") as HTMLElement;
+    expect(sticky.className).toContain("bg-surface-sunken");
+    expect(sticky.className).toContain("pl-10");
+    expect(sticky.className).toContain("pr-4");
   });
 });

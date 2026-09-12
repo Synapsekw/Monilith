@@ -48,6 +48,23 @@ export const NAME_FREEZE_SHADOW =
 export const NAME_FREEZE_EDGE =
   "name-freeze-edge after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/15 after:to-transparent after:opacity-0 after:transition-opacity after:content-[''] group-data-[scrolledx=true]/scroll:after:opacity-100";
 
+// The one vertical rule Quiet Grid keeps: a permanent 1px hairline at the
+// Name column's right edge, on every surface whose element spans exactly
+// that column (this cell, GroupHeaderRow, GroupRollupRow, NameCell — both
+// branches — and AddItemRow's inner sticky element). A REAL `border-r`, not
+// another `::after` — NAME_FREEZE_EDGE above already owns `::after` on the
+// group header, rollup and summary cells, and NameCell's `::after` is the
+// hover seam, so a second `after:` set on any of them would collide.
+// `border-border` names the semantic token explicitly (the global `*` rule
+// in globals.css already applies it to every element, but spelling it out
+// here means this rule can't silently drift if that reset ever changes) —
+// never a raw color. If a hover state ever needs to touch this rule, swap to
+// a brighter border token (e.g. `border-border-bright`); do not thicken it.
+// These elements are `border-box` (Tailwind's preflight sets `box-sizing:
+// border-box` on `*`), so the 1px comes out of the Name column's own fixed
+// width rather than shifting the grid.
+export const NAME_FREEZE_RULE = "border-r border-border";
+
 /** True when at least one column has a user-assigned footer aggregation. */
 export function hasAssignedSummary(columns: readonly Column[]): boolean {
   return columns.some(
@@ -200,6 +217,7 @@ export function SummaryRow({
         className={cn(
           "bg-surface-muted sticky left-0 z-10 flex items-center gap-2 px-4 py-1.5",
           NAME_FREEZE_EDGE,
+          NAME_FREEZE_RULE,
         )}
         style={{ width: nameWidth }}
       >

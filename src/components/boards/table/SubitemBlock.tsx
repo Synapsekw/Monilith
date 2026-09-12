@@ -26,6 +26,7 @@ export const SubitemBlock = memo(function SubitemBlock({
   controls,
   renamingItemId,
   onRenameSettled,
+  nameWidth,
 }: {
   parentId: string;
   subitems: Item[];
@@ -35,6 +36,9 @@ export const SubitemBlock = memo(function SubitemBlock({
   controls: CellControls;
   renamingItemId: string | null;
   onRenameSettled: () => void;
+  /** Threaded straight through to {@link AddSubitemRow} — a plain number,
+   *  same identity-stability story as every other primitive prop here. */
+  nameWidth: number;
 }) {
   const subitemSensors = useTouchAwareSensors();
   // Stable `items` identity for dnd-kit: this block re-renders on every
@@ -82,7 +86,11 @@ export const SubitemBlock = memo(function SubitemBlock({
           ))}
         </SortableContext>
       </DndContext>
-      <AddSubitemRow parentId={parentId} controls={controls} />
+      <AddSubitemRow
+        parentId={parentId}
+        controls={controls}
+        nameWidth={nameWidth}
+      />
     </div>
   );
 });

@@ -3,7 +3,10 @@
 import { useState } from "react";
 import type { Column, Group, Item } from "@/lib/boards/queries";
 import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_RULE,
+} from "@/components/boards/SummaryRow";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
 import { ROW_HAIRLINE, ROW_HEIGHT } from "./shared";
@@ -43,6 +46,7 @@ export function GroupRollupRow({
         className={cn(
           "bg-surface text-muted-foreground sticky left-0 z-10 flex items-center gap-2 px-4 text-xs",
           NAME_FREEZE_EDGE,
+          NAME_FREEZE_RULE,
         )}
       >
         <span
