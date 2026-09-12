@@ -375,6 +375,7 @@ export const GroupSection = memo(function GroupSection({
                             controls={controls}
                             renamingItemId={renamingItemId}
                             onRenameSettled={onRenameItemSettled}
+                            nameWidth={nameWidth}
                           />
                         )}
                       </div>
