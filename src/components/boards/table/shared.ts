@@ -186,13 +186,41 @@ export const ROW_HAIRLINE =
   "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:h-px before:bg-border before:opacity-70 before:content-['']";
 
 /**
- * Canvas font for the Name-column auto-fit measurement in BoardTableInner.
- * MUST stay in sync with what NameCell actually renders (13.5px / 500 Inter);
- * a drift here mis-sizes the frozen column on every board that has never had
- * its width set by hand, and nothing in typecheck or jsdom catches it.
+ * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what
+ * NameCell actually renders (`text-item font-medium`) — a drift here mis-sizes
+ * the frozen column's auto-fit width, and nothing in typecheck or jsdom
+ * catches it.
  */
-export const NAME_MEASURE_FONT =
-  "500 13.5px Inter, ui-sans-serif, system-ui, sans-serif";
+export const NAME_MEASURE_FONT_WEIGHT = "500";
+export const NAME_MEASURE_FONT_SIZE = "13.5px";
+
+/** The generic fallback stack `font-sans` itself falls back to. */
+const NAME_MEASURE_FONT_FALLBACK_STACK = "ui-sans-serif, system-ui, sans-serif";
+
+/**
+ * Canvas font for the Name-column auto-fit measurement in BoardTableInner,
+ * using the literal family name "Inter" — kept only as the value
+ * {@link buildNameMeasureFont} itself falls back to. Do NOT hand this to
+ * `ctx.font` directly in the browser: `next/font/google` self-hosts Inter
+ * under a generated family name (`__Inter_<hash>`), exposed only through the
+ * `--font-inter` CSS custom property (see src/app/layout.tsx) — the bare
+ * literal "Inter" never resolves to that font face, so canvas measurement
+ * would silently fall through to `ui-sans-serif` instead.
+ */
+export const NAME_MEASURE_FONT = `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FONT_SIZE} Inter, ${NAME_MEASURE_FONT_FALLBACK_STACK}`;
+
+/**
+ * Builds the canvas font string from the LIVE `--font-inter` custom property
+ * value (read via `getComputedStyle(document.documentElement).getPropertyValue`
+ * by the caller — this function stays DOM-free so it's trivially testable).
+ * Falls back to the {@link NAME_MEASURE_FONT} literal when the variable is
+ * empty (e.g. in jsdom, or before next/font registers it).
+ */
+export function buildNameMeasureFont(fontInterVar: string): string {
+  const family = fontInterVar.trim();
+  if (!family) return NAME_MEASURE_FONT;
+  return `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FONT_SIZE} ${family}, ${NAME_MEASURE_FONT_FALLBACK_STACK}`;
+}
 
 export const VALUE_COL_WIDTH = 180;
 const ADD_COL_WIDTH = 44;

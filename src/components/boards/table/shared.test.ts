@@ -154,6 +154,7 @@ import {
   ROW_HEIGHT,
   SUBITEM_ROW_HEIGHT,
   NAME_MEASURE_FONT,
+  buildNameMeasureFont,
   ROW_HAIRLINE,
 } from "./shared";
 
@@ -174,5 +175,27 @@ describe("Quiet Grid geometry", () => {
   it("insets the row hairline so it starts at the name text", () => {
     expect(ROW_HAIRLINE).toContain("before:left-4");
     expect(ROW_HAIRLINE).not.toMatch(/\bborder-b\b/);
+  });
+
+  describe("buildNameMeasureFont", () => {
+    it("resolves the LIVE --font-inter family, not a bare literal", () => {
+      // next/font self-hosts Inter under a generated family name exposed only
+      // via --font-inter; a regression back to a hardcoded "Inter" literal
+      // would make this assertion fail, since the generated name never
+      // contains the substring "Inter" verbatim.
+      const generated = "'__Inter_1a2b3c', '__Inter_Fallback_1a2b3c'";
+      const font = buildNameMeasureFont(generated);
+      expect(font).toContain(generated);
+      expect(font).toContain("13.5px");
+      expect(font).toContain("500");
+      expect(font).not.toBe(NAME_MEASURE_FONT);
+    });
+
+    it("falls back to the NAME_MEASURE_FONT literal when the variable is empty", () => {
+      // getComputedStyle returns "" for an unset custom property — true for
+      // every jsdom test render, since next/font never runs there.
+      expect(buildNameMeasureFont("")).toBe(NAME_MEASURE_FONT);
+      expect(buildNameMeasureFont("   ")).toBe(NAME_MEASURE_FONT);
+    });
   });
 });

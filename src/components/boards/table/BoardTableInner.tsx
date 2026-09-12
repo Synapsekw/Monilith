@@ -80,8 +80,8 @@ import { AddGroupRow } from "./AddGroupRow";
 import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
+  buildNameMeasureFont,
   gridTemplate,
-  NAME_MEASURE_FONT,
   type CellControls,
   type ColumnHeaderControls,
   type GroupControls,
@@ -437,14 +437,26 @@ export function BoardTableInner({
   // Offscreen canvas measurer at the Name cell font (500 13.5px Inter /
   // text-item), used to auto-fit the Name column to the longest item name
   // across ALL items (not just the virtualized rows). Pure measurement — no
-  // server round-trip. NAME_MEASURE_FONT is the single source of truth shared
-  // with what NameCell actually renders — see its doc comment in ./shared.
+  // server round-trip. Reads the LIVE `--font-inter` variable next/font sets
+  // on <html> (see src/app/layout.tsx) rather than the literal family name
+  // "Inter" — next/font self-hosts it under a generated family, so the bare
+  // literal never resolves in the browser; buildNameMeasureFont (./shared) is
+  // the single source of truth for composing the rest of the font string and
+  // falls back to that literal when the variable is empty (e.g. jsdom).
   const measureName = useMemo(() => {
     const ctx =
       typeof document !== "undefined"
         ? document.createElement("canvas").getContext("2d")
         : null;
-    if (ctx) ctx.font = NAME_MEASURE_FONT;
+    if (ctx) {
+      const fontInterVar =
+        typeof document !== "undefined"
+          ? getComputedStyle(document.documentElement).getPropertyValue(
+              "--font-inter",
+            )
+          : "";
+      ctx.font = buildNameMeasureFont(fontInterVar);
+    }
     return (text: string) => ctx?.measureText(text).width ?? 0;
   }, []);
   const autoFitWidth = useMemo(

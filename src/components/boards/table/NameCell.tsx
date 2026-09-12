@@ -3,7 +3,10 @@
 import { memo, useState, useTransition } from "react";
 import { Maximize2 } from "lucide-react";
 import type { Item } from "@/lib/boards/queries";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_SHADOW,
+} from "@/components/boards/SummaryRow";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
@@ -130,7 +133,13 @@ export const NameCell = memo(function NameCell({
         // Hover seam: a 2px periwinkle rule that wipes in from the left edge.
         // `after:` is the seam, `before:` is the selected bar — a selected row
         // owns x=0, so the seam hides rather than stacking on top of it.
-        "after:bg-primary after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-300 after:content-[''] group-hover/name:after:scale-y-100",
+        // `ease-keystone` on the host doesn't reach `::after` (timing function
+        // isn't inherited), so it's restated as `after:ease-keystone`; the
+        // duration uses the named motion scale via its CSS var — a bare
+        // `duration-standard` class compiles to nothing (Tailwind 4.3 has no
+        // `--duration-*` utility namespace, only the `--transition-duration`
+        // one; see vault/sessions/2026-08-02-2012-keystone-wash-and-polish.md).
+        "after:bg-primary after:ease-keystone after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-[var(--duration-standard)] after:content-[''] group-hover/name:after:scale-y-100",
         // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
         // (::before, inset 6px). The bar is pointer-events-none so it never
         // blocks the checkbox/drag targets.
@@ -156,12 +165,10 @@ export const NameCell = memo(function NameCell({
       )}
     >
       {/* Frozen-edge scroll shadow — a real node so it doesn't fight the hover
-          seam for this wrapper's `::after`. Mirrors NAME_FREEZE_EDGE's visual
-          exactly (see @/components/boards/SummaryRow). */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-4 translate-x-full bg-gradient-to-r from-black/15 to-transparent opacity-0 transition-opacity group-data-[scrolledx=true]/scroll:opacity-100"
-      />
+          seam for this wrapper's `::after`. NAME_FREEZE_SHADOW is the same
+          constant SummaryRow/GroupHeaderRow/GroupRollupRow derive
+          NAME_FREEZE_EDGE from, so this can never drift from theirs. */}
+      <span aria-hidden className={NAME_FREEZE_SHADOW} />
       {intelMatch === true && (
         <span aria-hidden data-testid="intel-rule" className="intel-rule" />
       )}
