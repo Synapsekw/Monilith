@@ -15,6 +15,17 @@ import { MemberAvatar } from "./member-avatar";
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
 /**
+ * Board cells render at the `text-cell` token (13px, see `--text-cell` in
+ * globals.css) — the Quiet Grid data scale (see the spec at
+ * docs/superpowers/specs/2026-09-12-quiet-grid-inter-design.md). This is one
+ * step below `text-sm`, which is the app-wide default everywhere else; the
+ * table is denser than the rest of the product on purpose. A named rem-based
+ * token, not an arbitrary pixel value, because `scripts/check-px-text.mjs`
+ * bans those repo-wide — rem tokens respond to the reader's browser
+ * font-size setting.
+ */
+
+/**
  * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
  * resting view strips the syntax and flattens to one line — this renderer also
  * backs Mirror and Rollup cells.
@@ -27,7 +38,7 @@ export function TextCell({
 }) {
   const text = stripMarkdown(value?.text ?? "");
   return (
-    <span className="truncate text-sm" title={text || undefined}>
+    <span className="text-cell truncate" title={text || undefined}>
       {text}
     </span>
   );
@@ -63,7 +74,7 @@ export function StatusCell({
   settings: Settings;
 }) {
   const opt = optionById(settings, value?.optionId ?? null);
-  if (!opt) return <span className="text-sm" />;
+  if (!opt) return <span className="text-cell" />;
   return <OptionPill option={opt} />;
 }
 
@@ -103,12 +114,12 @@ export function PeopleCell({
   members?: EditorMember[];
 }) {
   const userIds = value?.userIds ?? [];
-  if (userIds.length === 0) return <span className="text-sm" />;
+  if (userIds.length === 0) return <span className="text-cell" />;
   // Without a member directory to resolve ids → names (e.g. mirrored people
   // cells), fall back to the count so we never render a row of "Unknown".
   if (members.length === 0) {
     return (
-      <span className="text-muted-foreground text-sm">
+      <span className="text-muted-foreground text-cell">
         {userIds.length} {userIds.length === 1 ? "person" : "people"}
       </span>
     );
@@ -130,7 +141,7 @@ export function PeopleCell({
   if (assignees.length === 1) {
     const only = assignees[0];
     return (
-      <span className="flex items-center gap-1.5 truncate text-sm">
+      <span className="text-cell flex items-center gap-1.5 truncate">
         <MemberAvatar
           userId={only.id}
           name={only.label}
@@ -187,7 +198,7 @@ export function DateCell({
   /** Past-due + incomplete (derived at render time — see @/lib/boards/overdue). */
   overdue?: boolean;
 }) {
-  if (!value?.date) return <span className="text-sm" />;
+  if (!value?.date) return <span className="text-cell" />;
   // Pin the locale — `undefined` differs between the Node server (en-US) and a
   // non-US-default browser ("Jan 1" vs "1 Jan") → hydration mismatch. "en-US"
   // matches the rest of the board date formatters.
@@ -222,13 +233,13 @@ export function NumberCell({
   value: { n: number } | null;
   settings: Settings & { unit?: string; precision?: number };
 }) {
-  if (value == null) return <span className="text-sm" />;
+  if (value == null) return <span className="text-cell" />;
   const n =
     typeof settings.precision === "number"
       ? value.n.toFixed(settings.precision)
       : String(value.n);
   return (
-    <span className="text-sm tabular-nums">
+    <span className="text-cell tabular-nums">
       {n}
       {settings.unit ? ` ${settings.unit}` : ""}
     </span>
@@ -298,7 +309,7 @@ export function PercentCell({
   settings: Settings;
 }) {
   if (value == null || typeof value.percent !== "number")
-    return <span className="text-sm" />;
+    return <span className="text-cell" />;
   return <PercentBar percent={value.percent} />;
 }
 
@@ -314,9 +325,9 @@ export function CurrencyCell({
   settings: Settings;
 }) {
   if (value == null || typeof value.amount !== "number")
-    return <span className="text-sm" />;
+    return <span className="text-cell" />;
   return (
-    <span className="truncate text-sm tabular-nums">
+    <span className="text-cell truncate tabular-nums">
       <CurrencyAmount amount={value.amount} settings={settings} />
     </span>
   );
@@ -357,8 +368,8 @@ export function PriorityCell({
   }
   // Explicit Normal reads as quiet metadata; unset stays blank (no per-row noise).
   if (value?.level === "normal")
-    return <span className="text-muted-foreground text-sm">Normal</span>;
-  return <span className="text-sm" />;
+    return <span className="text-muted-foreground text-cell">Normal</span>;
+  return <span className="text-cell" />;
 }
 
 export function RatingCell({
@@ -386,18 +397,20 @@ export function LinkCell({
   value: { url: string; text?: string } | null;
   settings: Settings;
 }) {
-  if (!value?.url) return <span className="text-sm" />;
+  if (!value?.url) return <span className="text-cell" />;
   // Defense-in-depth: never render a non-http(s) href (e.g. a `javascript:` URL
   // that slipped past an older boundary) as a clickable anchor.
   if (!isHttpUrl(value.url))
-    return <span className="truncate text-sm">{value.text || value.url}</span>;
+    return (
+      <span className="text-cell truncate">{value.text || value.url}</span>
+    );
   return (
     <a
       href={value.url}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="text-primary truncate text-sm underline-offset-2 hover:underline"
+      className="text-primary text-cell truncate underline-offset-2 hover:underline"
     >
       {value.text || value.url}
     </a>
@@ -410,12 +423,12 @@ export function EmailCell({
   value: { email: string } | null;
   settings: Settings;
 }) {
-  if (!value?.email) return <span className="text-sm" />;
+  if (!value?.email) return <span className="text-cell" />;
   return (
     <a
       href={`mailto:${value.email}`}
       onClick={(e) => e.stopPropagation()}
-      className="text-primary truncate text-sm hover:underline"
+      className="text-primary text-cell truncate hover:underline"
     >
       {value.email}
     </a>
@@ -428,12 +441,12 @@ export function PhoneCell({
   value: { phone: string } | null;
   settings: Settings;
 }) {
-  if (!value?.phone) return <span className="text-sm" />;
+  if (!value?.phone) return <span className="text-cell" />;
   return (
     <a
       href={`tel:${value.phone}`}
       onClick={(e) => e.stopPropagation()}
-      className="text-primary truncate text-sm hover:underline"
+      className="text-primary text-cell truncate hover:underline"
     >
       {value.phone}
     </a>

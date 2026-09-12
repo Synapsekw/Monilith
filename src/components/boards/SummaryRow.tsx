@@ -164,7 +164,7 @@ export function SummaryRow({
         <Kicker size="xs">{label}</Kicker>
       </div>
       {perColumn.map(({ col, meta, values, current }) => (
-        <div key={col.id} className="flex min-w-0 items-center border-l py-1.5">
+        <div key={col.id} className="flex min-w-0 items-center py-1.5">
           <FooterCell
             aggregateKind={meta.aggregateKind}
             values={values}

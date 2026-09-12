@@ -74,7 +74,7 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
             type="button"
             aria-label="Open time tracking"
             className={cn(
-              "flex items-center gap-1 rounded px-1 py-0.5 text-sm transition-colors",
+              "text-cell flex items-center gap-1 rounded px-1 py-0.5 transition-colors",
               "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
               isEmpty && "text-muted-foreground/40",
               !isEmpty && "text-foreground",
@@ -249,7 +249,7 @@ function TimeTrackingPopover({
       <div className="border-border flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Clock className="text-muted-foreground size-3.5" />
-          <span className="text-sm font-medium tabular-nums">
+          <span className="text-cell font-medium tabular-nums">
             {formatDuration(total)}
           </span>
           <span className="text-muted-foreground text-xs">tracked</span>
