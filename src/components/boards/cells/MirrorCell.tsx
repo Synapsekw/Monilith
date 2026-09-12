@@ -40,10 +40,10 @@ export function MirrorCell({
   maxItems = 2,
 }: MirrorCellProps) {
   if (NON_RENDERABLE.has(targetKind))
-    return <span className="text-muted-foreground text-sm">—</span>;
+    return <span className="text-muted-foreground text-cell">—</span>;
 
   const present = values.filter((v) => v.value != null);
-  if (present.length === 0) return <span className="text-sm" />;
+  if (present.length === 0) return <span className="text-cell" />;
 
   const visible = present.slice(0, maxItems);
   const overflow = present.length - visible.length;

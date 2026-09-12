@@ -17,7 +17,8 @@
 - Elevation is surface steps + hairlines. The only sanctioned shadows are `shadow-panel` (floating panels) and `shadow-drag` (row/card being dragged).
 - The MONOLITH wordmark face (`src/lib/fonts.ts`, Nunito 800) does **not** change. It is a documented exception; every file that references it gets a comment saying so.
 - Mono face stays JetBrains Mono (`--font-jetbrains-mono`). Kickers stay mono, uppercase, `tracking-[0.12em]`.
-- Table type scale: item name `13.5px / 500 / -0.011em`; data cell value `13px`; column header kicker `10px / .12em` at 74% opacity; group name `13.5px / 600`; subitem name `13px / 400`. Tabular numerals stay on every numeric, currency and date cell.
+- **No arbitrary pixel text sizes.** `scripts/check-px-text.mjs` runs in `pnpm lint` and fails on any `text-[Npx]`: the scale is rem tokens declared in `@theme inline` (`--text-3xs` = 10px, `--text-2xs` = 11px). This work adds `--text-cell: 0.8125rem` (13px) and `--text-item: 0.84375rem` (13.5px) and uses `text-cell` / `text-item` / `text-3xs`. Never add an allowlist entry for a reading-hierarchy size.
+- Table type scale: item name `13.5px / 500 / -0.011em` (`text-item`); data cell value `13px` (`text-cell`); column header kicker `10px / .12em` at 74% opacity; group name `13.5px / 600`; subitem name `13px / 400`. Tabular numerals stay on every numeric, currency and date cell.
 - `ROW_HEIGHT = 42`, subitem rows `38px`, data-cell gutters `16px`.
 - No task may thread a new per-render object through `controls` (`CellControls`), and no row-level code may read `controls.cache.cellValues` — a row's values come from `cellMap`. `src/components/boards/BoardTable.render-count.test.tsx` is the guard and must stay green.
 - Coarse-pointer affordances (`pointer-coarse:size-11`, `pointer-coarse:opacity-100`) are preserved everywhere they exist today.
@@ -318,7 +319,7 @@ describe("cell renderers — Quiet Grid scale", () => {
       <CellRenderer kind="text" value="Hello" settings={{}} members={[]} />,
     );
     const span = screen.getByText("Hello");
-    expect(span.className).toContain("text-[13px]");
+    expect(span.className).toContain("text-cell");
     expect(span.className).not.toMatch(/\btext-sm\b/);
   });
 });
@@ -359,7 +360,7 @@ Leave the `px-1` editor-hosting branch at line 152 alone — it hosts an editor 
   `className="text-kicker flex items-center gap-1.5 px-4"`
 - `src/components/boards/RollupValueCell.tsx:20` →
   `const CELL_CLASS = "flex h-full items-center truncate px-4";`
-  and its three `text-sm` spans → `text-[13px]`
+  and its three `text-sm` spans → `text-cell`
 - `src/components/boards/SummaryRow.tsx:167` →
   `className="flex min-w-0 items-center py-1.5"`
 - `src/components/boards/AddColumnMenu.tsx:23` — drop the trailing `border-l` from the class string, keep everything else
@@ -388,7 +389,7 @@ and the kicker:
 
 - [ ] **Step 6: Drop the renderers to the 13px table scale**
 
-In `src/components/boards/cells/index.tsx`, replace every `text-sm` with `text-[13px]` (20 sites) and add this comment above the first renderer:
+In `src/components/boards/cells/index.tsx`, replace every `text-sm` with `text-cell` (20 sites) and add this comment above the first renderer:
 
 ```tsx
 /**
@@ -399,7 +400,7 @@ In `src/components/boards/cells/index.tsx`, replace every `text-sm` with `text-[
  */
 ```
 
-Do the same `text-sm` → `text-[13px]` replacement in `cells/MirrorCell.tsx`,
+Do the same `text-sm` → `text-cell` replacement in `cells/MirrorCell.tsx`,
 `cells/TimeTrackingCell.tsx`, `cells/RelationCell.tsx` and `cells/FilesCell.tsx`.
 **Do not** touch `cells/editors/*` — editors render inside popovers at the app's default size.
 
@@ -514,7 +515,7 @@ describe("NameCell — Quiet Grid", () => {
   it("renders the name at the 13.5px table scale", () => {
     render(<NameCell item={item} controls={controls} />);
     expect(screen.getByLabelText(`${item.name} name`).className).toContain(
-      "text-[13.5px]",
+      "text-item",
     );
   });
 
@@ -612,7 +613,7 @@ and the name text itself:
 
 ```tsx
         className={cn(
-          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate text-[13.5px] font-medium tracking-[-0.011em] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate text-item font-medium tracking-[-0.011em] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
           pending ? "cursor-default opacity-60" : "cursor-pointer",
           indented ? "pl-8" : "px-4",
         )}
@@ -850,7 +851,7 @@ In `src/components/boards/table/GroupHeaderRow.tsx`, delete the `style={{ boxSha
 ```tsx
       <div
         className={cn(
-          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 text-[13.5px] font-semibold",
+          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 text-item font-semibold",
           NAME_FREEZE_EDGE,
         )}
       >

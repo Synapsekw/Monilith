@@ -80,6 +80,7 @@ import { AddGroupRow } from "./AddGroupRow";
 import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
+  buildNameMeasureFont,
   gridTemplate,
   type CellControls,
   type ColumnHeaderControls,
@@ -433,15 +434,33 @@ export function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (Nunito Sans 14px / text-sm), used
-  // to auto-fit the Name column to the longest item name across ALL items (not
-  // just the virtualized rows). Pure measurement — no server round-trip.
+  // Offscreen canvas measurer at the Name cell font (500 13.5px Inter /
+  // text-item), used to auto-fit the Name column to the longest item name
+  // across ALL items (not just the virtualized rows). Pure measurement — no
+  // server round-trip. Reads the LIVE `--font-inter` variable next/font sets
+  // on <html> (see src/app/layout.tsx) rather than the literal family name
+  // "Inter" — next/font self-hosts it under a generated family, so the bare
+  // literal never resolves in the browser; buildNameMeasureFont (./shared) is
+  // the single source of truth for composing the rest of the font string and
+  // falls back to that literal when the variable is empty (e.g. jsdom).
   const measureName = useMemo(() => {
     const ctx =
       typeof document !== "undefined"
         ? document.createElement("canvas").getContext("2d")
         : null;
-    if (ctx) ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    if (ctx) {
+      // Read once per mount (useMemo's `[]` deps), not hoisted to a module
+      // constant: next/font's generated family name is only ever present as
+      // this custom property's VALUE on <html> at runtime (src/app/layout.tsx)
+      // — it doesn't exist at module-evaluation time, and never exists during
+      // SSR (no `document` at all, which is why this whole block is already
+      // gated on `ctx` — `document` is guaranteed here since `ctx` came from
+      // `document.createElement` above).
+      const fontInterVar = getComputedStyle(
+        document.documentElement,
+      ).getPropertyValue("--font-inter");
+      ctx.font = buildNameMeasureFont(fontInterVar);
+    }
     return (text: string) => ctx?.measureText(text).width ?? 0;
   }, []);
   const autoFitWidth = useMemo(

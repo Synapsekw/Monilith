@@ -8,6 +8,7 @@ import { Kicker } from "@/components/ui/kicker";
 import { mirrorTargetColumnFor, mirrorFooterValues } from "@/lib/boards/mirror";
 import { cellKey, timeEntriesForCell } from "@/lib/boards/cache";
 import { trackedSeconds } from "@/lib/boards/time-format";
+import { ROW_HAIRLINE } from "@/components/boards/table/shared";
 import type { Column } from "@/lib/boards/queries";
 import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
 import type {
@@ -16,7 +17,32 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 
-// Right-edge shadow for the frozen Name column. The `group/scroll` ancestor
+// NAME_FREEZE_EDGE and NAME_FREEZE_SHADOW below are DELIBERATELY DUPLICATED
+// LITERALS, not one derived from the other at runtime. Tailwind v4 emits a
+// utility only when its exact class name appears literally in a file its
+// scanner reads — it does not execute this module, so a class built by string
+// concatenation/interpolation (e.g. `` `after:${cls}` ``) is invisible to it
+// and silently drops out of the compiled CSS. (Provenance: a production build
+// was checked and both constants' classes ARE currently emitted, but only
+// because the old, pre-refactor literal happens to still exist verbatim in
+// `docs/superpowers/plans/2026-06-21-frozen-name-column.md` — Tailwind scans
+// docs too. That is an accident, not a guarantee; these two constants must
+// each spell out their own classes so the app's OWN source is what keeps them
+// alive.) `shared.test.ts`-style drift is instead caught by a test that
+// derives one from the other and asserts equivalence — see SummaryRow.test.tsx.
+
+// Right-edge shadow for the frozen Name column, as a REAL element's classes
+// (no `after:` prefixes, no `content-['']`). The `group/scroll` ancestor (the
+// scroll container) toggles `data-scrolledx`; the shadow only shows once
+// scrolled, so it reads as a floating frozen pane over the data columns.
+// Table's NameCell spends this directly on a sibling `<span>` — its own
+// `::after` is already claimed by the Quiet Grid hover seam.
+export const NAME_FREEZE_SHADOW =
+  "pointer-events-none absolute inset-y-0 right-0 w-4 translate-x-full bg-gradient-to-r from-black/15 to-transparent opacity-0 transition-opacity group-data-[scrolledx=true]/scroll:opacity-100";
+
+// Right-edge shadow for the frozen Name column, as `::after` pseudo-element
+// utilities for hosts that don't need a dedicated node (SummaryRow's own
+// header cell, GroupHeaderRow, GroupRollupRow). The `group/scroll` ancestor
 // (the scroll container) toggles `data-scrolledx`; the ::after only shows once
 // scrolled, so it reads as a floating frozen pane over the data columns.
 export const NAME_FREEZE_EDGE =
@@ -87,7 +113,7 @@ export type SummaryRowProps = {
   variant: "board" | "group";
   /** Frozen Name-track label. Default "Summary". */
   label?: string;
-  /** Group color for the 3px inset bar (group variant only). */
+  /** Group color for the group-identity dot (group variant only). */
   groupColor?: string;
   /** data-testid for the row root. */
   testId: string;
@@ -144,27 +170,50 @@ export function SummaryRow({
   return (
     <div
       data-testid={testId}
+      // ROW_HAIRLINE FIRST: it opens with `relative`, in the same
+      // tailwind-merge conflict group as the board variant's `sticky` below —
+      // listing it first lets `sticky` win the position instead of silently
+      // losing to `relative` (same trap as AddItemRow/AddSubitemRow; `sticky`
+      // still gives the group-variant's `after:` bottom hairline a valid
+      // positioning context on its own via `relative`).
+      //
+      // Both this top hairline and the group variant's bottom one are inset
+      // to `left-4`, matching every other separator in the table (row,
+      // subitem, add-item/add-subitem rows) — a full-bleed `border-t`/
+      // `border-b` here used to redraw the cage the rest of Quiet Grid
+      // removed, and read as a heavier, differently-colored line than the
+      // dim inset hairlines around it (confirmed in Chromium screenshots).
+      // The bottom rule is a hand-written `after:` literal, not derived from
+      // ROW_HAIRLINE, for the same reason NAME_FREEZE_SHADOW/NAME_FREEZE_EDGE
+      // above are duplicated rather than composed: Tailwind only emits a
+      // class whose exact text appears literally in scanned source.
       className={cn(
-        "bg-surface-muted grid border-t",
+        ROW_HAIRLINE,
+        "bg-surface-muted grid",
         variant === "board" && "sticky bottom-0 z-[15]",
-        variant === "group" && "border-b",
+        variant === "group" &&
+          "after:bg-border after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:left-4 after:h-px after:opacity-70 after:content-['']",
       )}
       style={{ gridTemplateColumns: template }}
     >
       <div
         className={cn(
-          "bg-surface-muted sticky left-0 z-10 flex items-center px-4 py-1.5",
+          "bg-surface-muted sticky left-0 z-10 flex items-center gap-2 px-4 py-1.5",
           NAME_FREEZE_EDGE,
         )}
-        style={{
-          width: nameWidth,
-          ...(groupColor ? { boxShadow: `inset 3px 0 0 0 ${groupColor}` } : {}),
-        }}
+        style={{ width: nameWidth }}
       >
+        {groupColor && (
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: groupColor }}
+          />
+        )}
         <Kicker size="xs">{label}</Kicker>
       </div>
       {perColumn.map(({ col, meta, values, current }) => (
-        <div key={col.id} className="flex min-w-0 items-center border-l py-1.5">
+        <div key={col.id} className="flex min-w-0 items-center py-1.5">
           <FooterCell
             aggregateKind={meta.aggregateKind}
             values={values}

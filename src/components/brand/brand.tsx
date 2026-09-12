@@ -9,6 +9,10 @@ import { cn } from "@/lib/utils";
  * as everywhere else). Collapsed, it shows the standalone cleaved mark alone.
  * A visually-hidden "MONOLITH" keeps the wordmark's accessible name intact for
  * screen readers, since the visible letters are split around the slab glyph.
+ *
+ * Nunito 800 here is the WORDMARK face, not the UI font: the product type is
+ * Inter (see src/app/layout.tsx). This divergence is deliberate — the logotype
+ * keeps its rounded ExtraBold identity. Do not "unify" it.
  */
 export function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (

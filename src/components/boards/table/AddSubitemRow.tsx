@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import type { CellControls } from "./shared";
+import { cn } from "@/lib/utils";
+import { ROW_HAIRLINE, type CellControls } from "./shared";
 
 /** Inline input row appended to the expanded subitem block. */
 export function AddSubitemRow({
@@ -45,9 +46,25 @@ export function AddSubitemRow({
   }
 
   return (
-    <div className="bg-surface-sunken sticky left-0 flex flex-col border-b py-1.5 pr-4 pl-12">
+    <div
+      // ROW_HAIRLINE FIRST: it opens with `relative`, which is in the same
+      // tailwind-merge conflict group as `sticky` below — putting the literal
+      // string second makes `sticky` the later (winning) class instead of
+      // silently losing to `relative`. `sticky` still establishes a valid
+      // positioning context for the hairline's `before:` pseudo-element, so
+      // nothing here needs a separate `relative`.
+      className={cn(
+        ROW_HAIRLINE,
+        "group/add bg-surface-sunken sticky left-0 flex flex-col py-1.5 pr-4 pl-10",
+      )}
+    >
       <div className="flex items-center gap-2">
-        <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+        <span
+          data-testid="add-affordance"
+          className="border-border-bright text-muted-foreground group-hover/add:border-primary group-hover/add:text-primary grid size-[18px] shrink-0 place-items-center rounded-md border border-dashed transition-colors"
+        >
+          <Plus className="size-3" aria-hidden />
+        </span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -59,7 +76,7 @@ export function AddSubitemRow({
           }}
           placeholder="Add subitem"
           aria-label="Add subitem"
-          className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none disabled:opacity-50"
+          className="text-foreground placeholder:text-muted-foreground text-cell w-full bg-transparent outline-none disabled:opacity-50"
           {...status.controlProps}
         />
       </div>

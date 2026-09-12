@@ -118,4 +118,30 @@ describe("AddItemRow", () => {
       `Couldn't add "First" — boom`,
     );
   });
+
+  it("renders the dashed add affordance", () => {
+    const { container } = render(
+      <AddItemRow groupId="g1" controls={controls} nameWidth={240} canEdit />,
+    );
+    const plus = container.querySelector("[data-testid='add-affordance']");
+    expect(plus?.className).toContain("border-dashed");
+  });
+
+  it("keeps the frozen name-column element sticky under a full-width separator host", () => {
+    const { container } = render(
+      <AddItemRow groupId="g1" controls={controls} nameWidth={240} canEdit />,
+    );
+    // Regression guard for a tailwind-merge trap: ROW_HAIRLINE opens with
+    // `relative`, which shares a conflict group with `sticky` — merging both
+    // onto one element's class list drops whichever loses the group, so the
+    // hairline lives on a full-width OUTER host and `sticky` stays on the
+    // INNER, name-width-constrained element untouched.
+    const host = container.firstElementChild as HTMLElement;
+    expect(host.className).toContain("before:left-4");
+    expect(host.className).toContain("w-full");
+    const sticky = host.querySelector(".sticky") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.className).toContain("sticky");
+    expect(sticky!.className).toContain("left-0");
+  });
 });

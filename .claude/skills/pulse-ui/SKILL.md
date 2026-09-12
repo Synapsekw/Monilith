@@ -74,9 +74,11 @@ the same semantic tokens and every preset works for free.
 
 ## Typography
 
-- **UI + headings: Nunito Sans** (`font-sans`, weights 400–800 loaded; headings lean
-  600–800). **Mono: JetBrains Mono** (`font-mono`, 400–600). Wired in `src/app/layout.tsx`
-  as `--font-nunito-sans` / `--font-jetbrains-mono`. Geist is gone — do not reference it.
+- **UI + headings: Inter** (`font-sans`, weights 400–800 loaded; headings lean
+  600–800 with `-0.02em` tracking at display sizes). **Mono: JetBrains Mono**
+  (`font-mono`, 400–600). Wired in `src/app/layout.tsx` as `--font-inter` /
+  `--font-jetbrains-mono`. Nunito Sans is gone from the UI; Nunito 800 survives
+  ONLY as the MONOLITH wordmark face in `src/lib/fonts.ts` — do not unify it.
 - **Kickers** are a Keystone signature: JetBrains Mono, uppercase, 11px, `tracking-[0.12em]`,
   `text-kicker`, optional index prefix ("01 / SPRINT 24"). Use the `<Kicker index="01">`
   primitive (`src/components/ui/kicker.tsx`) — don't hand-roll the recipe.
@@ -211,8 +213,8 @@ and style those with `text-destructive`.
 ## Common mistakes
 
 - Using raw colors (`bg-slate-50`, `text-indigo-600`) instead of semantic tokens. → tokens only.
-- Referencing the old system: Geist font, indigo accent, `0.625rem` radius — all replaced by
-  Keystone (Nunito Sans/JetBrains Mono, periwinkle, `0.875rem`).
+- Referencing the old system: Nunito Sans font, indigo accent, `0.625rem` radius — all replaced by
+  Keystone (Inter/JetBrains Mono, periwinkle, `0.875rem`).
 - Adding box-shadows for elevation. → surface steps + hairlines; shadows are (near) zero.
 - Thickening borders on hover/focus. → hairlines **brighten** (`border-hover`/`border-bright`).
 - Hand-rolling a status/option pill (`bg-status-* text-white`). → `<StatusPill>` / `<ColorChip>`.

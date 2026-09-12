@@ -104,16 +104,29 @@ export function GroupHeaderRow({
 
   return (
     <div
-      className="group/grouphdr bg-surface text-muted-foreground grid border-b text-xs font-medium"
+      // No border-b here: Quiet Grid rows draw their OWN top hairline (see
+      // ROW_HAIRLINE), so the line under this header comes from whatever
+      // follows it (an item row, GroupRollupRow, SummaryRow or AddItemRow) —
+      // a border-b here would double up with that inset top hairline.
+      className="group/grouphdr bg-surface text-muted-foreground grid text-xs font-medium"
       style={{ gridTemplateColumns: template }}
     >
       {/* Frozen group/Name cell — group controls + Name-column resize handle. */}
       <div
-        className={cn(
-          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-3 py-1.5 text-sm font-semibold",
+        // `text-item` is kept OUT of the cn() call on purpose: tailwind-merge
+        // 3.6.0 classifies `text-item` (a custom `--text-*` theme key, meant to
+        // set font-size) as belonging to the text-COLOR group, since custom
+        // `--text-*` keys are invisible to its size-group detection. Passed
+        // through cn() alongside `text-foreground`, twMerge treats them as
+        // conflicting members of one group and drops whichever came first —
+        // here it silently deleted `text-foreground`, so this cell inherited
+        // the parent row's `text-muted-foreground` and every group name
+        // rendered muted grey instead of full foreground. See
+        // TimeTrackingCell.tsx for the same fix.
+        className={`text-item ${cn(
+          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
           NAME_FREEZE_EDGE,
-        )}
-        style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
+        )}`}
       >
         {selectAll}
         <button
@@ -138,10 +151,13 @@ export function GroupHeaderRow({
             <ChevronDown className="size-4" />
           )}
         </button>
+        {/* Group color, right next to the name it labels — not left of the
+            drag/collapse controls, which would read as attached to the
+            select-all checkbox instead. */}
         <span
-          className="inline-block size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: group.color }}
           aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: group.color }}
         />
         {renaming ? (
           <Input

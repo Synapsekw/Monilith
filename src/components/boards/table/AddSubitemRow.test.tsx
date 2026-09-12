@@ -74,4 +74,32 @@ describe("AddSubitemRow", () => {
     );
     expect(input).toHaveAttribute("aria-invalid", "true");
   });
+
+  it("renders the dashed add affordance", () => {
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+      />,
+    );
+    const plus = container.querySelector("[data-testid='add-affordance']");
+    expect(plus?.className).toContain("border-dashed");
+  });
+
+  it("keeps the row sticky under its own top hairline", () => {
+    const { container } = render(
+      <AddSubitemRow
+        parentId="p1"
+        controls={{ addSubitem: vi.fn() } as unknown as CellControls}
+      />,
+    );
+    // Regression guard for a tailwind-merge trap: ROW_HAIRLINE opens with
+    // `relative`, which shares a conflict group with `sticky` — ROW_HAIRLINE
+    // must come FIRST in the cn() call so the literal `sticky` (later in the
+    // list) wins the group instead of being silently dropped.
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.className).toContain("sticky");
+    expect(row.className).toContain("left-0");
+    expect(row.className).toContain("before:left-4");
+  });
 });

@@ -3,7 +3,10 @@
 import { memo, useState, useTransition } from "react";
 import { Maximize2 } from "lucide-react";
 import type { Item } from "@/lib/boards/queries";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  NAME_FREEZE_EDGE,
+  NAME_FREEZE_SHADOW,
+} from "@/components/boards/SummaryRow";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
@@ -127,12 +130,40 @@ export const NameCell = memo(function NameCell({
       }
       className={cn(
         "group/name ease-keystone relative sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        // Hover seam: a 2px periwinkle rule that wipes in from the left edge.
+        // `after:` is the seam, `before:` is the selected bar — a selected row
+        // owns x=0, so the seam hides rather than stacking on top of it.
+        // `ease-keystone` on the host doesn't reach `::after` (timing function
+        // isn't inherited), so it's restated as `after:ease-keystone`; the
+        // duration uses the named motion scale via its CSS var — a bare
+        // `duration-standard` class compiles to nothing (Tailwind 4.3 has no
+        // `--duration-*` utility namespace, only the `--transition-duration`
+        // one; see vault/sessions/2026-08-02-2012-keystone-wash-and-polish.md).
+        //
+        // Plain `hover:`, NOT `group-hover/name:` — this `after:` pseudo
+        // belongs to the SAME element that carries `group/name`. Tailwind
+        // compiles `group-hover/name:after:scale-y-100` to
+        // `.group-hover\/name\:after\:scale-y-100:is(:where(.group\/name):hover *):after`
+        // — the trailing ` *` requires the styled node to be a DESCENDANT of
+        // the hovered `.group/name`, which this node can never be of itself,
+        // so that rule can never match (verified by reading the compiled CSS
+        // chunk in Chromium: the selector exists, but no node can satisfy
+        // it). The hover seam was consequently dead on every row on this
+        // branch until this fix — a regression jsdom cannot catch, since it
+        // renders no CSS selectors at all. `hover:` targets `:hover` on this
+        // same node directly, which is exactly what "mouse is over this row"
+        // means here; `group/name` stays for the OTHER
+        // `group-hover/name:opacity-100` reveals below (the drag handle, open
+        // and add-subitem buttons), which correctly target DESCENDANT
+        // elements and were unaffected.
+        "after:bg-primary after:ease-keystone after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-[2px] after:origin-center after:scale-y-0 after:transition-transform after:duration-[var(--duration-standard)] after:content-[''] hover:after:scale-y-100",
         // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
         // (::before, inset 6px). The bar is pointer-events-none so it never
         // blocks the checkbox/drag targets.
         selected
           ? cn(
               "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded",
+              "after:hidden",
               // The intel rule owns x=0 while a chip is active; the periwinkle
               // wash still says "selected" on its own.
               intelMatch === true && "before:hidden",
@@ -140,9 +171,23 @@ export const NameCell = memo(function NameCell({
           : indented
             ? "bg-surface-sunken hover:bg-surface"
             : "bg-surface hover:bg-surface-muted",
-        NAME_FREEZE_EDGE,
+        // `name-freeze-edge` is a bare marker class (asserted by
+        // BoardTable.test.tsx's "marks the Name header and name cells as the
+        // freeze edge") — its shadow itself is reproduced below as a real
+        // element, NOT via `NAME_FREEZE_EDGE`'s own `after:` rules, because
+        // this wrapper's `::after` is now spoken for by the hover seam above;
+        // stacking both `after:` rule sets on one pseudo-element would collide
+        // (competing left-0/right-0, width, transform and background).
+        "name-freeze-edge",
       )}
     >
+      {/* Frozen-edge scroll shadow — a real node so it doesn't fight the hover
+          seam for this wrapper's `::after`. NAME_FREEZE_SHADOW is a hand-
+          written literal kept in lockstep with NAME_FREEZE_EDGE (used by
+          SummaryRow/GroupHeaderRow/GroupRollupRow) by a test, not by runtime
+          derivation — see the comment above both constants in SummaryRow.tsx
+          for why. */}
+      <span aria-hidden className={NAME_FREEZE_SHADOW} />
       {intelMatch === true && (
         <span aria-hidden data-testid="intel-rule" className="intel-rule" />
       )}
@@ -162,9 +207,15 @@ export const NameCell = memo(function NameCell({
         }}
         aria-disabled={pending || undefined}
         className={cn(
-          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center truncate focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          // Subitem names step down to the 13px/400 cell scale (spec T2);
+          // item names stay at 13.5px/500 — the only remaining hierarchy cue
+          // besides the thread line and indent (Blocker 3).
+          indented
+            ? "text-cell font-normal"
+            : "text-item font-medium tracking-[-0.011em]",
           pending ? "cursor-default opacity-60" : "cursor-pointer",
-          indented ? "pl-8" : "px-4",
+          indented ? "pl-10" : "px-4",
         )}
       >
         {item.name}

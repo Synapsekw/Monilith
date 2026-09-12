@@ -14,8 +14,8 @@
  * is dark-locked by design (like /pricing and /updates), so it does not read
  * the app's theme tokens.
  *
- * Fonts come from the app's existing next/font assets: Nunito Sans
- * (`--font-nunito-sans`) for text, JetBrains Mono (`--font-jetbrains-mono`)
+ * Fonts come from the app's existing next/font assets: Inter
+ * (`--font-inter`) for text, JetBrains Mono (`--font-jetbrains-mono`)
  * for kickers, and Nunito 800 (lib/fonts) for the wordmark — the same three
  * faces the artifact embedded.
  */
@@ -52,7 +52,7 @@
   background: var(--page);
   color: var(--ink);
   color-scheme: dark;
-  font-family: var(--font-nunito-sans), Arial, sans-serif;
+  font-family: var(--font-inter), Arial, sans-serif;
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -88,7 +88,7 @@
 }
 .page h1,
 .page h2 {
-  font-family: var(--font-nunito-sans), sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 1.08;

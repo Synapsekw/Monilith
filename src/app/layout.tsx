@@ -1,11 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito_Sans, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { THEME_PRESET_INLINE_SCRIPT } from "@/lib/theme/theme-preset-script";
 
-const nunitoSans = Nunito_Sans({
-  variable: "--font-nunito-sans",
+/**
+ * Inter is the product typeface: a neutral, optically-sized grotesque that
+ * stays crisp at the 13–13.5px sizes the board table uses and whose tabular
+ * figures align hard in numeric columns. It deliberately does NOT cover the
+ * MONOLITH wordmark — that stays Nunito 800 (src/lib/fonts.ts).
+ */
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
@@ -45,7 +51,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${nunitoSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
         {/* Stamps [data-theme-preset] on <html> from localStorage while the

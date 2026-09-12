@@ -268,3 +268,35 @@ describe("ColumnHeader reorder affordances", () => {
     ).toHaveAttribute("aria-disabled", "true");
   });
 });
+
+describe("ColumnHeader — Quiet Grid", () => {
+  it("paints no vertical rule and pads to 16px", () => {
+    const { container } = render(
+      <ColumnHeader
+        column={col()}
+        width={200}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+      />,
+    );
+    const header = container.firstElementChild as HTMLElement;
+    expect(header.className).not.toMatch(/\bborder-l\b/);
+    expect(header.className).toContain("px-4");
+  });
+
+  it("dims the column kicker", () => {
+    render(
+      <ColumnHeader
+        column={col({ name: "Budget" })}
+        width={200}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Budget").className).toContain("opacity-[0.74]");
+  });
+});
