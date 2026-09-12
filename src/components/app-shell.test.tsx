@@ -81,19 +81,43 @@ describe("dock slot", () => {
     expect(slot).toBeEmptyDOMElement();
     expect(slot).toHaveClass("flex");
     expect(slot).toHaveClass("shrink-0");
-    // The column that holds the header and <main> is the slot's previous sibling,
-    // so the portalled dock lands beside the card — rail | card | dock.
-    const column = screen.getByRole("main").parentElement as HTMLElement;
-    expect(slot!.previousElementSibling).toBe(column);
+    // The column that holds the header and the card frame is the slot's previous
+    // sibling, so the portalled dock lands beside the card — rail | card | dock.
+    const frame = screen.getByRole("main").parentElement as HTMLElement;
+    expect(frame).toHaveAttribute("id", "app-card-frame");
+    expect(slot!.previousElementSibling).toBe(frame.parentElement);
   });
 
-  it("collapses main's right gutter to mr-1 only while the slot is filled, in pure CSS", () => {
+  it("collapses the card's right gutter to mr-1 only while the slot is filled, in pure CSS", () => {
     const { container } = renderShell();
     const root = container.firstElementChild as HTMLElement;
     expect(root).toHaveClass(
-      "[&:has(#app-dock-slot:not(:empty))>div>main]:mr-1",
+      "[&:has(#app-dock-slot:not(:empty))_#app-card-frame]:mr-1",
     );
-    // The default gutter is untouched: the variant, not a prop, decides.
-    expect(screen.getByRole("main")).toHaveClass("mr-2");
+    // The gutter lives on the FRAME now, not on <main> — the frame is what the
+    // seam overlays, so both have to be the same box.
+    const frame = container.querySelector("#app-card-frame") as HTMLElement;
+    expect(frame).toHaveClass("mr-2");
+    expect(frame).toHaveClass("relative");
+    expect(screen.getByRole("main")).toHaveClass("absolute");
+    expect(screen.getByRole("main")).toHaveClass("inset-0");
+  });
+
+  it("renders an empty, static #card-seam-slot inside the frame for the dock's seam", () => {
+    const { container } = renderShell();
+    const slot = container.querySelector("#card-seam-slot");
+    expect(slot).not.toBeNull();
+    expect(slot).toBeEmptyDOMElement();
+    expect(slot!.parentElement).toHaveAttribute("id", "app-card-frame");
+  });
+
+  it("mounts the sidebar's lit seam on the card's left edge", () => {
+    const { container } = renderShell();
+    const seam = container.querySelector('[data-seam="left"]');
+    expect(seam).not.toBeNull();
+    expect(seam!.parentElement).toHaveAttribute("id", "app-card-frame");
+    expect(
+      screen.getByRole("button", { name: /collapse sidebar/i }),
+    ).toBeInTheDocument();
   });
 });

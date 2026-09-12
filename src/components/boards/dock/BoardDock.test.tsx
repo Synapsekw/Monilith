@@ -256,9 +256,12 @@ type MountProps = {
 const mount = (props: MountProps = {}) =>
   render(
     <>
-      {/* The static shell's slot (app-shell.tsx). On the wide surface the dock
-          portals its <aside> into it; with no slot it renders nothing. */}
+      {/* The static shell's two slots (app-shell.tsx). On the wide surface the
+          dock portals its <aside> into the first and its seam — the control
+          that opens, closes and resizes it — onto the content card via the
+          second; with no slot either renders nothing. */}
       <div id="app-dock-slot" className="flex shrink-0" />
+      <div id="card-seam-slot" />
       <BoardDock
         boardId="b1"
         agents={AGENTS}
@@ -863,17 +866,23 @@ describe("BoardDock — placement in the shell's dock slot", () => {
     await waitFor(() => expect(slot).not.toBeEmptyDOMElement());
     expect(aside()!.closest("#app-dock-slot")).toBe(slot);
     expect(aside()!.querySelector("[data-layer='mini']")).not.toBeNull();
+    // The control is NOT in the aside: it is the content card's own right
+    // hairline, portalled into the shell's seam slot beside <main>.
+    const seamSlot = document.getElementById("card-seam-slot")!;
     expect(
-      screen.getByRole("button", { name: /open agent dock/i }).closest("aside"),
-    ).toBe(aside());
+      screen
+        .getByRole("button", { name: /open agent dock/i })
+        .closest("#card-seam-slot"),
+    ).toBe(seamSlot);
+    expect(seamSlot.querySelector('[data-seam="right"]')).not.toBeNull();
 
     await openDock();
     expect(aside()!.querySelector("[data-layer='full']")).not.toBeNull();
     expect(
       screen
         .getByRole("button", { name: /close agent dock/i })
-        .closest("aside"),
-    ).toBe(aside());
+        .closest("#card-seam-slot"),
+    ).toBe(seamSlot);
   });
 
   it("renders nothing on the wide surface when the page has no slot", async () => {

@@ -29,16 +29,23 @@ describe("Sidebar frame", () => {
     );
   });
 
-  it("collapses on toggle click, hiding the brand label", () => {
+  it("hides the brand label when the store says collapsed", () => {
+    useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
     render(<Sidebar navSlot={<div />} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
-
-    expect(useUIStore.getState().sidebarCollapsed).toBe(true);
     expect(screen.queryByText("MONOLITH")).not.toBeInTheDocument();
+  });
+
+  it("carries no collapse control of its own — that is the card's seam", () => {
+    // The chevron used to live in the brand row, far from the edge it moved and
+    // asymmetric with the dock's. `SidebarSeam` owns it now; the rail keeps only
+    // the keyboard shortcut. Guarding the absence is what stops it drifting back.
+    render(<Sidebar navSlot={<div />} />);
     expect(
-      screen.getByRole("button", { name: /expand sidebar/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /collapse sidebar/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /expand sidebar/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("toggles with the Cmd/Ctrl+\\ shortcut", () => {
@@ -49,14 +56,6 @@ describe("Sidebar frame", () => {
 
     fireEvent.keyDown(window, { key: "\\", metaKey: true });
     expect(useUIStore.getState().sidebarCollapsed).toBe(false);
-  });
-
-  it("gives the collapse toggle a ≥44px coarse-pointer hit target", () => {
-    render(<Sidebar navSlot={<div />} />);
-    // size-11 == 44px (Apple HIG); applied only under (pointer: coarse) so the
-    // desktop affordance stays the compact size-8.
-    const toggle = screen.getByRole("button", { name: /collapse sidebar/i });
-    expect(toggle.className).toContain("pointer-coarse:size-11");
   });
 
   it("paints nothing — it shows the wash through", () => {
