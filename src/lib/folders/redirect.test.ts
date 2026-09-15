@@ -11,4 +11,7 @@ describe("dashboardRedirectTarget", () => {
     expect(dashboardRedirectTarget({ folder_id: null }, false)).toBeNull();
     expect(dashboardRedirectTarget({ folder_id: "f1" }, false)).toBeNull();
   });
+  it("stays on the legacy canvas when ?review=1 is active, even with a live folder", () => {
+    expect(dashboardRedirectTarget({ folder_id: "f1" }, true, true)).toBeNull();
+  });
 });

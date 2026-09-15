@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { z } from "zod";
 
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
@@ -9,6 +10,16 @@ import { getDashboardPayload } from "@/lib/dashboards/queries";
 import { dashboardRedirectTarget } from "@/lib/folders/redirect";
 import { optionSchema } from "@/lib/validations/boards";
 
+/**
+ * `?review=1` is the AI-generation review flow's own flag (Keep / Regenerate
+ * / Discard, `AiReviewBanner`) — the one query param this page reads. Parsed
+ * once and reused for both gates below: it keeps the folder redirect from
+ * swallowing the banner, and replaces the old raw string comparison.
+ */
+const dashboardSearchParamsSchema = z.object({
+  review: z.literal("1").optional(),
+});
+
 export default async function DashboardPage({
   params,
   searchParams,
@@ -17,7 +28,11 @@ export default async function DashboardPage({
   searchParams: Promise<{ [k: string]: string | string[] | undefined }>;
 }) {
   const { dashboardId } = await params;
-  const sp = await searchParams;
+  // safeParse, not parse: a garbage/unexpected `review` value (e.g. an array
+  // from a repeated query param) must fall through to "review not requested"
+  // rather than 500 the whole dashboard page.
+  const parsedSp = dashboardSearchParamsSchema.safeParse(await searchParams);
+  const reviewRequested = parsedSp.success && parsedSp.data.review === "1";
   await requireUser();
 
   const payload = await getDashboardPayload(dashboardId);
@@ -33,13 +48,22 @@ export default async function DashboardPage({
   // collapse to the same "treat the folder as gone, fall back to the legacy
   // canvas" outcome (ruling 3) without branching on the error code (42501 vs
   // a genuine miss).
+  //
+  // `reviewRequested` is the carve-out: Task 13's AI wizard sets `folder_id`
+  // at creation time and still pushes to `/dashboards/{id}?review=1`, so the
+  // Keep/Regenerate/Discard banner must render on the legacy canvas instead
+  // of being redirected away before the user ever sees it.
   if (payload.dashboard.folder_id) {
     const { data: folder } = await supabase
       .from("folders")
       .select("id")
       .eq("id", payload.dashboard.folder_id)
       .maybeSingle();
-    const target = dashboardRedirectTarget(payload.dashboard, folder !== null);
+    const target = dashboardRedirectTarget(
+      payload.dashboard,
+      folder !== null,
+      reviewRequested,
+    );
     if (target) redirect(target);
   }
 
@@ -99,7 +123,7 @@ export default async function DashboardPage({
 
   return (
     <>
-      {sp.review === "1" && (
+      {reviewRequested && (
         <div className="px-4 pt-4">
           <AiReviewBanner dashboardId={dashboardId} />
         </div>

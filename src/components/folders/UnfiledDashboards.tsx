@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderInput, Plus } from "lucide-react";
@@ -15,8 +16,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NewDashboardDialog } from "@/components/dashboards/NewDashboardDialog";
-import { AiDashboardWizard } from "@/components/dashboards/ai/AiDashboardWizard";
 import { useUIStore } from "@/stores/ui";
+
+// Lazy-load the wizard (and its action/SDK imports) only when needed — the
+// same code-splitting the deleted `DashboardsNav` used.
+const AiDashboardWizard = dynamic(
+  () =>
+    import("@/components/dashboards/ai/AiDashboardWizard").then(
+      (m) => m.AiDashboardWizard,
+    ),
+  { ssr: false },
+);
 
 /**
  * "Unfiled dashboards" section with the attach picker; also the client island

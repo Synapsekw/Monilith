@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect, useState, type ComponentType } from "react";
 import { useUIStore } from "@/stores/ui";
 
 // Mutable so individual tests can seed the URL the component reads on mount
@@ -21,6 +22,28 @@ vi.mock("@/components/dashboards/NewDashboardDialog", () => ({
   NewDashboardDialog: (props: { open: boolean }) => {
     newDashboardDialogProps.current = props;
     return <div data-testid="new-dashboard-dialog" />;
+  },
+}));
+// Resolve the component's `next/dynamic(..., { ssr: false })` wizard loader
+// in a jsdom-friendly way (same pattern as DashboardWidget.test.tsx): run the
+// loader in an effect and swap the resolved component in.
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    return function Lazy(props: Record<string, unknown>) {
+      const [Comp, setComp] = useState<ComponentType<
+        Record<string, unknown>
+      > | null>(null);
+      useEffect(() => {
+        void loader().then((m) => {
+          const resolved =
+            typeof m === "function"
+              ? (m as ComponentType<Record<string, unknown>>)
+              : null;
+          setComp(() => resolved);
+        });
+      }, []);
+      return Comp ? <Comp {...props} /> : null;
+    };
   },
 }));
 vi.mock("@/components/dashboards/ai/AiDashboardWizard", () => ({
@@ -72,10 +95,14 @@ describe("UnfiledDashboards", () => {
     expect(newDashboardDialogProps.current?.open).toBe(true);
   });
 
-  it("opens the AI dashboard wizard when the URL has ?ai=1", () => {
+  it("opens the AI dashboard wizard when the URL has ?ai=1", async () => {
     searchParamsStore.value = new URLSearchParams("ai=1");
     render(<UnfiledDashboards workspaceId="w1" dashboards={[]} folders={[]} />);
-    expect(screen.getByTestId("ai-dashboard-wizard")).toBeInTheDocument();
+    // The wizard is next/dynamic(..., { ssr: false }) — it mounts one tick
+    // after the lazy loader resolves.
+    expect(
+      await screen.findByTestId("ai-dashboard-wizard"),
+    ).toBeInTheDocument();
   });
 
   it("does not mount the AI dashboard wizard without ?ai=1", () => {
