@@ -32,7 +32,13 @@ export async function listFoldersCached(
       .order("position", { ascending: true }),
     supabase
       .from("folder_boards")
-      .select("board_id, folder_id, position, folders!inner(workspace_id)")
+      .select(
+        "board_id, folder_id, position, folders!inner(workspace_id, org_id)",
+      )
+      // On the service client (bypasses RLS) these two `folders.*` filters ARE
+      // the tenant boundary for this read — org_id alone is not enough, since
+      // a workspace_id collision across orgs would otherwise leak placements.
+      .eq("folders.org_id", orgId)
       .eq("folders.workspace_id", workspaceId)
       .limit(PLACEMENTS_LIMIT)
       .order("position", { ascending: true }),

@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { rowToRun } from "@/lib/ai/board-intelligence/runs";
+import { getLatestBoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import type { Database, Tables } from "@/types/database.types";
 import type { FolderBoardRef, FolderSummary, IntelligenceBrief } from "./types";
 
@@ -11,8 +11,8 @@ export type FolderHead = { folder: FolderSummary; boards: FolderBoardRef[] };
 const FOLDER_BOARDS_LIMIT = 100;
 /** Folded-in dashboards rendered on the Overview strip. */
 const FOLDER_DASHBOARDS_LIMIT = 10;
-/** Latest-run reads: runs are per (board, user); this bounds the dedupe scan. */
-const BRIEF_RUNS_LIMIT = 200;
+/** Unfiled-dashboards read: the "Unfiled" gallery section and the attach picker. */
+const UNFILED_DASHBOARDS_LIMIT = 100;
 
 /** Folder + its live boards. Two reads in one Promise.all; null when RLS hides the folder. */
 export async function getFolderHead(
@@ -55,35 +55,30 @@ export async function getFolderHead(
   };
 }
 
-/** The latest Board Intelligence brief per board for THIS user (runs are own-rows-only by RLS). */
+/**
+ * The latest Board Intelligence brief per board for THIS user (runs are
+ * own-rows-only by RLS). One indexed `LIMIT 1` per board via the canonical
+ * `getLatestBoardIntelligenceRun` helper, fanned out with `Promise.all` over
+ * the folder's boards (bounded to `FOLDER_BOARDS_LIMIT` by the caller) —
+ * NOT a single wide scan across every board's runs: a board with many
+ * regenerations used to starve the LIMIT budget for the rest of the folder.
+ */
 export async function listLatestBriefs(
   supabase: DB,
   boards: FolderBoardRef[],
   userId: string,
 ): Promise<IntelligenceBrief[]> {
   if (boards.length === 0) return [];
-  const { data, error } = await supabase
-    .from("board_intelligence_runs")
-    .select("*")
-    .in(
-      "board_id",
-      boards.map((b) => b.id),
-    )
-    .eq("user_id", userId)
-    .order("generated_at", { ascending: false })
-    .limit(BRIEF_RUNS_LIMIT);
-  if (error || !data) return [];
+  const runs = await Promise.all(
+    boards.map((b) => getLatestBoardIntelligenceRun(supabase, b.id, userId)),
+  );
   const nameOf = new Map(boards.map((b) => [b.id, b.name]));
-  const seen = new Set<string>();
   const out: IntelligenceBrief[] = [];
-  for (const row of data) {
-    if (seen.has(row.board_id)) continue;
-    const run = rowToRun(row);
+  for (const run of runs) {
     if (!run) continue;
-    seen.add(row.board_id);
     out.push({
-      boardId: row.board_id,
-      boardName: nameOf.get(row.board_id) ?? "",
+      boardId: run.boardId,
+      boardName: nameOf.get(run.boardId) ?? "",
       brief: run.payload.brief,
       generatedAt: run.generatedAt,
     });
@@ -123,7 +118,7 @@ export async function listUnfiledDashboards(
     .eq("workspace_id", workspaceId)
     .is("folder_id", null)
     .order("name", { ascending: true })
-    .limit(100);
+    .limit(UNFILED_DASHBOARDS_LIMIT);
   if (error)
     throw new Error(`Failed to load unfiled dashboards: ${error.message}`);
   return data ?? [];

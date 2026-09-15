@@ -11,6 +11,14 @@
  */
 export const FOLDER_GONE_ERROR = "That folder no longer exists.";
 
+/**
+ * Generic fallback for a folder RPC failure that is NOT the P0002 not-found
+ * case (a transport error, an unexpected Postgres error, or a row that failed
+ * Zod validation). Raw `error.message` / Zod issue text is never forwarded to
+ * the UI — it's logged server-side instead — so this is what callers show.
+ */
+export const FOLDER_DATA_ERROR = "Couldn't load folder data. Please try again.";
+
 export type FolderSummary = {
   id: string;
   name: string;

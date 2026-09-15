@@ -51,7 +51,7 @@ describe("listFoldersCached", () => {
             board_id: "b1",
             folder_id: "f1",
             position: 0,
-            folders: { workspace_id: "w1" },
+            folders: { workspace_id: "w1", org_id: "o1" },
           },
         ],
       },
@@ -68,6 +68,10 @@ describe("listFoldersCached", () => {
     });
     expect(calls).toContainEqual(["folders", "eq:org_id", "o1"]);
     expect(calls).toContainEqual(["folders", "eq:workspace_id", "w1"]);
+    // The placements read must filter on BOTH folders.org_id and
+    // folders.workspace_id — org_id alone (or workspace_id alone) is not the
+    // full tenant boundary on the service client, which bypasses RLS.
+    expect(calls).toContainEqual(["folder_boards", "eq:folders.org_id", "o1"]);
     expect(calls).toContainEqual([
       "folder_boards",
       "eq:folders.workspace_id",
