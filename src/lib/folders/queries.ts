@@ -13,6 +13,13 @@ const FOLDER_BOARDS_LIMIT = 100;
 const FOLDER_DASHBOARDS_LIMIT = 10;
 /** Unfiled-dashboards read: the "Unfiled" gallery section and the attach picker. */
 const UNFILED_DASHBOARDS_LIMIT = 100;
+/**
+ * Boards the brief fan-out will read. One indexed LIMIT-1 read per board is
+ * cheap; 100 of them in one wave is not, and the Overview's Intelligence panel
+ * is a stacked list nobody scrolls 100 entries of. Capped at the folder's
+ * first 25 boards (folder order, the same order the page lists them in).
+ */
+const BRIEF_BOARDS_LIMIT = 25;
 
 /** Folder + its live boards. Two reads in one Promise.all; null when RLS hides the folder. */
 export async function getFolderHead(
@@ -58,10 +65,14 @@ export async function getFolderHead(
 /**
  * The latest Board Intelligence brief per board for THIS user (runs are
  * own-rows-only by RLS). One indexed `LIMIT 1` per board via the canonical
- * `getLatestBoardIntelligenceRun` helper, fanned out with `Promise.all` over
- * the folder's boards (bounded to `FOLDER_BOARDS_LIMIT` by the caller) —
+ * `getLatestBoardIntelligenceRun` helper, fanned out with `Promise.all` —
  * NOT a single wide scan across every board's runs: a board with many
  * regenerations used to starve the LIMIT budget for the rest of the folder.
+ *
+ * The fan-out itself is bounded: at most `BRIEF_BOARDS_LIMIT` reads, the
+ * folder's first 25 boards. `FOLDER_BOARDS_LIMIT` (100) bounds the caller's
+ * board list, which would otherwise mean 100 concurrent reads on the first
+ * paint's critical path for a panel that shows a stacked list.
  */
 export async function listLatestBriefs(
   supabase: DB,
@@ -69,10 +80,11 @@ export async function listLatestBriefs(
   userId: string,
 ): Promise<IntelligenceBrief[]> {
   if (boards.length === 0) return [];
+  const scanned = boards.slice(0, BRIEF_BOARDS_LIMIT);
   const runs = await Promise.all(
-    boards.map((b) => getLatestBoardIntelligenceRun(supabase, b.id, userId)),
+    scanned.map((b) => getLatestBoardIntelligenceRun(supabase, b.id, userId)),
   );
-  const nameOf = new Map(boards.map((b) => [b.id, b.name]));
+  const nameOf = new Map(scanned.map((b) => [b.id, b.name]));
   const out: IntelligenceBrief[] = [];
   for (const run of runs) {
     if (!run) continue;

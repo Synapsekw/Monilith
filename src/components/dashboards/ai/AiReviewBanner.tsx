@@ -10,9 +10,10 @@ import { deleteDashboard } from "@/lib/dashboards/actions";
 
 interface AiReviewBannerProps {
   dashboardId: string;
-  /** Present when this dashboard is folded into a folder — Regenerate then
-   *  returns there (with `?ai=1#widgets` to reopen the wizard) instead of the
-   *  standalone dashboards gallery. */
+  /** Present when this dashboard is folded into a folder — Discard and
+   *  Regenerate then return THERE (Regenerate with `?ai=1#widgets` to reopen
+   *  the wizard) instead of the standalone dashboards gallery, which no
+   *  longer lists this dashboard at all. */
   folderId?: string;
 }
 
@@ -39,7 +40,9 @@ export function AiReviewBanner({ dashboardId, folderId }: AiReviewBannerProps) {
         setError(result.error ?? "Failed to discard dashboard.");
         return;
       }
-      router.push("/dashboards");
+      // A foldered dashboard came from its folder's widgets strip, so that is
+      // where discarding it lands — /dashboards would not list it either way.
+      router.push(folderId ? `/folders/${folderId}#widgets` : "/dashboards");
     });
   }
 

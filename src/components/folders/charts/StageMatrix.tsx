@@ -34,7 +34,9 @@ export function StageMatrix({
                   <button
                     type="button"
                     onClick={() => onSelectStage(s.key)}
-                    className="focus-visible:ring-ring hover:text-foreground text-muted-foreground rounded-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+                    // Hand-rolled control: it has to buy its own 44px coarse
+                    // touch target, the app primitives get it for free.
+                    className="focus-visible:ring-ring hover:text-foreground text-muted-foreground inline-flex items-center rounded-sm font-medium focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
                   >
                     {s.name}
                   </button>

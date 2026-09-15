@@ -67,6 +67,33 @@ function makeRunsClient(
 }
 
 describe("listLatestBriefs", () => {
+  it("caps the per-board fan-out at 25 boards", async () => {
+    // One indexed LIMIT-1 read per board is cheap; 100 of them in one wave on
+    // the first paint's critical path is not. The cap is on the READS, so a
+    // 40-board folder must issue exactly 25.
+    const boards: FolderBoardRef[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `b${i}`,
+      name: `Board ${i}`,
+      position: i,
+    }));
+    const runs = Object.fromEntries(
+      boards.map((b) => [
+        b.id,
+        [runRow(b.id, "2026-09-01T00:00:00Z", "brief")],
+      ]),
+    );
+    const { client, calls } = makeRunsClient(runs);
+
+    const out = await listLatestBriefs(
+      client as unknown as SupabaseClient<Database>,
+      boards,
+      "user-1",
+    );
+
+    expect(calls).toHaveLength(25);
+    expect(out).toHaveLength(25);
+  });
+
   it("returns every board's own latest brief, even when one board has many runs", async () => {
     const boards: FolderBoardRef[] = [
       { id: "b1", name: "Backend", position: 0 },

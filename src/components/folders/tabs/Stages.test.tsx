@@ -17,6 +17,7 @@ describe("StagesTab", () => {
         allRows={fx.rollup!}
         stages={stages}
         stage={null}
+        board={null}
         burn={fx.burn}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
@@ -37,6 +38,7 @@ describe("StagesTab", () => {
         allRows={fx.rollup!}
         stages={stages}
         stage={null}
+        board={null}
         burn={fx.burn}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
@@ -60,6 +62,7 @@ describe("StagesTab", () => {
         allRows={fx.rollup!}
         stages={filteredStages}
         stage={null}
+        board="b1"
         burn={fx.burn}
         boards={filteredBoards}
         todayISO={FIXTURE_TODAY}
@@ -73,5 +76,46 @@ describe("StagesTab", () => {
     expect(within(matrixSection).getByText("Backend")).toBeInTheDocument();
     expect(within(matrixSection).queryByText("Mobile")).toBeNull();
     expect(within(matrixSection).queryByText("Website")).toBeNull();
+    // ...but the burn chart CANNOT honour it (a BurnRow has no boardId), so
+    // the panel says so instead of implying it narrowed too.
+    const note = screen.getByTestId("burn-scope-note");
+    expect(note).toHaveTextContent("All boards");
+    expect(note).toHaveTextContent(/folder-wide/i);
+  });
+  it("shows no scope caption when no board filter is set", () => {
+    render(
+      <StagesTab
+        rows={fx.rollup!}
+        allRows={fx.rollup!}
+        stages={stages}
+        stage={null}
+        board={null}
+        burn={fx.burn}
+        boards={fx.boards}
+        todayISO={FIXTURE_TODAY}
+        onSelectStage={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("burn-scope-note")).toBeNull();
+  });
+  it("gives the chart-mode radios a 44px hit target on a coarse pointer", () => {
+    render(
+      <StagesTab
+        rows={fx.rollup!}
+        allRows={fx.rollup!}
+        stages={stages}
+        stage={null}
+        board={null}
+        burn={fx.burn}
+        boards={fx.boards}
+        todayISO={FIXTURE_TODAY}
+        onSelectStage={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "Weekly" }).className).toContain(
+      "pointer-coarse:min-h-11",
+    );
   });
 });

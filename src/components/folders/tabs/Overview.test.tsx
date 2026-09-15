@@ -10,7 +10,10 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
 }));
 import { OverviewTab } from "./Overview";
 
-function renderOverview(patch: Partial<ReturnType<typeof folderFixture>> = {}) {
+function renderOverview(
+  patch: Partial<ReturnType<typeof folderFixture>> = {},
+  opts: { stage?: string | null; board?: string | null } = {},
+) {
   const payload = { ...folderFixture(), ...patch };
   const rows = payload.rollup ?? [];
   const stages = buildStages(rows, FIXTURE_TODAY);
@@ -20,7 +23,8 @@ function renderOverview(patch: Partial<ReturnType<typeof folderFixture>> = {}) {
       payload={payload}
       rows={rows}
       stages={stages}
-      stage={null}
+      stage={opts.stage ?? null}
+      board={opts.board ?? null}
       onRetry={onRetry}
     />,
   );
@@ -93,6 +97,62 @@ describe("OverviewTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Complete")).toBeInTheDocument();
+  });
+
+  it("says the burn chart is folder-wide while a board filter is set", () => {
+    // `folder_burn` has no board dimension (a BurnRow is (stage, week)), so
+    // the chart silently ignores the board dropdown every other panel honours.
+    renderOverview({}, { board: "b1" });
+    const note = screen.getByTestId("burn-scope-note");
+    expect(note).toHaveTextContent("All boards");
+    expect(note).toHaveTextContent(/folder-wide/i);
+  });
+
+  it("shows no scope caption when no board filter is set", () => {
+    renderOverview();
+    expect(screen.queryByTestId("burn-scope-note")).toBeNull();
+  });
+
+  it("captions how much of the attention list is shown, folder-wide", () => {
+    renderOverview();
+    expect(screen.getByTestId("attention-caption")).toHaveTextContent(
+      "Top 4 across the folder",
+    );
+  });
+
+  it("captions the attention list as a slice of the stage when one is selected", () => {
+    // The stage filter is applied client-side to the RPC's top-N, so the
+    // caption has to say how many rows the stage actually holds.
+    renderOverview({}, { stage: "build" });
+    expect(screen.getByTestId("attention-caption")).toHaveTextContent(
+      "Top 4 of 4 in this stage",
+    );
+  });
+
+  it("never renders more than 20 attention rows", () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      itemId: `x${i}`,
+      itemName: `Item ${i}`,
+      boardId: "b1",
+      boardName: "Backend",
+      groupId: "b1:build",
+      groupName: "Build",
+      reason: "stale" as const,
+      ageDays: 30,
+      severity: 1,
+    }));
+    renderOverview({ attention: many });
+    expect(screen.getAllByRole("link", { name: /^Item / })).toHaveLength(20);
+    expect(screen.getByTestId("attention-caption")).toHaveTextContent(
+      "Top 20 across the folder",
+    );
+  });
+
+  it("gives the chart-mode radios a 44px hit target on a coarse pointer", () => {
+    renderOverview();
+    expect(screen.getByRole("radio", { name: "Weekly" }).className).toContain(
+      "pointer-coarse:min-h-11",
+    );
   });
 
   it("renders the next three milestones", () => {

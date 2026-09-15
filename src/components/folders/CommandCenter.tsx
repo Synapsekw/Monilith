@@ -135,6 +135,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               rows={rows}
               stages={buildStages(rows, payload.todayISO)}
               stage={stage}
+              board={board}
               widgets={widgets}
               onRetry={() => router.refresh()}
             />
@@ -144,6 +145,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               allRows={rollup}
               stages={stageTabStages}
               stage={stage}
+              board={board}
               burn={payload.burn}
               boards={stageTabBoards}
               todayISO={payload.todayISO}

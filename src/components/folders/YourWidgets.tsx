@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderInput, Plus, Sparkles } from "lucide-react";
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { NewDashboardDialog } from "@/components/dashboards/NewDashboardDialog";
-import { AiDashboardWizard } from "@/components/dashboards/ai/AiDashboardWizard";
 import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
@@ -19,6 +19,18 @@ import {
 import { attachDashboardToFolder } from "@/lib/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { Tables } from "@/types/database.types";
+
+// Lazy-load the wizard (and its action/SDK imports) only when it is opened —
+// the same code-splitting `UnfiledDashboards` does. Statically importing it
+// here pulled the whole wizard into the folder page's first-paint bundle for
+// every visitor, opened or not.
+const AiDashboardWizard = dynamic(
+  () =>
+    import("@/components/dashboards/ai/AiDashboardWizard").then(
+      (m) => m.AiDashboardWizard,
+    ),
+  { ssr: false },
+);
 
 /**
  * Spec §5.2.7: the folder's folded-in dashboards, one canvas section each,

@@ -11,7 +11,17 @@ import {
 } from "./resolve";
 import type { FolderPayload } from "./types";
 
-export const ATTENTION_LIMIT = 20;
+/**
+ * Rows `folder_attention` returns for the first paint.
+ *
+ * The Overview panel SHOWS 20, but it narrows the list to the selected stage
+ * on the client — i.e. it classifies AFTER the SQL LIMIT. At 20 a folder whose
+ * worst 20 items all sit in one stage left every other stage looking clean.
+ * 100 is the RPC's own hard ceiling (`least(greatest(p_limit, 1), 100)`), so
+ * this asks for the widest pool it will give; Overview slices to 20 and
+ * captions the truncation.
+ */
+export const ATTENTION_LIMIT = 100;
 
 /**
  * First paint (spec §6): head reads + folder_rollup + folder_burn +

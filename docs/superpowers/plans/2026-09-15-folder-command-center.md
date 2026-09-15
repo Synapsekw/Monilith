@@ -8787,16 +8787,16 @@ Implementers gate (`pnpm typecheck && pnpm lint && pnpm test && pnpm build`) and
 
 **First paint of `/folders/[id]`** — one RSC render (Task 10 `buildFolderPayload`, Task 13 page):
 
-| Wave                 | Call                                                                     | Client                          | Bound / index                                                                  |
-| -------------------- | ------------------------------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------ |
-| A (concurrent)       | `folders` head + `folder_boards!inner(boards)`                           | RLS                             | PK; `folder_boards_folder_position_idx`, ≤ 100 boards                          |
-| A                    | `folder_rollup(folder_id)`                                               | RLS (RPC gates on `auth.uid()`) | boards × groups; `items_board_id_idx`, `groups_board_id_idx`, `cell_values` PK |
-| A                    | `folder_burn(folder_id)`                                                 | RLS                             | stages × ≤ 104 weeks                                                           |
-| A                    | `folder_attention(folder_id, 20)`                                        | RLS                             | `LIMIT 20` inside SQL                                                          |
-| B (after A)          | `board_intelligence_runs` latest per board                               | RLS                             | `board_intelligence_runs_lookup_idx`, `LIMIT 200`                              |
-| B                    | `listOrgMembersCached(orgId)`                                            | service, `use cache`            | warm from the shell                                                            |
-| C (Task 13, after A) | `dashboards(*, dashboard_widgets(*))` where `folder_id`                  | RLS                             | `dashboards_folder_idx`, `LIMIT 10`                                            |
-| C                    | unfiled dashboards; workspace boards + columns for the Add-widget dialog | RLS                             | same reads `/dashboards/[id]` already does                                     |
+| Wave                 | Call                                                                     | Client                          | Bound / index                                                                                          |
+| -------------------- | ------------------------------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| A (concurrent)       | `folders` head + `folder_boards!inner(boards)`                           | RLS                             | PK; `folder_boards_folder_position_idx`, ≤ 100 boards                                                  |
+| A                    | `folder_rollup(folder_id)`                                               | RLS (RPC gates on `auth.uid()`) | boards × groups; `items_board_id_idx`, `groups_board_id_idx`, `cell_values` PK                         |
+| A                    | `folder_burn(folder_id)`                                                 | RLS                             | stages × ≤ 104 weeks                                                                                   |
+| A                    | `folder_attention(folder_id, 20)`                                        | RLS                             | `LIMIT 20` inside SQL                                                                                  |
+| B (after A)          | `board_intelligence_runs` latest per board                               | RLS                             | ≤ 25 indexed LIMIT-1 reads, one per board (`BRIEF_BOARDS_LIMIT`), `board_intelligence_runs_lookup_idx` |
+| B                    | `listOrgMembersCached(orgId)`                                            | service, `use cache`            | warm from the shell                                                                                    |
+| C (Task 13, after A) | `dashboards(*, dashboard_widgets(*))` where `folder_id`                  | RLS                             | `dashboards_folder_idx`, `LIMIT 10`                                                                    |
+| C                    | unfiled dashboards; workspace boards + columns for the Add-widget dialog | RLS                             | same reads `/dashboards/[id]` already does                                                             |
 
 Widget DATA for the strip loads lazily below the fold through the existing batched `getWidgetsData` (unchanged).
 

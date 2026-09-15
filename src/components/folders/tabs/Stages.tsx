@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StackedStatusBar } from "@/components/folders/charts/StackedStatusBar";
 import { StageMatrix } from "@/components/folders/charts/StageMatrix";
 import { BurnChart } from "@/components/folders/charts/BurnChart";
+import { BurnScopeNote } from "@/components/folders/charts/BurnScopeNote";
 import type { BurnMode } from "@/components/folders/charts/BurnChartInner";
 import { burnSeries, carryOver, stageMatrix } from "@/lib/folders/rollup";
 import type { StageState, StageSummary } from "@/lib/folders/stages";
@@ -32,6 +33,7 @@ export function StagesTab({
   allRows,
   stages,
   stage,
+  board,
   burn,
   boards,
   todayISO,
@@ -55,6 +57,9 @@ export function StagesTab({
   allRows: RollupRow[];
   stages: StageSummary[];
   stage: string | null;
+  /** The active board filter, for the burn panel's scope caption only — the
+   *  burn RPC has no board dimension. */
+  board: string | null;
   burn: BurnRow[] | null;
   boards: FolderBoardRef[];
   todayISO: string;
@@ -137,7 +142,9 @@ export function StagesTab({
                 aria-checked={mode === m}
                 onClick={() => setMode(m)}
                 className={cn(
-                  "rounded-sm border px-2 py-0.5 text-xs",
+                  // Hand-rolled control: it has to buy its own 44px coarse
+                  // touch target, the app primitives get it for free.
+                  "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs pointer-coarse:min-h-11 pointer-coarse:px-3",
                   mode === m
                     ? "border-border-bright text-foreground"
                     : "text-muted-foreground hover:border-border-hover",
@@ -148,6 +155,7 @@ export function StagesTab({
             ))}
           </div>
         </div>
+        <BurnScopeNote board={board} />
         {points === null ? (
           <EmptyState
             variant="inline"

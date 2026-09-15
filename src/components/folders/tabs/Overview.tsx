@@ -9,6 +9,7 @@ import { StatusPill, type StatusColor } from "@/components/ui/status-pill";
 import { KpiCard } from "@/components/folders/charts/KpiCard";
 import { StackedStatusBar } from "@/components/folders/charts/StackedStatusBar";
 import { BurnChart } from "@/components/folders/charts/BurnChart";
+import { BurnScopeNote } from "@/components/folders/charts/BurnScopeNote";
 import type { BurnMode } from "@/components/folders/charts/BurnChartInner";
 import {
   boardSummaries,
@@ -16,13 +17,20 @@ import {
   computeKpis,
   nextMilestones,
 } from "@/lib/folders/rollup";
-import type { StageSummary } from "@/lib/folders/stages";
+import { stageKey, type StageSummary } from "@/lib/folders/stages";
 import type {
   AttentionReason,
   FolderPayload,
   RollupRow,
 } from "@/lib/folders/types";
 import { cn } from "@/lib/utils";
+
+/**
+ * Rows shown in "Needs attention". `buildFolderPayload` asks the RPC for
+ * `ATTENTION_LIMIT` (100) so the stage filter below classifies from a wide
+ * enough pool; only the top 20 are rendered, and the caption says so.
+ */
+const ATTENTION_SHOWN = 20;
 
 const REASON_COLOR: Record<AttentionReason, StatusColor> = {
   overdue: "red",
@@ -84,6 +92,7 @@ export function OverviewTab({
   rows,
   stages,
   stage,
+  board,
   widgets,
   onRetry,
 }: {
@@ -91,6 +100,9 @@ export function OverviewTab({
   rows: RollupRow[];
   stages: StageSummary[];
   stage: string | null;
+  /** The active board filter, for the burn panel's scope caption only — the
+   *  burn RPC has no board dimension. */
+  board: string | null;
   widgets?: ReactNode;
   onRetry: () => void;
 }) {
@@ -102,15 +114,25 @@ export function OverviewTab({
       ? null
       : burnSeries(payload.burn, stage, payload.todayISO);
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
-  const attention =
+  // The RPC returns the folder's top ATTENTION_LIMIT (100) rows by severity;
+  // narrowing them to the selected stage happens here, on the client, so the
+  // rendered list is a slice of a slice. The caption makes that visible
+  // instead of quietly implying "this is everything".
+  const attentionInScope =
     payload.attention === null
       ? null
       : payload.attention.filter(
           (a) =>
             stage === null ||
-            (a.groupName !== null &&
-              a.groupName.trim().toLowerCase() === stage),
+            (a.groupName !== null && stageKey(a.groupName) === stage),
         );
+  const attention = attentionInScope?.slice(0, ATTENTION_SHOWN) ?? null;
+  const attentionCaption =
+    attentionInScope === null || attentionInScope.length === 0
+      ? null
+      : stage === null
+        ? `Top ${Math.min(attentionInScope.length, ATTENTION_SHOWN)} across the folder`
+        : `Top ${Math.min(attentionInScope.length, ATTENTION_SHOWN)} of ${attentionInScope.length} in this stage`;
   const milestones = nextMilestones(
     stages.filter((s) => stage === null || s.key === stage),
     payload.todayISO,
@@ -211,7 +233,9 @@ export function OverviewTab({
                 aria-checked={mode === m}
                 onClick={() => setMode(m)}
                 className={cn(
-                  "rounded-sm border px-2 py-0.5 text-xs",
+                  // Hand-rolled control: it has to buy its own 44px coarse
+                  // touch target, the app primitives get it for free.
+                  "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs pointer-coarse:min-h-11 pointer-coarse:px-3",
                   mode === m
                     ? "border-border-bright text-foreground"
                     : "text-muted-foreground hover:border-border-hover",
@@ -221,6 +245,7 @@ export function OverviewTab({
               </button>
             ))}
           </div>
+          <BurnScopeNote board={board} />
           {burn === null ? (
             <Failed onRetry={onRetry} />
           ) : !anyDue || burn.length === 0 ? (
@@ -266,6 +291,14 @@ export function OverviewTab({
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel kicker="04" title="Needs attention" className="lg:col-span-2">
+          {attentionCaption ? (
+            <p
+              data-testid="attention-caption"
+              className="text-muted-foreground text-xs"
+            >
+              {attentionCaption}
+            </p>
+          ) : null}
           {attention === null ? (
             <Failed onRetry={onRetry} />
           ) : attention.length === 0 ? (

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useEffect, useState, type ComponentType } from "react";
 
 let searchParamsValue = new URLSearchParams();
 vi.mock("next/navigation", () => ({
@@ -14,6 +15,29 @@ vi.mock("@/components/dashboards/DashboardCanvasLazy", () => ({
 vi.mock("@/components/dashboards/NewDashboardDialog", () => ({
   NewDashboardDialog: (p: { open: boolean; folderId?: string }) =>
     p.open ? <div data-testid="new-dialog">{p.folderId}</div> : null,
+}));
+// Resolve the component's `next/dynamic(..., { ssr: false })` wizard loader in
+// a jsdom-friendly way (same pattern as UnfiledDashboards.test.tsx): run the
+// loader in an effect and swap the resolved component in. The wizard is code
+// split so it never lands in the folder page's first-paint bundle.
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    return function Lazy(props: Record<string, unknown>) {
+      const [Comp, setComp] = useState<ComponentType<
+        Record<string, unknown>
+      > | null>(null);
+      useEffect(() => {
+        void loader().then((m) => {
+          const resolved =
+            typeof m === "function"
+              ? (m as ComponentType<Record<string, unknown>>)
+              : null;
+          setComp(() => resolved);
+        });
+      }, []);
+      return Comp ? <Comp {...props} /> : null;
+    };
+  },
 }));
 vi.mock("@/components/dashboards/ai/AiDashboardWizard", () => ({
   AiDashboardWizard: (p: { open: boolean; folderId?: string }) =>
@@ -55,7 +79,7 @@ describe("YourWidgets", () => {
       "Sales",
     ]);
   });
-  it("opens New dashboard and Generate with AI seeded with the folder id", () => {
+  it("opens New dashboard and Generate with AI seeded with the folder id", async () => {
     render(
       <YourWidgets
         folderId="f1"
@@ -68,7 +92,7 @@ describe("YourWidgets", () => {
     fireEvent.click(screen.getByRole("button", { name: "New dashboard" }));
     expect(screen.getByTestId("new-dialog")).toHaveTextContent("f1");
     fireEvent.click(screen.getByRole("button", { name: "Generate with AI" }));
-    expect(screen.getByTestId("ai-wizard")).toHaveTextContent("f1");
+    expect(await screen.findByTestId("ai-wizard")).toHaveTextContent("f1");
   });
   it("attaches an existing unfiled dashboard", async () => {
     render(
@@ -87,7 +111,7 @@ describe("YourWidgets", () => {
       folderId: "f1",
     });
   });
-  it("opens the AI wizard on mount when the URL carries ?ai=1", () => {
+  it("opens the AI wizard on mount when the URL carries ?ai=1", async () => {
     searchParamsValue = new URLSearchParams("ai=1");
     render(
       <YourWidgets
@@ -98,7 +122,7 @@ describe("YourWidgets", () => {
         unfiled={[]}
       />,
     );
-    expect(screen.getByTestId("ai-wizard")).toHaveTextContent("f1");
+    expect(await screen.findByTestId("ai-wizard")).toHaveTextContent("f1");
     searchParamsValue = new URLSearchParams();
   });
 });

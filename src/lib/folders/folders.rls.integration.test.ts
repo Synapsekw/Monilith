@@ -183,6 +183,38 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
     expect(error?.code).toBe("23505");
   });
 
+  it("refuses to move a folder to another workspace or org (23514)", async () => {
+    // A folder's `folder_boards` placements are workspace-scoped and its
+    // dashboards hang off a composite (org_id, folder_id) FK, so a tenancy
+    // move orphans both. Nothing in the product moves a folder — the
+    // `folders_block_tenant_move` trigger is a hard stop, not a cascade.
+    const moved = await aAnon
+      .from("folders")
+      .update({ workspace_id: aWs2 })
+      .eq("id", aFolderId);
+    expect(moved.error?.code).toBe("23514");
+
+    const reOrged = await aAnon
+      .from("folders")
+      .update({ org_id: bOrgId })
+      .eq("id", aFolderId);
+    // Either the trigger (23514) or the org RLS/FK stops this; what must never
+    // happen is a successful cross-org move.
+    expect(reOrged.error).not.toBeNull();
+
+    // Renaming — the folder mutation the product actually has — still works.
+    const renamed = await aAnon
+      .from("folders")
+      .update({ name: "Q4 Launch (renamed)" })
+      .eq("id", aFolderId);
+    expect(renamed.error).toBeNull();
+    const restored = await aAnon
+      .from("folders")
+      .update({ name: "Q4 Launch" })
+      .eq("id", aFolderId);
+    expect(restored.error).toBeNull();
+  });
+
   it("hides another org's folders", async () => {
     const { data } = await bAnon
       .from("folders")

@@ -1092,13 +1092,18 @@
    [data-print-root] region prints: chrome, tabs, filters and buttons carry
    [data-print-hide]; the charts are inline SVG (recharts) and print as-is. */
 @media print {
-  aside,
-  nav,
-  header,
-  [data-print-hide] {
+  /* EVERY rule in this block is scoped to a page that actually has a print
+     root. They used to be global, so printing ANY other page in the app hid
+     its chrome, set `visibility: hidden` on every element, and produced a
+     blank sheet. `body:has([data-print-root])` limits the whole mechanism to
+     the surfaces that opt in (today: the folder Overview export). */
+  body:has([data-print-root]) aside,
+  body:has([data-print-root]) nav,
+  body:has([data-print-root]) header,
+  body:has([data-print-root]) [data-print-hide] {
     display: none !important;
   }
-  body * {
+  body:has([data-print-root]) * {
     visibility: hidden;
   }
   [data-print-root],
@@ -1147,10 +1152,16 @@
     --brand: #5a6ed5;
     --primary: var(--brand);
 
+    /* Positioned (not `inset: 0`) so the root can grow PAST one page height:
+       `inset: 0` pinned bottom to the viewport, clipping a multi-page Overview
+       to a single sheet. `bottom: auto` + `height: auto` let it paginate; the
+       26mm top leaves room for [data-print-title]. */
     position: absolute;
-    inset: 0;
-    /* Leave room at the top of the page for [data-print-title]. */
     top: 26mm;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    height: auto;
     padding: 12mm;
     background: #fff;
     color: #000;

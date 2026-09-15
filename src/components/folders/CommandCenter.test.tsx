@@ -54,6 +54,20 @@ describe("CommandCenter", () => {
     expect(screen.getByText("26 items · 3 boards")).toBeInTheDocument();
   });
 
+  it("gives the tab strip and the stage chips a 44px hit target on a coarse pointer", () => {
+    // Both are hand-rolled buttons, not app primitives, so they have to carry
+    // the coarse-pointer rule themselves. Class arithmetic — jsdom has no
+    // layout, and the real geometry is pinned by the CSS harness suite.
+    render(wrap({ payload: folderFixture() }));
+    expect(screen.getByRole("tab", { name: /Overview/ }).className).toContain(
+      "pointer-coarse:min-h-11",
+    );
+    const chips = screen.getByRole("group", { name: "Stage" });
+    for (const chip of Array.from(chips.querySelectorAll("button"))) {
+      expect(chip.className).toContain("pointer-coarse:min-h-11");
+    }
+  });
+
   it("switching tab and stage costs zero server calls and only touches history.replaceState", () => {
     const replace = vi.spyOn(window.history, "replaceState");
     render(wrap({ payload: folderFixture() }));

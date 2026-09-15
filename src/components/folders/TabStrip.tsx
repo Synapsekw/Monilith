@@ -56,7 +56,9 @@ export function TabStrip({
             disabled={disabled && t.id !== "overview"}
             onClick={() => onChange(t.id)}
             className={cn(
-              "focus-visible:ring-ring -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50",
+              // Hand-rolled control: it has to buy its own 44px coarse touch
+              // target, the app primitives get it for free.
+              "focus-visible:ring-ring -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50 pointer-coarse:min-h-11",
               active
                 ? "border-primary text-foreground"
                 : "text-muted-foreground hover:text-foreground border-transparent",

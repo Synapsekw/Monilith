@@ -41,7 +41,9 @@ export function FilterBar({
     .join(" · ");
   const chip = (active: boolean) =>
     cn(
-      "focus-visible:ring-ring flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+      // Hand-rolled control: it has to buy its own 44px coarse touch target,
+      // the app primitives (Button, DropdownMenuItem) get it for free.
+      "focus-visible:ring-ring flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3",
       active
         ? "border-border-bright bg-surface-muted text-foreground"
         : "hover:border-border-hover text-muted-foreground",

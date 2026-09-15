@@ -72,7 +72,7 @@ vi.mock("@/lib/org/queries-cached", () => ({
 
 import { getFolderHead, listLatestBriefs } from "./queries";
 import { resolveFolderAttention } from "./resolve";
-import { buildFolderPayload } from "./payload";
+import { ATTENTION_LIMIT, buildFolderPayload } from "./payload";
 
 const supabase = {} as SupabaseClient<Database>;
 
@@ -87,7 +87,14 @@ describe("buildFolderPayload", () => {
     expect(p!.members).toEqual([
       { userId: "u1", fullName: "Ada", avatarUrl: null },
     ]);
-    expect(resolveFolderAttention).toHaveBeenCalledWith(supabase, "f1", 20);
+    // The Overview panel shows 20 but classifies by stage on the CLIENT, so
+    // the RPC has to return a wider pool than the visible list (finding I4).
+    expect(ATTENTION_LIMIT).toBe(100);
+    expect(resolveFolderAttention).toHaveBeenCalledWith(
+      supabase,
+      "f1",
+      ATTENTION_LIMIT,
+    );
     expect(listLatestBriefs).toHaveBeenCalledWith(
       supabase,
       [{ id: "b1", name: "Backend", position: 0 }],
