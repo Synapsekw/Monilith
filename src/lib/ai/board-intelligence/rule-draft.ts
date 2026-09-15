@@ -50,7 +50,16 @@ export function ruleDraftFor(
     case "set_status": {
       const dateCol = firstOfKind("date");
       if (!dateCol) return null;
-      if (!meta.columns.some((c) => c.id === action.columnId)) return null;
+      // The target column came from model output, so re-check its kind against
+      // the board — the engine only accepts status or dropdown columns for
+      // set_option (20260704111500). If the column was converted to a different
+      // kind after the suggestion was generated but before the user clicks
+      // "Create rule", this guard prevents a broken rule from persisting.
+      if (
+        !isKind(action.columnId, "status") &&
+        !isKind(action.columnId, "dropdown")
+      )
+        return null;
       return {
         trigger: { type: "date_reached", columnId: dateCol, offsetDays: 0 },
         actions: [

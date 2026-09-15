@@ -48,6 +48,24 @@ describe("ruleDraftFor", () => {
     });
   });
 
+  it("maps set_status onto date_reached + set_option for dropdown columns too", () => {
+    const DROPDOWN = "cccccccc-0000-4000-8000-000000000004";
+    const draft = ruleDraftFor(
+      {
+        type: "set_status",
+        itemId: "i1",
+        columnId: DROPDOWN,
+        optionId: "o1",
+        label: "Set status",
+      },
+      meta({ [DATE]: "date", [DROPDOWN]: "dropdown" }),
+    );
+    expect(draft).toEqual({
+      trigger: { type: "date_reached", columnId: DATE, offsetDays: 0 },
+      actions: [{ type: "set_option", columnId: DROPDOWN, optionId: "o1" }],
+    });
+  });
+
   it("maps nudge onto date_reached + notify the owner", () => {
     const draft = ruleDraftFor(
       {
@@ -98,6 +116,38 @@ describe("ruleDraftFor", () => {
           label: "Set status",
         },
         meta({ [STATUS]: "status" }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for set_status when target column is absent", () => {
+    const ABSENT = "cccccccc-0000-4000-8000-000000000005";
+    expect(
+      ruleDraftFor(
+        {
+          type: "set_status",
+          itemId: "i1",
+          columnId: ABSENT,
+          optionId: "o1",
+          label: "Set status",
+        },
+        meta({ [DATE]: "date", [STATUS]: "status" }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for set_status when target column is not status or dropdown", () => {
+    const TEXT = "cccccccc-0000-4000-8000-000000000006";
+    expect(
+      ruleDraftFor(
+        {
+          type: "set_status",
+          itemId: "i1",
+          columnId: TEXT,
+          optionId: "o1",
+          label: "Set status",
+        },
+        meta({ [DATE]: "date", [TEXT]: "text" }),
       ),
     ).toBeNull();
   });
