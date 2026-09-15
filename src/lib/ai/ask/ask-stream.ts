@@ -25,8 +25,17 @@ const READ_TOOL_NAMES = new Set(ASK_TOOLS.map((t) => t.name));
 
 /** The `"read-only"` toolset: the two board-read tools Board Intelligence Q&A
  *  needs, and nothing else. A SUBSET of ASK_TOOLS, so the loop's read branch
- *  already knows how to execute both. */
-const INTEL_READ_TOOLS = new Set(["query_items", "semantic_search_items"]);
+ *  already knows how to execute both.
+ *
+ *  Exported so `ask-toolset.test.ts` can hold it against the REAL `ASK_TOOLS`
+ *  without mocking that module: these are plain strings, and a rename in
+ *  tools.ts would otherwise silently shrink the offered list to nothing —
+ *  shipping a Q&A assistant that cannot read a single item, with a green
+ *  suite, because the unit test mocks the same strings. */
+export const INTEL_READ_TOOLS = new Set([
+  "query_items",
+  "semantic_search_items",
+]);
 
 /** Concatenate the text blocks of a model response, dropping tool_use/other blocks. */
 function textOf(content: Anthropic.ContentBlock[]): string {

@@ -503,9 +503,10 @@ describe("askPulseStream", () => {
     const names = toolNamesOf(client.messages.stream.mock.calls[0][0]);
     expect(names).toEqual(["query_items", "semantic_search_items"]);
     // Named explicitly: a write tool reaching this loop is the failure this
-    // guards, and an assertion that never names one cannot see it.
+    // guards, and an assertion that never names one cannot see it. Both names
+    // are real entries in this file's WRITE_TOOLS / LIST_MEMBERS_TOOL mocks, so
+    // they are in the list the assertion inspects and can genuinely fire.
     expect(names).not.toContain("propose_create_item");
-    expect(names).not.toContain("propose_update_cell");
     expect(names).not.toContain("list_board_members");
   });
 
