@@ -108,8 +108,11 @@ const MAX_EVIDENCE_ITEMS = 8;
 const MAX_ACTION_ITEM_IDS = 50;
 
 /** Cut to `max` characters on a word boundary where there is one, marking the
- *  cut with an ellipsis. The result is always `<= max`. */
-function truncate(text: string, max: number): string {
+ *  cut with an ellipsis. The result is always `<= max`.
+ *
+ *  Exported because the SAME truncate-don't-reject rule governs the Q&A request
+ *  boundary (`ask-input.ts`): one implementation of "cut it and carry on". */
+export function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max - 1);
   const space = cut.lastIndexOf(" ");
