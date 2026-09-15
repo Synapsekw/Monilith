@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
@@ -135,6 +135,45 @@ describe("AskComposer", () => {
     });
     render(<AskComposer runId="r1" boardId="board-1" />);
     expect(screen.getByRole("alert")).toHaveTextContent("nope");
+  });
+
+  it("does not start a second promotion while the first is in flight", async () => {
+    // "Open in Chat" runs three sequential server calls before the parent
+    // switches to Chat and unmounts this button — a 300-500ms live window. Two
+    // clicks used to write TWO ai_conversations rows and FOUR ai_messages rows
+    // for one Q/A pair, both left in the reader's ledger.
+    useIntelligenceAsk.mockReturnValue({
+      pairs: [{ id: "1", question: "q", answer: "a" }],
+      streaming: false,
+      status: null,
+      error: null,
+      ask,
+    });
+    let settle: () => void = () => {};
+    const onOpenInChat = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    render(
+      <AskComposer runId="r1" boardId="board-1" onOpenInChat={onOpenInChat} />,
+    );
+
+    const button = screen.getByRole("button", { name: /open in chat/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(onOpenInChat).toHaveBeenCalledTimes(1);
+    // Named for what is happening, and inert while it happens.
+    expect(screen.getByRole("button", { name: /opening/i })).toBeDisabled();
+
+    // A FAILED promotion leaves the panel mounted (the parent renders its own
+    // error), so the reader must get the action back rather than a dead
+    // button.
+    await act(async () => {
+      settle();
+    });
+    expect(screen.getByRole("button", { name: /open in chat/i })).toBeEnabled();
   });
 
   it("shows the Open in Chat action only when onOpenInChat is provided", () => {

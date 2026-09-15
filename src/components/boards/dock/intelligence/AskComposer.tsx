@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
@@ -32,12 +32,46 @@ export function AskComposer({
   /** Only the newest pair can be the one in flight — `ask` refuses while a
    *  turn is streaming, so an earlier empty pair is a turn that ENDED. */
   const inFlightId = pairs.at(-1)?.id;
+  /**
+   * Which pair is being promoted into a thread, if any.
+   *
+   * COMPONENT state, deliberately — not the store's `busy[boardId]` claim that
+   * guards apply/dismiss. That one is board-scoped and lives in the store
+   * because a board WRITE must stay serialised even after this panel unmounts,
+   * and because two writes race the same jsonb array. Promotion is neither:
+   * it inserts its own `ai_conversations`/`ai_messages` rows and touches no
+   * run, and the only way to duplicate one is a second click on THIS button,
+   * which cannot outlive the component that renders it. Borrowing `busy` would
+   * also grey out every suggestion card's Apply while a thread opens, saying
+   * something false about the board.
+   *
+   * The ref is the half that holds when the click beats the render: two clicks
+   * in one tick both read the pre-render state, so `promoting.current` — not
+   * `promotingId` — is what makes the second one a no-op.
+   */
+  const promoting = useRef(false);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
 
   async function submit() {
     const q = draft.trim();
     if (!q || disabled) return;
     setDraft("");
     await ask(q);
+  }
+
+  async function openInChat(pair: QaPair) {
+    if (!onOpenInChat || promoting.current) return;
+    promoting.current = true;
+    setPromotingId(pair.id);
+    try {
+      await onOpenInChat(pair);
+    } finally {
+      // On success the parent switches to Chat and unmounts this panel, so
+      // these are no-ops. On failure it stays mounted and renders its own
+      // error — and the reader needs the action back to retry.
+      promoting.current = false;
+      setPromotingId(null);
+    }
   }
 
   return (
@@ -77,9 +111,10 @@ export function AskComposer({
                   <Button
                     size="xs"
                     variant="link"
-                    onClick={() => void onOpenInChat(pair)}
+                    disabled={promotingId !== null}
+                    onClick={() => void openInChat(pair)}
                   >
-                    Open in Chat
+                    {promotingId === pair.id ? "Opening…" : "Open in Chat"}
                   </Button>
                 </div>
               )}
