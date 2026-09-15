@@ -44,11 +44,22 @@ const run = (
   ...over,
 });
 
+const draft = {
+  trigger: { type: "item_created" as const },
+  actions: [
+    {
+      type: "notify" as const,
+      recipient: { kind: "owner" as const, peopleColumnId: "people-1" },
+    },
+  ],
+};
+
 beforeEach(() =>
   useBoardIntelligenceStore.setState({
     runs: {},
     openRequest: null,
     filterRequest: null,
+    ruleRequest: null,
     busy: {},
   }),
 );
@@ -108,5 +119,20 @@ describe("board intelligence bridge store", () => {
     expect(req.selection).toEqual({ kind: "overloaded", subject: "u1" });
     s.consumeFilter(req.nonce);
     expect(useBoardIntelligenceStore.getState().filterRequest).toBeNull();
+  });
+
+  it("carries a rule request and clears it by nonce", () => {
+    const s = useBoardIntelligenceStore.getState();
+    s.requestRule("board-1", draft);
+    const req = useBoardIntelligenceStore.getState().ruleRequest;
+    expect(req).toMatchObject({ boardId: "board-1", draft });
+
+    // A stale nonce clears nothing — the same rule openRequest/filterRequest
+    // follow, so a request issued while another is in flight is never lost.
+    useBoardIntelligenceStore.getState().consumeRule(req!.nonce - 1);
+    expect(useBoardIntelligenceStore.getState().ruleRequest).not.toBeNull();
+
+    useBoardIntelligenceStore.getState().consumeRule(req!.nonce);
+    expect(useBoardIntelligenceStore.getState().ruleRequest).toBeNull();
   });
 });

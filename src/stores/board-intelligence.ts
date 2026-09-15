@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { IntelSelection } from "@/lib/boards/intelligence/types";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
+import type { Draft } from "@/components/boards/automations/recipes";
 
 /**
  * Ephemeral bridge between the Intelligence strip (inside
@@ -16,11 +17,16 @@ export type FilterRequest = {
   selection: IntelSelection;
   nonce: number;
 };
+/** "Always do this" (spec §2.3): the dock hands the header a prefilled rule.
+ *  A third command of the same nonce-stamped shape as the two above — the
+ *  consumer clears exactly the request it handled. */
+export type RuleRequest = { boardId: string; draft: Draft; nonce: number };
 
 export interface BoardIntelligenceStoreState {
   runs: Record<string, BoardIntelligenceRun | null>;
   openRequest: OpenRequest | null;
   filterRequest: FilterRequest | null;
+  ruleRequest: RuleRequest | null;
   /**
    * A write (apply, undo or dismiss) is in flight for this board.
    *
@@ -38,6 +44,8 @@ export interface BoardIntelligenceStoreState {
   consumeOpen: (nonce: number) => void;
   requestFilter: (boardId: string, selection: IntelSelection) => void;
   consumeFilter: (nonce: number) => void;
+  requestRule: (boardId: string, draft: Draft) => void;
+  consumeRule: (nonce: number) => void;
 }
 
 let nonce = 0;
@@ -48,6 +56,7 @@ export const useBoardIntelligenceStore = create<BoardIntelligenceStoreState>()(
     runs: {},
     openRequest: null,
     filterRequest: null,
+    ruleRequest: null,
     busy: {},
     setRun: (boardId, run) =>
       set((s) => ({ runs: { ...s.runs, [boardId]: run } })),
@@ -67,6 +76,10 @@ export const useBoardIntelligenceStore = create<BoardIntelligenceStoreState>()(
       set({ filterRequest: { boardId, selection, nonce: nextNonce() } }),
     consumeFilter: (n) =>
       set((s) => (s.filterRequest?.nonce === n ? { filterRequest: null } : {})),
+    requestRule: (boardId, draft) =>
+      set({ ruleRequest: { boardId, draft, nonce: nextNonce() } }),
+    consumeRule: (n) =>
+      set((s) => (s.ruleRequest?.nonce === n ? { ruleRequest: null } : {})),
   }),
 );
 

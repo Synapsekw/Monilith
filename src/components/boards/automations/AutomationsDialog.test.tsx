@@ -359,6 +359,59 @@ describe("AutomationsDialog", () => {
     ).toHaveLength(0);
   });
 
+  // -------------------------------------------------------------------------
+  // Board Intelligence "Always do this": a prefilled draft handed down from
+  // the header (via the board-intelligence store's ruleRequest) must open the
+  // dialog straight into the builder, seeded — not the rule list.
+  //
+  // NOTE: the brief's fixture used an `assign_person` action, which is being
+  // added concurrently by another task and doesn't exist on this branch yet.
+  // Using an existing action (`notify` → owner) instead, per the brief's
+  // fallback instruction.
+  // -------------------------------------------------------------------------
+  it("opens straight into a seeded builder", async () => {
+    const seededDraft = {
+      trigger: { type: "item_created" as const },
+      actions: [
+        {
+          type: "notify" as const,
+          recipient: { kind: "owner" as const, peopleColumnId: "c-people" },
+        },
+      ],
+    };
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    render(
+      <AutomationsDialog
+        open
+        boardId="board-1"
+        columns={columns}
+        members={members}
+        onOpenChange={vi.fn()}
+        seedDraft={seededDraft}
+      />,
+      { wrapper: Wrapper },
+    );
+
+    // Builder, not the rule list: the draft is the reason the dialog opened.
+    expect(
+      await screen.findByRole("button", { name: "Save" }),
+    ).toBeInTheDocument();
+    expect(
+      (screen.getByLabelText("Trigger type") as HTMLSelectElement).value,
+    ).toBe("item_created");
+    expect(
+      (screen.getByLabelText("Owner people column") as HTMLSelectElement).value,
+    ).toBe("c-people");
+  });
+
   it("Cancel from build mode returns to list mode", async () => {
     renderDialog();
     const newBtn = await screen.findByRole("button", {
