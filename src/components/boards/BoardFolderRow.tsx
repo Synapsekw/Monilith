@@ -112,6 +112,12 @@ export function BoardFolderRow({
           className={cn(
             SIDEBAR_LEAD_CLASS,
             "focus-visible:ring-ring rounded focus-visible:ring-2 focus-visible:outline-none",
+            // Toggling used to be the whole row; it is a 24px glyph now, which
+            // is under the 44px touch minimum on the iPad this app targets.
+            // A pseudo-element grows the HIT area to 24+2×10=44px without
+            // touching the 24px lead column the board rows align to — a real
+            // `pointer-coarse:size-11` would shift every row beneath it.
+            "relative pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 pointer-coarse:before:content-['']",
           )}
         >
           <ChevronDown

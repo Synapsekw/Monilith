@@ -949,6 +949,20 @@ describe("BoardsNav folder header disclosure", () => {
       screen.getByRole("button", { name: "Toggle Acme Rebrand" }).className,
     ).toContain("focus-visible:ring-2");
   });
+
+  it("keeps the chevron in the 24px lead column but grows its touch target", () => {
+    renderWithFolder();
+    // Class arithmetic (jsdom has no layout), guarding the trade-off: the
+    // chevron must stay 24px wide or every board row under it shifts off the
+    // folder's column, so the 44px touch minimum is bought with a hit-area
+    // pseudo-element instead of a bigger box.
+    const chevron = screen.getByRole("button", {
+      name: "Toggle Acme Rebrand",
+    });
+    expect(chevron.className).toContain("size-6");
+    expect(chevron.className).not.toMatch(/pointer-coarse:size-/);
+    expect(chevron.className).toContain("pointer-coarse:before:-inset-2.5");
+  });
 });
 
 describe("BoardsNav folder moves", () => {
