@@ -1,7 +1,6 @@
 import Form from "next/form";
 import { ChevronRight } from "lucide-react";
 import { searchUsers } from "@/lib/platform/queries";
-import { partitionByAccountKind } from "@/lib/platform/test-accounts";
 import { Pager } from "@/components/platform/pager";
 import { USER_ROW_GRID, UserRow } from "@/components/admin/user-row";
 import { Kicker } from "@/components/ui/kicker";
@@ -9,6 +8,8 @@ import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Platform admin · users" };
 const PAGE_SIZE = 25;
+/** The collapsed system/test section is a single bounded list, not a pager. */
+const SYSTEM_LIMIT = 50;
 
 export default async function AdminUsers({
   searchParams,
@@ -17,13 +18,20 @@ export default async function AdminUsers({
 }) {
   const { q = "", page: pageStr } = await searchParams;
   const page = Math.max(0, Number(pageStr ?? "0") || 0);
-  // No exact count on the user search; fetch one extra row to detect a next page.
-  const rows = await searchUsers(q, PAGE_SIZE + 1, page * PAGE_SIZE);
+  // People are paginated on their own: the RPC drops system/test addresses
+  // before LIMIT/OFFSET, so a burst of seeded fixtures can never fill a page
+  // and hide the real users (2026-09-12). No exact count on the user search;
+  // fetch one extra row to detect a next page. System actors and
+  // reserved-domain test accounts are real rows an admin may still need to act
+  // on — list them collapsed on the first page, never drop them.
+  const [rows, systemAndTest] = await Promise.all([
+    searchUsers(q, PAGE_SIZE + 1, page * PAGE_SIZE, "people"),
+    page === 0
+      ? searchUsers(q, SYSTEM_LIMIT, 0, "system")
+      : Promise.resolve([]),
+  ]);
   const hasNext = rows.length > PAGE_SIZE;
-  const users = rows.slice(0, PAGE_SIZE);
-  // System actors and reserved-domain test accounts are real rows an admin may
-  // still need to act on — collapse them, never drop them.
-  const { people, systemAndTest } = partitionByAccountKind(users);
+  const people = rows.slice(0, PAGE_SIZE);
 
   return (
     <div className="space-y-5">
@@ -49,7 +57,7 @@ export default async function AdminUsers({
         </button>
       </Form>
 
-      {users.length === 0 && (
+      {people.length === 0 && systemAndTest.length === 0 && (
         <p className="text-muted-foreground text-sm">
           {q ? "No users match that search." : "No users yet."}
         </p>

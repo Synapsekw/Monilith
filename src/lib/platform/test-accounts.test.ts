@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isNonCustomerAccount, partitionByAccountKind } from "./test-accounts";
+import {
+  NON_CUSTOMER_EMAIL_PATTERNS,
+  isNonCustomerAccount,
+} from "./test-accounts";
 
 describe("isNonCustomerAccount", () => {
   it("flags IANA-reserved test domains", () => {
@@ -43,60 +46,63 @@ describe("isNonCustomerAccount", () => {
     expect(isNonCustomerAccount("hi@notexample.com")).toBe(false);
     expect(isNonCustomerAccount("ops@internal.io")).toBe(false);
   });
-});
-
-describe("partitionByAccountKind", () => {
-  const user = (email: string | null) => ({ email });
-
-  it("splits the two buckets and preserves order within each", () => {
-    const { people, systemAndTest } = partitionByAccountKind([
-      user("a@eand.com"),
-      user("pulse-autopilot@pulse.internal"),
-      user("b@accenture.com"),
-      user("pulse-tier2-fixture-a@example.com"),
-      user("c@gmail.com"),
-    ]);
-
-    expect(people.map((u) => u.email)).toEqual([
-      "a@eand.com",
-      "b@accenture.com",
-      "c@gmail.com",
-    ]);
-    expect(systemAndTest.map((u) => u.email)).toEqual([
-      "pulse-autopilot@pulse.internal",
-      "pulse-tier2-fixture-a@example.com",
-    ]);
-  });
-
-  it("loses no rows — every input lands in exactly one bucket", () => {
-    const input = [
-      user("a@eand.com"),
-      user(null),
-      user("x@example.com"),
-      user("b@gmail.com"),
-    ];
-    const { people, systemAndTest } = partitionByAccountKind(input);
-    expect(people.length + systemAndTest.length).toBe(input.length);
-  });
-
-  it("handles an empty page", () => {
-    expect(partitionByAccountKind([])).toEqual({
-      people: [],
-      systemAndTest: [],
-    });
-  });
 
   it("classifies the four accounts that survive on DEV as non-customer", () => {
     // Regression lock: these are exactly the accounts the 2026-08-10 cleanup
     // deliberately KEPT (the platform agent + the Tier-2 isolation fixtures).
-    // If one ever lands in `people`, the console is cluttered again.
-    const { people, systemAndTest } = partitionByAccountKind([
-      user("pulse-autopilot@pulse.internal"),
-      user("pulse-tier2-fixture-a@example.com"),
-      user("pulse-tier2-fixture-b@example.com"),
-      user("pulse-tier2-fixture-c@example.com"),
-    ]);
-    expect(people).toEqual([]);
-    expect(systemAndTest).toHaveLength(4);
+    for (const email of [
+      "pulse-autopilot@pulse.internal",
+      "pulse-tier2-fixture-a@example.com",
+      "pulse-tier2-fixture-b@example.com",
+      "pulse-tier2-fixture-c@example.com",
+    ]) {
+      expect(isNonCustomerAccount(email), email).toBe(true);
+    }
+  });
+});
+
+describe("NON_CUSTOMER_EMAIL_PATTERNS", () => {
+  // The list is handed to `platform_search_users` as SQL ILIKE patterns, so the
+  // database and the TypeScript classifier must agree on every address.
+  // Mirror ILIKE here: `%` = any run of characters, everything else literal.
+  const ilike = (email: string, pattern: string) =>
+    new RegExp(
+      "^" +
+        pattern
+          .split("%")
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join(".*") +
+        "$",
+      "i",
+    ).test(email);
+  const matchesAny = (email: string) =>
+    NON_CUSTOMER_EMAIL_PATTERNS.some((p) => ilike(email, p));
+
+  it("is a non-empty list of leading-wildcard suffix patterns", () => {
+    expect(NON_CUSTOMER_EMAIL_PATTERNS.length).toBeGreaterThan(0);
+    for (const p of NON_CUSTOMER_EMAIL_PATTERNS) {
+      expect(p.startsWith("%"), p).toBe(true);
+      // Exactly one wildcard, at the front — a suffix match and nothing else.
+      expect(p.indexOf("%", 1), p).toBe(-1);
+      // No `_` single-char wildcard sneaking in: ILIKE treats it specially.
+      expect(p.includes("_"), p).toBe(false);
+    }
+  });
+
+  it("agrees with isNonCustomerAccount on every address the classifier handles", () => {
+    for (const email of [
+      "pulse-autopilot@pulse.internal",
+      "pulse-tier2-fixture-a@example.com",
+      "someone@example.net",
+      "someone@example.org",
+      "Probe-1@EXAMPLE.COM",
+      "info@synapse-solutions.ai",
+      "leostalin91@gmail.com",
+      "sales@example.com.attacker.io",
+      "hi@notexample.com",
+      "ops@internal.io",
+    ]) {
+      expect(matchesAny(email), email).toBe(isNonCustomerAccount(email));
+    }
   });
 });
