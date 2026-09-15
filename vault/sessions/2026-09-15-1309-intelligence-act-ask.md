@@ -5,7 +5,7 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: ["2026-09-15-gotcha-107-now-is-fixed-per-transaction-so-two-engine-runs-are-indistinguishable"]
+related: ["2026-09-15-gotcha-108-now-is-fixed-per-transaction-so-two-engine-runs-are-indistinguishable"]
 ---
 
 # Board Intelligence — Act and Ask
@@ -16,7 +16,7 @@ related: ["2026-09-15-gotcha-107-now-is-fixed-per-transaction-so-two-engine-runs
 - **Act:** a new `assign_person` automation action (Zod member → `_automation_run` branch in migration `20260915062952` → `AssignPersonRow` → rule-list sentence → `recipeItemCreatedAssignPerson`), the pure `ruleDraftFor` mapper, and an **"Always do this"** button that hands a prefilled draft to the header's automation editor through a third nonce-stamped store command.
 - **Ask:** `POST /api/board-intelligence/ask` running the proven Ask tool loop with a new `toolset: "read-only"` (two board-read tools, no writer), a composer holding at most five ephemeral Q/A pairs, and `openQaInChat` promoting one pair into a real board thread — the answer persisted verbatim, never re-generated.
 - **Spec and plan written first** (`2026-09-13-board-intelligence-act-ask-design.md`, `2026-09-15-board-intelligence-act-ask.md`), each corrected mid-flight: the action chain lives in `_automation_run`, not `tg_run_automations`; `useAskStream` is not reusable (only `readAskStream`, now generic); the gate is `canApply`, not org-admin.
-- **The migration was applied, version-reconciled and live-verified on DEV** in a rolled-back transaction — six outcomes including "replaces, does not append" — because the Tier-1 suite that was supposed to prove it **can never run here**. Recorded as [[2026-09-15-gotcha-107-now-is-fixed-per-transaction-so-two-engine-runs-are-indistinguishable]].
+- **The migration was applied, version-reconciled and live-verified on DEV** in a rolled-back transaction — six outcomes including "replaces, does not append" — because the Tier-1 suite that was supposed to prove it **can never run here**. Recorded as [[2026-09-15-gotcha-108-now-is-fixed-per-transaction-so-two-engine-runs-are-indistinguishable]].
 - Announced three `/updates` entries for the ship date; nine per-task branches deleted.
 
 ## Why

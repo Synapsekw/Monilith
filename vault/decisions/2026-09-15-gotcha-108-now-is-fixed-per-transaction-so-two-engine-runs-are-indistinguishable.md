@@ -1,4 +1,4 @@
-# gotcha-107 — `now()` is fixed per transaction, so two engine runs in one transaction are indistinguishable
+# gotcha-108 — `now()` is fixed per transaction, so two engine runs in one transaction are indistinguishable
 
 **Date:** 2026-09-15
 **Surfaced by:** verifying the `assign_person` automation action against the live DEV engine
