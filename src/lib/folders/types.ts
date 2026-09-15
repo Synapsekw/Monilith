@@ -4,6 +4,13 @@
  * names exactly as declared here — do not rename or reshape.
  */
 
+/**
+ * Every folder RPC guard (`_assert_folder_member`) raises ONE code, P0002,
+ * for both a nonexistent folder and a real folder in another org — a 0-row
+ * `.maybeSingle()` miss on a direct table write maps to the same message.
+ */
+export const FOLDER_GONE_ERROR = "That folder no longer exists.";
+
 export type FolderSummary = {
   id: string;
   name: string;
