@@ -1,17 +1,21 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetaChip } from "@/components/ui/meta-chip";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildStages } from "@/lib/folders/stages";
 import { filterRows } from "@/lib/folders/rollup";
-import type { FolderPayload } from "@/lib/folders/types";
+import type { FolderPayload, WorkloadRow } from "@/lib/folders/types";
 import { useCommandCenterState } from "./command-center-state";
 import { TabStrip } from "./TabStrip";
 import { FilterBar } from "./FilterBar";
 import { OverviewTab } from "./tabs/Overview";
+import { StagesTab } from "./tabs/Stages";
+import { BoardsTab } from "./tabs/Boards";
+import { PeopleTab, peopleFromWorkload } from "./tabs/People";
+import { OVERLOAD_THRESHOLD } from "@/components/folders/charts/WorkloadBars";
 
 export type CommandCenterProps = {
   payload: FolderPayload;
@@ -47,6 +51,24 @@ export function CommandCenter({
   const itemCount = rows.reduce((s, r) => s + r.total, 0);
   const empty = payload.boards.length === 0;
   const generated = new Date(payload.generatedAt);
+  const [workload, setWorkload] = useState<WorkloadRow[] | null>(null);
+  const onWorkload = useCallback(
+    (rows: WorkloadRow[]) => setWorkload(rows),
+    [],
+  );
+  const people =
+    workload === null
+      ? null
+      : peopleFromWorkload(workload, stage, payload.members);
+  const counts = {
+    stages: stages.length,
+    boards: payload.boards.length,
+    people: people === null ? null : people.length,
+    overloaded:
+      people === null
+        ? 0
+        : people.filter((p) => p.open > OVERLOAD_THRESHOLD).length,
+  };
 
   return (
     <div className="flex flex-col gap-2 p-4 md:p-6">
@@ -63,17 +85,7 @@ export function CommandCenter({
         }
         actions={headerActions}
       />
-      <TabStrip
-        tab={tab}
-        counts={{
-          stages: stages.length,
-          boards: payload.boards.length,
-          people: null,
-          overloaded: 0,
-        }}
-        disabled={empty}
-        onChange={setTab}
-      />
+      <TabStrip tab={tab} counts={counts} disabled={empty} onChange={setTab} />
       {empty ? (
         <EmptyState className="mt-4">
           <span className="block">Add boards to this folder</span>
@@ -101,8 +113,35 @@ export function CommandCenter({
               widgets={widgets}
               onRetry={() => router.refresh()}
             />
+          ) : tab === "stages" ? (
+            <StagesTab
+              rows={rows}
+              allRows={rollup}
+              stages={stages}
+              stage={stage}
+              burn={payload.burn}
+              boards={payload.boards}
+              todayISO={payload.todayISO}
+              onSelectStage={setStage}
+              onRetry={() => router.refresh()}
+            />
+          ) : tab === "boards" ? (
+            <BoardsTab
+              rows={rows}
+              boards={
+                board
+                  ? payload.boards.filter((b) => b.id === board)
+                  : payload.boards
+              }
+              stages={stages}
+            />
           ) : (
-            <EmptyState variant="inline">Coming in this build.</EmptyState>
+            <PeopleTab
+              folderId={payload.folder.id}
+              stage={stage}
+              members={payload.members}
+              onWorkload={onWorkload}
+            />
           )}
         </>
       )}
