@@ -15,11 +15,13 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 import { setThreadVisibility } from "@/lib/ai/ask/conversation-actions";
 import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
+import { openQaInChat } from "@/lib/ai/board-intelligence/qa-thread";
 import {
   unresolvedCount,
   useBoardIntelligenceStore,
   type DockTab,
 } from "@/stores/board-intelligence";
+import type { QaPair } from "./intelligence/use-intelligence-ask";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
 import { DockBody, type DockBodyProps } from "./DockBody";
 import { DockSeam } from "./DockSeam";
@@ -101,6 +103,7 @@ type Failure =
   | { kind: "threads"; message: string }
   | { kind: "thread"; conversationId: string; message: string }
   | { kind: "share"; message: string }
+  | { kind: "openInChat"; message: string }
   | null;
 
 /**
@@ -492,6 +495,34 @@ export function BoardDock({
   }, [failure, loadThreads, selectThread]);
 
   /**
+   * Promote one ephemeral Q/A pair from the Intelligence tab's composer into a
+   * real, persisted thread (spec §3.3). `run` is the store's cached run for
+   * THIS board — the same one the tab's badge reads — never a new read.
+   *
+   * Order matters: `loadThreads()` is awaited FIRST so the ledger knows the
+   * new row, THEN `selectThread` opens it, THEN the tab switches to Chat.
+   * Reversed, the dock would mount Chat on an id its thread list has never
+   * seen and render an empty transcript.
+   */
+  const openInChat = useCallback(
+    async (pair: QaPair) => {
+      const res = await openQaInChat({
+        runId: run?.id ?? "",
+        question: pair.question,
+        answer: pair.answer,
+      });
+      if (!res.ok) {
+        setFailure({ kind: "openInChat", message: res.error });
+        return;
+      }
+      await loadThreads();
+      void selectThread(res.data.conversationId);
+      setTab("chat");
+    },
+    [loadThreads, run?.id, selectThread, setTab],
+  );
+
+  /**
    * Start over on `persona`: a fresh chat instance with no thread. New uses
    * it with the persona on screen; a tile tap uses it with a different one —
    * "tap an agent and talk" (§2), replacing the locked select.
@@ -666,8 +697,14 @@ export function BoardDock({
     onNew: () => startNewAs(currentPersona),
     error: failure?.message ?? null,
     // An optimistic share that rolled itself back has nothing to re-run — the
-    // thread is already showing its true visibility again.
-    onRetry: failure && failure.kind !== "share" ? retry : undefined,
+    // thread is already showing its true visibility again. A failed promotion
+    // has nothing stateful to retry into either: pressing the same "Open in
+    // Chat" button again is the retry, so `retry` (which re-reads the thread
+    // list) would not repeat the action that actually failed.
+    onRetry:
+      failure && failure.kind !== "share" && failure.kind !== "openInChat"
+        ? retry
+        : undefined,
     loading,
     boardThreads,
     agentThreads,
@@ -690,6 +727,7 @@ export function BoardDock({
     runOnMount,
     onRanOnMount,
     ruleMeta,
+    onOpenInChat: openInChat,
   };
 
   if (narrow) {

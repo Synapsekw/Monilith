@@ -21,6 +21,7 @@ import {
   type DockTile,
 } from "./DockTiles";
 import { IntelligenceTab } from "./intelligence/IntelligenceTab";
+import type { QaPair } from "./intelligence/use-intelligence-ask";
 
 export type DockBodyProps = {
   agents: DockAgent[];
@@ -71,6 +72,10 @@ export type DockBodyProps = {
   /** Column kinds and member ids, for the Intelligence tab's "Always do
    *  this" mapping. Threaded straight through to `IntelligenceTab`. */
   ruleMeta: RuleBoardMeta;
+  /** Promote one Q/A pair into a real board thread (spec §3.3). Threaded
+   *  straight through to `IntelligenceTab` → `AskComposer`. Absent for a
+   *  viewer-only surface, which renders no button. */
+  onOpenInChat?: (pair: QaPair) => void | Promise<void>;
 };
 
 /** Full-layer entrance (spec §5): 14px slide from the right, staggered band →
@@ -130,6 +135,7 @@ export function DockBody({
   runOnMount,
   onRanOnMount,
   ruleMeta,
+  onOpenInChat,
 }: DockBodyProps) {
   // Component state, not persisted (spec §6): the ledger opens on demand and
   // folds again when a thread is picked, so the transcript is what you see.
@@ -209,6 +215,21 @@ export function DockBody({
           </Button>
         )}
       </header>
+
+      {/* Shared across BOTH panels, not nested inside the chat branch: a
+          failure can originate from either — most pointedly "Open in Chat"
+          (spec §3.3), which fails while Intelligence is still on screen and
+          never switches tabs on a rejection. */}
+      {error && (
+        <div className="flex shrink-0 items-center gap-2 px-3.5 py-1.5">
+          <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
+          {onRetry && (
+            <Button variant="ghost" size="xs" onClick={onRetry}>
+              Try again
+            </Button>
+          )}
+        </div>
+      )}
 
       {tab === "chat" ? (
         // A real flex column rather than `display: contents`: the panel has to
@@ -310,17 +331,6 @@ export function DockBody({
             )}
           </div>
 
-          {error && (
-            <div className="flex shrink-0 items-center gap-2 px-3.5 py-1.5">
-              <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
-              {onRetry && (
-                <Button variant="ghost" size="xs" onClick={onRetry}>
-                  Try again
-                </Button>
-              )}
-            </div>
-          )}
-
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {threadLoading ? (
               <div
@@ -385,6 +395,7 @@ export function DockBody({
           runOnMount={runOnMount}
           onRanOnMount={onRanOnMount}
           ruleMeta={ruleMeta}
+          onOpenInChat={onOpenInChat}
         />
       )}
     </div>

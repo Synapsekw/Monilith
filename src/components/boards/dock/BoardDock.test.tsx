@@ -39,6 +39,23 @@ vi.mock("@/lib/boards/use-ai-effects", () => ({
   useApplyBoardEffects: () => vi.fn(),
 }));
 
+// The server action itself has its own suite (qa-thread.test.ts); here it is
+// a probe for what the dock does with the result — the ordering test below is
+// what actually matters at this layer.
+const openQaInChat = vi.fn();
+vi.mock("@/lib/ai/board-intelligence/qa-thread", () => ({
+  openQaInChat: (i: unknown) => openQaInChat(i),
+}));
+
+// The composer's own suite (AskComposer.test.tsx) covers rendering pairs and
+// the streaming ask itself; here the hook is stubbed so a pair with an answer
+// (and its "Open in Chat" button) can appear with no fetch/stream involved.
+const useIntelligenceAskFixture = vi.fn();
+vi.mock("./intelligence/use-intelligence-ask", () => ({
+  useIntelligenceAsk: (runId: string | null) =>
+    useIntelligenceAskFixture(runId),
+}));
+
 /**
  * AskChat is exercised by its own suite; here it stands in as a probe for what
  * the dock does TO it.
@@ -247,6 +264,15 @@ beforeEach(() => {
   loadDockThreads.mockResolvedValue(EMPTY);
   setThreadVisibility.mockResolvedValue({ ok: true, data: {} });
   runBoardIntelligence.mockResolvedValue({ ok: true, data: intelRun() });
+  // No pairs by default — a suite that never touches "Open in Chat" renders
+  // the composer exactly as an empty one.
+  useIntelligenceAskFixture.mockReturnValue({
+    pairs: [],
+    streaming: false,
+    status: null,
+    error: null,
+    ask: vi.fn(),
+  });
   useBoardIntelligenceStore.setState({
     runs: {},
     openRequest: null,
@@ -826,6 +852,122 @@ describe("BoardDock — Chat and Intelligence", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
     await openIntelligence();
     await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
+  });
+});
+
+// Task 9 (spec §3.3): promoting one ephemeral Q/A pair from the composer into
+// a real, persisted board thread. The action itself has its own suite
+// (qa-thread.test.ts); what belongs here is the dock's OWN behaviour once that
+// action resolves — the ordering rule the brief calls out by name.
+describe("BoardDock — Open in Chat", () => {
+  const openIntelligence = () =>
+    userEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
+
+  const answeredPair = {
+    id: "p1",
+    question: "what slipped?",
+    answer: "Two items.",
+  };
+
+  const promotedThreadRow = {
+    id: "conv-99",
+    title: "what slipped?",
+    updated_at: "2026-09-15T10:00:00Z",
+    agent_id: null,
+    board_id: "b1",
+    visibility: "private",
+    user_id: "me",
+  };
+
+  it("loads the thread list BEFORE selecting the promoted thread, then switches to Chat", async () => {
+    useIntelligenceAskFixture.mockReturnValue({
+      pairs: [answeredPair],
+      streaming: false,
+      status: null,
+      error: null,
+      ask: vi.fn(),
+    });
+    openQaInChat.mockResolvedValue({
+      ok: true,
+      data: { conversationId: "conv-99" },
+    });
+    loadThreadMessages.mockResolvedValue({ ok: true, data: { messages: [] } });
+
+    mount({ initialRun: intelRun() });
+    await openDock();
+    await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
+    await openIntelligence();
+
+    // The read that follows a successful promotion returns the new row — the
+    // dock's ordering rule depends on this row existing by the time it picks
+    // a thread to select.
+    loadDockThreads.mockResolvedValueOnce({
+      ok: true,
+      data: { board: [promotedThreadRow], agent: [] },
+    });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /open in chat/i }),
+    );
+
+    expect(openQaInChat).toHaveBeenCalledWith({
+      runId: "r1", // `intelRun()`'s id — read from the store, not re-fetched.
+      question: "what slipped?",
+      answer: "Two items.",
+    });
+
+    await waitFor(() =>
+      expect(loadThreadMessages).toHaveBeenCalledWith({
+        conversationId: "conv-99",
+      }),
+    );
+    // ORDER MATTERS (brief, verbatim): loadThreads first, so the ledger knows
+    // the new row before selectThread is asked to open it. Reversed, the
+    // dock would mount Chat on an id its own thread list has never seen.
+    const threadsCalls = loadDockThreads.mock.invocationCallOrder;
+    const messagesCalls = loadThreadMessages.mock.invocationCallOrder;
+    expect(threadsCalls[threadsCalls.length - 1]).toBeLessThan(
+      messagesCalls[messagesCalls.length - 1],
+    );
+
+    // And the panel ends on Chat, open on the promoted thread.
+    await waitFor(() =>
+      expect(screen.getByRole("heading")).toHaveTextContent("what slipped?"),
+    );
+    expect(screen.getByRole("tab", { name: /intelligence/i })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("surfaces the failure inline and never switches tabs when the promotion is rejected", async () => {
+    useIntelligenceAskFixture.mockReturnValue({
+      pairs: [answeredPair],
+      streaming: false,
+      status: null,
+      error: null,
+      ask: vi.fn(),
+    });
+    openQaInChat.mockResolvedValue({
+      ok: false,
+      error: "That brief is no longer available.",
+    });
+
+    mount({ initialRun: intelRun() });
+    await openDock();
+    await openIntelligence();
+    await userEvent.click(
+      screen.getByRole("button", { name: /open in chat/i }),
+    );
+
+    expect(
+      await screen.findByText("That brief is no longer available."),
+    ).toBeInTheDocument();
+    expect(loadThreadMessages).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: /intelligence/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });
 
