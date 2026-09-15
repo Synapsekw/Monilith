@@ -9,10 +9,9 @@
   where we stand, what's next, and the percentages behind each.
 -->
 
-<script type="application/json" id="board-data">
-{
+<script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-09-12 21:00",
+  "updated": "2026-09-15 10:30",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +133,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "0a0c898a",
-        "tone": "ok",
-        "note": "Heal commit on top of PR #124 — unpromoted delta 0. No live worktrees."
+        "value": "521dc170",
+        "tone": "warn",
+        "note": "One unpromoted fix: /admin/users paginates people before system/test accounts (migration 20260915053143 on DEV, ledger 164/164, not on PROD). 36 fixture accounts purged from DEV. No live worktrees."
       },
       {
         "name": "main",
@@ -188,6 +187,14 @@
     ]
   },
   "next": [
+    {
+      "title": "Promote develop to main to ship the /admin/users fix",
+      "why": "The purge already made people visible on the live deployment, but the deployed code still paginates before partitioning; the next fixture burst reproduces the report until 521dc170 is in production. Check the page live as the owner after the promotion.",
+      "tags": [
+        "promote",
+        "admin"
+      ]
+    },
     {
       "title": "Fix requestShapeFor — it is wrong about five active models",
       "why": "Pre-existing on develop and exposing every adapter-routed feature, found while fixing the intelligence latency. The /haiku/i two-bucket split sends effort high to claude-sonnet-4.5, claude-sonnet-4 and claude-opus-4, all of which reject the key; adaptive thinking to claude-opus-4.5, which is pre-4.6 and needs budget_tokens; and budget_tokens to claude-3-haiku, which supports no thinking at all. All five are active catalog rows, and pickModel lets an org default outrank the tier hint, so one Settings change arms a 400. Likely repair: shape per model from the feed's reasoning_options, which already carries the fact.",
@@ -372,20 +379,17 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-12-2001-intelligence-refusal-diagnostics",
-    "when": "2026-09-12 20:01",
-    "title": "The refusal log learns to talk",
+    "id": "2026-09-15-1026-admin-users-people-first",
+    "when": "2026-09-15 10:26",
+    "title": "/admin/users shows people first again",
     "bullets": [
-      "The latency complaint is CLOSED and measured on the owner's own run, not felt: 5284 to 1334 output tokens, about two minutes to 21 seconds, with the stored brief slightly LONGER. Different boards, so not a strict A/B, but useful output rose while billed output fell three quarters.",
-      "That run fired the dropped-suggestions warning and the log could not say why, so toActionParse now returns 17 constant reasons, one per failing check, with kept/proposed/model/tokensOut alongside. Missing and invented are deliberately distinct: a null id is a structured-output failure, a wrong one is a grounding failure, and they call for opposite fixes.",
-      "Two of the branch's own guard tests were vacuous and the review caught both — a coverage test asserting size equals 17 against a hardcoded 17 while never referencing the union it claimed to cover, and an agrees-with-toAction tautology over the shared code path. Fixed by keying the case table on the union, exhaustive at compile time and verified by injecting a probe member.",
-      "The same review found the log lying twice over: denominators taken after cappedArray truncated, so a model proposing nine suggestions logged five and a clean-looking run hid four dropped cards; and dropped 0 of 3 printed while one of three had in fact been dropped. Neither was visible to any gate.",
-      "Announced the measured speed-up on /updates — held back at merge time because faster was then an unobserved outcome claim.",
-      "SINCE THEN: the owner ran a full authenticated browser pass across the shipped surfaces and reported everything OK — the first human verification since the Chrome extension went down, clearing six sessions of owed walkthroughs."
+      "Owner report: the platform admin console listed only system and test accounts. Root cause: the page cut 25 newest rows and split people from fixtures afterwards; 37 browser-verification fixtures seeded 2026-09-12 filled page 0.",
+      "Classification moved under LIMIT: platform_search_users takes ILIKE pattern lists, people are paged alone, system/test accounts are one bounded collapsed section. Patterns single-sourced in NON_CUSTOMER_EMAIL_PATTERNS.",
+      "Purged the 36 disposable fixtures and their 36 one-member orgs from DEV after proving no real member sat in any of them. 21 users remain: 16 people, 5 system/test.",
+      "The anon-reachability conformance suite caught the missing revoke on the new function on the first full run. gotcha-55 fired again."
     ]
   }
-}
-</script>
+}</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
