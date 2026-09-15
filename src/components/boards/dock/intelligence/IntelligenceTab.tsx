@@ -9,9 +9,11 @@ import {
   type RuleBoardMeta,
 } from "@/lib/ai/board-intelligence/rule-draft";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
+import { AskComposer } from "./AskComposer";
 import { BriefBlock } from "./BriefBlock";
 import { SuggestionCard } from "./SuggestionCard";
 import { useIntelligenceRun } from "./use-intelligence-run";
+import type { QaPair } from "./use-intelligence-ask";
 
 /** The shape of the answer, not a spinner: three brief lines and two cards. */
 function Reading() {
@@ -50,6 +52,7 @@ export function IntelligenceTab({
   runOnMount,
   onRanOnMount,
   ruleMeta,
+  onOpenInChat,
 }: {
   boardId: string;
   canApply: boolean;
@@ -59,6 +62,8 @@ export function IntelligenceTab({
    *  needs to decide whether a card's suggestion becomes a standing rule.
    *  The page already reads both; this adds no new query (spec §2.2/§4). */
   ruleMeta: RuleBoardMeta;
+  /** Wired by a later task (spec §3.3) — the tab only forwards it. */
+  onOpenInChat?: (pair: QaPair) => void | Promise<void>;
 }) {
   const requestRule = useBoardIntelligenceStore((s) => s.requestRule);
   const {
@@ -186,6 +191,12 @@ export function IntelligenceTab({
               Nothing needs attention right now.
             </p>
           )}
+
+          <AskComposer
+            runId={run.id}
+            boardId={boardId}
+            onOpenInChat={onOpenInChat}
+          />
 
           <p className="text-muted-foreground text-3xs mt-auto font-mono">
             {`${canApply ? "Read-only until you apply" : "Read-only"} · ${
