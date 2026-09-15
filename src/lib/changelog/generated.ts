@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-15",
+    kind: "new",
+    title: "Turn a suggestion into a rule",
+    description:
+      'When a board suggests something, "Always do this" opens the automation editor already filled in — review it, save it, and the board keeps doing it without being asked again.',
+  },
+  {
+    date: "2026-09-15",
+    kind: "new",
+    title: "Ask about a board's brief",
+    description:
+      "Ask a question about the brief you are reading and get an answer grounded in that board, without leaving the panel. Any answer can be opened in chat to keep talking.",
+  },
+  {
+    date: "2026-09-15",
+    kind: "new",
+    title: "Assign a person automatically",
+    description:
+      "Automations can now assign a specific person to an item, so new work lands on a named owner instead of nobody.",
+  },
+  {
     date: "2026-09-12",
     kind: "improved",
     title: "Board briefs arrive in seconds",
