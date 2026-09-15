@@ -1087,3 +1087,36 @@
     opacity: 0.35;
   }
 }
+
+/* Folder command center → Export PDF (spec §5.1). Only the Overview's
+   [data-print-root] region prints: chrome, tabs, filters and buttons carry
+   [data-print-hide]; the charts are inline SVG (recharts) and print as-is. */
+@media print {
+  aside,
+  nav,
+  header,
+  [data-print-hide] {
+    display: none !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible;
+  }
+  [data-print-root] {
+    position: absolute;
+    inset: 0;
+    padding: 12mm;
+    background: #fff;
+    color: #000;
+  }
+  [data-print-root] .recharts-surface {
+    visibility: visible;
+  }
+  [data-print-root] a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

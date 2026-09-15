@@ -11,6 +11,7 @@ import type { FolderPayload, WorkloadRow } from "@/lib/folders/types";
 import { useCommandCenterState } from "./command-center-state";
 import { TabStrip } from "./TabStrip";
 import { FilterBar } from "./FilterBar";
+import { HeaderActions } from "./HeaderActions";
 import { OverviewTab } from "./tabs/Overview";
 import { StagesTab } from "./tabs/Stages";
 import { BoardsTab } from "./tabs/Boards";
@@ -20,7 +21,6 @@ import { OVERLOAD_THRESHOLD } from "@/components/folders/charts/WorkloadBars";
 export type CommandCenterProps = {
   payload: FolderPayload;
   widgets?: ReactNode;
-  headerActions?: ReactNode;
 };
 
 /**
@@ -31,11 +31,7 @@ export type CommandCenterProps = {
  * page's RSC render, which is DIFFERENT data being requested, not a refetch
  * of state the client already has.
  */
-export function CommandCenter({
-  payload,
-  widgets,
-  headerActions,
-}: CommandCenterProps) {
+export function CommandCenter({ payload, widgets }: CommandCenterProps) {
   const router = useRouter();
   const { tab, stage, board, setTab, setStage, setBoard } =
     useCommandCenterState();
@@ -100,7 +96,7 @@ export function CommandCenter({
             · live
           </MetaChip>
         }
-        actions={headerActions}
+        actions={<HeaderActions folderId={payload.folder.id} tab={tab} />}
       />
       <TabStrip tab={tab} counts={counts} disabled={empty} onChange={setTab} />
       {empty ? (
