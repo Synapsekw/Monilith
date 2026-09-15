@@ -23,16 +23,21 @@ export type StreamOutcome = "ok" | "dropped";
  *
  * Returns whether a **terminal** event (`done` or `error`) was seen. A reader
  * loop that ends without one means the response was severed mid-turn.
+ *
+ * Generic over the event union so a second NDJSON protocol can reuse the reader
+ * verbatim (Board Intelligence's `IntelAskEvent`). The framing, the terminal
+ * check and the truncated-tail handling are protocol-independent; only the
+ * parsed type differs. `AskStreamEvent` stays the default, so every existing
+ * unparameterized call — `useAskStream` below included — is unchanged.
  */
-export async function readAskStream(
-  res: Response,
-  onEvent: (e: AskStreamEvent) => void,
-): Promise<boolean> {
+export async function readAskStream<
+  T extends { type: string } = AskStreamEvent,
+>(res: Response, onEvent: (e: T) => void): Promise<boolean> {
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buf = "";
   let terminated = false;
-  const dispatch = (e: AskStreamEvent) => {
+  const dispatch = (e: T) => {
     if (e.type === "done" || e.type === "error") terminated = true;
     onEvent(e);
   };
@@ -45,7 +50,7 @@ export async function readAskStream(
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       // Complete lines are strict: truncation can only ever happen at the tail.
-      if (line) dispatch(JSON.parse(line) as AskStreamEvent);
+      if (line) dispatch(JSON.parse(line) as T);
     }
   }
   // Flush a trailing line with no terminating newline. A severed body usually
@@ -54,7 +59,7 @@ export async function readAskStream(
   const tail = buf.trim();
   if (tail) {
     try {
-      dispatch(JSON.parse(tail) as AskStreamEvent);
+      dispatch(JSON.parse(tail) as T);
     } catch {
       /* truncated tail — leaves `terminated` false, which is the truth */
     }

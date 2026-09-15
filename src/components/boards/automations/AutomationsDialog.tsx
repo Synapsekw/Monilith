@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Sparkles, Trash2, Zap } from "lucide-react";
 
@@ -167,6 +167,12 @@ function summarize(
     if (a.type === "set_percent") {
       return `set ${colName(columns, a.columnId)} to ${a.percent}%`;
     }
+    if (a.type === "assign_person") {
+      return `assign ${memberName(members, a.userId)} in ${colName(
+        columns,
+        a.columnId,
+      )}`;
+    }
     return "do nothing";
   });
 
@@ -180,6 +186,7 @@ export function AutomationsDialog({
   groups = [],
   open,
   onOpenChange,
+  seedDraft,
 }: {
   boardId: string;
   columns: CacheColumn[];
@@ -187,6 +194,9 @@ export function AutomationsDialog({
   groups?: BuilderGroup[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A prefilled draft (e.g. from a Board Intelligence suggestion) that opens
+   *  the dialog straight into the builder, seeded, instead of the rule list. */
+  seedDraft?: Draft;
 }) {
   const qc = useQueryClient();
   const [mode, setMode] = useState<"list" | "build">("list");
@@ -339,6 +349,16 @@ export function AutomationsDialog({
     setMode("build");
   }
 
+  // The dock asked for a specific rule, so the list is not what the user came
+  // for. Edge-triggered on the draft identity: re-seeding on every render would
+  // wipe edits the user had already made to the seeded draft.
+  const seeded = useRef<Draft | undefined>(undefined);
+  useEffect(() => {
+    if (!open || !seedDraft || seeded.current === seedDraft) return;
+    seeded.current = seedDraft;
+    startBuild(seedDraft);
+  }, [open, seedDraft]);
+
   function closeAll(next: boolean) {
     if (!next) {
       setMode("list");
@@ -346,6 +366,7 @@ export function AutomationsDialog({
       setError(null);
       setAiWarnings([]);
       setAiPrompt("");
+      seeded.current = undefined;
     }
     onOpenChange(next);
   }

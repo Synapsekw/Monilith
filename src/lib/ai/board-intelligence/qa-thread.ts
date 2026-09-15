@@ -1,0 +1,162 @@
+"use server";
+
+import { z } from "zod";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
+import { createClient } from "@/lib/supabase/server";
+import { type ActionResult, fail } from "@/lib/actions/result";
+import { MAX_ANSWER_CHARS, MAX_QUESTION_CHARS } from "./ask-input";
+import { rowToRun } from "./runs";
+import { truncate } from "./schema";
+
+const TITLE_MAX = 60;
+
+/**
+ * Strict on SHAPE, TRUNCATING on SIZE — the same rule, and the same
+ * `truncate`, as `ask-input.ts` and `schema.ts`.
+ *
+ * The answer MUST truncate rather than reject. It is the text that just
+ * streamed onto the reader's screen, capped nowhere client-side, out of a turn
+ * whose `max_tokens` is 8192 — and the system prompt asks for four sentences
+ * "unless asked for more", so a 6000-character answer is the normal result of
+ * "explain in more detail". A rejecting `.max()` here turned a good answer
+ * into "That question couldn't be opened in chat." — a message that blames
+ * the question, reproduces every time, offers no path to success, and loses
+ * the answer for good, because this pair is ephemeral.
+ *
+ * `question` stays a hard bound: its composer is a `maxLength={500}` textarea,
+ * so 501 characters is a broken client, not a reader doing something ordinary.
+ */
+const inputSchema = z.object({
+  runId: z.string().uuid(),
+  question: z.string().trim().min(1).max(MAX_QUESTION_CHARS),
+  answer: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((t) => truncate(t, MAX_ANSWER_CHARS)),
+});
+
+/**
+ * Promote one Q/A pair from the Intelligence tab's ephemeral composer into a
+ * real, persisted board thread (spec §3.3).
+ *
+ * The answer is written VERBATIM, exactly as it streamed to the reader on
+ * screen — never re-generated. A second model call here would both cost
+ * money and risk landing a different answer than the one the reader is
+ * promoting.
+ *
+ * Written through the caller's OWN client, never the service client — RLS
+ * bounds this write exactly as it bounds the run read above it. Modelled on
+ * `writeBriefingThread` (`src/lib/agents/briefing-thread.ts`), which does the
+ * same two-insert dance for a scheduled agent's briefing: one
+ * `ai_conversations` row, then its `ai_messages`, `visibility` omitted so the
+ * column default (`private`) is the guarantee.
+ *
+ * `run_id` is deliberately NOT set on the conversation — that FK points at
+ * `user_agent_runs` (the scheduled-agent run table `writeBriefingThread`
+ * links to), not `board_intelligence_runs`, which is what `runId` here
+ * actually names. Setting it would violate the foreign key.
+ *
+ * The run read is scoped by BOTH the caller's RLS (owner-only) AND an
+ * explicit `org_id` filter, the same belt-and-braces the ask route uses
+ * (`src/app/api/board-intelligence/ask/route.ts`): RLS answers "is this run
+ * mine", not "is it in the org I currently have active". A user in orgs A and
+ * B, holding a run id for a board in B while A is active, would otherwise be
+ * able to open that run's Q/A pair into a NEW thread stamped `org_id: A` —
+ * org A's ai_conversations row and ledger would carry board-B content the
+ * user only has because they are also a member of B. A mismatch reads the
+ * same as "not found".
+ *
+ * NEVER throws. `requireUser()`/`resolveActiveOrg()` stay OUTSIDE the guard
+ * below — every other action in this area does the same, because
+ * `requireUser` calls Next's `redirect()` on purpose (which throws BY DESIGN
+ * and must propagate, not be swallowed — see the "keep it outside any
+ * try/catch" note on `requireUser` itself) and `resolveActiveOrg` documents
+ * its own DB error as meant to propagate ("a transient error is not 'no
+ * org'"). Everything from the first database read down — the part that can
+ * fail in an ordinary, expected way (RLS denial, a dropped connection, a
+ * rejected delete) — is inside the try/catch, so a caller always gets an
+ * `ActionResult` back, the one thing `BoardDock`'s error banner can render.
+ * Every failure branch is `console.error`'d with enough to find it later
+ * (which insert/delete failed, the conversation id, the cause).
+ */
+export async function openQaInChat(
+  input: unknown,
+): Promise<ActionResult<{ conversationId: string }>> {
+  const parsed = inputSchema.safeParse(input);
+  if (!parsed.success) return fail("That question couldn't be opened in chat.");
+  const { runId, question, answer } = parsed.data;
+
+  const user = await requireUser();
+  const org = await resolveActiveOrg();
+  if (!org) return fail("No organization.");
+
+  try {
+    const supabase = await createClient();
+    const row = await supabase
+      .from("board_intelligence_runs")
+      .select("*")
+      .eq("id", runId)
+      .eq("org_id", org.id)
+      .maybeSingle();
+    const run = row.data ? rowToRun(row.data) : null;
+    if (!run) return fail("That brief is no longer available.");
+
+    const conv = await supabase
+      .from("ai_conversations")
+      .insert({
+        org_id: org.id,
+        user_id: user.id,
+        board_id: run.boardId,
+        title: question.slice(0, TITLE_MAX),
+        // `visibility` omitted on purpose: the column default 'private' is
+        // the guarantee, exactly as in `writeBriefingThread`.
+      })
+      .select("id")
+      .single();
+    if (conv.error || !conv.data) {
+      console.error("[qa-thread] conversation insert failed:", {
+        runId,
+        boardId: run.boardId,
+        cause: conv.error?.message,
+      });
+      return fail("Couldn't start that thread.");
+    }
+
+    const msgs = await supabase.from("ai_messages").insert([
+      { conversation_id: conv.data.id, role: "user", content: question },
+      { conversation_id: conv.data.id, role: "assistant", content: answer },
+    ]);
+    // A thread with no turns is worse than no thread: an empty row in the
+    // reader's ledger they cannot make sense of. Clean it up rather than
+    // leave it behind — and if THAT fails too, say so distinctly, because
+    // "Couldn't save that answer to a thread." would otherwise imply nothing
+    // was written when an orphaned, empty conversation may now exist.
+    if (msgs.error) {
+      console.error("[qa-thread] message insert failed:", {
+        conversationId: conv.data.id,
+        cause: msgs.error.message,
+      });
+      const del = await supabase
+        .from("ai_conversations")
+        .delete()
+        .eq("id", conv.data.id);
+      if (del.error) {
+        console.error(
+          "[qa-thread] compensating delete ALSO failed — an empty conversation may remain:",
+          { conversationId: conv.data.id, cause: del.error.message },
+        );
+        return fail(
+          "That answer wasn't saved, and an empty thread may still be in your list.",
+        );
+      }
+      return fail("Couldn't save that answer to a thread.");
+    }
+
+    return { ok: true, data: { conversationId: conv.data.id } };
+  } catch (e) {
+    console.error("[qa-thread] openQaInChat threw:", e);
+    return fail("Couldn't open that answer in chat.");
+  }
+}

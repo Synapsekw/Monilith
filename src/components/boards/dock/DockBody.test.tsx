@@ -93,6 +93,7 @@ function props(over: Partial<DockBodyProps> = {}): DockBodyProps {
     canApply: true,
     runOnMount: false,
     onRanOnMount: vi.fn(),
+    ruleMeta: { columns: [], memberIds: [] },
     ...over,
   };
 }

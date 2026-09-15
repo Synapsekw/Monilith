@@ -42,6 +42,8 @@ function describeChosen(action: AutomationAction): string {
       return action.recipient.kind === "owner"
         ? "Notify the item owner"
         : "Notify a specific member";
+    case "assign_person":
+      return "Assign the item to a person";
     default:
       return action.type;
   }
@@ -280,6 +282,55 @@ export function NotifyRow({
           </select>
         </label>
       )}
+    </>
+  );
+}
+
+export function AssignPersonRow({
+  action,
+  peopleColumns,
+  members,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { type: "assign_person" }>;
+  peopleColumns: CacheColumn[];
+  members: BuilderMember[];
+  onChange: (next: AutomationAction) => void;
+}) {
+  return (
+    <>
+      <label className="text-sm">
+        <span className="text-muted-foreground">Assign in column</span>
+        <select
+          aria-label="Assign in column"
+          className={selectClass}
+          value={action.columnId}
+          onChange={(e) => onChange({ ...action, columnId: e.target.value })}
+        >
+          <option value="">Select…</option>
+          {peopleColumns.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="text-muted-foreground">Assign to</span>
+        <select
+          aria-label="Assign to"
+          className={selectClass}
+          value={action.userId}
+          onChange={(e) => onChange({ ...action, userId: e.target.value })}
+        >
+          <option value="">Select…</option>
+          {members.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {memberLabel(m)}
+            </option>
+          ))}
+        </select>
+      </label>
     </>
   );
 }

@@ -65,6 +65,9 @@ export function isActionComplete(a: AutomationAction): boolean {
   if (a.type === "ai_step") {
     return a.instruction.trim().length >= 3 && a.allow.length > 0;
   }
+  if (a.type === "assign_person") {
+    return !!a.columnId && !!a.userId;
+  }
   return false;
 }
 export function memberLabel(m: BuilderMember): string {

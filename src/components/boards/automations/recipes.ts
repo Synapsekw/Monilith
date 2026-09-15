@@ -69,6 +69,23 @@ export function recipeItemCreatedSetOption(
   };
 }
 
+/**
+ * "When an item is created, assign it to N (in a people column)."
+ *
+ * The standing form of an Intelligence `reassign` suggestion: the card exists
+ * because work is unowned or piled on one person, and the durable fix is that
+ * NEW work lands on a named owner (spec §2.2).
+ */
+export function recipeItemCreatedAssignPerson(
+  peopleColumnId: string,
+  userId: string,
+): Draft {
+  return {
+    trigger: { type: "item_created" },
+    actions: [{ type: "assign_person", columnId: peopleColumnId, userId }],
+  };
+}
+
 /** "When someone is assigned in a People column, notify them (first assignee)." */
 export function recipePersonAssignedNotify(peopleColumnId: string): Draft {
   return {

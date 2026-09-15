@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Eye,
@@ -35,6 +35,8 @@ import type { CacheColumn } from "@/lib/boards/cache";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
+import type { Draft } from "@/components/boards/automations/recipes";
 
 export type HeaderMember = {
   userId: string;
@@ -86,6 +88,24 @@ export function BoardHeader({
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [seedDraft, setSeedDraft] = useState<Draft | undefined>();
+
+  // Board Intelligence (spec §2.3): "Always do this" hands the header a
+  // prefilled automation draft, opening straight into the builder.
+  const ruleRequest = useBoardIntelligenceStore((s) => s.ruleRequest);
+  const consumeRule = useBoardIntelligenceStore((s) => s.consumeRule);
+  useEffect(() => {
+    if (!ruleRequest || ruleRequest.boardId !== boardId) return;
+    // Subscribing to an external store and reacting to what it asked for is
+    // the sanctioned shape for an effect, not a cascading render — same
+    // exemption as BoardDock's openRequest consumer: a nonce-stamped request
+    // in the store is the only channel the dock has to reach the header, and
+    // the request is consumed in the same pass, so this runs once per ask.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeedDraft(ruleRequest.draft);
+    setAutomationsOpen(true);
+    consumeRule(ruleRequest.nonce);
+  }, [boardId, ruleRequest, consumeRule]);
 
   // The import wizard's existing-board arm matches/targets columns by their
   // real board kind + synthesized options — the same shape the commit
@@ -254,7 +274,11 @@ export function BoardHeader({
           members={members}
           groups={groups}
           open={automationsOpen}
-          onOpenChange={setAutomationsOpen}
+          onOpenChange={(next) => {
+            setAutomationsOpen(next);
+            if (!next) setSeedDraft(undefined);
+          }}
+          seedDraft={seedDraft}
         />
         <ImportWizard
           destination={{
