@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FolderPlus } from "lucide-react";
 
-import { createFolder } from "@/lib/boards/folders/actions";
+import { createFolder } from "@/lib/folders/actions";
 import { showMutationSuccess } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/** "New folder" — creates a private folder in the signed-in user's Boards nav. */
-export function NewFolderDialog() {
+/**
+ * "New folder" — creates a shared folder in the active workspace. A folder is a
+ * project: it is visible to the whole workspace and gets its own command center
+ * at `/folders/<id>`.
+ *
+ * `workspaceId` is optional only because the sidebar renders before the active
+ * workspace resolves; without one there is nothing to create the folder IN, so
+ * the trigger is disabled rather than the submit failing at the action.
+ */
+export function NewFolderDialog({ workspaceId }: { workspaceId?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -29,25 +37,22 @@ export function NewFolderDialog() {
 
   function submit() {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || !workspaceId) return;
     setError(null);
     startTransition(async () => {
-      const res = await createFolder({ name: trimmed });
+      const res = await createFolder({ workspaceId, name: trimmed });
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setName("");
       setOpen(false);
-      // A brand-new folder is EMPTY, and an empty folder is deliberately not
-      // rendered in the nav (design decision 3), so a refresh alone leaves the
-      // sidebar byte-identical — the user has no way to tell the create
-      // worked. The toast is the only confirmation, so it also has to carry
-      // the discovery path: the folder is reachable from a board's ⋯ menu
-      // until something is filed into it.
+      // An empty folder now DOES render in the nav, so the refresh below is
+      // itself visible confirmation. The toast points at the next step: the
+      // folder's command center is where it gets built out.
       showMutationSuccess(
         `Folder “${trimmed}” created`,
-        "Move a board into it from the board’s ⋯ menu.",
+        "Open it from the sidebar to build its command center.",
       );
       router.refresh();
     });
@@ -61,6 +66,7 @@ export function NewFolderDialog() {
           variant="ghost"
           size="icon-xs"
           aria-label="New folder"
+          disabled={!workspaceId}
           className="text-muted-foreground hover:text-foreground"
         >
           <FolderPlus className="size-4" />
@@ -70,8 +76,8 @@ export function NewFolderDialog() {
         <DialogHeader>
           <DialogTitle>New folder</DialogTitle>
           <DialogDescription>
-            Folders are private to you. Drop in your own boards and ones shared
-            with you.
+            A folder is a project everyone in this workspace can see. It gets
+            its own command center — add boards to it from a board’s ⋯ menu.
           </DialogDescription>
         </DialogHeader>
         <form

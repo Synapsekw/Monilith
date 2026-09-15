@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import Link from "next/link";
 import { ChevronDown, Folder, FolderOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,14 @@ import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
 import { SIDEBAR_LEAD_CLASS, SidebarRow } from "@/components/shell/sidebar-row";
 
 /**
- * One collapsible folder in the Boards nav. Open/closed state reuses
+ * One collapsible folder in the Boards nav. A folder is a PROJECT: its name is
+ * a link to the folder's command center (`/folders/<id>`) and the chevron
+ * beside it is a separate control that only expands or collapses the board
+ * list. They were ONE merged disclosure while a folder was a private grouping
+ * with nowhere to navigate to — now there are two destinations, so there are
+ * two controls.
+ *
+ * Open/closed state reuses
  * `useUIStore.collapsedSections` (the same persisted map `NavSection` uses),
  * keyed `folder:<id>` — so toggling a folder is 0 server round-trips and
  * survives a reload. Default open (absent key).
@@ -58,8 +66,8 @@ export function BoardFolderRow({
     <div className="flex flex-col gap-0.5">
       <SidebarRow
         child
-        // The disclosure button spans the lead slot AND the label, so the row
-        // itself renders no slot span — the button's own chevron span is it.
+        // The chevron button IS the lead slot (it carries SIDEBAR_LEAD_CLASS),
+        // so the row renders no slot span of its own.
         lead={null}
         ref={dropRef}
         // Focus anchor for the plain→drag subtree swap. Folder rows render
@@ -89,43 +97,48 @@ export function BoardFolderRow({
           </>
         }
       >
-        {/* ONE disclosure, not two. The chevron and the name used to be
-            separate buttons doing the identical thing, which cost the folder a
-            third tab stop for no second control. The accessible name is the
-            folder name and `aria-expanded` carries the state — the standard
-            disclosure pattern, and a screen reader already announces
-            "Acme Rebrand, button, collapsed" without a redundant aria-label.
-            The count and the ⋯ menu stay OUTSIDE: inside they would join the
-            accessible name. */}
+        {/* The chevron is the disclosure and nothing else. It keeps the same
+            24px column the board rows reserve for their grip, so the header
+            and its boards still line up, and it stays ONE rotated chevron
+            rather than two swapped glyphs — a rotation animates, a swap
+            cannot. It needs an explicit aria-label now that it no longer wraps
+            the folder name: alone it would announce as an unnamed button. */}
         <button
           type="button"
           onClick={() => toggleSection(key)}
           aria-expanded={open}
           aria-controls={bodyId}
-          // The label metrics of `sidebarLabelClass(true)`, spelled out: the
-          // helper's `truncate` is dead on a flex container (the inner span
-          // does the truncating), and its `pl-1` belongs AFTER the lead slot —
-          // which here lives INSIDE the button, so the button starts flush.
+          aria-label={`Toggle ${folder.name}`}
+          className={cn(
+            SIDEBAR_LEAD_CLASS,
+            "focus-visible:ring-ring rounded focus-visible:ring-2 focus-visible:outline-none",
+          )}
+        >
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "ease-keystone size-3.5 transition-transform duration-200",
+              !open && "-rotate-90",
+            )}
+          />
+        </button>
+        {/* The name opens the folder's command center. The count and the ⋯
+            menu stay OUTSIDE it — inside they would join its accessible name.
+            The label metrics of `sidebarLabelClass(true)` are spelled out: the
+            helper's `truncate` is dead on a flex container (the inner span
+            does the truncating) and its `pl-1` belongs after the lead slot,
+            which the chevron button above already occupies. */}
+        <Link
+          href={`/folders/${folder.id}`}
           className="focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded py-1 pr-1 text-left text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
         >
-          {/* Keeps the chevron in the same 24px column the board rows reserve
-              for their grip, so the header and its boards line up. One rotated
-              chevron, not two glyphs — the rotation animates, a swap cannot. */}
-          <span aria-hidden className={SIDEBAR_LEAD_CLASS}>
-            <ChevronDown
-              className={cn(
-                "ease-keystone size-3.5 transition-transform duration-200",
-                !open && "-rotate-90",
-              )}
-            />
-          </span>
           {open ? (
             <FolderOpen className="mr-1.5 size-3.5 shrink-0" aria-hidden />
           ) : (
             <Folder className="mr-1.5 size-3.5 shrink-0" aria-hidden />
           )}
           <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-        </button>
+        </Link>
       </SidebarRow>
       <div id={bodyId} hidden={!open} className="flex flex-col gap-0.5 pl-3">
         {children}

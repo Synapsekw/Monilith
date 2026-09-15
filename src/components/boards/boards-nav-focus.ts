@@ -17,7 +17,7 @@
 /** Which row held focus when the drag layer was armed, and where in that row. */
 export type BoardsNavFocusAnchor =
   | { kind: "board"; id: string; edge: "link" | "menu" }
-  | { kind: "folder"; id: string; edge: "toggle" | "menu" };
+  | { kind: "folder"; id: string; edge: "toggle" | "link" | "menu" };
 
 const ROW_ATTR = {
   board: "data-board-row",
@@ -47,10 +47,17 @@ export function focusAnchorFrom(target: Element): BoardsNavFocusAnchor | null {
   const folderId = target.closest<HTMLElement>(`[${ROW_ATTR.folder}]`)?.dataset
     .folderRow;
   if (folderId) {
+    // A folder header has THREE focusables since the name became a link to the
+    // command center: chevron, name, ⋯. Tell the name apart from the chevron,
+    // or tabbing to the name would hand focus back to the chevron.
     return {
       kind: "folder",
       id: folderId,
-      edge: onMenuTrigger ? "menu" : "toggle",
+      edge: onMenuTrigger
+        ? "menu"
+        : target.closest("a[href]")
+          ? "link"
+          : "toggle",
     };
   }
 
@@ -59,9 +66,10 @@ export function focusAnchorFrom(target: Element): BoardsNavFocusAnchor | null {
 
 /**
  * Find the element in the freshly mounted tree that should take focus back.
- * A folder header has exactly one disclosure — chevron, icon and name merged
- * into a single `button[aria-expanded]` — so this selector resolves to one
- * node, not two, and focus returns precisely where it was.
+ * Each selector resolves to exactly one node per row: a folder header has one
+ * `button[aria-expanded]` (the chevron), one `a[href]` (the name, linking to
+ * the command center) and one menu trigger, so focus returns precisely where
+ * it was rather than to whichever control happens to come first.
  */
 export function focusAnchorTarget(
   container: HTMLElement | null,
@@ -76,7 +84,8 @@ export function focusAnchorTarget(
   if (anchor.edge === "menu") {
     return row.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
   }
-  return anchor.kind === "board"
-    ? row.querySelector<HTMLElement>("a[href]")
-    : row.querySelector<HTMLElement>("button[aria-expanded]");
+  if (anchor.kind === "folder" && anchor.edge === "toggle") {
+    return row.querySelector<HTMLElement>("button[aria-expanded]");
+  }
+  return row.querySelector<HTMLElement>("a[href]");
 }

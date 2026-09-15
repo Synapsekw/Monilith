@@ -19,7 +19,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { useUIStore } from "@/stores/ui";
-import { moveBoardToFolder } from "@/lib/boards/folders/actions";
+import { moveBoardToFolder } from "@/lib/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
@@ -43,7 +43,7 @@ vi.mock("next/navigation", () => ({
 // The folder mutations are the only server calls this nav makes. Mocking the
 // whole module (not just `moveBoardToFolder`) keeps NewFolderDialog's
 // `createFolder` import resolvable.
-vi.mock("@/lib/boards/folders/actions", () => ({
+vi.mock("@/lib/folders/actions", () => ({
   moveBoardToFolder: vi.fn(async () => ({ ok: true, data: undefined })),
   createFolder: vi.fn(async () => ({ ok: true, data: undefined })),
 }));
@@ -631,7 +631,15 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[sharedBoard]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[
             { boardId: "b1", folderId: "f1", position: 0 },
             { boardId: "s1", folderId: "f1", position: 1 },
@@ -647,19 +655,32 @@ describe("BoardsNav folders", () => {
     expect(screen.queryByText("Shared with me")).not.toBeInTheDocument();
   });
 
-  it("hides a folder whose boards are not visible in this workspace", () => {
+  it("renders an empty folder as a link to its command center", () => {
+    // A shared folder is a project. It keeps its row even with nothing filed
+    // in it — that row is how the user reaches the command center to fill it.
     render(
       <TooltipProvider>
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Elsewhere", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Elsewhere",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b-other", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
     );
 
-    expect(screen.queryByText("Elsewhere")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Elsewhere" })).toHaveAttribute(
+      "href",
+      "/folders/f1",
+    );
     expect(screen.getByText("Website revamp")).toBeInTheDocument();
   });
 
@@ -685,19 +706,30 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
     );
 
     const toggle = screen.getByRole("button", {
-      name: "Acme Rebrand",
+      name: "Toggle Acme Rebrand",
       expanded: true,
     });
     fireEvent.click(toggle);
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: false,
+      }),
     ).toBeInTheDocument();
     // Collapsing changes no server data, so it must not re-run the page's
     // queries (gotcha-09): client state only, zero round-trips.
@@ -710,7 +742,15 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
           collapsed
         />
@@ -729,7 +769,15 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[]}
         />
       </TooltipProvider>,
@@ -745,7 +793,15 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[]}
           sharedBoards={[sharedBoard]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[]}
         />
       </TooltipProvider>,
@@ -778,7 +834,15 @@ describe("BoardsNav folders", () => {
         <BoardsNav
           boards={[]}
           sharedBoards={[{ ...sharedBoard, access_level: "viewer" as const }]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "s1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -812,7 +876,15 @@ describe("BoardsNav folder header disclosure", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -830,35 +902,41 @@ describe("BoardsNav folder header disclosure", () => {
     );
   }
 
-  it("has exactly two tab stops — the disclosure and its ⋯ menu", () => {
+  it("has three tab stops — the chevron, the folder link and its ⋯ menu", () => {
     renderWithFolder();
-    // Three today: a chevron button and a name button that do the identical
-    // thing, plus the menu. One control, one stop — the menu is a genuinely
-    // different control and correctly keeps its own.
-    expect(headerTabStops()).toHaveLength(2);
+    // The chevron and the name are two genuinely DIFFERENT controls now: one
+    // expands the board list in place, the other navigates to the folder's
+    // command center. They were one merged disclosure while the name led
+    // nowhere.
+    expect(headerTabStops()).toHaveLength(3);
   });
 
-  it("names the disclosure after the folder and carries its state in aria-expanded", () => {
+  it("labels the chevron as a toggle and carries its state in aria-expanded", () => {
     renderWithFolder();
 
-    // The standard disclosure pattern: the accessible name is the thing, the
-    // state is ARIA's job. A screen reader already says "Acme Rebrand, button,
-    // expanded" — a "Collapse Acme Rebrand" label would say it twice.
+    // The chevron no longer wraps the folder name, so it needs a label of its
+    // own — without one it announces as an unnamed button.
     const disclosure = screen.getByRole("button", {
-      name: "Acme Rebrand",
+      name: "Toggle Acme Rebrand",
       expanded: true,
     });
     expect(disclosure).toHaveAttribute("aria-controls", "board-folder-f1");
-    expect(disclosure).not.toHaveAttribute("aria-label");
   });
 
-  it("still toggles when the folder NAME is clicked, not just the chevron", () => {
+  it("navigates to the command center when the folder NAME is clicked", () => {
     renderWithFolder();
 
-    fireEvent.click(screen.getByText("Acme Rebrand"));
+    const link = screen.getByRole("link", { name: "Acme Rebrand" });
+    expect(link).toHaveAttribute("href", "/folders/f1");
 
+    // Clicking the name must NOT collapse the folder — the two controls are
+    // independent.
+    fireEvent.click(link);
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: true,
+      }),
     ).toBeInTheDocument();
     expect(routerRefresh).not.toHaveBeenCalled();
   });
@@ -868,7 +946,7 @@ describe("BoardsNav folder header disclosure", () => {
     // It is the section's FIRST tab stop for anyone with a folder; neither of
     // the two buttons it replaces had a focus-visible ring at all.
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand" }).className,
+      screen.getByRole("button", { name: "Toggle Acme Rebrand" }).className,
     ).toContain("focus-visible:ring-2");
   });
 });
@@ -889,8 +967,20 @@ describe("BoardsNav folder moves", () => {
     access_level: "editor" as const,
   };
   const folders = [
-    { id: "f1", name: "Acme Rebrand", position: 0 },
-    { id: "f2", name: "Q3 Launch", position: 1 },
+    {
+      id: "f1",
+      name: "Acme Rebrand",
+      workspaceId: "w1",
+      orgId: "o1",
+      position: 0,
+    },
+    {
+      id: "f2",
+      name: "Q3 Launch",
+      workspaceId: "w1",
+      orgId: "o1",
+      position: 1,
+    },
   ];
 
   /** Open a row menu, then its "Move to folder" submenu, and hand back the items. */
@@ -1074,7 +1164,10 @@ describe("BoardFolderRow as a drop target", () => {
       </BoardFolderRow>,
     );
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: false,
+      }),
     ).toBeInTheDocument();
 
     rerender(
@@ -1086,7 +1179,10 @@ describe("BoardFolderRow as a drop target", () => {
     // Dropping into a closed folder would hide the board the user just filed,
     // so hovering opens it first.
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: true,
+      }),
     ).toBeInTheDocument();
     // Opening is client state only — never a re-read of the page's queries.
     expect(routerRefresh).not.toHaveBeenCalled();
@@ -1103,7 +1199,10 @@ describe("BoardFolderRow as a drop target", () => {
 
     // Visually open…
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: true,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("Website revamp")).toBeVisible();
     // …but the PERSISTED map is untouched. Hover is not a decision the user
@@ -1131,7 +1230,10 @@ describe("BoardFolderRow as a drop target", () => {
     // Nothing to undo, so no onDragCancel handler is needed — which is the
     // whole point of making hover purely visual.
     expect(
-      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+      screen.getByRole("button", {
+        name: "Toggle Acme Rebrand",
+        expanded: false,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("Website revamp")).not.toBeVisible();
     expect(useUIStore.getState().collapsedSections["folder:f1"]).toBe(true);
@@ -1186,7 +1288,15 @@ describe("BoardsNav drag a board onto a folder", () => {
         <BoardsNav
           boards={[unfiled, alsoUnfiled, filed]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b3", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -1410,7 +1520,15 @@ describe("BoardsNav folder-row focus handoff", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -1424,13 +1542,16 @@ describe("BoardsNav folder-row focus handoff", () => {
     // the first focusable thing in Boards. Arming on it must not drop focus,
     // or the very first Tab into the section lands on <body>.
     screen
-      .getByRole("button", { name: "Acme Rebrand", expanded: true })
+      .getByRole("button", { name: "Toggle Acme Rebrand", expanded: true })
       .focus();
 
     await screen.findByTestId("boards-nav-sortable");
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
+        screen.getByRole("button", {
+          name: "Toggle Acme Rebrand",
+          expanded: true,
+        }),
       ),
     );
     expect(document.activeElement).not.toBe(document.body);
@@ -1467,7 +1588,15 @@ describe("BoardsNav dragging a shared board", () => {
     owner_name: "Ada",
     access_level: "editor" as const,
   };
-  const folders = [{ id: "f1", name: "Acme Rebrand", position: 0 }];
+  const folders = [
+    {
+      id: "f1",
+      name: "Acme Rebrand",
+      workspaceId: "w1",
+      orgId: "o1",
+      position: 0,
+    },
+  ];
   const handleName = "Move Design tasks into a folder";
 
   /** Nav with one owned board filed in f1 and one unfiled shared board. */
@@ -1613,8 +1742,14 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
     access_level: "editor" as const,
   };
   const folders = [
-    { id: "f1", name: "Acme Rebrand", position: 0 },
-    { id: "f2", name: "Archive", position: 1 },
+    {
+      id: "f1",
+      name: "Acme Rebrand",
+      workspaceId: "w1",
+      orgId: "o1",
+      position: 0,
+    },
+    { id: "f2", name: "Archive", workspaceId: "w1", orgId: "o1", position: 1 },
   ];
   const placements = [
     { boardId: "b1", folderId: "f1", position: 0 },
@@ -1780,7 +1915,15 @@ describe("BoardsNav droppable measuring", () => {
             },
           ]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -1875,7 +2018,15 @@ describe("BoardsNav optimistic reorder survives a client re-render", () => {
     // Same invariant with the folder props actually supplied: the fold still
     // has to be memoised, or `unfiledOwned` is a new array every render.
     const boards = [alpha, beta, filedBoard];
-    const folders = [{ id: "f1", name: "Acme Rebrand", position: 0 }];
+    const folders = [
+      {
+        id: "f1",
+        name: "Acme Rebrand",
+        workspaceId: "w1",
+        orgId: "o1",
+        position: 0,
+      },
+    ];
     const placements = [{ boardId: "b3", folderId: "f1", position: 0 }];
     const { rerender } = render(
       <TooltipProvider>
@@ -2030,7 +2181,15 @@ describe("BoardsNav prunes stale folder collapse state", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -2041,27 +2200,35 @@ describe("BoardsNav prunes stale folder collapse state", () => {
     expect(map["folder:f1"]).toBe(true);
   });
 
-  it("keeps the key of a folder that is merely hidden in this workspace", () => {
-    // THE subtle one. `groupBoardsByFolder` DROPS a folder whose boards are all
-    // in another workspace, so it never renders — but it still exists. Pruning
-    // against `grouped.folders` would erase its collapsed state every time the
-    // user switched workspace.
-    useUIStore.setState({ collapsedSections: { "folder:hidden": true } });
+  it("keeps the key of a folder that currently holds no visible board", () => {
+    // The prune must key off "does this folder EXIST", never "did it render a
+    // board". A folder whose only board is filtered out of this workspace is
+    // still a folder — it renders empty now, and either way erasing its
+    // collapsed state on a workspace switch would be a bug.
+    useUIStore.setState({ collapsedSections: { "folder:empty": true } });
     render(
       <TooltipProvider>
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "hidden", name: "Elsewhere", position: 0 }]}
+          folders={[
+            {
+              id: "empty",
+              name: "Elsewhere",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           // The folder's only board lives in another workspace, so it is not in
-          // `boards` and the fold drops the folder from the rendered tree.
-          placements={[{ boardId: "b-other", folderId: "hidden", position: 0 }]}
+          // `boards` and the folder renders with no children.
+          placements={[{ boardId: "b-other", folderId: "empty", position: 0 }]}
         />
       </TooltipProvider>,
     );
 
-    expect(screen.queryByText("Elsewhere")).not.toBeInTheDocument();
-    expect(useUIStore.getState().collapsedSections["folder:hidden"]).toBe(true);
+    expect(screen.getByRole("link", { name: "Elsewhere" })).toBeInTheDocument();
+    expect(useUIStore.getState().collapsedSections["folder:empty"]).toBe(true);
   });
 
   it("does not prune at all when no folder data was supplied", () => {
@@ -2087,7 +2254,15 @@ describe("BoardsNav prunes stale folder collapse state", () => {
         <BoardsNav
           boards={[ownedBoard]}
           sharedBoards={[]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
         />
       </TooltipProvider>,
@@ -2138,7 +2313,15 @@ describe("BoardsNav folder row alignment", () => {
               owner_name: "Dana",
             },
           ]}
-          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          folders={[
+            {
+              id: "f1",
+              name: "Acme Rebrand",
+              workspaceId: "w1",
+              orgId: "o1",
+              position: 0,
+            },
+          ]}
           placements={[
             { boardId: "own", folderId: "f1", position: 0 },
             { boardId: "shared", folderId: "f1", position: 1 },

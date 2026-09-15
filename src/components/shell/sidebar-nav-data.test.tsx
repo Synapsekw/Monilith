@@ -38,16 +38,21 @@ vi.mock("@/lib/boards/queries-cached", () => ({
   ]),
   listSharedBoardsCached: vi.fn(async () => []),
 }));
-// Private board folders — the same cached-read shape as the boards/dashboards
-// reads above, so the folder layer is exercised through the real shell loader.
-vi.mock("@/lib/boards/folders/queries-cached", () => ({
-  listBoardFoldersCached: vi.fn(async () => ({
-    folders: [{ id: "f1", name: "Client work", position: 0 }],
+// Shared workspace folders — the same cached-read shape as the boards reads
+// above, so the folder layer is exercised through the real shell loader.
+vi.mock("@/lib/folders/queries-cached", () => ({
+  listFoldersCached: vi.fn(async () => ({
+    folders: [
+      {
+        id: "f1",
+        name: "Client work",
+        workspaceId: "w1",
+        orgId: "org2",
+        position: 0,
+      },
+    ],
     placements: [{ boardId: "b1", folderId: "f1", position: 0 }],
   })),
-}));
-vi.mock("@/lib/dashboards/queries-cached", () => ({
-  listDashboardsCached: vi.fn(async () => [{ id: "d1", name: "Velocity" }]),
 }));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
@@ -58,12 +63,12 @@ vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "w1"),
 }));
 
-import { listBoardFoldersCached } from "@/lib/boards/folders/queries-cached";
+import { listFoldersCached } from "@/lib/folders/queries-cached";
 import { useUIStore } from "@/stores/ui";
 
 beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
-  vi.mocked(listBoardFoldersCached).mockClear();
+  vi.mocked(listFoldersCached).mockClear();
   useUIStore.setState({ collapsedSections: {} });
 });
 
@@ -72,15 +77,16 @@ describe("SidebarNavData", () => {
   // 5s cap when the suite runs fully parallel; the generous cap only guards
   // against a hang, not slowness.
   it(
-    "renders boards, dashboards and workspaces from the cached reads",
+    "renders boards, folders and workspaces from the cached reads",
     { timeout: 20_000 },
     async () => {
       const { SidebarNavData } = await import("./sidebar-nav-data");
       render(await SidebarNavData());
       expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
-      // Folders are threaded through the loader into the Boards nav.
+      // Folders are threaded through the loader into the Boards nav, and the
+      // folder read is keyed by (org, active workspace) — not by user.
       expect(screen.getByText("Client work")).toBeInTheDocument();
-      expect(screen.getByText("Velocity")).toBeInTheDocument();
+      expect(listFoldersCached).toHaveBeenCalledWith("org2", "w1");
       expect(screen.getByText("Eng")).toBeInTheDocument();
     },
   );
@@ -97,8 +103,8 @@ describe("SidebarNavData", () => {
 
   it("omits the folder props entirely when the folders read fails", async () => {
     // `undefined`, not `[]`. The prop is how the client learns whether folder
-    // data is KNOWN; an empty array would say "this user has none".
-    vi.mocked(listBoardFoldersCached).mockResolvedValueOnce(null);
+    // data is KNOWN; an empty array would say "this workspace has none".
+    vi.mocked(listFoldersCached).mockResolvedValueOnce(null);
 
     const { getSidebarNavData } = await import("./sidebar-nav-data");
     const data = await getSidebarNavData();
@@ -119,7 +125,7 @@ describe("SidebarNavData", () => {
       useUIStore.setState({
         collapsedSections: { "folder:f1": true, planning: true },
       });
-      vi.mocked(listBoardFoldersCached).mockResolvedValueOnce(null);
+      vi.mocked(listFoldersCached).mockResolvedValueOnce(null);
 
       const { SidebarNavData } = await import("./sidebar-nav-data");
       render(await SidebarNavData());

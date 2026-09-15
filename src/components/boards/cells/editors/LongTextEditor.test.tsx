@@ -8,7 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 // The toolbar buttons are wrapped in Tooltip/TooltipTrigger, which throws
 // without a TooltipProvider ancestor. In the app this comes from the
 // root-level provider (src/components/providers.tsx); tests supply their own,
-// same as BoardsNav.test.tsx / DashboardsNav.test.tsx do for their own
+// same as BoardsNav.test.tsx does for its own
 // Tooltip usage.
 function setup(overrides: Partial<Parameters<typeof LongTextEditor>[0]> = {}) {
   const onCommit = vi.fn();

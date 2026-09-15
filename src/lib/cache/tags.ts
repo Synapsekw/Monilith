@@ -11,8 +11,6 @@ import "server-only";
 export const boardsTag = (userId: string) => `boards:user:${userId}`;
 export const sharedBoardsTag = (userId: string) =>
   `shared-boards:user:${userId}`;
-export const boardFoldersTag = (userId: string) =>
-  `board-folders:user:${userId}`;
 export const foldersTag = (orgId: string) => `folders:org:${orgId}`;
 export const dashboardsTag = (orgId: string) => `dashboards:org:${orgId}`;
 export const workspacesTag = (orgId: string) => `workspaces:org:${orgId}`;

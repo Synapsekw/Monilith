@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const createFolder = vi.fn();
-vi.mock("@/lib/boards/folders/actions", () => ({
+vi.mock("@/lib/folders/actions", () => ({
   createFolder: (...args: unknown[]) => createFolder(...args),
 }));
 
@@ -30,7 +30,7 @@ beforeEach(() => {
 
 /** Open the dialog and type a name — the only path a user has to a folder. */
 function openAndType(value: string) {
-  render(<NewFolderDialog />);
+  render(<NewFolderDialog workspaceId="w1" />);
   fireEvent.click(screen.getByRole("button", { name: "New folder" }));
   fireEvent.change(screen.getByLabelText("Folder name"), {
     target: { value },
@@ -45,7 +45,10 @@ describe("NewFolderDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
 
     await waitFor(() =>
-      expect(createFolder).toHaveBeenCalledWith({ name: "Acme Rebrand" }),
+      expect(createFolder).toHaveBeenCalledWith({
+        workspaceId: "w1",
+        name: "Acme Rebrand",
+      }),
     );
     await waitFor(() =>
       expect(
@@ -56,9 +59,9 @@ describe("NewFolderDialog", () => {
   });
 
   it("confirms the create with a toast that names the folder and says what to do next", async () => {
-    // A new folder is empty, and an empty folder is not rendered in the nav —
-    // so the sidebar does not change and this toast is the ONLY evidence the
-    // create worked. It also carries the discovery path for the new folder.
+    // The new folder DOES appear in the nav now (empty folders render), so the
+    // toast's job is the next step rather than the only evidence: the folder's
+    // command center is where it gets built out.
     openAndType("Acme Rebrand");
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
 
@@ -66,7 +69,15 @@ describe("NewFolderDialog", () => {
     const [headline, description] = showMutationSuccess.mock.calls[0];
     expect(headline).toContain("Acme Rebrand");
     expect(headline).toMatch(/created/i);
-    expect(description).toMatch(/⋯/);
+    expect(description).toMatch(/command center/i);
+  });
+
+  it("disables the trigger until an active workspace is known", () => {
+    // A shared folder must be created IN a workspace. Without one there is
+    // nothing to create it in, so the affordance is off rather than the action
+    // failing after the user has typed a name.
+    render(<NewFolderDialog />);
+    expect(screen.getByRole("button", { name: "New folder" })).toBeDisabled();
   });
 
   it("shows the action's error, keeps the dialog open, and does not toast success", async () => {
@@ -89,7 +100,10 @@ describe("NewFolderDialog", () => {
     fireEvent.submit(screen.getByLabelText("Folder name").closest("form")!);
 
     await waitFor(() =>
-      expect(createFolder).toHaveBeenCalledWith({ name: "Keyboard folder" }),
+      expect(createFolder).toHaveBeenCalledWith({
+        workspaceId: "w1",
+        name: "Keyboard folder",
+      }),
     );
   });
 

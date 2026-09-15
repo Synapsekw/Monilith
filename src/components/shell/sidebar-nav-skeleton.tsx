@@ -1,8 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * Suspense fallback for the streamed sidebar nav. Rows match BoardsNav/
- * DashboardsNav heights so streamed content swaps in with zero layout shift.
+ * Suspense fallback for the streamed sidebar nav. Rows match BoardsNav heights
+ * so streamed content swaps in with zero layout shift.
  */
 export function SidebarNavSkeleton() {
   return (
