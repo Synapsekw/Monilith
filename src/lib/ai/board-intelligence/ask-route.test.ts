@@ -98,6 +98,32 @@ const chain = (result: unknown) => {
   return q;
 };
 
+/**
+ * Like `chain`, but it actually HONOURS its `.eq()` filters against the row.
+ *
+ * Tenancy here is a filter the route must send, not a shape it must have, so a
+ * double that returns the row regardless could not tell a scoped read from an
+ * unscoped one. This one resolves to null unless every `.eq(column, value)`
+ * matches the row — so dropping `.eq("org_id", …)` from the route makes the
+ * cross-org test fail, which is the only way that test means anything.
+ */
+const filteringChain = (row: Record<string, unknown> | null) => {
+  const filters: [string, unknown][] = [];
+  const q: Record<string, unknown> = {};
+  for (const m of ["select", "order", "limit", "maybeSingle", "single"])
+    q[m] = () => q;
+  q.eq = (column: string, value: unknown) => {
+    filters.push([column, value]);
+    return q;
+  };
+  (q as { then: unknown }).then = (res: (v: unknown) => void) =>
+    res({
+      data: row && filters.every(([c, v]) => row[c] === v) ? row : null,
+      error: null,
+    });
+  return q;
+};
+
 const req = (body: unknown) =>
   new Request("http://x/api/board-intelligence/ask", {
     method: "POST",
@@ -124,7 +150,8 @@ beforeEach(() => {
   boardRow = { data: { id: BOARD_ID, name: "Launch" }, error: null };
   from.mockImplementation((t: string) => {
     tablesRead.push(t);
-    if (t === "board_intelligence_runs") return chain(runRow);
+    if (t === "board_intelligence_runs")
+      return filteringChain(runRow.data as Record<string, unknown> | null);
     if (t === "boards") return chain(boardRow);
     throw new Error(`unmocked table in test double: ${t}`);
   });
@@ -180,6 +207,25 @@ describe("POST /api/board-intelligence/ask", () => {
       req({ runId: RUN_ID, question: "why?", history: [] }),
     );
     expect(res.status).toBe(404);
+    expect(askPulseStream).not.toHaveBeenCalled();
+  });
+
+  // The run read is org-scoped EXPLICITLY, because RLS cannot answer this:
+  // it scopes the row to the owning user, while `org` comes from the org
+  // switcher and `runId` comes from the client. Without `.eq("org_id", …)` a
+  // user in orgs A and B, holding a run id for a board in B with A active,
+  // would have A entitled, A's key resolved and A's `ai_usage` row written for
+  // a turn answered over B's board.
+  it("404s when the run belongs to another org, and never meters the active one", async () => {
+    mockRun({
+      ...sampleRow(),
+      org_id: "orgB",
+    } as unknown as Tables<"board_intelligence_runs">);
+    const res = await POST(
+      req({ runId: RUN_ID, question: "what slipped?", history: [] }),
+    );
+    expect(res.status).toBe(404);
+    expect(runAi).not.toHaveBeenCalled();
     expect(askPulseStream).not.toHaveBeenCalled();
   });
 
@@ -257,6 +303,36 @@ describe("POST /api/board-intelligence/ask", () => {
       { role: "assistant", content: "Two items." },
       { role: "user", content: "and the second one?" },
     ]);
+  });
+
+  // The prompt must describe what the reader is LOOKING AT. The tab renders
+  // `payload.suggestions` minus `new Set([...dismissed, ...applied])`, so a
+  // card the user dismissed must not come back as context the model can cite
+  // ("as the overdue card above suggests…") — the card is gone.
+  it("omits dismissed and applied suggestions from the prompt", async () => {
+    const row = sampleRow();
+    const payload = row.payload as unknown as {
+      suggestions: Record<string, unknown>[];
+    };
+    const first = payload.suggestions[0];
+    mockRun({
+      ...row,
+      payload: {
+        ...payload,
+        suggestions: [
+          first,
+          { ...first, id: "s2", title: "Dismissed card" },
+          { ...first, id: "s3", title: "Applied card" },
+        ],
+      },
+      dismissed: ["s2"],
+      applied: ["s3"],
+    } as unknown as Tables<"board_intelligence_runs">);
+    await drain(await POST(req({ runId: RUN_ID, question: "q", history: [] })));
+    const { system } = askPulseStream.mock.calls[0][0] as { system: string };
+    expect(system).toContain("Three overdue in Launch");
+    expect(system).not.toContain("Dismissed card");
+    expect(system).not.toContain("Applied card");
   });
 
   // Spec §3.2: this turn is ephemeral. A write here would give the Ask

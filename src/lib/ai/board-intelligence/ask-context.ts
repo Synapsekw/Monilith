@@ -12,7 +12,15 @@ export function buildIntelAskSystem(
   run: BoardIntelligenceRun,
   board: { id: string; name: string },
 ): string {
+  // The SAME filter the tab renders through (`use-intelligence-run.ts`'s
+  // `visible`): a dismissed or applied card is gone from the screen, so listing
+  // it as "ON SCREEN" invites the model to answer "as the overdue card above
+  // suggests… you can apply it from a suggestion card" about a card the user
+  // just made disappear. The prompt must describe what the reader is looking
+  // at, not what the run once held.
+  const gone = new Set([...run.dismissed, ...run.applied]);
   const suggestions = run.payload.suggestions
+    .filter((s) => !gone.has(s.id))
     .map((s) => `- ${s.title}: ${s.body}`)
     .join("\n");
   return [

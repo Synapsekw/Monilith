@@ -63,10 +63,20 @@ export async function POST(request: Request) {
   // miss is "not yours or not there" and both answer the same way: 404. No
   // context is ever invented for a run we cannot read — and `rowToRun` returns
   // null on a payload that no longer validates, which is the same answer.
+  //
+  // `org_id` is filtered EXPLICITLY, because RLS does not answer this question.
+  // RLS scopes the row to the owning user; the org comes from
+  // `resolveActiveOrg()` and `runId` comes from the client. A user in orgs A
+  // and B, holding a run id for a board in B while A is active, would
+  // otherwise pass `requireAiEntitlement(A, …)` and have `runAi({orgId: A})`
+  // resolve A's key and write A's `ai_usage` row for a turn answered over B's
+  // board — billing A and bypassing B's entitlement entirely. A mismatch is
+  // the same 404 as "not yours".
   const row = await supabase
     .from("board_intelligence_runs")
     .select("*")
     .eq("id", runId)
+    .eq("org_id", org.id)
     .maybeSingle();
   const run = row.data ? rowToRun(row.data) : null;
   if (!run)
