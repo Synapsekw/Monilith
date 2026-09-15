@@ -1097,13 +1097,13 @@
      its chrome, set `visibility: hidden` on every element, and produced a
      blank sheet. `body:has([data-print-root])` limits the whole mechanism to
      the surfaces that opt in (today: the folder Overview export). */
-  body:has([data-print-root]) aside,
-  body:has([data-print-root]) nav,
-  body:has([data-print-root]) header,
-  body:has([data-print-root]) [data-print-hide] {
+  :where(body:has([data-print-root])) aside,
+  :where(body:has([data-print-root])) nav,
+  :where(body:has([data-print-root])) header,
+  :where(body:has([data-print-root])) [data-print-hide] {
     display: none !important;
   }
-  body:has([data-print-root]) * {
+  :where(body:has([data-print-root])) * {
     visibility: hidden;
   }
   [data-print-root],

@@ -21,16 +21,37 @@ describe("print stylesheet (folder Overview export)", () => {
     // Regression guard: these rules were global, so printing any other page in
     // the app hid its chrome and blanked every element. Both the chrome-hiding
     // rule and the blanket `visibility: hidden` must sit behind
-    // `body:has([data-print-root])`.
+    // `body:has([data-print-root])` (optionally wrapped in `:where(...)`).
     expect(print).toMatch(
-      /body:has\(\[data-print-root\]\)\s+aside[^{]*\{[^}]*display:\s*none/,
+      /body:has\(\[data-print-root\]\)\)?\s+aside[^{]*\{[^}]*display:\s*none/,
     );
     expect(print).toMatch(
-      /body:has\(\[data-print-root\]\)\s+\*\s*\{[^}]*visibility:\s*hidden/,
+      /body:has\(\[data-print-root\]\)\)?\s+\*\s*\{[^}]*visibility:\s*hidden/,
     );
     // No UNSCOPED `body * { visibility: hidden }` / bare `aside,` selector.
     expect(print).not.toMatch(/(^|[^)])\s\bbody\s+\*\s*\{/);
     expect(print).not.toMatch(/\n\s*aside,/);
+  });
+
+  it("scopes the hiding rules through :where() so they carry ZERO specificity", () => {
+    // Regression guard: `body:has([data-print-root]) *` has specificity
+    // (0,1,1), which OUTRANKS the re-visibility rules `[data-print-root],
+    // [data-print-root] *` and `[data-print-title], [data-print-title] *`
+    // at (0,1,0) — so the print root and title computed to `hidden` and
+    // Export PDF printed a blank page. Wrapping the scoping condition in
+    // `:where(...)` drops it to zero specificity so the plain-attribute
+    // re-visibility rules win again, exactly as before the scoping was added.
+    expect(print).toMatch(
+      /:where\(body:has\(\[data-print-root\]\)\)\s+aside[^{]*\{[^}]*display:\s*none/,
+    );
+    expect(print).toMatch(
+      /:where\(body:has\(\[data-print-root\]\)\)\s+\*\s*\{[^}]*visibility:\s*hidden/,
+    );
+    // No un-:where()'d `body:has([data-print-root]) *` — that's the (0,1,1)
+    // form that beat the re-visibility rules.
+    expect(print).not.toMatch(
+      /[^)]\sbody:has\(\[data-print-root\]\)\s+\*\s*\{/,
+    );
   });
 
   it("lets the print root paginate instead of pinning it to one page", () => {
