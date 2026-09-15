@@ -11,7 +11,7 @@
 
 <script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-09-15 13:09",
+  "updated": "2026-09-15 15:12",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -133,21 +133,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "fbc335b7",
-        "tone": "warn",
-        "note": "Unpromoted: Board Intelligence Act + Ask (24 commits, 45 files) plus the /admin/users fix. Migration 20260915062952_automation_assign_person_action is on DEV (ledger 165/165), applied, version-reconciled and live-verified in a rolled-back transaction; not on PROD, along with 20260915053143. All four gates ran against the rebased state: full suite 7797 passed / 1 skipped / 0 failed. Three /updates entries announced for 2026-09-15, publishing with the next promotion."
+        "value": "e8d7e929",
+        "tone": "ok",
+        "note": "The heal commit on top of main — unpromoted delta 0. Ledger 165/165 on DEV; this feature's assign_person migration and the earlier DEV-only ones are not on PROD (/sync-prod declined). A parallel folder-command-center session holds three more DEV migrations in its own worktrees, which db:ledger-check reads as parallel work rather than drift."
       },
       {
         "name": "main",
-        "value": "4b4828df",
+        "value": "2ca821a7",
         "tone": "ok",
-        "note": "PR #124 merged 2026-09-12, 7 commits — the intel-rule geometry correction and its regression test, the board-brief /updates entry, and the vault + plan-board refreshes. Verified live: main CI green (run 34706697074), Vercel state=success. Squash divergence healed (0a0c898a, -s ours). Preceded by PR #123, 51 commits — the Quiet Grid table redesign and Inter."
+        "note": "PR #128 merged 2026-09-15, 40 commits — Board Intelligence Act + Ask, the assign_person automation action and the /admin/users pagination fix. main CI green (run 34963744162). Squash divergence healed (e8d7e929, -s ours, tree byte-identical). Delta from heal watermark 0a0c898a — 40, against a raw range of 3174, which is squash accumulation, not work."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Still serving the PR #124 build — Board Intelligence Act + Ask is NOT live yet. The three /updates entries announced today publish with the next promotion. /sync-prod not run: DEV migrations including board_intelligence_runs and the new assign_person branch are not on PROD."
+        "note": "Serving the PR #128 build on 2ca821a7 — verified by content, not assumed: /updates serves all three new entries (Turn a suggestion into a rule, Ask about a board's brief, Assign a person automatically). Still owed: one browser glance at two Intelligence-tab layouts jsdom cannot judge."
       }
     ],
     "gates": [
@@ -188,12 +188,12 @@
   },
   "next": [
     {
-      "title": "Promote develop to main",
-      "why": "It carries Board Intelligence Act + Ask plus the /admin/users fix, and the three /updates entries announced for 2026-09-15 publish with it. Nothing in the feature is gated behind an org ceiling, so it is reachable by every board editor on arrival."
-    },
-    {
-      "title": "One authenticated browser pass on two Intelligence-tab layouts",
-      "why": "jsdom renders no geometry and this project has already shipped three defects of the shape \"the class is right in the source and absent from the page\". Look at the greyed composer beside the Catch me up button on a board with no brief, and the bottom-docked composer + meta line on a board with a short brief and no suggestions. Then walk Always do this and Open in Chat."
+      "title": "The owed browser pass, now against production",
+      "why": "jsdom renders no geometry and this repo has shipped three defects of the shape \"the class is right in the source and absent from the page\". Look at the greyed composer beside the Catch me up button on a board with no brief, and the bottom-docked composer + meta line on a board with a short brief and no suggestions. Then walk Always do this → Save → create an item, and ask → Open in Chat → double-click it once to confirm one thread, not two.",
+      "tags": [
+        "owner",
+        "verify"
+      ]
     },
     {
       "title": "Fix model-request-shape.test.ts's call-site scan",
@@ -369,7 +369,8 @@
       "Ask: a streaming read-only Q&A route over the cached brief, a composer holding five ephemeral pairs, and openQaInChat promoting one pair into a real board thread with the answer persisted verbatim.",
       "The Tier-1 suite meant to prove the SQL guards can never run here, so six outcomes were verified on DEV in a rolled-back transaction — and the first reading was wrong because now() is fixed per transaction (gotcha-107).",
       "The whole-branch review found the blocking defect for the seventh session running: a turn ending with zero tokens left the answer reading \"Thinking…\" forever, and a green test asserted around it.",
-      "Five plan defects rode along, all in test code written without running it — a nonexistent tool name, missing fixtures, a two-of-four mock, an off-by-one, and a fetch mock reusing one drained stream."
+      "Five plan defects rode along, all in test code written without running it — a nonexistent tool name, missing fixtures, a two-of-four mock, an off-by-one, and a fetch mock reusing one drained stream.",
+      "Promoted the same session as PR #128 (40 commits) — main @ 2ca821a7, live and verified by content. A gotcha number collision surfaced in the delta and was fixed first: the parallel session minted gotcha-107 after this worktree was cut, so mine became gotcha-108."
     ]
   }
 }</script>
