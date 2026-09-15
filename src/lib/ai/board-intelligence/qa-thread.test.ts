@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tables } from "@/types/database.types";
+import { filteringChain } from "@/test/query-double";
 
 const RUN_ID = "11111111-1111-4111-8111-111111111111";
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
@@ -45,25 +46,6 @@ function mockRun(row: Tables<"board_intelligence_runs"> | null) {
   runRow = row;
 }
 
-/** Honours its `.eq()` filters against the row — the same shape
- *  `ask-route.test.ts` uses to prove a scoping filter is actually SENT, not
- *  merely satisfiable. Dropping `.eq("org_id", …)` from the action makes the
- *  cross-org test below fail, which is the only way that test means anything. */
-function filteringChain(row: Record<string, unknown> | null) {
-  const filters: [string, unknown][] = [];
-  const q: Record<string, unknown> = {};
-  q.select = () => q;
-  q.eq = (column: string, value: unknown) => {
-    filters.push([column, value]);
-    return q;
-  };
-  q.maybeSingle = async () => ({
-    data: row && filters.every(([c, v]) => row[c] === v) ? row : null,
-    error: null,
-  });
-  return q;
-}
-
 type ConversationInsert = {
   org_id: string;
   user_id: string;
@@ -79,11 +61,33 @@ const inserted: {
 const deletedConversationIds: string[] = [];
 let convError: { message: string } | null = null;
 let msgError: { message: string } | null = null;
+/** The compensating delete's own outcome — `null` (default) means it
+ *  succeeds; set to reject or to resolve with `.error` to exercise the
+ *  branch where the cleanup ITSELF fails. */
+let delError: { message: string } | null = null;
+let delThrows: Error | null = null;
+/** Anything else that should make a database await reject outright, to
+ *  prove the action never lets an unexpected throw escape as an unhandled
+ *  Server Action error. */
+let runReadThrows: Error | null = null;
 
 function makeClient() {
   return {
     from(table: string) {
       if (table === "board_intelligence_runs") {
+        if (runReadThrows) {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: async () => {
+                    throw runReadThrows;
+                  },
+                }),
+              }),
+            }),
+          };
+        }
         return filteringChain(runRow as Record<string, unknown> | null);
       }
       if (table === "ai_conversations") {
@@ -102,7 +106,8 @@ function makeClient() {
           delete: () => ({
             eq: async (_col: string, id: string) => {
               deletedConversationIds.push(id);
-              return { error: null };
+              if (delThrows) throw delThrows;
+              return { error: delError };
             },
           }),
         };
@@ -134,6 +139,9 @@ beforeEach(() => {
   deletedConversationIds.length = 0;
   convError = null;
   msgError = null;
+  delError = null;
+  delThrows = null;
+  runReadThrows = null;
   runRow = sampleRow();
   requireUser.mockResolvedValue({ id: USER_ID });
   resolveActiveOrg.mockResolvedValue({ id: ORG_ID });
@@ -207,6 +215,7 @@ describe("openQaInChat", () => {
   });
 
   it("deletes the empty conversation when the message insert fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     msgError = { message: "boom" };
     const res = await openQaInChat({
       runId: RUN_ID,
@@ -217,6 +226,72 @@ describe("openQaInChat", () => {
     // A thread with no turns is worse than no thread: the conversation row
     // that was inserted is cleaned up rather than left behind.
     expect(deletedConversationIds).toEqual(["conv-1"]);
+    // Logged with enough to find it: which insert failed, and the orphaned
+    // conversation's id.
+    expect(spy).toHaveBeenCalledWith(
+      "[qa-thread] message insert failed:",
+      expect.objectContaining({ conversationId: "conv-1", cause: "boom" }),
+    );
+  });
+
+  it("returns a message distinguishable from the normal case, and logs loudly, when the compensating delete ALSO fails", async () => {
+    // This is the branch the brief calls "worse than no thread": the message
+    // insert failed AND the cleanup that was supposed to remove the empty
+    // conversation failed too, so an orphaned row may now sit in the user's
+    // ledger. The caller must be told something DIFFERENT from the ordinary
+    // "couldn't save" case, and it must be logged loudly enough to find.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    msgError = { message: "boom" };
+    delError = { message: "delete denied" };
+    const res = await openQaInChat({
+      runId: RUN_ID,
+      question: "what slipped?",
+      answer: "Two items.",
+    });
+    expect(res.ok).toBe(false);
+    expect((res as { ok: false; error: string }).error).not.toBe(
+      "Couldn't save that answer to a thread.",
+    );
+    expect(deletedConversationIds).toEqual(["conv-1"]);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("compensating delete ALSO failed"),
+      expect.objectContaining({
+        conversationId: "conv-1",
+        cause: "delete denied",
+      }),
+    );
+  });
+
+  it("never throws — a rejected delete still returns an ActionResult, not an unhandled error", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    msgError = { message: "boom" };
+    delThrows = new Error("network dropped mid-delete");
+    const res = await openQaInChat({
+      runId: RUN_ID,
+      question: "what slipped?",
+      answer: "Two items.",
+    });
+    expect(res).toEqual({ ok: false, error: expect.any(String) });
+    expect(spy).toHaveBeenCalledWith(
+      "[qa-thread] openQaInChat threw:",
+      delThrows,
+    );
+  });
+
+  it("never throws — an unexpected error reading the run still returns an ActionResult", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    runReadThrows = new Error("connection reset");
+    const res = await openQaInChat({
+      runId: RUN_ID,
+      question: "what slipped?",
+      answer: "Two items.",
+    });
+    expect(res).toEqual({ ok: false, error: expect.any(String) });
+    expect(inserted.conversations).toHaveLength(0);
+    expect(spy).toHaveBeenCalledWith(
+      "[qa-thread] openQaInChat threw:",
+      runReadThrows,
+    );
   });
 
   it("fails closed on malformed input without touching the database", async () => {

@@ -73,8 +73,11 @@ export type DockBodyProps = {
    *  this" mapping. Threaded straight through to `IntelligenceTab`. */
   ruleMeta: RuleBoardMeta;
   /** Promote one Q/A pair into a real board thread (spec §3.3). Threaded
-   *  straight through to `IntelligenceTab` → `AskComposer`. Absent for a
-   *  viewer-only surface, which renders no button. */
+   *  straight through to `IntelligenceTab` → `AskComposer`. NOT gated on
+   *  board access, and deliberately so: the write is one PRIVATE
+   *  `ai_conversations` row owned by the caller — RLS scopes it per-user, not
+   *  per board-role — so a viewer gets the button too, same as an editor.
+   *  Only `undefined` (never passed) renders no button. */
   onOpenInChat?: (pair: QaPair) => void | Promise<void>;
 };
 
@@ -216,10 +219,13 @@ export function DockBody({
         )}
       </header>
 
-      {/* Shared across BOTH panels, not nested inside the chat branch: a
-          failure can originate from either — most pointedly "Open in Chat"
-          (spec §3.3), which fails while Intelligence is still on screen and
-          never switches tabs on a rejection. */}
+      {/* Rendered outside the `tab === "chat"` branch, not nested inside it:
+          a failure can originate from either panel — most pointedly "Open in
+          Chat" (spec §3.3), which fails while Intelligence is still on
+          screen and never switches tabs on a rejection. `error` itself is
+          already TAB-SCOPED by the caller (`BoardDock`'s `failureOnThisTab`)
+          — this component just renders whatever it is handed, on whichever
+          panel is showing. */}
       {error && (
         <div className="flex shrink-0 items-center gap-2 px-3.5 py-1.5">
           <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>

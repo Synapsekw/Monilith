@@ -686,6 +686,25 @@ export function BoardDock({
     [setWidth, width],
   );
 
+  /**
+   * `failure` OUTLIVES a tab switch on purpose — switching Chat → Intelligence
+   * and back to Chat must still show a list-read failure that never resolved.
+   * But it must not BLEED across tabs: "openInChat" happens ON Intelligence
+   * and, on rejection, deliberately never switches tabs (so the reader can
+   * retry from where they were); every other kind ("threads", "thread",
+   * "share") only ever happens while Chat is showing. Rendering `failure`
+   * unconditionally on both panels (the earlier fix for visibility) meant a
+   * stale "Couldn't open this thread." could sit on screen after the reader
+   * switched to Intelligence, pointing at a chat action they can no longer
+   * see. This is the tab-aware gate that keeps a failure on the panel it
+   * actually belongs to, without discarding it on an unrelated switch.
+   */
+  const failureOnThisTab =
+    failure &&
+    (failure.kind === "openInChat" ? tab === "intelligence" : tab === "chat")
+      ? failure
+      : null;
+
   const body: Omit<DockBodyProps, "onClose"> = {
     agents,
     agentNames,
@@ -695,14 +714,16 @@ export function BoardDock({
     activeThread,
     onBusyChange,
     onNew: () => startNewAs(currentPersona),
-    error: failure?.message ?? null,
+    error: failureOnThisTab?.message ?? null,
     // An optimistic share that rolled itself back has nothing to re-run — the
     // thread is already showing its true visibility again. A failed promotion
     // has nothing stateful to retry into either: pressing the same "Open in
     // Chat" button again is the retry, so `retry` (which re-reads the thread
     // list) would not repeat the action that actually failed.
     onRetry:
-      failure && failure.kind !== "share" && failure.kind !== "openInChat"
+      failureOnThisTab &&
+      failureOnThisTab.kind !== "share" &&
+      failureOnThisTab.kind !== "openInChat"
         ? retry
         : undefined,
     loading,

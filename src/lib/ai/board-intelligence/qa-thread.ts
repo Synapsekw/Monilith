@@ -45,6 +45,19 @@ const inputSchema = z.object({
  * org A's ai_conversations row and ledger would carry board-B content the
  * user only has because they are also a member of B. A mismatch reads the
  * same as "not found".
+ *
+ * NEVER throws. `requireUser()`/`resolveActiveOrg()` stay OUTSIDE the guard
+ * below — every other action in this area does the same, because
+ * `requireUser` calls Next's `redirect()` on purpose (which throws BY DESIGN
+ * and must propagate, not be swallowed — see the "keep it outside any
+ * try/catch" note on `requireUser` itself) and `resolveActiveOrg` documents
+ * its own DB error as meant to propagate ("a transient error is not 'no
+ * org'"). Everything from the first database read down — the part that can
+ * fail in an ordinary, expected way (RLS denial, a dropped connection, a
+ * rejected delete) — is inside the try/catch, so a caller always gets an
+ * `ActionResult` back, the one thing `BoardDock`'s error banner can render.
+ * Every failure branch is `console.error`'d with enough to find it later
+ * (which insert/delete failed, the conversation id, the cause).
  */
 export async function openQaInChat(
   input: unknown,
@@ -57,41 +70,71 @@ export async function openQaInChat(
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
 
-  const supabase = await createClient();
-  const row = await supabase
-    .from("board_intelligence_runs")
-    .select("*")
-    .eq("id", runId)
-    .eq("org_id", org.id)
-    .maybeSingle();
-  const run = row.data ? rowToRun(row.data) : null;
-  if (!run) return fail("That brief is no longer available.");
+  try {
+    const supabase = await createClient();
+    const row = await supabase
+      .from("board_intelligence_runs")
+      .select("*")
+      .eq("id", runId)
+      .eq("org_id", org.id)
+      .maybeSingle();
+    const run = row.data ? rowToRun(row.data) : null;
+    if (!run) return fail("That brief is no longer available.");
 
-  const conv = await supabase
-    .from("ai_conversations")
-    .insert({
-      org_id: org.id,
-      user_id: user.id,
-      board_id: run.boardId,
-      title: question.slice(0, TITLE_MAX),
-      // `visibility` omitted on purpose: the column default 'private' is the
-      // guarantee, exactly as in `writeBriefingThread`.
-    })
-    .select("id")
-    .single();
-  if (conv.error || !conv.data) return fail("Couldn't start that thread.");
+    const conv = await supabase
+      .from("ai_conversations")
+      .insert({
+        org_id: org.id,
+        user_id: user.id,
+        board_id: run.boardId,
+        title: question.slice(0, TITLE_MAX),
+        // `visibility` omitted on purpose: the column default 'private' is
+        // the guarantee, exactly as in `writeBriefingThread`.
+      })
+      .select("id")
+      .single();
+    if (conv.error || !conv.data) {
+      console.error("[qa-thread] conversation insert failed:", {
+        runId,
+        boardId: run.boardId,
+        cause: conv.error?.message,
+      });
+      return fail("Couldn't start that thread.");
+    }
 
-  const msgs = await supabase.from("ai_messages").insert([
-    { conversation_id: conv.data.id, role: "user", content: question },
-    { conversation_id: conv.data.id, role: "assistant", content: answer },
-  ]);
-  // A thread with no turns is worse than no thread: an empty row in the
-  // reader's ledger they cannot make sense of. Clean it up rather than leave
-  // it behind.
-  if (msgs.error) {
-    await supabase.from("ai_conversations").delete().eq("id", conv.data.id);
-    return fail("Couldn't save that answer to a thread.");
+    const msgs = await supabase.from("ai_messages").insert([
+      { conversation_id: conv.data.id, role: "user", content: question },
+      { conversation_id: conv.data.id, role: "assistant", content: answer },
+    ]);
+    // A thread with no turns is worse than no thread: an empty row in the
+    // reader's ledger they cannot make sense of. Clean it up rather than
+    // leave it behind — and if THAT fails too, say so distinctly, because
+    // "Couldn't save that answer to a thread." would otherwise imply nothing
+    // was written when an orphaned, empty conversation may now exist.
+    if (msgs.error) {
+      console.error("[qa-thread] message insert failed:", {
+        conversationId: conv.data.id,
+        cause: msgs.error.message,
+      });
+      const del = await supabase
+        .from("ai_conversations")
+        .delete()
+        .eq("id", conv.data.id);
+      if (del.error) {
+        console.error(
+          "[qa-thread] compensating delete ALSO failed — an empty conversation may remain:",
+          { conversationId: conv.data.id, cause: del.error.message },
+        );
+        return fail(
+          "That answer wasn't saved, and an empty thread may still be in your list.",
+        );
+      }
+      return fail("Couldn't save that answer to a thread.");
+    }
+
+    return { ok: true, data: { conversationId: conv.data.id } };
+  } catch (e) {
+    console.error("[qa-thread] openQaInChat threw:", e);
+    return fail("Couldn't open that answer in chat.");
   }
-
-  return { ok: true, data: { conversationId: conv.data.id } };
 }

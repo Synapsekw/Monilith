@@ -969,6 +969,78 @@ describe("BoardDock — Open in Chat", () => {
       "true",
     );
   });
+
+  it("offers Open in Chat to a viewer too — promoting into one's OWN private thread needs no board-edit right", async () => {
+    // The write is a per-user ai_conversations row, RLS-scoped by user_id, not
+    // by board role — `canApply` (owner/editor-only) governs writes to the
+    // BOARD; this isn't one. Pinning this so the gate stays a deliberate
+    // absence, not an accident of `canApply` happening to cover it too.
+    useIntelligenceAskFixture.mockReturnValue({
+      pairs: [answeredPair],
+      streaming: false,
+      status: null,
+      error: null,
+      ask: vi.fn(),
+    });
+    mount({ access: "viewer", initialRun: intelRun() });
+    await openDock();
+    await openIntelligence();
+    expect(
+      screen.getByRole("button", { name: /open in chat/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("scopes an Open in Chat failure to Intelligence — it does not bleed onto Chat after a tab switch", async () => {
+    useIntelligenceAskFixture.mockReturnValue({
+      pairs: [answeredPair],
+      streaming: false,
+      status: null,
+      error: null,
+      ask: vi.fn(),
+    });
+    openQaInChat.mockResolvedValue({
+      ok: false,
+      error: "That brief is no longer available.",
+    });
+    mount({ initialRun: intelRun() });
+    await openDock();
+    await openIntelligence();
+    await userEvent.click(
+      screen.getByRole("button", { name: /open in chat/i }),
+    );
+    expect(
+      await screen.findByText("That brief is no longer available."),
+    ).toBeInTheDocument();
+
+    // The user manually leaves Intelligence (a rejection never switches tabs
+    // on its own) — the failure must not follow them onto Chat.
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    expect(screen.queryByText("That brief is no longer available.")).toBeNull();
+  });
+});
+
+// A `Failure` outlives a tab switch — so a Chat-side failure ("Couldn't open
+// this thread.") that never resolved must still be there when the reader
+// comes BACK to Chat — but it must not bleed onto a panel it has nothing to
+// do with while the reader is looking at it. The "Open in Chat" side of this
+// is covered above; this is the Chat side.
+describe("BoardDock — a Chat failure does not bleed onto Intelligence", () => {
+  it("disappears while Intelligence is showing and reappears back on Chat", async () => {
+    loadDockThreads.mockResolvedValue(withThread());
+    loadThreadMessages.mockRejectedValueOnce(new Error("network"));
+    mount({ initialRun: intelRun() });
+    await openDock();
+    await userEvent.click(await threadRow("About the roadmap"));
+    expect(
+      await screen.findByText("Couldn't open this thread."),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: /intelligence/i }));
+    expect(screen.queryByText("Couldn't open this thread.")).toBeNull();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    expect(screen.getByText("Couldn't open this thread.")).toBeInTheDocument();
+  });
 });
 
 // The strip's "Catch me up" lives in a different subtree, so it asks through

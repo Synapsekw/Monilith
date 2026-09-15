@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tables } from "@/types/database.types";
+import { filteringChain } from "@/test/query-double";
 import { INTEL_ASK_OPENING_STATUS, type IntelAskEvent } from "./ask-protocol";
 
 // Same mocking shape as `run.test.ts` (the Phase 2 suite for this area): every
@@ -98,31 +99,11 @@ const chain = (result: unknown) => {
   return q;
 };
 
-/**
- * Like `chain`, but it actually HONOURS its `.eq()` filters against the row.
- *
- * Tenancy here is a filter the route must send, not a shape it must have, so a
- * double that returns the row regardless could not tell a scoped read from an
- * unscoped one. This one resolves to null unless every `.eq(column, value)`
- * matches the row — so dropping `.eq("org_id", …)` from the route makes the
- * cross-org test fail, which is the only way that test means anything.
- */
-const filteringChain = (row: Record<string, unknown> | null) => {
-  const filters: [string, unknown][] = [];
-  const q: Record<string, unknown> = {};
-  for (const m of ["select", "order", "limit", "maybeSingle", "single"])
-    q[m] = () => q;
-  q.eq = (column: string, value: unknown) => {
-    filters.push([column, value]);
-    return q;
-  };
-  (q as { then: unknown }).then = (res: (v: unknown) => void) =>
-    res({
-      data: row && filters.every(([c, v]) => row[c] === v) ? row : null,
-      error: null,
-    });
-  return q;
-};
+// `filteringChain` — a double that actually HONOURS its `.eq()` filters
+// against the row, so dropping `.eq("org_id", …)` from the route makes the
+// cross-org test below fail — lives in `src/test/query-double.ts`, shared
+// with `qa-thread.test.ts` (same table, same org-scoping shape, a different
+// call site).
 
 const req = (body: unknown) =>
   new Request("http://x/api/board-intelligence/ask", {
