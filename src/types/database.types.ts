@@ -3951,6 +3951,10 @@ export type Database = {
           owner_ids: string[];
         }[];
       };
+      _folder_readable_boards: {
+        Args: { p_folder_id: string };
+        Returns: string[];
+      };
       _health_digest_ping: { Args: never; Returns: undefined };
       _org_health_digest: {
         Args: { p_org_id: string; p_since: string };

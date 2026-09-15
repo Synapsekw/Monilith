@@ -279,15 +279,18 @@ describe.skipIf(!integrationTargetReady())(
       expect(attention.data).toEqual([]);
     });
 
-    it("rejects a non-member and an unknown folder", async () => {
+    it("rejects a non-member and an unknown folder with the same generic code", async () => {
+      // Collapsed to a single P0002 for both cases: a distinct "not a member"
+      // code for a folder that DOES exist in another org would be a cross-org
+      // existence oracle (the class Task 1's review removed from folder_boards).
       const { error } = await outsider.rpc("folder_rollup", {
         p_folder_id: folderId,
       });
-      expect(error?.code).toBe("42501");
+      expect(error?.code).toBe("P0002");
       const missing = await member.rpc("folder_rollup", {
         p_folder_id: "00000000-0000-0000-0000-000000000000",
       });
-      expect(missing.error).not.toBeNull();
+      expect(missing.error?.code).toBe("P0002");
     });
 
     it("keeps the internal helpers unreachable", async () => {
@@ -296,6 +299,65 @@ describe.skipIf(!integrationTargetReady())(
         { p_folder_id: folderId } as never,
       );
       expect(error).not.toBeNull();
+    });
+
+    it("excludes a board the caller cannot read from rollup and attention", async () => {
+      // member is an org member of orgId (can read folder F) but holds no
+      // board_members grant on board2 and did not create it — board2 must
+      // contribute no row to folder_rollup and no item to folder_attention.
+      const boardmate = await provision("boardmate");
+      const { error: memErr } = await admin.from("org_members").insert({
+        org_id: orgId,
+        user_id: boardmate.userId,
+        role: "member",
+      });
+      expect(memErr, "add boardmate to org").toBeNull();
+
+      const { data: board2, error: board2Err } = await boardmate.anon.rpc(
+        "create_board",
+        { p_workspace_id: wsId, p_name: "Boardmate Only" },
+      );
+      expect(board2Err, "create_board(board2)").toBeNull();
+      const board2Id = (board2 as { id: string }).id;
+
+      const { data: group2, error: group2Err } = await boardmate.anon
+        .from("groups")
+        .select("id")
+        .eq("board_id", board2Id)
+        .single();
+      expect(group2Err, "read group2").toBeNull();
+      const group2Id = (group2 as { id: string }).id;
+
+      const { error: fb2Err } = await boardmate.anon
+        .from("folder_boards")
+        .insert({ folder_id: folderId, board_id: board2Id });
+      expect(fb2Err, "link board2 to folder").toBeNull();
+
+      const { error: item2Err } = await boardmate.anon.from("items").insert({
+        board_id: board2Id,
+        org_id: orgId,
+        group_id: group2Id,
+        name: "hidden-from-member",
+      });
+      expect(item2Err, "seed item on board2").toBeNull();
+
+      const { data: rollup, error: rollupErr } = await member.rpc(
+        "folder_rollup",
+        { p_folder_id: folderId },
+      );
+      expect(rollupErr).toBeNull();
+      expect(rollup!.map((r) => r.board_id)).not.toContain(board2Id);
+      expect(rollup!.every((r) => r.board_id === boardId)).toBe(true);
+
+      const { data: attention, error: attentionErr } = await member.rpc(
+        "folder_attention",
+        { p_folder_id: folderId, p_limit: 20 },
+      );
+      expect(attentionErr).toBeNull();
+      expect(attention!.some((r) => r.item_name === "hidden-from-member")).toBe(
+        false,
+      );
+      expect(attention!.map((r) => r.board_id)).not.toContain(board2Id);
     });
   },
 );
