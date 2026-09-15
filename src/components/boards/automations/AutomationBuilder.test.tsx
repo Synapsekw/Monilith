@@ -687,7 +687,25 @@ describe("assign_person action", () => {
       "people-1",
     );
     await userEvent.selectOptions(screen.getByLabelText("Assign to"), "user-1");
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    // Save flipping proves both fields are non-empty, not that they landed in
+    // the right slot — a cross-wired AssignPersonRow (columnId <-> userId
+    // swapped) would leave both truthy and Save enabled too. This asserts the
+    // exact submitted shape so that swap is caught.
+    expect(onSubmit).toHaveBeenCalledWith({
+      trigger: {
+        type: "status_changed",
+        columnId: "c-status",
+        toOptionId: null,
+      },
+      actions: [
+        { type: "assign_person", columnId: "people-1", userId: "user-1" },
+      ],
+      condition: undefined,
+    });
   });
 
   it("does not offer assign a person on a board with no people column", () => {

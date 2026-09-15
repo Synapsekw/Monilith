@@ -331,6 +331,58 @@ describe("AutomationsDialog", () => {
     });
   });
 
+  describe("summarize() for assign_person action", () => {
+    function renderWithAssignRule() {
+      const rule = {
+        id: "auto-ap",
+        board_id: "board-1",
+        org_id: "o1",
+        name: null,
+        enabled: true,
+        trigger: { type: "item_created" },
+        actions: [
+          { type: "assign_person", columnId: "c-people", userId: "u1" },
+        ],
+        condition: null,
+        created_at: "",
+        updated_at: "",
+      };
+      getAutomations.mockResolvedValue([rule]);
+
+      const qc = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      const Wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      );
+      render(
+        <AutomationsDialog
+          open
+          boardId="board-1"
+          columns={columns}
+          members={members}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: Wrapper },
+      );
+    }
+
+    // Asserts the FULL composed sentence (trigger + action), not a fragment —
+    // a wrong preposition, a missing member name, or a columnId/userId swap
+    // in the summarize() arm would all be visible here.
+    it("renders 'When an item is created, assign <member> in <column>.'", async () => {
+      renderWithAssignRule();
+      expect(
+        await screen.findByText(
+          "When an item is created, assign Ada Lovelace in Owner.",
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("passes canWebhook=true to the builder for an admin", async () => {
     getBoardAdminStatus.mockResolvedValue(true);
     renderDialog();
@@ -364,10 +416,14 @@ describe("AutomationsDialog", () => {
   // the header (via the board-intelligence store's ruleRequest) must open the
   // dialog straight into the builder, seeded — not the rule list.
   //
-  // NOTE: the brief's fixture used an `assign_person` action, which is being
-  // added concurrently by another task and doesn't exist on this branch yet.
-  // Using an existing action (`notify` → owner) instead, per the brief's
-  // fallback instruction.
+  // NOTE: this exercises the seeding mechanism itself (Draft prop -> builder
+  // fields pre-filled), which is action-agnostic, so it deliberately keeps a
+  // `notify` action rather than switching to `assign_person` now that the
+  // latter exists on this branch — swapping it in would prove the same
+  // mechanism via a different action's aria-labels, not add coverage.
+  // assign_person's own row rendering/gating is covered in
+  // AutomationBuilder.test.tsx ("assign_person action"), and its rule-list
+  // sentence in "summarize() for assign_person action" above.
   // -------------------------------------------------------------------------
   it("opens straight into a seeded builder", async () => {
     const seededDraft = {
