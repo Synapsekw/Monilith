@@ -3949,6 +3949,7 @@ export type Database = {
           last_touched: string;
           overdue_since: string;
           owner_ids: string[];
+          planned_on: string;
         }[];
       };
       _folder_readable_boards: {
