@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MAX_ANSWER_CHARS } from "@/lib/ai/board-intelligence/ask-input";
 import type { Tables } from "@/types/database.types";
 import { filteringChain } from "@/test/query-double";
 
@@ -185,6 +186,29 @@ describe("openQaInChat", () => {
     });
     expect(inserted.conversations[0].title).toHaveLength(60);
     expect(inserted.conversations[0].title).toBe("q".repeat(60));
+  });
+
+  it("truncates an over-length answer rather than refusing to promote it", async () => {
+    // The owner's rule for this feature: size caps TRUNCATE, they never
+    // reject. The system prompt caps answers at four sentences "unless asked
+    // for more" and `max_tokens` is 8192, so a 6000-character answer is the
+    // ORDINARY outcome of "explain in more detail" — and it is capped nowhere
+    // client-side. Rejecting it told the reader "That question couldn't be
+    // opened in chat." (blaming the question) with no path to success, and
+    // the pair is ephemeral, so the answer was gone on reload.
+    const res = await openQaInChat({
+      runId: RUN_ID,
+      question: "explain in more detail",
+      answer: `${"a ".repeat(3000)}end`,
+    });
+    expect(res.ok).toBe(true);
+
+    const assistant = inserted.messages.find((m) => m.role === "assistant")!;
+    expect(assistant.content.length).toBeLessThanOrEqual(MAX_ANSWER_CHARS);
+    // Truncated, not emptied: the answer the reader saw is what gets written,
+    // minus the tail, with the same ellipsis `truncate` puts everywhere else.
+    expect(assistant.content.startsWith("a a a")).toBe(true);
+    expect(assistant.content.endsWith("…")).toBe(true);
   });
 
   it("fails for a run the caller cannot read, and writes nothing", async () => {

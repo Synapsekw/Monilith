@@ -5,14 +5,36 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { type ActionResult, fail } from "@/lib/actions/result";
+import { MAX_ANSWER_CHARS, MAX_QUESTION_CHARS } from "./ask-input";
 import { rowToRun } from "./runs";
+import { truncate } from "./schema";
 
 const TITLE_MAX = 60;
 
+/**
+ * Strict on SHAPE, TRUNCATING on SIZE — the same rule, and the same
+ * `truncate`, as `ask-input.ts` and `schema.ts`.
+ *
+ * The answer MUST truncate rather than reject. It is the text that just
+ * streamed onto the reader's screen, capped nowhere client-side, out of a turn
+ * whose `max_tokens` is 8192 — and the system prompt asks for four sentences
+ * "unless asked for more", so a 6000-character answer is the normal result of
+ * "explain in more detail". A rejecting `.max()` here turned a good answer
+ * into "That question couldn't be opened in chat." — a message that blames
+ * the question, reproduces every time, offers no path to success, and loses
+ * the answer for good, because this pair is ephemeral.
+ *
+ * `question` stays a hard bound: its composer is a `maxLength={500}` textarea,
+ * so 501 characters is a broken client, not a reader doing something ordinary.
+ */
 const inputSchema = z.object({
   runId: z.string().uuid(),
-  question: z.string().trim().min(1).max(500),
-  answer: z.string().trim().min(1).max(4000),
+  question: z.string().trim().min(1).max(MAX_QUESTION_CHARS),
+  answer: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((t) => truncate(t, MAX_ANSWER_CHARS)),
 });
 
 /**
