@@ -114,10 +114,68 @@ describe("useIntelligenceAsk", () => {
 
   it("clears streaming after the turn settles", async () => {
     vi.stubGlobal("fetch", fetchMock);
-    fetchMock.mockResolvedValue(ndjson([{ type: "done" }]));
+    // A turn that really did answer: a token, then `done`. A body of `done`
+    // alone is NOT "settled" — see the zero-token cases below.
+    fetchMock.mockResolvedValue(
+      ndjson([{ type: "token", text: "Two items." }, { type: "done" }]),
+    );
     const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
     await act(() => result.current.ask("q"));
     await waitFor(() => expect(result.current.streaming).toBe(false));
+    expect(result.current.error).toBeNull();
+  });
+
+  it("tells the user the answer didn't finish when the turn ends with done but no tokens", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    // `askPulseStream` has two exits that emit NO token and still let the
+    // route write `done`: the early return when `stop_reason !== "tool_use"`
+    // and `stream.on("text")` never fired (thinking consumed `max_tokens`),
+    // and the capped tail whose single token can be `""`. The route discards
+    // the return value by design — no row is written — so token events are
+    // the ONLY channel to the reader. `terminated` is true here, so the
+    // severed-stream guard cannot catch it: without an empty-answer check the
+    // bubble renders "Thinking…" forever, with `streaming` false and `error`
+    // null, on a surface with no persistence and no retry.
+    fetchMock.mockResolvedValue(ndjson([{ type: "done" }]));
+    const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
+    await act(() => result.current.ask("q"));
+
+    expect(result.current.error).toBe("The answer didn't finish. Try again.");
+    expect(result.current.streaming).toBe(false);
+    expect(result.current.pairs[0].answer).toBe("");
+    expect(result.current.status).toBeNull();
+  });
+
+  it("tells the user the answer didn't finish when the only token is empty", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    // The capped tail: `args.emit({ type: "token", text: answer })` where
+    // `textOf(capped.content)` came back empty. A token event arrived, but no
+    // answer did.
+    fetchMock.mockResolvedValue(
+      ndjson([
+        { type: "status", text: "Reading this board…" },
+        { type: "token", text: "" },
+        { type: "done" },
+      ]),
+    );
+    const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
+    await act(() => result.current.ask("q"));
+
+    expect(result.current.error).toBe("The answer didn't finish. Try again.");
+    expect(result.current.streaming).toBe(false);
+  });
+
+  it("keeps an error event's own message when the turn also produced no answer", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    // An `error` event is terminal AND leaves the answer empty, so the
+    // empty-answer check must not overwrite the message the server sent.
+    fetchMock.mockResolvedValue(
+      ndjson([{ type: "error", message: "That board is too large to read." }]),
+    );
+    const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
+    await act(() => result.current.ask("q"));
+
+    expect(result.current.error).toBe("That board is too large to read.");
   });
 
   it("tells the user the answer didn't finish when the stream closes with no terminal event", async () => {

@@ -29,6 +29,9 @@ export function AskComposer({
   const busy = useBoardIntelligenceStore((s) => s.busy[boardId] ?? false);
   const [draft, setDraft] = useState("");
   const disabled = !runId || streaming || busy;
+  /** Only the newest pair can be the one in flight — `ask` refuses while a
+   *  turn is streaming, so an earlier empty pair is a turn that ENDED. */
+  const inFlightId = pairs.at(-1)?.id;
 
   async function submit() {
     const q = draft.trim();
@@ -54,10 +57,18 @@ export function AskComposer({
               <p className="text-muted-foreground text-xs font-medium whitespace-pre-wrap">
                 {pair.question}
               </p>
+              {/* Three states, never conflated: the answer; the turn still
+                  running; and a turn that ENDED with nothing. Only one turn
+                  can be in flight (`ask` refuses while `streaming`), so
+                  `streaming` is what separates the last two — without it an
+                  empty pair reads "Thinking…" forever. The bubble says what
+                  happened to THIS pair; the alert below says what to do. */}
               <p className="text-sm leading-relaxed whitespace-pre-wrap">
                 {pair.answer || (
                   <span className="text-muted-foreground">
-                    {status ?? "Thinking…"}
+                    {streaming && pair.id === inFlightId
+                      ? (status ?? "Thinking…")
+                      : "No answer came back."}
                   </span>
                 )}
               </p>

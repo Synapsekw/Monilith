@@ -75,6 +75,56 @@ describe("AskComposer", () => {
     expect(screen.getByText("Two items.")).toBeInTheDocument();
   });
 
+  it("says nothing came back rather than sitting at Thinking… once the turn settled", () => {
+    // The turn ended (`streaming` false) with an empty answer — the zero-token
+    // `done` from `use-intelligence-ask`. The bubble must not keep claiming a
+    // request is in flight.
+    useIntelligenceAsk.mockReturnValue({
+      pairs: [{ id: "1", question: "what slipped?", answer: "" }],
+      streaming: false,
+      status: null,
+      error: "The answer didn't finish. Try again.",
+      ask,
+    });
+    render(<AskComposer runId="r1" boardId="board-1" />);
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.getByText("No answer came back.")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The answer didn't finish. Try again.",
+    );
+  });
+
+  it("shows the status line while the answer is still streaming", () => {
+    useIntelligenceAsk.mockReturnValue({
+      pairs: [{ id: "1", question: "what slipped?", answer: "" }],
+      streaming: true,
+      status: "Reading this board…",
+      error: null,
+      ask,
+    });
+    render(<AskComposer runId="r1" boardId="board-1" />);
+    expect(screen.getByText("Reading this board…")).toBeInTheDocument();
+  });
+
+  it("attributes the in-flight status to the newest pair only", () => {
+    // An earlier turn that came back empty must not be re-labelled
+    // "Thinking…" just because a LATER question is now streaming — only the
+    // newest pair can be in flight.
+    useIntelligenceAsk.mockReturnValue({
+      pairs: [
+        { id: "1", question: "first", answer: "" },
+        { id: "2", question: "second", answer: "" },
+      ],
+      streaming: true,
+      status: "Reading this board…",
+      error: null,
+      ask,
+    });
+    render(<AskComposer runId="r1" boardId="board-1" />);
+    expect(screen.getByText("No answer came back.")).toBeInTheDocument();
+    expect(screen.getByText("Reading this board…")).toBeInTheDocument();
+  });
+
   it("surfaces the error from the hook", () => {
     useIntelligenceAsk.mockReturnValue({
       pairs: [],
