@@ -953,15 +953,30 @@ describe("BoardsNav folder header disclosure", () => {
   it("keeps the chevron in the 24px lead column but grows its touch target", () => {
     renderWithFolder();
     // Class arithmetic (jsdom has no layout), guarding the trade-off: the
-    // chevron must stay 24px wide or every board row under it shifts off the
-    // folder's column, so the 44px touch minimum is bought with a hit-area
-    // pseudo-element instead of a bigger box.
+    // chevron must stay 24px wide in LAYOUT or every board row under it shifts
+    // off the folder's column. The 44px touch minimum is a real box with a
+    // -10px margin each side (44 − 2×10 = 24), NOT an unclipped
+    // `before:-inset-2.5` overlay — that one bled into the neighbouring rows
+    // and swallowed their taps.
     const chevron = screen.getByRole("button", {
       name: "Toggle Acme Rebrand",
     });
     expect(chevron.className).toContain("size-6");
-    expect(chevron.className).not.toMatch(/pointer-coarse:size-/);
-    expect(chevron.className).toContain("pointer-coarse:before:-inset-2.5");
+    expect(chevron.className).toContain("pointer-coarse:size-11");
+    expect(chevron.className).toContain("pointer-coarse:-mx-2.5");
+    expect(chevron.className).not.toMatch(/before:-inset-/);
+  });
+
+  it("makes the folder row tall enough to contain the coarse chevron", () => {
+    renderWithFolder();
+    // The 44px chevron must fit INSIDE its own row; without this the button
+    // overflows a 28px row and overlaps the rows above and below.
+    const chevron = screen.getByRole("button", {
+      name: "Toggle Acme Rebrand",
+    });
+    const row = chevron.closest("[data-folder-row]") as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.className).toContain("pointer-coarse:min-h-11");
   });
 });
 

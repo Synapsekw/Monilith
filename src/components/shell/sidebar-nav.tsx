@@ -6,6 +6,7 @@ import {
   BarChart3,
   Clock,
   FileText,
+  FolderKanban,
   Gauge,
   ListTodo,
   Target,
@@ -42,6 +43,10 @@ const TOP: NavLink[] = [
   { label: "Agents", href: "/ask", icon: AskAiMark },
 ];
 const PLANNING: NavLink[] = [
+  // The folder gallery. It is the ONLY surface that lists unfiled dashboards,
+  // and deleting `DashboardsNav` left it reachable from nowhere but ⌘K — which
+  // mobile has no equivalent of at all.
+  { label: "Folders", href: "/dashboards", icon: FolderKanban },
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },
@@ -103,7 +108,9 @@ function RailLink({
  *
  * Dashboards are no longer a nav section of their own: a dashboard belongs to a
  * folder now, so it is reached through that folder's command center rather than
- * from a flat workspace-wide list.
+ * from a flat workspace-wide list. What Planning carries instead is one
+ * "Folders" link to `/dashboards`, the folder gallery — the only surface that
+ * lists unfiled dashboards, and the only way to reach it on mobile.
  */
 export function SidebarNav({
   orgs = [],

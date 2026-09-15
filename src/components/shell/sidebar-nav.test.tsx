@@ -82,6 +82,9 @@ describe("SidebarNav", () => {
     expect(screen.queryByText("Dashboards")).not.toBeInTheDocument();
     for (const [label, href] of [
       ["My Work", "/my-work"],
+      // The folder gallery: the only surface listing unfiled dashboards, and
+      // on mobile the only way to reach it at all.
+      ["Folders", "/dashboards"],
       ["Goals", "/goals"],
       ["Portfolios", "/portfolios"],
       ["Reports", "/reports"],
