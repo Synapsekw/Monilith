@@ -160,6 +160,7 @@ type ConversationRow = {
   summary: string | null;
   summarized_upto: string | null;
   board_id: string | null;
+  folder_id: string | null;
   agent_id: string | null;
   user_id: string;
 };
@@ -167,6 +168,7 @@ const defaultConversationRow = (): ConversationRow => ({
   summary: null,
   summarized_upto: null,
   board_id: null,
+  folder_id: null,
   agent_id: null,
   user_id: USER_ID,
 });
@@ -228,6 +230,56 @@ function mockBoardRow(row: { id: string; name: string } | null) {
   boardRow = { data: row, error: null };
 }
 
+type FolderRowData = {
+  id: string;
+  name: string;
+  workspace_id: string;
+  org_id: string;
+  position: number;
+};
+let folderRow: { data: FolderRowData | null; error: unknown } = {
+  data: null,
+  error: null,
+};
+type FolderBoardsRow = {
+  position: number;
+  boards: { id: string; name: string; archived_at: string | null };
+};
+let folderBoardsRows: { data: FolderBoardsRow[] | null; error: unknown } = {
+  data: [],
+  error: null,
+};
+
+/** Overrides the `folders` row `getFolderHead` reads back for `folder_id`.
+ *  Pass `null` to simulate an RLS-invisible or dangling folder id, which
+ *  `getFolderHead` maps to `null` for the route to degrade on. */
+function mockFolderHead(
+  folder: Omit<FolderRowData, "workspace_id" | "org_id" | "position"> &
+    Partial<Pick<FolderRowData, "workspace_id" | "org_id" | "position">>,
+  boards: { id: string; name: string }[],
+) {
+  folderRow = {
+    data: {
+      workspace_id: "ws1",
+      org_id: "org1",
+      position: 0,
+      ...folder,
+    },
+    error: null,
+  };
+  folderBoardsRows = {
+    data: boards.map((b, i) => ({
+      position: i,
+      boards: { id: b.id, name: b.name, archived_at: null },
+    })),
+    error: null,
+  };
+}
+function mockFolderMissing() {
+  folderRow = { data: null, error: null };
+  folderBoardsRows = { data: [], error: null };
+}
+
 // Table-routed, because the route now reads three different tables through the
 // same client: ai_conversations (owner gate + persona/board ids), boards and
 // user_agents (persona/board lookups, via maybeSingle so a missing row is not
@@ -250,6 +302,26 @@ vi.mock("@/lib/supabase/server", () => ({
         return {
           select: () => ({
             eq: () => ({ maybeSingle: vi.fn(async () => boardRow) }),
+          }),
+        };
+      }
+      if (table === "folders") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: vi.fn(async () => folderRow) }),
+          }),
+        };
+      }
+      if (table === "folder_boards") {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                order: () => ({
+                  limit: vi.fn(async () => folderBoardsRows),
+                }),
+              }),
+            }),
           }),
         };
       }
@@ -296,6 +368,7 @@ beforeEach(() => {
   conversationRow = { data: defaultConversationRow(), error: null };
   agentRow = { data: null, error: null };
   boardRow = { data: null, error: null };
+  mockFolderMissing();
   agentEqCalls.length = 0;
   single.mockResolvedValue({ data: { id: "a1" }, error: null });
   setMessagesRows(defaultMessagesRows());
@@ -554,6 +627,50 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     const system = askPulseStreamMock.mock.calls[0][0].system as string;
     expect(system).toContain(BOARD_ID);
     expect(system).toContain("Roadmap");
+  });
+
+  it("composes the folder scope into the system prompt for a folder thread", async () => {
+    const FOLDER_ID = "folder-1";
+    mockConversationRow({
+      board_id: null,
+      folder_id: FOLDER_ID,
+      agent_id: null,
+    });
+    mockFolderHead({ id: FOLDER_ID, name: "Q4 Launch" }, [
+      { id: "b1", name: "Backend" },
+      { id: "b2", name: "Mobile" },
+    ]);
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).toContain('folder "');
+    expect(system).toContain("Backend");
+    expect(system).toContain("Mobile");
+  });
+
+  it("degrades to plain Ask when the folder is no longer readable", async () => {
+    const FOLDER_ID = "folder-1";
+    mockConversationRow({
+      board_id: null,
+      folder_id: FOLDER_ID,
+      agent_id: null,
+    });
+    mockFolderMissing();
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).not.toContain('folder "');
+  });
+
+  it("ignores folder_id when board_id is also set (board wins)", async () => {
+    mockConversationRow({
+      board_id: BOARD_ID,
+      folder_id: "folder-1",
+      agent_id: null,
+    });
+    mockBoardRow({ id: BOARD_ID, name: "Roadmap" });
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).toContain("Roadmap");
+    expect(system).not.toContain('folder "');
   });
 
   it("meters a dock turn as ask_pulse, never against the agent run cap", async () => {

@@ -4,9 +4,9 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FolderInput } from "lucide-react";
 
-import { moveBoardToFolder } from "@/lib/boards/folders/actions";
+import { moveBoardToFolder } from "@/lib/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -26,7 +26,7 @@ export function MoveToFolderMenu({
   currentFolderId,
 }: {
   boardId: string;
-  folders: BoardFolder[];
+  folders: FolderSummary[];
   currentFolderId: string | null;
 }) {
   const router = useRouter();

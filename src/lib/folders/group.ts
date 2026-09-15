@@ -1,5 +1,5 @@
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
-import type { BoardFolder, BoardFolderPlacement } from "./types";
+import type { FolderPlacement, FolderSummary } from "./types";
 
 /**
  * A board in the nav tree, tagged with which list it came from. Kept as a
@@ -12,8 +12,8 @@ export type NavBoard =
   | { kind: "shared"; board: SharedBoardEntry };
 
 export type GroupedNav = {
-  /** Only folders with at least one currently-visible board. */
-  folders: Array<{ folder: BoardFolder; boards: NavBoard[] }>;
+  /** Every folder in the workspace, in order — empty ones included. */
+  folders: Array<{ folder: FolderSummary; boards: NavBoard[] }>;
   unfiledOwned: BoardListEntry[];
   unfiledShared: SharedBoardEntry[];
 };
@@ -22,9 +22,14 @@ export type GroupedNav = {
  * Folds folders + placements + the two board lists into the sidebar tree.
  *
  * Two rules live here and nowhere else:
- *   1. A folder with no visible board is DROPPED, not rendered empty. Folders
- *      are user-global while owned boards are workspace-filtered, so a folder
- *      whose boards all live in another workspace must simply not appear.
+ *   1. An EMPTY folder is rendered, not dropped. This inverts the rule the
+ *      private per-user layer had. A shared folder is a project with its own
+ *      command center at /folders/<id>, and it is workspace-scoped like the
+ *      boards beside it — so "no visible board" now means "this project has
+ *      nothing filed yet", which the user must be able to see and open. (The
+ *      old rule existed because private folders were user-GLOBAL: a folder
+ *      whose boards all lived in another workspace would otherwise have shown
+ *      up empty in every workspace.)
  *   2. A placement is only honoured if BOTH its board and its folder are
  *      present — a stale placement (revoked share, deleted folder) is inert.
  */
@@ -34,8 +39,8 @@ export function groupBoardsByFolder({
   boards,
   sharedBoards,
 }: {
-  folders: BoardFolder[];
-  placements: BoardFolderPlacement[];
+  folders: FolderSummary[];
+  placements: FolderPlacement[];
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
 }): GroupedNav {
@@ -73,18 +78,16 @@ export function groupBoardsByFolder({
   );
 
   return {
-    folders: ordered
-      .filter((f) => (buckets.get(f.id)?.length ?? 0) > 0)
-      .map((folder) => ({
-        folder,
-        boards: (buckets.get(folder.id) ?? [])
-          .sort(
-            (a, b) =>
-              a.position - b.position ||
-              a.nav.board.name.localeCompare(b.nav.board.name),
-          )
-          .map((entry) => entry.nav),
-      })),
+    folders: ordered.map((folder) => ({
+      folder,
+      boards: (buckets.get(folder.id) ?? [])
+        .sort(
+          (a, b) =>
+            a.position - b.position ||
+            a.nav.board.name.localeCompare(b.nav.board.name),
+        )
+        .map((entry) => entry.nav),
+    })),
     unfiledOwned,
     unfiledShared,
   };

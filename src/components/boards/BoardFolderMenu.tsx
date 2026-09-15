@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
-import { deleteFolder, renameFolder } from "@/lib/boards/folders/actions";
-import { FOLDER_GONE_ERROR } from "@/lib/boards/folders/types";
+import { deleteFolder, renameFolder } from "@/lib/folders/actions";
+import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

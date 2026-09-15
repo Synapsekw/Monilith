@@ -70,6 +70,7 @@ export function AskChat({
   conversationId,
   initialMessages,
   boardId,
+  folderId,
   agentId,
   initialAgentId,
   title,
@@ -92,6 +93,11 @@ export function AskChat({
   agentProposals?: PendingProposal[];
   /** Board this thread belongs to. Set by the dock; absent on /ask. */
   boardId?: string;
+  /** Folder this thread belongs to. Set by the command center's Ask button;
+   *  absent otherwise. Mutually exclusive with `boardId` — a thread is
+   *  scoped to one or the other, never both — and `boardId` wins if a caller
+   *  somehow supplies both. */
+  folderId?: string;
   /** Persona for a thread that does not exist yet (the dock's chosen default
    *  for a NEW board thread). Folded into the live persona state below on
    *  mount — after that this prop is never read again, because the state (and
@@ -253,7 +259,7 @@ export function AskChat({
         const persona = addressedAgentId ?? personaId;
         const res = await createConversation({
           firstMessage: text,
-          ...(boardId ? { boardId } : {}),
+          ...(boardId ? { boardId } : folderId ? { folderId } : {}),
           ...(persona ? { agentId: persona } : {}),
         });
         if (!res.ok) {

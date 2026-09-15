@@ -462,6 +462,47 @@ describe("AskChat — surface-agnostic (board dock)", () => {
     // conversation row, so it must never ride along per turn.
     expect(send).toHaveBeenCalledWith("c1", expect.any(Function));
   });
+
+  it("passes folderId to createConversation for a new thread", async () => {
+    const FOLDER_ID = "33333333-3333-4333-8333-333333333333";
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        folderId={FOLDER_ID}
+        onStarted={() => {}}
+      />,
+    );
+    ask("what is late in this project?");
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "what is late in this project?",
+        folderId: FOLDER_ID,
+      }),
+    );
+  });
+
+  it("prefers boardId over folderId when both are given", async () => {
+    const FOLDER_ID = "33333333-3333-4333-8333-333333333333";
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        boardId={BOARD_ID}
+        folderId={FOLDER_ID}
+        onStarted={() => {}}
+      />,
+    );
+    ask("hello");
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "hello",
+        boardId: BOARD_ID,
+      }),
+    );
+  });
 });
 
 /** Hold the conversation-minting server action open, so the test can inspect the

@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Eye, Users2 } from "lucide-react";
 import type { SharedBoardEntry } from "@/lib/boards/queries";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -55,7 +55,7 @@ export function SharedBoardRow({
 }: {
   board: SharedBoardEntry;
   isActive: boolean;
-  folders?: BoardFolder[];
+  folders?: FolderSummary[];
   currentFolderId?: string | null;
   lead?: ReactNode;
   dragRef?: (node: HTMLElement | null) => void;

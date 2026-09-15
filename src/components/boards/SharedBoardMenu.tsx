@@ -2,7 +2,7 @@
 
 import { MoreHorizontal } from "lucide-react";
 
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +23,7 @@ export function SharedBoardMenu({
   currentFolderId,
 }: {
   board: { id: string; name: string };
-  folders: BoardFolder[];
+  folders: FolderSummary[];
   currentFolderId: string | null;
 }) {
   return (

@@ -75,6 +75,22 @@ describe("AiReviewBanner", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboards"));
   });
 
+  it("clicking Discard on a foldered dashboard pushes back to the folder, not /dashboards", async () => {
+    // /dashboards is the folder gallery — it never listed this dashboard, so
+    // discarding a foldered one has to land back on its folder's widgets strip
+    // (the same place Regenerate returns to, minus the ?ai=1 reopen).
+    render(<AiReviewBanner dashboardId="dash-10" folderId="folder-2" />);
+    fireEvent.click(screen.getByRole("button", { name: /discard/i }));
+    await waitFor(() =>
+      expect(mockDeleteDashboard).toHaveBeenCalledWith({
+        dashboardId: "dash-10",
+      }),
+    );
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/folders/folder-2#widgets"),
+    );
+  });
+
   it("clicking Regenerate calls deleteDashboard then pushes /dashboards?ai=1", async () => {
     render(<AiReviewBanner dashboardId="dash-7" />);
     fireEvent.click(screen.getByRole("button", { name: /regenerate/i }));
@@ -85,6 +101,19 @@ describe("AiReviewBanner", () => {
     );
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith("/dashboards?ai=1"),
+    );
+  });
+
+  it("clicking Regenerate on a foldered dashboard pushes back to the folder's widgets strip with ?ai=1", async () => {
+    render(<AiReviewBanner dashboardId="dash-8" folderId="folder-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /regenerate/i }));
+    await waitFor(() =>
+      expect(mockDeleteDashboard).toHaveBeenCalledWith({
+        dashboardId: "dash-8",
+      }),
+    );
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/folders/folder-1?ai=1#widgets"),
     );
   });
 

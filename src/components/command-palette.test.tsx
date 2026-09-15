@@ -48,7 +48,7 @@ const boards = [
     shared_out: false,
   },
 ];
-const dashboards = [{ id: "d1", name: "Team overview" }];
+const folders = [{ id: "f1", name: "Q4 Launch" }];
 const workspaces = [{ id: "ws1", name: "WS" }];
 
 function renderOpen() {
@@ -60,7 +60,7 @@ function renderOpen() {
   return render(
     <CommandPalette
       boards={boards}
-      dashboards={dashboards}
+      folders={folders}
       workspaces={workspaces}
     />,
   );
@@ -80,11 +80,11 @@ beforeEach(() => {
 });
 
 describe("CommandPalette", () => {
-  it("renders a navigation item per board and per dashboard", () => {
+  it("renders a navigation item per board and per folder", () => {
     renderOpen();
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
     expect(screen.getByText("Roadmap")).toBeInTheDocument();
-    expect(screen.getByText("Team overview")).toBeInTheDocument();
+    expect(screen.getByText(/Q4 Launch — command center/)).toBeInTheDocument();
   });
 
   it("navigates to a board on select and closes", () => {
@@ -101,9 +101,10 @@ describe("CommandPalette", () => {
     expect(useUIStore.getState().commandOpen).toBe(false);
   });
 
-  it("New dashboard sets the newDashboardOpen flag", () => {
+  it("New dashboard navigates to the gallery and sets the newDashboardOpen flag", () => {
     renderOpen();
     fireEvent.click(screen.getByText("New dashboard"));
+    expect(push).toHaveBeenCalledWith("/dashboards");
     expect(useUIStore.getState().newDashboardOpen).toBe(true);
   });
 

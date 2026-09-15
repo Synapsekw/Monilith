@@ -22,11 +22,8 @@ import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { PlainBoardRow } from "@/components/boards/PlainBoardRow";
 import { NavSection } from "@/components/shell/nav-section";
 import { railTileClass } from "@/components/shell/sidebar-row";
-import type {
-  BoardFolder,
-  BoardFolderPlacement,
-} from "@/lib/boards/folders/types";
-import { groupBoardsByFolder, type NavBoard } from "@/lib/boards/folders/group";
+import type { FolderPlacement, FolderSummary } from "@/lib/folders/types";
+import { groupBoardsByFolder, type NavBoard } from "@/lib/folders/group";
 import { useUIStore } from "@/stores/ui";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
@@ -61,8 +58,8 @@ const BoardsNavSortable = dynamic(
 // `NO_FOLDERS` carries one further meaning that IS load-bearing: it is the
 // sentinel for "the caller supplied no folder data at all", which the prune
 // effect below must treat as UNKNOWN rather than as "this user has no folders".
-const NO_FOLDERS: BoardFolder[] = [];
-const NO_PLACEMENTS: BoardFolderPlacement[] = [];
+const NO_FOLDERS: FolderSummary[] = [];
+const NO_PLACEMENTS: FolderPlacement[] = [];
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -88,8 +85,8 @@ export function BoardsNav({
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
-  folders?: BoardFolder[];
-  placements?: BoardFolderPlacement[];
+  folders?: FolderSummary[];
+  placements?: FolderPlacement[];
   activeWorkspaceId?: string;
   collapsed?: boolean;
 }) {
@@ -126,7 +123,8 @@ export function BoardsNav({
   }
 
   // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
-  // "a folder with no visible board is dropped, not rendered empty" rule.
+  // "an empty folder still renders" rule — a shared folder is a project, and its
+  // row links to the command center whether or not anything is filed in it yet.
   //
   // The memo is a render-cost saving: the fold allocates several arrays and maps
   // and runs on every client re-render (e.g. `useParams()` changing as you click
@@ -178,10 +176,11 @@ export function BoardsNav({
   // Drop the collapse state of folders that no longer exist, so the persisted
   // map cannot grow without bound.
   //
-  // Prune against the RAW `folders` prop, never `grouped.folders`: the fold
-  // DROPS folders whose boards are all in another workspace, so pruning against
-  // the rendered tree would erase the collapse state of folders that still
-  // exist, merely because you switched workspace.
+  // Prune against the RAW `folders` prop, never `grouped.folders`. The two are
+  // the same set now that empty folders render, but the raw prop is the one
+  // that MEANS "the folders that exist" — `grouped.folders` is a render
+  // concern, and coupling the persisted map to it is how the collapse state
+  // got erased on a workspace switch before.
   //
   // And skip entirely when the prop was omitted — `NO_FOLDERS` means "the
   // caller supplied no folder data", i.e. UNKNOWN, not "this user has none".
@@ -279,7 +278,7 @@ export function BoardsNav({
       title="Boards"
       action={
         <>
-          <NewFolderDialog />
+          <NewFolderDialog workspaceId={activeWorkspaceId} />
           <NewBoardDialog workspaceId={activeWorkspaceId} />
         </>
       }

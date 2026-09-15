@@ -9,13 +9,13 @@ vi.mock("next/navigation", () => ({
 
 const renameFolder = vi.fn();
 const deleteFolder = vi.fn();
-vi.mock("@/lib/boards/folders/actions", () => ({
+vi.mock("@/lib/folders/actions", () => ({
   renameFolder: (...args: unknown[]) => renameFolder(...args),
   deleteFolder: (...args: unknown[]) => deleteFolder(...args),
 }));
 
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
-import { FOLDER_GONE_ERROR } from "@/lib/boards/folders/types";
+import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
 
 const folder = { id: "f1", name: "Acme Rebrand" };
 

@@ -3,8 +3,7 @@ import {
   listMyBoardsCached,
   listSharedBoardsCached,
 } from "@/lib/boards/queries-cached";
-import { listDashboardsCached } from "@/lib/dashboards/queries-cached";
-import { listBoardFoldersCached } from "@/lib/boards/folders/queries-cached";
+import { listFoldersCached } from "@/lib/folders/queries-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { resolveActiveOrg } from "@/lib/org/active";
@@ -28,11 +27,10 @@ export async function getSidebarNavData(): Promise<
 
   // Folders join the EXISTING Promise.all — a sequential await here would add a
   // round-trip to first paint of every authenticated route.
-  const [boards, sharedBoards, dashboards, folderData] = await Promise.all([
+  const [boards, sharedBoards, folderData] = await Promise.all([
     listMyBoardsCached(userId, activeWorkspaceId),
     listSharedBoardsCached(userId),
-    listDashboardsCached(orgId, activeWorkspaceId),
-    listBoardFoldersCached(userId),
+    listFoldersCached(orgId, activeWorkspaceId),
   ]);
 
   return {
@@ -43,14 +41,13 @@ export async function getSidebarNavData(): Promise<
     // `folderData` is null when the folders read FAILED. Spreading `?.` here
     // hands `undefined` down, which makes `SidebarNav`/`BoardsNav` fall back to
     // their `NO_FOLDERS` sentinel — the one place that already means "no folder
-    // data was supplied", as opposed to "this user has no folders". That
+    // data was supplied", as opposed to "this workspace has no folders". That
     // sentinel is what stops the prune effect wiping every persisted folder
     // collapse key on a one-off Supabase blip.
     folders: folderData?.folders,
     placements: folderData?.placements,
     workspaces,
     activeWorkspaceId,
-    dashboards: dashboards.map((d) => ({ id: d.id, name: d.name })),
   };
 }
 
