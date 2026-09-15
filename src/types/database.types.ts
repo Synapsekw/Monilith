@@ -174,6 +174,7 @@ export type Database = {
           agent_id: string | null;
           board_id: string | null;
           created_at: string;
+          folder_id: string | null;
           id: string;
           org_id: string;
           run_id: string | null;
@@ -189,6 +190,7 @@ export type Database = {
           agent_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          folder_id?: string | null;
           id?: string;
           org_id: string;
           run_id?: string | null;
@@ -204,6 +206,7 @@ export type Database = {
           agent_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          folder_id?: string | null;
           id?: string;
           org_id?: string;
           run_id?: string | null;
@@ -229,6 +232,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";
@@ -1609,6 +1619,7 @@ export type Database = {
         Row: {
           created_at: string;
           created_by: string;
+          folder_id: string | null;
           id: string;
           name: string;
           org_id: string;
@@ -1618,6 +1629,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           created_by: string;
+          folder_id?: string | null;
           id?: string;
           name: string;
           org_id: string;
@@ -1627,6 +1639,7 @@ export type Database = {
         Update: {
           created_at?: string;
           created_by?: string;
+          folder_id?: string | null;
           id?: string;
           name?: string;
           org_id?: string;
@@ -1634,6 +1647,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "dashboards_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "dashboards_org_id_fkey";
             columns: ["org_id"];
@@ -1749,6 +1769,90 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      folder_boards: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          folder_id: string;
+          position: number;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          folder_id: string;
+          position?: number;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          folder_id?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_boards_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: true;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folder_boards_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      folders: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folders_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folders_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -4068,6 +4172,7 @@ export type Database = {
         Returns: {
           created_at: string;
           created_by: string;
+          folder_id: string | null;
           id: string;
           name: string;
           org_id: string;
@@ -4327,6 +4432,7 @@ export type Database = {
         Returns: {
           created_at: string;
           created_by: string;
+          folder_id: string | null;
           id: string;
           name: string;
           org_id: string;
@@ -4341,6 +4447,10 @@ export type Database = {
         };
       };
       escape_like: { Args: { p_text: string }; Returns: string };
+      folder_accepts_board: {
+        Args: { p_board_id: string; p_folder_id: string };
+        Returns: boolean;
+      };
       get_my_agent_last_runs: {
         Args: never;
         Returns: {
