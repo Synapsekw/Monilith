@@ -23,6 +23,11 @@ const MAX_ROUNDS = 6;
  *  propose-only writer, which NEVER mutates. */
 const READ_TOOL_NAMES = new Set(ASK_TOOLS.map((t) => t.name));
 
+/** The `"read-only"` toolset: the two board-read tools Board Intelligence Q&A
+ *  needs, and nothing else. A SUBSET of ASK_TOOLS, so the loop's read branch
+ *  already knows how to execute both. */
+const INTEL_READ_TOOLS = new Set(["query_items", "semantic_search_items"]);
+
 /** Concatenate the text blocks of a model response, dropping tool_use/other blocks. */
 function textOf(content: Anthropic.ContentBlock[]): string {
   return content
@@ -78,6 +83,13 @@ export async function askPulseStream(args: {
   messages: Anthropic.MessageParam[];
   system: string;
   emit: (e: AskStreamEvent) => void;
+  /**
+   * `"read-only"` (Board Intelligence Q&A, spec §3.1) narrows the loop to the
+   * two board-read tools and attaches NO write executor, so no propose_* tool
+   * is even offered to the model. `"full"` is Ask's shipped behaviour and the
+   * default — a missing option must change nothing.
+   */
+  toolset?: "full" | "read-only";
   client?: Anthropic; // DI for tests
 }): Promise<{
   answer: string;
@@ -86,11 +98,16 @@ export async function askPulseStream(args: {
   usage: AiUsageTokens;
 }> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
-  const writer = createWriteToolExecutor({
-    orgId: args.orgId,
-    workspaceId: args.workspaceId,
-  });
-  const tools = [...ASK_TOOLS, LIST_MEMBERS_TOOL, ...WRITE_TOOLS];
+  const readOnly = args.toolset === "read-only";
+  const tools = readOnly
+    ? ASK_TOOLS.filter((t) => INTEL_READ_TOOLS.has(t.name))
+    : [...ASK_TOOLS, LIST_MEMBERS_TOOL, ...WRITE_TOOLS];
+  const writer = readOnly
+    ? null
+    : createWriteToolExecutor({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+      });
   const messages = [...args.messages];
   const shape = requestShapeFor(args.model);
   const system: Anthropic.TextBlockParam[] = [
@@ -144,7 +161,7 @@ export async function askPulseStream(args: {
     }
 
     messages.push({ role: "assistant", content: final.content });
-    const collectedBefore = writer.collected().length;
+    const collectedBefore = writer?.collected().length ?? 0;
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     let consulted = 0;
     for (const block of final.content) {
@@ -164,7 +181,15 @@ export async function askPulseStream(args: {
         });
         continue;
       }
-      const r = await writer.execute(block.name, block.input);
+      // No writer means `read-only`: no propose_* tool was offered, so the
+      // model cannot legitimately be here. Fall through to `executeAskTool`,
+      // whose `default` branch is the canonical `{"error":"unknown tool"}`
+      // result — the model gets a chance to self-correct, and NOTHING runs.
+      const r = writer
+        ? await writer.execute(block.name, block.input)
+        : await executeAskTool(block.name, block.input, {
+            workspaceId: args.workspaceId,
+          });
       toolResults.push({
         type: "tool_result",
         tool_use_id: block.id,
@@ -177,7 +202,9 @@ export async function askPulseStream(args: {
     // growing, not off the tool name: a propose_* call that FAILED (bad id,
     // unknown group) collects nothing, and its {"error": …} result falls through
     // to the normal feed-back below so the model can self-correct.
-    const proposed = writer.collected() as ValidatedAction[];
+    // `read-only` has no writer, so this stays empty and the proposal branch is
+    // unreachable — `proposedActions: []` by construction, not by convention.
+    const proposed = (writer?.collected() ?? []) as ValidatedAction[];
     if (proposed.length > collectedBefore) {
       args.emit({ type: "proposal", actions: proposed });
       return {

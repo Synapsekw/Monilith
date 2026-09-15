@@ -7,8 +7,16 @@ const mockExecuteAskTool = vi.fn();
 const mockWriterExecute = vi.fn();
 let collected: unknown[] = [];
 
+// All four real read tools are named here (the real ASK_TOOLS has exactly
+// these): the read-only toolset is defined as a SUBSET of them, so a mock that
+// omitted `query_items` / `semantic_search_items` could not see the filter.
 vi.mock("@/lib/ai/ask/tools", () => ({
-  ASK_TOOLS: [{ name: "list_boards" }, { name: "get_board_overview" }],
+  ASK_TOOLS: [
+    { name: "list_boards" },
+    { name: "get_board_overview" },
+    { name: "query_items" },
+    { name: "semantic_search_items" },
+  ],
   executeAskTool: (...a: unknown[]) => mockExecuteAskTool(...a),
 }));
 vi.mock("@/lib/ai/write/write-tools", () => ({
@@ -34,7 +42,9 @@ function fakeClient(rounds: Round[]) {
   let i = 0;
   return {
     messages: {
-      stream: vi.fn(() => {
+      // The params are declared (unused here) so vitest RECORDS them: the
+      // toolset cases read `stream.mock.calls[0][0].tools`.
+      stream: vi.fn((_params: Record<string, unknown>) => {
         const round = rounds[i++];
         const handlers: Record<string, (arg: string) => void> = {};
         const p = {
@@ -70,22 +80,43 @@ const ACTION = {
   warnings: [],
 };
 
+/** Everything the engine needs except the client — the bits no test varies. */
+const baseArgs = {
+  apiKey: "k",
+  model: "claude-sonnet-5",
+  orgId: "org1",
+  workspaceId: "ws1",
+  messages: [{ role: "user" as const, content: "hi" }],
+  system: "SYS",
+  emit: () => {},
+};
+
 const run = (
   client: unknown,
   emit: (e: AskStreamEvent) => void,
   messages = [{ role: "user" as const, content: "hi" }],
 ) =>
   askPulseStream({
+    ...baseArgs,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- scripted structural double
     client: client as any,
-    apiKey: "k",
-    model: "claude-sonnet-5",
-    orgId: "org1",
-    workspaceId: "ws1",
     messages,
-    system: "SYS",
     emit,
   });
+
+/** One end_turn round — enough to reach the ONE `.stream()` call a
+ *  request-shape assertion inspects. */
+const oneRound = (): Round[] => [
+  {
+    text: "ok",
+    stop_reason: "end_turn",
+    content: [{ type: "text", text: "ok" }],
+  },
+];
+
+/** The tool names a recorded `.stream()` call offered the model. */
+const toolNamesOf = (params: unknown): string[] =>
+  (params as { tools: { name: string }[] }).tools.map((t) => t.name);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -459,5 +490,35 @@ describe("askPulseStream", () => {
     expect(streamParams?.max_tokens).toBe(8192);
     expect(createParams?.thinking).toEqual(shape.thinking);
     expect(createParams?.max_tokens).toBe(4096);
+  });
+
+  it("offers only the two read tools under toolset read-only", async () => {
+    const client = fakeClient(oneRound());
+    await askPulseStream({
+      ...baseArgs,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- scripted structural double
+      client: client as any,
+      toolset: "read-only",
+    });
+    const names = toolNamesOf(client.messages.stream.mock.calls[0][0]);
+    expect(names).toEqual(["query_items", "semantic_search_items"]);
+    // Named explicitly: a write tool reaching this loop is the failure this
+    // guards, and an assertion that never names one cannot see it.
+    expect(names).not.toContain("propose_create_item");
+    expect(names).not.toContain("propose_update_cell");
+    expect(names).not.toContain("list_board_members");
+  });
+
+  it("still offers the full toolset by default", async () => {
+    const client = fakeClient(oneRound());
+    await askPulseStream({
+      ...baseArgs,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- scripted structural double
+      client: client as any,
+    });
+    const names = toolNamesOf(client.messages.stream.mock.calls[0][0]);
+    expect(names).toContain("list_boards");
+    expect(names).toContain("propose_create_item");
+    expect(names).toContain("list_board_members");
   });
 });
