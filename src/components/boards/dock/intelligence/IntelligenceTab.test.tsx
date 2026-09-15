@@ -150,6 +150,26 @@ describe("IntelligenceTab — nothing read yet", () => {
     });
   });
 
+  it("shows the composer greyed, pointing at Catch me up (spec §3.2)", async () => {
+    // The owner's ruling: "Disabled until a run exists — composer greyed with
+    // a one-liner pointing at Catch me up". Mounting it inside `run &&` made
+    // that state unreachable, so `AskComposer`'s own disabled branch described
+    // something the app could never show.
+    seed(null);
+    mount();
+    const box = screen.getByRole("textbox", { name: /ask about this board/i });
+    expect(box).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Catch me up first — answers are grounded in the brief.",
+      ),
+    ).toBeInTheDocument();
+    // The composer must not become a second way to spend on the model before
+    // a brief exists: the only action in this state is "Catch me up".
+    await userEvent.type(box, "what slipped?");
+    expect(box).toHaveValue("");
+  });
+
   it("reads the board once when the tab is opened for it", async () => {
     seed(null);
     const { rerender } = mount({ runOnMount: true });
@@ -271,14 +291,18 @@ describe("IntelligenceTab — the brief", () => {
     expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
-  it("mounts the ask composer once a brief is on screen", () => {
+  it("enables the ask composer once a brief is on screen", () => {
     // A positive assertion, not just an absence of errors: if a future change
     // drops <AskComposer> from the tab, this fails instead of passing quietly.
+    // The composer mounts either way now (see the no-run case above) — a
+    // brief is what ENABLES it, and that is the pair of states spec §3.2
+    // describes.
     seed(makeRun());
     mount();
-    expect(
-      screen.getByRole("textbox", { name: /ask about this board/i }),
-    ).toBeInTheDocument();
+    const box = screen.getByRole("textbox", { name: /ask about this board/i });
+    expect(box).toBeInTheDocument();
+    expect(box).toBeEnabled();
+    expect(screen.queryByText(/catch me up first/i)).toBeNull();
   });
 
   it("dates a refreshed brief from now, not from when the tab opened", async () => {

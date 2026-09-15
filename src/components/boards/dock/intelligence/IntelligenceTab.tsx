@@ -191,20 +191,32 @@ export function IntelligenceTab({
               Nothing needs attention right now.
             </p>
           )}
+        </>
+      )}
 
-          <AskComposer
-            runId={run.id}
-            boardId={boardId}
-            onOpenInChat={onOpenInChat}
-          />
+      {/* The footer group, OUTSIDE `run &&` on purpose (spec §3.2): the
+          composer is "disabled when no run is cached, with a one-liner
+          pointing at 'Catch me up'", which it can only ever be if it mounts
+          before one exists. Pinned to the bottom of the panel with the
+          hairline above it, so with no brief it reads as the composer waiting
+          its turn rather than a second paragraph arguing with the empty
+          state's own "Catch me up" — one invites the brief, the other says
+          why asking is unavailable, and both name the same action. */}
+      <div className="mt-auto flex flex-col gap-4">
+        <AskComposer
+          runId={run?.id ?? null}
+          boardId={boardId}
+          onOpenInChat={onOpenInChat}
+        />
 
-          <p className="text-muted-foreground text-3xs mt-auto font-mono">
+        {run && (
+          <p className="text-muted-foreground text-3xs font-mono">
             {`${canApply ? "Read-only until you apply" : "Read-only"} · ${
               run.model ?? "model"
             } · ${run.tokensIn + run.tokensOut} tokens`}
           </p>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
