@@ -10,9 +10,13 @@ import { deleteDashboard } from "@/lib/dashboards/actions";
 
 interface AiReviewBannerProps {
   dashboardId: string;
+  /** Present when this dashboard is folded into a folder — Regenerate then
+   *  returns there (with `?ai=1#widgets` to reopen the wizard) instead of the
+   *  standalone dashboards gallery. */
+  folderId?: string;
 }
 
-export function AiReviewBanner({ dashboardId }: AiReviewBannerProps) {
+export function AiReviewBanner({ dashboardId, folderId }: AiReviewBannerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -47,9 +51,12 @@ export function AiReviewBanner({ dashboardId }: AiReviewBannerProps) {
         setError(result.error ?? "Failed to discard dashboard.");
         return;
       }
-      // Route to /dashboards?ai=1 — the ?ai=1 param re-opens the AI wizard
-      // (contract with the wizard component in Task 6).
-      router.push("/dashboards?ai=1");
+      // A foldered dashboard goes back to its folder's widgets strip; ?ai=1
+      // re-opens the wizard there (folder page) same as it does on the
+      // standalone gallery (contract with the wizard component in Task 6).
+      router.push(
+        folderId ? `/folders/${folderId}?ai=1#widgets` : "/dashboards?ai=1",
+      );
     });
   }
 

@@ -99,6 +99,26 @@ describe("AiDashboardWizard", () => {
     ).toBeInTheDocument();
   });
 
+  it("forwards folderId to createDashboardFromProposal when given", async () => {
+    const user = userEvent.setup();
+    render(
+      <AiDashboardWizard
+        workspaceId="ws1"
+        folderId="folder-1"
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    await user.click(await screen.findByText("Sales Pipeline"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+    await user.click(await screen.findByRole("button", { name: /generate/i }));
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId: "folder-1" }),
+    );
+  });
+
   it("shows the error in an alert when generation fails", async () => {
     mockGenerate.mockResolvedValue({
       ok: false,

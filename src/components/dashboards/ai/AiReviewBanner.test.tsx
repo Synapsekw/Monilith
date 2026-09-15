@@ -88,6 +88,19 @@ describe("AiReviewBanner", () => {
     );
   });
 
+  it("clicking Regenerate on a foldered dashboard pushes back to the folder's widgets strip with ?ai=1", async () => {
+    render(<AiReviewBanner dashboardId="dash-8" folderId="folder-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /regenerate/i }));
+    await waitFor(() =>
+      expect(mockDeleteDashboard).toHaveBeenCalledWith({
+        dashboardId: "dash-8",
+      }),
+    );
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/folders/folder-1?ai=1#widgets"),
+    );
+  });
+
   it("shows an error message when deleteDashboard fails on Discard", async () => {
     mockDeleteDashboard.mockResolvedValue({
       ok: false,

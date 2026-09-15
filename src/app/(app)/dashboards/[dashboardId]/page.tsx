@@ -3,12 +3,11 @@ import { z } from "zod";
 
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
-import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardPayload } from "@/lib/dashboards/queries";
+import { buildBoardOptions } from "@/lib/dashboards/board-options";
 import { dashboardRedirectTarget } from "@/lib/folders/redirect";
-import { optionSchema } from "@/lib/validations/boards";
 
 /**
  * `?review=1` is the AI-generation review flow's own flag (Keep / Regenerate
@@ -85,47 +84,16 @@ export default async function DashboardPage({
       .order("position", { ascending: true }),
   ]);
 
-  const boards: BoardOption[] = (boardRows ?? []).map((b) => {
-    const cols = (allCols ?? []).filter((c) => c.board_id === b.id);
-    return {
-      id: b.id,
-      name: b.name,
-      numbersColumns: cols
-        .filter((c) => c.kind === "numbers")
-        .map((c) => ({ id: c.id, name: c.name })),
-      statusColumns: cols
-        .filter((c) => c.kind === "status")
-        .map((c) => ({ id: c.id, name: c.name })),
-      dateColumns: cols
-        .filter((c) => c.kind === "date")
-        .map((c) => ({ id: c.id, name: c.name })),
-      peopleColumns: cols
-        .filter((c) => c.kind === "people")
-        .map((c) => ({ id: c.id, name: c.name })),
-      dropdownColumns: cols
-        .filter((c) => c.kind === "dropdown")
-        .map((c) => ({ id: c.id, name: c.name })),
-      percentColumns: cols
-        .filter((c) => c.kind === "percent")
-        .map((c) => ({ id: c.id, name: c.name })),
-      allColumns: cols.map((c) => ({
-        id: c.id,
-        name: c.name,
-        kind: c.kind,
-        options:
-          optionSchema
-            .array()
-            .safeParse((c.settings as { options?: unknown }).options ?? [])
-            .data ?? [],
-      })),
-    };
-  });
+  const boards = buildBoardOptions(boardRows ?? [], allCols ?? []);
 
   return (
     <>
       {reviewRequested && (
         <div className="px-4 pt-4">
-          <AiReviewBanner dashboardId={dashboardId} />
+          <AiReviewBanner
+            dashboardId={dashboardId}
+            folderId={payload.dashboard.folder_id ?? undefined}
+          />
         </div>
       )}
       <DashboardCanvasLazy initialData={payload} boards={boards} />
