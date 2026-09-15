@@ -69,10 +69,6 @@ const MINI_OUT =
   "pointer-events-none -translate-x-2 opacity-0 [transition:opacity_120ms_ease,translate_160ms_ease-in]";
 
 const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
-/** No columns and no members — every "Always do this" mapping fails closed,
- *  so a caller that has not yet wired the page's real meta simply gets no
- *  button rather than a crash. */
-const EMPTY_RULE_META: RuleBoardMeta = { columns: [], memberIds: [] };
 
 /**
  * Put the open thread in the URL, MERGING into whatever is already there.
@@ -137,7 +133,7 @@ export function BoardDock({
   currentUserId,
   access = "viewer",
   initialRun = null,
-  ruleMeta = EMPTY_RULE_META,
+  ruleMeta,
 }: {
   boardId: string;
   agents: DockAgent[];
@@ -147,10 +143,12 @@ export function BoardDock({
   /** The latest run, read ONCE by the board page. Never re-read here. */
   initialRun?: BoardIntelligenceRun | null;
   /** Column kinds and member ids for "Always do this" (spec §2.2/§4). The
-   *  page already reads both, so this costs no new query; defaults to
-   *  "nothing on the board" so an unwired caller loses the button, not the
-   *  render. */
-  ruleMeta?: RuleBoardMeta;
+   *  page already reads both, so this costs no new query. Required, not
+   *  defaulted: a silently-empty value makes every "Always do this" button
+   *  vanish with no error and no empty state — a caller must say explicitly
+   *  what the board looks like, even when that is "nothing" (see the test
+   *  fixtures' `NO_RULE_META_FIXTURE`). */
+  ruleMeta: RuleBoardMeta;
 }) {
   const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
   const narrow = useNarrowViewport();

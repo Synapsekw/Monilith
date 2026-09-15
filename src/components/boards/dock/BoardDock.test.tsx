@@ -133,8 +133,15 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
 
 import { BoardDock } from "./BoardDock";
 import { DOCK_MIN_WIDTH, DOCK_RAIL_WIDTH } from "./use-dock-state";
+import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
+
+/** This suite never asserts on "Always do this" — the board it fixtures has
+ *  no columns and no members ON PURPOSE, so `ruleDraftFor` maps nothing.
+ *  Named rather than an inline `{}` literal so a reader sees a deliberate
+ *  fixture choice, not an accidentally-empty board. */
+const NO_RULE_META_FIXTURE: RuleBoardMeta = { columns: [], memberIds: [] };
 
 const AGENTS = [
   { id: "a1", name: "Morning Brief" },
@@ -268,6 +275,7 @@ const mount = (props: MountProps = {}) =>
         currentUserId="me"
         access={props.access ?? "editor"}
         initialRun={props.initialRun ?? null}
+        ruleMeta={NO_RULE_META_FIXTURE}
       />
     </>,
   );
@@ -886,7 +894,14 @@ describe("BoardDock — placement in the shell's dock slot", () => {
   });
 
   it("renders nothing on the wide surface when the page has no slot", async () => {
-    render(<BoardDock boardId="b1" agents={AGENTS} currentUserId="me" />);
+    render(
+      <BoardDock
+        boardId="b1"
+        agents={AGENTS}
+        currentUserId="me"
+        ruleMeta={NO_RULE_META_FIXTURE}
+      />,
+    );
     await act(async () => {});
     expect(aside()).toBeNull();
     expect(
