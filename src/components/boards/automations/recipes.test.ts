@@ -1,6 +1,7 @@
 import { it, expect } from "vitest";
 import {
   recipeCompletedSetsPercent,
+  recipeItemCreatedAssignPerson,
   recipePercentSetsCompleted,
   recipeStatusChangedWebhook,
 } from "@/components/boards/automations/recipes";
@@ -37,6 +38,13 @@ it("builds the 100% -> completed draft and round-trips the create schema", () =>
   expect(
     createAutomationSchema.safeParse({ boardId: BOARD, ...d }).success,
   ).toBe(true);
+});
+
+it("builds an item_created → assign_person draft", () => {
+  expect(recipeItemCreatedAssignPerson("col-1", "user-1")).toEqual({
+    trigger: { type: "item_created" },
+    actions: [{ type: "assign_person", columnId: "col-1", userId: "user-1" }],
+  });
 });
 
 it("builds a status-changed -> webhook draft", () => {

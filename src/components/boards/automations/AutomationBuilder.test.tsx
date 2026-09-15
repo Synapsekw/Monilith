@@ -652,3 +652,48 @@ describe("percent-sync builder (percent_reached / set_percent)", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("assign_person action", () => {
+  const assignPeopleCol = col({
+    id: "people-1",
+    name: "Owner",
+    kind: "people",
+  });
+  const columnsWithPeople = [statusCol, assignPeopleCol, dateCol];
+  const columnsWithoutPeople = [statusCol, dateCol];
+  const assignMembers = [
+    { userId: "user-1", fullName: "Ada Lovelace", email: "ada@x.com" },
+  ];
+  const baseProps = {
+    columns: columnsWithPeople,
+    members: assignMembers,
+    onSubmit: vi.fn(),
+    onCancel: vi.fn(),
+  };
+
+  it("adds an assign_person action and requires both fields", async () => {
+    const onSubmit = vi.fn();
+    render(<AutomationBuilder {...baseProps} onSubmit={onSubmit} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /assign a person/i }),
+    );
+
+    expect(screen.getByLabelText("Assign in column")).toBeInTheDocument();
+    // Incomplete: no person picked yet, so Save stays shut.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Assign in column"),
+      "people-1",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Assign to"), "user-1");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("does not offer assign a person on a board with no people column", () => {
+    render(<AutomationBuilder {...baseProps} columns={columnsWithoutPeople} />);
+    expect(
+      screen.queryByRole("button", { name: /assign a person/i }),
+    ).not.toBeInTheDocument();
+  });
+});

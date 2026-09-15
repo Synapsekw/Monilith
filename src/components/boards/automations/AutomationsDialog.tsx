@@ -167,6 +167,12 @@ function summarize(
     if (a.type === "set_percent") {
       return `set ${colName(columns, a.columnId)} to ${a.percent}%`;
     }
+    if (a.type === "assign_person") {
+      return `assign ${memberName(members, a.userId)} in ${colName(
+        columns,
+        a.columnId,
+      )}`;
+    }
     return "do nothing";
   });
 
