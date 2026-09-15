@@ -289,5 +289,106 @@ describe.skipIf(!integrationTargetReady())(
           ?.code,
       ).toBe("P0002");
     });
+
+    it("excludes a board the caller cannot read from burn, workload and gallery counts", async () => {
+      // member is an org member of orgId (can read folder F) but holds no
+      // board_members grant on board2 and did not create it — board2 must
+      // contribute no bucket to folder_burn, no row to folder_workload, and
+      // no count to folder_gallery (ruling 2). Placed as the LAST test so it
+      // doesn't disturb the earlier tests' fixture assumptions.
+      const boardmate = await provision("boardmate");
+      const { error: memErr } = await admin.from("org_members").insert({
+        org_id: orgId,
+        user_id: boardmate.userId,
+        role: "member",
+      });
+      expect(memErr, "add boardmate to org").toBeNull();
+
+      const { data: board2, error: board2Err } = await boardmate.anon.rpc(
+        "create_board",
+        { p_workspace_id: wsId, p_name: "Boardmate Only" },
+      );
+      expect(board2Err, "create_board(board2)").toBeNull();
+      const board2Id = (board2 as { id: string }).id;
+
+      const { data: group2, error: group2Err } = await boardmate.anon
+        .from("groups")
+        .select("id")
+        .eq("board_id", board2Id)
+        .single();
+      expect(group2Err, "read group2").toBeNull();
+      const group2Id = (group2 as { id: string }).id;
+
+      const { data: cols2, error: cols2Err } = await boardmate.anon
+        .from("columns")
+        .select("id, kind")
+        .eq("board_id", board2Id);
+      expect(cols2Err, "read board2 columns").toBeNull();
+      const dateCol2Id = cols2!.find((c) => c.kind === "date")!.id;
+      const peopleCol2Id = cols2!.find((c) => c.kind === "people")!.id;
+
+      const { error: fb2Err } = await boardmate.anon
+        .from("folder_boards")
+        .insert({ folder_id: folderId, board_id: board2Id });
+      expect(fb2Err, "link board2 to folder").toBeNull();
+
+      const { data: item2, error: item2Err } = await boardmate.anon
+        .from("items")
+        .insert({
+          board_id: board2Id,
+          org_id: orgId,
+          group_id: group2Id,
+          name: "hidden-from-member",
+        })
+        .select("id")
+        .single();
+      expect(item2Err, "seed item on board2").toBeNull();
+      const item2Id = (item2 as { id: string }).id;
+
+      // A due date + owner on the hidden item: if either RPC leaked board2,
+      // planned/completed or open_items counts below would change.
+      const { error: cell2Err } = await boardmate.anon
+        .from("cell_values")
+        .insert([
+          {
+            item_id: item2Id,
+            column_id: dateCol2Id,
+            board_id: board2Id,
+            org_id: orgId,
+            value: { date: isoDaysFromNow(-2) },
+          },
+          {
+            item_id: item2Id,
+            column_id: peopleCol2Id,
+            board_id: board2Id,
+            org_id: orgId,
+            value: { userIds: [boardmate.userId] },
+          },
+        ]);
+      expect(cell2Err, "seed cells on board2 item").toBeNull();
+
+      const { data: gallery, error: galleryErr } = await member.rpc(
+        "folder_gallery",
+        { p_workspace_id: wsId },
+      );
+      expect(galleryErr).toBeNull();
+      const row = gallery!.find((r) => r.folder_id === folderId)!;
+      expect(row.board_count).toBe(1); // board2 excluded
+      expect(row.item_count).toBe(5); // hidden-from-member excluded
+
+      const { data: burn, error: burnErr } = await member.rpc("folder_burn", {
+        p_folder_id: folderId,
+      });
+      expect(burnErr).toBeNull();
+      expect(burn!.reduce((s, r) => s + r.planned, 0)).toBe(3); // unchanged
+      expect(burn!.reduce((s, r) => s + r.completed, 0)).toBe(1); // unchanged
+
+      const { data: workload, error: workloadErr } = await member.rpc(
+        "folder_workload",
+        { p_folder_id: folderId },
+      );
+      expect(workloadErr).toBeNull();
+      expect(workload!.map((r) => r.board_id)).not.toContain(board2Id);
+    });
   },
 );
