@@ -4,6 +4,11 @@ import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ruleDraftFor,
+  type RuleBoardMeta,
+} from "@/lib/ai/board-intelligence/rule-draft";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import { BriefBlock } from "./BriefBlock";
 import { SuggestionCard } from "./SuggestionCard";
 import { useIntelligenceRun } from "./use-intelligence-run";
@@ -44,12 +49,18 @@ export function IntelligenceTab({
   canApply,
   runOnMount,
   onRanOnMount,
+  ruleMeta,
 }: {
   boardId: string;
   canApply: boolean;
   runOnMount: boolean;
   onRanOnMount: () => void;
+  /** Column kinds and member ids, for `ruleDraftFor` — the least the mapper
+   *  needs to decide whether a card's suggestion becomes a standing rule.
+   *  The page already reads both; this adds no new query (spec §2.2/§4). */
+  ruleMeta: RuleBoardMeta;
 }) {
+  const requestRule = useBoardIntelligenceStore((s) => s.requestRule);
   const {
     run,
     running,
@@ -147,16 +158,27 @@ export function IntelligenceTab({
             <div className="flex flex-col gap-2">
               <Kicker size="xs">{`Suggested · ${visible.length}`}</Kicker>
               <ul className="flex flex-col gap-2">
-                {visible.map((s) => (
-                  <SuggestionCard
-                    key={s.id}
-                    suggestion={s}
-                    canApply={canApply}
-                    pending={pending}
-                    onApply={(i) => void apply(s.id, i)}
-                    onDismiss={() => void dismiss(s.id)}
-                  />
-                ))}
+                {visible.map((s) => {
+                  // The draft is also the ANSWER to "should this card offer
+                  // the button" — asking the mapper is the whole check
+                  // (spec §2.2).
+                  const draft = s.actions[0]
+                    ? ruleDraftFor(s.actions[0], ruleMeta)
+                    : null;
+                  return (
+                    <SuggestionCard
+                      key={s.id}
+                      suggestion={s}
+                      canApply={canApply}
+                      pending={pending}
+                      onApply={(i) => void apply(s.id, i)}
+                      onDismiss={() => void dismiss(s.id)}
+                      onAlwaysDoThis={
+                        draft ? () => requestRule(boardId, draft) : undefined
+                      }
+                    />
+                  );
+                })}
               </ul>
             </div>
           ) : (

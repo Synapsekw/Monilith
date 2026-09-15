@@ -116,6 +116,14 @@ export default async function BoardPage({
         currentUserId={user.id}
         access={access ?? "viewer"}
         initialRun={latestRun}
+        // "Always do this" maps a suggestion onto an automation draft purely
+        // on the client (spec §2.2/§4). Column kinds and member ids are all
+        // the mapper checks, and both are already in hand here — no new
+        // query.
+        ruleMeta={{
+          columns: payload.columns.map((c) => ({ id: c.id, kind: c.kind })),
+          memberIds: members.map((m) => m.userId),
+        }}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import {
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 import { setThreadVisibility } from "@/lib/ai/ask/conversation-actions";
+import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import {
   unresolvedCount,
@@ -68,6 +69,10 @@ const MINI_OUT =
   "pointer-events-none -translate-x-2 opacity-0 [transition:opacity_120ms_ease,translate_160ms_ease-in]";
 
 const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
+/** No columns and no members — every "Always do this" mapping fails closed,
+ *  so a caller that has not yet wired the page's real meta simply gets no
+ *  button rather than a crash. */
+const EMPTY_RULE_META: RuleBoardMeta = { columns: [], memberIds: [] };
 
 /**
  * Put the open thread in the URL, MERGING into whatever is already there.
@@ -132,6 +137,7 @@ export function BoardDock({
   currentUserId,
   access = "viewer",
   initialRun = null,
+  ruleMeta = EMPTY_RULE_META,
 }: {
   boardId: string;
   agents: DockAgent[];
@@ -140,6 +146,11 @@ export function BoardDock({
   access?: "owner" | "editor" | "viewer";
   /** The latest run, read ONCE by the board page. Never re-read here. */
   initialRun?: BoardIntelligenceRun | null;
+  /** Column kinds and member ids for "Always do this" (spec §2.2/§4). The
+   *  page already reads both, so this costs no new query; defaults to
+   *  "nothing on the board" so an unwired caller loses the button, not the
+   *  render. */
+  ruleMeta?: RuleBoardMeta;
 }) {
   const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
   const narrow = useNarrowViewport();
@@ -680,6 +691,7 @@ export function BoardDock({
     canApply: access !== "viewer",
     runOnMount,
     onRanOnMount,
+    ruleMeta,
   };
 
   if (narrow) {

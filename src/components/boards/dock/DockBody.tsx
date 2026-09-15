@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AskChat } from "@/components/ai/ask/AskChat";
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
+import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { DockTab } from "@/stores/board-intelligence";
 import { cn } from "@/lib/utils";
 import { DockThreadList } from "./DockThreadList";
@@ -67,6 +68,9 @@ export type DockBodyProps = {
   canApply: boolean;
   runOnMount: boolean;
   onRanOnMount: () => void;
+  /** Column kinds and member ids, for the Intelligence tab's "Always do
+   *  this" mapping. Threaded straight through to `IntelligenceTab`. */
+  ruleMeta: RuleBoardMeta;
 };
 
 /** Full-layer entrance (spec §5): 14px slide from the right, staggered band →
@@ -125,6 +129,7 @@ export function DockBody({
   canApply,
   runOnMount,
   onRanOnMount,
+  ruleMeta,
 }: DockBodyProps) {
   // Component state, not persisted (spec §6): the ledger opens on demand and
   // folds again when a thread is picked, so the transcript is what you see.
@@ -379,6 +384,7 @@ export function DockBody({
           canApply={canApply}
           runOnMount={runOnMount}
           onRanOnMount={onRanOnMount}
+          ruleMeta={ruleMeta}
         />
       )}
     </div>
