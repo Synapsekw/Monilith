@@ -4500,6 +4500,28 @@ export type Database = {
           severity: number;
         }[];
       };
+      folder_burn: {
+        Args: { p_folder_id: string };
+        Returns: {
+          completed: number;
+          planned: number;
+          stage_key: string;
+          week_start: string;
+        }[];
+      };
+      folder_gallery: {
+        Args: { p_workspace_id: string };
+        Returns: {
+          attention_count: number;
+          board_count: number;
+          done_count: number;
+          folder_id: string;
+          folder_name: string;
+          folder_position: number;
+          item_count: number;
+          overdue_count: number;
+        }[];
+      };
       folder_rollup: {
         Args: { p_folder_id: string };
         Returns: {
@@ -4525,6 +4547,18 @@ export type Database = {
           stale: number;
           total: number;
           unassigned: number;
+        }[];
+      };
+      folder_workload: {
+        Args: { p_folder_id: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          open_items: number;
+          overdue_items: number;
+          stage_key: string;
+          stage_name: string;
+          user_id: string;
         }[];
       };
       get_my_agent_last_runs: {
