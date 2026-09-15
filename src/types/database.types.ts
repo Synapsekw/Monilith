@@ -3868,6 +3868,10 @@ export type Database = {
         Returns: undefined;
       };
       _ai_models_refresh_tick: { Args: never; Returns: undefined };
+      _assert_folder_member: {
+        Args: { p_folder_id: string };
+        Returns: undefined;
+      };
       _automation_ai_reconcile: { Args: never; Returns: undefined };
       _automation_condition_predicate: {
         Args: { p_col: string; p_item_id: string; p_op: string; p_val: string };
@@ -3921,6 +3925,32 @@ export type Database = {
         Returns: string;
       };
       _embed_sweep_ping: { Args: never; Returns: undefined };
+      _folder_item_flags: {
+        Args: { p_folder_id: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          board_position: number;
+          done_on: string;
+          due_on: string;
+          group_color: string;
+          group_id: string;
+          group_name: string;
+          group_position: number;
+          has_owner: boolean;
+          has_people_col: boolean;
+          has_status: boolean;
+          is_blocked: boolean;
+          is_done: boolean;
+          is_incomplete: boolean;
+          is_overdue: boolean;
+          item_id: string;
+          item_name: string;
+          last_touched: string;
+          overdue_since: string;
+          owner_ids: string[];
+        }[];
+      };
       _health_digest_ping: { Args: never; Returns: undefined };
       _org_health_digest: {
         Args: { p_org_id: string; p_since: string };
@@ -3936,6 +3966,7 @@ export type Database = {
           total_items: number;
         }[];
       };
+      _parse_iso_date: { Args: { p: string }; Returns: string };
       _personal_agent_sweep: { Args: { p_now?: string }; Returns: undefined };
       _reassign_authorship_target: {
         Args: { p_leaving: string; p_org_id: string };
@@ -4450,6 +4481,47 @@ export type Database = {
       folder_accepts_board: {
         Args: { p_board_id: string; p_folder_id: string };
         Returns: boolean;
+      };
+      folder_attention: {
+        Args: { p_folder_id: string; p_limit?: number };
+        Returns: {
+          age_days: number;
+          board_id: string;
+          board_name: string;
+          group_id: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          reason: string;
+          severity: number;
+        }[];
+      };
+      folder_rollup: {
+        Args: { p_folder_id: string };
+        Returns: {
+          blocked: number;
+          board_id: string;
+          board_name: string;
+          board_position: number;
+          done: number;
+          due_this_week: number;
+          due_this_week_not_started: number;
+          group_color: string;
+          group_id: string;
+          group_name: string;
+          group_position: number;
+          in_progress: number;
+          incomplete: number;
+          max_due: string;
+          min_due: string;
+          not_started: number;
+          oldest_overdue: string;
+          overdue: number;
+          planned_by_today: number;
+          stale: number;
+          total: number;
+          unassigned: number;
+        }[];
       };
       get_my_agent_last_runs: {
         Args: never;
