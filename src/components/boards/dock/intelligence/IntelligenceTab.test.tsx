@@ -97,14 +97,26 @@ const makeRun = (
 const seed = (run: BoardIntelligenceRun | null) =>
   useBoardIntelligenceStore.setState({ runs: run ? { b1: run } : {} });
 
+/** No matching column or member — the default for tests that don't care
+ *  about "Always do this" mapping, so every existing card keeps rendering
+ *  exactly the buttons it did before that feature existed. */
+const NO_RULE_META = { columns: [], memberIds: [] };
+
 const onRanOnMount = vi.fn();
-const mount = (props: { canApply?: boolean; runOnMount?: boolean } = {}) =>
+const mount = (
+  props: {
+    canApply?: boolean;
+    runOnMount?: boolean;
+    ruleMeta?: { columns: { id: string; kind: string }[]; memberIds: string[] };
+  } = {},
+) =>
   render(
     <IntelligenceTab
       boardId="b1"
       canApply={props.canApply ?? true}
       runOnMount={props.runOnMount ?? false}
       onRanOnMount={onRanOnMount}
+      ruleMeta={props.ruleMeta ?? NO_RULE_META}
     />,
   );
 
@@ -115,6 +127,7 @@ beforeEach(() => {
     runs: {},
     openRequest: null,
     filterRequest: null,
+    ruleRequest: null,
     busy: {},
   });
   runBoardIntelligence.mockResolvedValue({ ok: true, data: makeRun() });
@@ -137,6 +150,26 @@ describe("IntelligenceTab — nothing read yet", () => {
     });
   });
 
+  it("shows the composer greyed, pointing at Catch me up (spec §3.2)", async () => {
+    // The owner's ruling: "Disabled until a run exists — composer greyed with
+    // a one-liner pointing at Catch me up". Mounting it inside `run &&` made
+    // that state unreachable, so `AskComposer`'s own disabled branch described
+    // something the app could never show.
+    seed(null);
+    mount();
+    const box = screen.getByRole("textbox", { name: /ask about this board/i });
+    expect(box).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Catch me up first — answers are grounded in the brief.",
+      ),
+    ).toBeInTheDocument();
+    // The composer must not become a second way to spend on the model before
+    // a brief exists: the only action in this state is "Catch me up".
+    await userEvent.type(box, "what slipped?");
+    expect(box).toHaveValue("");
+  });
+
   it("reads the board once when the tab is opened for it", async () => {
     seed(null);
     const { rerender } = mount({ runOnMount: true });
@@ -149,6 +182,7 @@ describe("IntelligenceTab — nothing read yet", () => {
         canApply
         runOnMount
         onRanOnMount={onRanOnMount}
+        ruleMeta={NO_RULE_META}
       />,
     );
     expect(runBoardIntelligence).toHaveBeenCalledTimes(1);
@@ -171,6 +205,7 @@ describe("IntelligenceTab — nothing read yet", () => {
           canApply
           runOnMount={runOnMount}
           onRanOnMount={() => setRunOnMount(false)}
+          ruleMeta={NO_RULE_META}
         />
       );
     }
@@ -185,7 +220,12 @@ describe("IntelligenceTab — nothing read yet", () => {
 
   it("reads again when the board is asked a SECOND time", async () => {
     seed(null);
-    const props = { boardId: "b1", canApply: true, onRanOnMount };
+    const props = {
+      boardId: "b1",
+      canApply: true,
+      onRanOnMount,
+      ruleMeta: NO_RULE_META,
+    };
     const { rerender } = render(
       <IntelligenceTab {...props} runOnMount={true} />,
     );
@@ -249,6 +289,20 @@ describe("IntelligenceTab — the brief", () => {
     expect(brief.tagName).toBe("P");
     expect(container.querySelectorAll("h1,h2,h3,h4,h5,h6")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+  });
+
+  it("enables the ask composer once a brief is on screen", () => {
+    // A positive assertion, not just an absence of errors: if a future change
+    // drops <AskComposer> from the tab, this fails instead of passing quietly.
+    // The composer mounts either way now (see the no-run case above) — a
+    // brief is what ENABLES it, and that is the pair of states spec §3.2
+    // describes.
+    seed(makeRun());
+    mount();
+    const box = screen.getByRole("textbox", { name: /ask about this board/i });
+    expect(box).toBeInTheDocument();
+    expect(box).toBeEnabled();
+    expect(screen.queryByText(/catch me up first/i)).toBeNull();
   });
 
   it("dates a refreshed brief from now, not from when the tab opened", async () => {
@@ -457,5 +511,77 @@ describe("IntelligenceTab — where the brief came from", () => {
     seed(makeRun());
     mount();
     expect(screen.queryByText(/pulse/i)).toBeNull();
+  });
+});
+
+describe("IntelligenceTab — Always do this", () => {
+  // A `reassign` card's PRIMARY action maps onto `assign_person`; the other
+  // card's only action is `filter`, which maps to nothing (spec §2.2) — so
+  // exactly one button is offered across both cards.
+  const runWithReassignAndFilterCards = makeRun({
+    payload: {
+      brief: "Two people are carrying more than the rest of the board.",
+      signals: [],
+      suggestions: [
+        {
+          id: "s1",
+          kind: "overloaded",
+          title: "Sam is carrying six open items",
+          evidence: "6 items",
+          body: "Move one to someone with room.",
+          evidenceRows: [],
+          actions: [
+            {
+              type: "reassign",
+              itemIds: ["i1"],
+              columnId: "people-1",
+              toUserId: "user-1",
+              label: "Give to Alex",
+            },
+          ],
+        },
+        {
+          id: "s2",
+          kind: "stalled",
+          title: "Design is stalled",
+          evidence: "5 days",
+          body: "Nothing in Design changed since Friday.",
+          evidenceRows: [],
+          actions: [
+            { type: "filter", signalKind: "stalled", label: "Show stalled" },
+          ],
+        },
+      ],
+    },
+  });
+
+  it("issues a rule request for a reassign card and offers none for a filter card", async () => {
+    seed(runWithReassignAndFilterCards);
+    mount({
+      ruleMeta: {
+        columns: [{ id: "people-1", kind: "people" }],
+        memberIds: ["user-1"],
+      },
+    });
+    const buttons = screen.getAllByRole("button", { name: /always do this/i });
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]);
+    expect(useBoardIntelligenceStore.getState().ruleRequest).toMatchObject({
+      boardId: "b1",
+      draft: {
+        trigger: { type: "item_created" },
+        actions: [
+          { type: "assign_person", columnId: "people-1", userId: "user-1" },
+        ],
+      },
+    });
+  });
+
+  it("offers no Always do this when the board has none of the columns or members the draft needs", () => {
+    seed(runWithReassignAndFilterCards);
+    mount({ ruleMeta: NO_RULE_META });
+    expect(
+      screen.queryByRole("button", { name: /always do this/i }),
+    ).toBeNull();
   });
 });

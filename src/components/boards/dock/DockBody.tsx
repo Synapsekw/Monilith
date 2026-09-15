@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AskChat } from "@/components/ai/ask/AskChat";
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
+import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { DockTab } from "@/stores/board-intelligence";
 import { cn } from "@/lib/utils";
 import { DockThreadList } from "./DockThreadList";
@@ -20,6 +21,7 @@ import {
   type DockTile,
 } from "./DockTiles";
 import { IntelligenceTab } from "./intelligence/IntelligenceTab";
+import type { QaPair } from "./intelligence/use-intelligence-ask";
 
 export type DockBodyProps = {
   agents: DockAgent[];
@@ -67,6 +69,16 @@ export type DockBodyProps = {
   canApply: boolean;
   runOnMount: boolean;
   onRanOnMount: () => void;
+  /** Column kinds and member ids, for the Intelligence tab's "Always do
+   *  this" mapping. Threaded straight through to `IntelligenceTab`. */
+  ruleMeta: RuleBoardMeta;
+  /** Promote one Q/A pair into a real board thread (spec §3.3). Threaded
+   *  straight through to `IntelligenceTab` → `AskComposer`. NOT gated on
+   *  board access, and deliberately so: the write is one PRIVATE
+   *  `ai_conversations` row owned by the caller — RLS scopes it per-user, not
+   *  per board-role — so a viewer gets the button too, same as an editor.
+   *  Only `undefined` (never passed) renders no button. */
+  onOpenInChat?: (pair: QaPair) => void | Promise<void>;
 };
 
 /** Full-layer entrance (spec §5): 14px slide from the right, staggered band →
@@ -125,6 +137,8 @@ export function DockBody({
   canApply,
   runOnMount,
   onRanOnMount,
+  ruleMeta,
+  onOpenInChat,
 }: DockBodyProps) {
   // Component state, not persisted (spec §6): the ledger opens on demand and
   // folds again when a thread is picked, so the transcript is what you see.
@@ -204,6 +218,24 @@ export function DockBody({
           </Button>
         )}
       </header>
+
+      {/* Rendered outside the `tab === "chat"` branch, not nested inside it:
+          a failure can originate from either panel — most pointedly "Open in
+          Chat" (spec §3.3), which fails while Intelligence is still on
+          screen and never switches tabs on a rejection. `error` itself is
+          already TAB-SCOPED by the caller (`BoardDock`'s `failureOnThisTab`)
+          — this component just renders whatever it is handed, on whichever
+          panel is showing. */}
+      {error && (
+        <div className="flex shrink-0 items-center gap-2 px-3.5 py-1.5">
+          <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
+          {onRetry && (
+            <Button variant="ghost" size="xs" onClick={onRetry}>
+              Try again
+            </Button>
+          )}
+        </div>
+      )}
 
       {tab === "chat" ? (
         // A real flex column rather than `display: contents`: the panel has to
@@ -305,17 +337,6 @@ export function DockBody({
             )}
           </div>
 
-          {error && (
-            <div className="flex shrink-0 items-center gap-2 px-3.5 py-1.5">
-              <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
-              {onRetry && (
-                <Button variant="ghost" size="xs" onClick={onRetry}>
-                  Try again
-                </Button>
-              )}
-            </div>
-          )}
-
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {threadLoading ? (
               <div
@@ -379,6 +400,8 @@ export function DockBody({
           canApply={canApply}
           runOnMount={runOnMount}
           onRanOnMount={onRanOnMount}
+          ruleMeta={ruleMeta}
+          onOpenInChat={onOpenInChat}
         />
       )}
     </div>

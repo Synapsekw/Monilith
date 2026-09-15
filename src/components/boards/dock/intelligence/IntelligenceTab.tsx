@@ -4,9 +4,16 @@ import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ruleDraftFor,
+  type RuleBoardMeta,
+} from "@/lib/ai/board-intelligence/rule-draft";
+import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
+import { AskComposer } from "./AskComposer";
 import { BriefBlock } from "./BriefBlock";
 import { SuggestionCard } from "./SuggestionCard";
 import { useIntelligenceRun } from "./use-intelligence-run";
+import type { QaPair } from "./use-intelligence-ask";
 
 /** The shape of the answer, not a spinner: three brief lines and two cards. */
 function Reading() {
@@ -44,12 +51,21 @@ export function IntelligenceTab({
   canApply,
   runOnMount,
   onRanOnMount,
+  ruleMeta,
+  onOpenInChat,
 }: {
   boardId: string;
   canApply: boolean;
   runOnMount: boolean;
   onRanOnMount: () => void;
+  /** Column kinds and member ids, for `ruleDraftFor` — the least the mapper
+   *  needs to decide whether a card's suggestion becomes a standing rule.
+   *  The page already reads both; this adds no new query (spec §2.2/§4). */
+  ruleMeta: RuleBoardMeta;
+  /** Wired by a later task (spec §3.3) — the tab only forwards it. */
+  onOpenInChat?: (pair: QaPair) => void | Promise<void>;
 }) {
+  const requestRule = useBoardIntelligenceStore((s) => s.requestRule);
   const {
     run,
     running,
@@ -147,16 +163,27 @@ export function IntelligenceTab({
             <div className="flex flex-col gap-2">
               <Kicker size="xs">{`Suggested · ${visible.length}`}</Kicker>
               <ul className="flex flex-col gap-2">
-                {visible.map((s) => (
-                  <SuggestionCard
-                    key={s.id}
-                    suggestion={s}
-                    canApply={canApply}
-                    pending={pending}
-                    onApply={(i) => void apply(s.id, i)}
-                    onDismiss={() => void dismiss(s.id)}
-                  />
-                ))}
+                {visible.map((s) => {
+                  // The draft is also the ANSWER to "should this card offer
+                  // the button" — asking the mapper is the whole check
+                  // (spec §2.2).
+                  const draft = s.actions[0]
+                    ? ruleDraftFor(s.actions[0], ruleMeta)
+                    : null;
+                  return (
+                    <SuggestionCard
+                      key={s.id}
+                      suggestion={s}
+                      canApply={canApply}
+                      pending={pending}
+                      onApply={(i) => void apply(s.id, i)}
+                      onDismiss={() => void dismiss(s.id)}
+                      onAlwaysDoThis={
+                        draft ? () => requestRule(boardId, draft) : undefined
+                      }
+                    />
+                  );
+                })}
               </ul>
             </div>
           ) : (
@@ -164,14 +191,32 @@ export function IntelligenceTab({
               Nothing needs attention right now.
             </p>
           )}
+        </>
+      )}
 
-          <p className="text-muted-foreground text-3xs mt-auto font-mono">
+      {/* The footer group, OUTSIDE `run &&` on purpose (spec §3.2): the
+          composer is "disabled when no run is cached, with a one-liner
+          pointing at 'Catch me up'", which it can only ever be if it mounts
+          before one exists. Pinned to the bottom of the panel with the
+          hairline above it, so with no brief it reads as the composer waiting
+          its turn rather than a second paragraph arguing with the empty
+          state's own "Catch me up" — one invites the brief, the other says
+          why asking is unavailable, and both name the same action. */}
+      <div className="mt-auto flex flex-col gap-4">
+        <AskComposer
+          runId={run?.id ?? null}
+          boardId={boardId}
+          onOpenInChat={onOpenInChat}
+        />
+
+        {run && (
+          <p className="text-muted-foreground text-3xs font-mono">
             {`${canApply ? "Read-only until you apply" : "Read-only"} · ${
               run.model ?? "model"
             } · ${run.tokensIn + run.tokensOut} tokens`}
           </p>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

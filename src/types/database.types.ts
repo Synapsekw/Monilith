@@ -4481,7 +4481,13 @@ export type Database = {
       };
       platform_agent_user_id: { Args: never; Returns: string };
       platform_search_users: {
-        Args: { p_limit?: number; p_offset?: number; p_query?: string };
+        Args: {
+          p_exclude_email_patterns?: string[];
+          p_limit?: number;
+          p_offset?: number;
+          p_only_email_patterns?: string[];
+          p_query?: string;
+        };
         Returns: {
           banned_until: string;
           created_at: string;

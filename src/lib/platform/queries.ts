@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "./guard";
+import { NON_CUSTOMER_EMAIL_PATTERNS } from "./test-accounts";
 
 export type PlatformOrg = {
   id: string;
@@ -135,19 +136,30 @@ export type PlatformUser = {
 };
 
 /** Filtered user search via the SECURITY DEFINER RPC (no in-memory cap). */
+/**
+ * Which address family a user list should contain. Classification runs inside
+ * the RPC, before LIMIT/OFFSET, so paging through people is never derailed by
+ * a burst of seeded fixtures (see test-accounts.ts).
+ */
+export type PlatformAccountKind = "all" | "people" | "system";
+
 export async function searchUsers(
   query = "",
   limit = 25,
   offset = 0,
+  kind: PlatformAccountKind = "all",
 ): Promise<PlatformUser[]> {
   if (!(await isPlatformAdmin())) return [];
   // Authed client — the RPC's internal is_platform_admin() gate reads auth.uid()
   // (the service-role client has no session and would return zero rows).
   const supabase = await createClient();
+  const patterns = [...NON_CUSTOMER_EMAIL_PATTERNS];
   const { data } = await supabase.rpc("platform_search_users", {
     p_query: query.trim(),
     p_limit: limit,
     p_offset: offset,
+    p_exclude_email_patterns: kind === "people" ? patterns : undefined,
+    p_only_email_patterns: kind === "system" ? patterns : undefined,
   });
   return (data ?? []).map((u) => ({
     id: u.id,

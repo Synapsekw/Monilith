@@ -652,3 +652,66 @@ describe("percent-sync builder (percent_reached / set_percent)", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("assign_person action", () => {
+  const assignPeopleCol = col({
+    id: "people-1",
+    name: "Owner",
+    kind: "people",
+  });
+  const columnsWithPeople = [statusCol, assignPeopleCol, dateCol];
+  const columnsWithoutPeople = [statusCol, dateCol];
+  const assignMembers = [
+    { userId: "user-1", fullName: "Ada Lovelace", email: "ada@x.com" },
+  ];
+  const baseProps = {
+    columns: columnsWithPeople,
+    members: assignMembers,
+    onSubmit: vi.fn(),
+    onCancel: vi.fn(),
+  };
+
+  it("adds an assign_person action and requires both fields", async () => {
+    const onSubmit = vi.fn();
+    render(<AutomationBuilder {...baseProps} onSubmit={onSubmit} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /assign a person/i }),
+    );
+
+    expect(screen.getByLabelText("Assign in column")).toBeInTheDocument();
+    // Incomplete: no person picked yet, so Save stays shut.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Assign in column"),
+      "people-1",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Assign to"), "user-1");
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    // Save flipping proves both fields are non-empty, not that they landed in
+    // the right slot — a cross-wired AssignPersonRow (columnId <-> userId
+    // swapped) would leave both truthy and Save enabled too. This asserts the
+    // exact submitted shape so that swap is caught.
+    expect(onSubmit).toHaveBeenCalledWith({
+      trigger: {
+        type: "status_changed",
+        columnId: "c-status",
+        toOptionId: null,
+      },
+      actions: [
+        { type: "assign_person", columnId: "people-1", userId: "user-1" },
+      ],
+      condition: undefined,
+    });
+  });
+
+  it("does not offer assign a person on a board with no people column", () => {
+    render(<AutomationBuilder {...baseProps} columns={columnsWithoutPeople} />);
+    expect(
+      screen.queryByRole("button", { name: /assign a person/i }),
+    ).not.toBeInTheDocument();
+  });
+});

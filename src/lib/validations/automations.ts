@@ -37,7 +37,9 @@ const notifyRecipientSchema = z.discriminatedUnion("kind", [
  * F13 guardrail #2). Deliberately a subset of the manual action union — it
  * EXCLUDES `call_webhook` (irreversible egress) and any destructive shape, so
  * the AI can never invent an action outside this box. The rule author caps it
- * further via `allow` (a non-empty subset of these).
+ * further via `allow` (a non-empty subset of these). It excludes `assign_person`
+ * because the effect is outward-facing at a named person, not because it is
+ * irreversible.
  */
 export const AI_STEP_ALLOWED_ACTIONS = [
   "set_option",
@@ -67,6 +69,21 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     type: z.literal("set_percent"),
     columnId: z.string().uuid(),
     percent: z.number().int().min(0).max(100),
+  }),
+  /**
+   * Replace the people cell with exactly this member (spec §2.1).
+   *
+   * REPLACE, not append: Intelligence's own `reassign` writes
+   * `next: [toUserId]` (`src/lib/ai/board-intelligence/apply.ts`) and diffs
+   * against the prior `userIds` to notify. Two paths that write one column must
+   * agree on what writing it means.
+   *
+   * Absent from `AI_STEP_ALLOWED_ACTIONS` on purpose — see that list.
+   */
+  z.object({
+    type: z.literal("assign_person"),
+    columnId: z.string().uuid(),
+    userId: z.string().uuid(),
   }),
   z.object({
     type: z.literal("move_to_group"),
@@ -147,8 +164,13 @@ if (!firstAgentAction)
     "AGENT_FORBIDDEN_AUTOMATION_ACTIONS excludes every automation action",
   );
 
+export const agentAutomationActionSchema = z.discriminatedUnion("type", [
+  firstAgentAction,
+  ...restAgentActions,
+]);
+
 export const agentAutomationActionsSchema = z
-  .array(z.discriminatedUnion("type", [firstAgentAction, ...restAgentActions]))
+  .array(agentAutomationActionSchema)
   .min(1);
 
 /** The complement of {@link AGENT_FORBIDDEN_AUTOMATION_ACTIONS}, derived rather

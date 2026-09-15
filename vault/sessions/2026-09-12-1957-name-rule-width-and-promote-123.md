@@ -53,18 +53,45 @@ Production is live at `www.monolith.works`; open any board.
 
 ## Open threads
 
-- **Both fixes were verified against a static harness** (compiled CSS + real component markup), not a
-  live rendered board — the DEV fixture tenants have no items. Box-model numbers are solid; not
-  proof against live React/dnd-kit.
-- A row with an active Intelligence chip shows a 1px notch in its 2px rule where the separator
-  crosses. Deliberate and consistent; give the intel rule the higher z if it should stay unbroken.
+- ~~Both fixes were verified against a static harness, not a live board~~ — **CLOSED**: the owner
+  ran a full authenticated browser pass on 2026-09-12 across every shipped surface and reported
+  everything OK. That also cleared the walkthroughs six earlier sessions had been carrying.
+- ~~A row with an active Intelligence chip shows a 1px notch in its 2px rule~~ — **THE NOTCH NEVER
+  EXISTED.** See the addendum below.
 - The parent row's "(n)" child-count label isn't separately reserved in the width maths — a safe
   superset for 1–2 digit counts, theoretically ~2px short at three digits.
 - `/sync-prod` not run; DEV and PROD data remain out of sync by design.
 
+## Addendum (2026-09-12 21:00) — the notch that was never there
+
+The whole-branch reviewer wrote that raising the row hairline to `z-20` cut "a deliberate 1px notch"
+into the Board Intelligence tone rule. **That was an inference from class names, not an observation,
+and it was wrong** — I relayed it to the owner as fact, and the owner reasonably asked for it to be
+fixed. Measured against the compiled CSS in Chromium: `.intel-rule` occupies x=[0, 2] inside the
+frozen Name cell, `ROW_HAIRLINE` is inset to `before:left-4` and occupies x=[16, row-width]. The two
+boxes never share a horizontal pixel, so no z-index relationship between them is ever evaluated; the
+rule was already unbroken, scrolled or not.
+
+The fix, therefore, was to the comment, not the CSS (`1e073718`): the false claim is replaced with
+the measured geometry, plus a test that reads the rule's real width out of `globals.css` and asserts
+the hairline's inset still clears it — so genuine overlap fails CI instead of being re-argued from
+class names.
+
+**The lesson is about how a claim travels.** A reviewer's reasoning, a plan's assertion and a
+measurement all arrive as prose and read alike; only one of them is evidence. Three defects on this
+branch shared the shape "the class is right in the source and absent from the rendered page", so
+the reviewer's story was *plausible* — which is exactly why it was repeated without being checked.
+Say which one you have. See [[2026-09-12-gotcha-106-a-group-hover-variant-on-its-own-group-element-never-matches]].
+
+Also in this addendum's window: **PR #124 promoted** (7 commits — the correction above, the
+board-brief `/updates` entry, vault refreshes). `main` @ `4b4828df`, main CI green, Vercel
+`state=success`, `/updates` verified serving "Board briefs arrive in seconds".
+
 ## Next session entry point
 
-Nothing is owed on this work. `develop` == `main` + the heal commit; the next build starts clean.
+Nothing is owed on this work, and the visual debt is cleared — the owner's browser pass found no
+defects. `develop` == `main` + the heal commit. The board's rank-1 item is now `requestShapeFor`,
+which is wrong about five active models and exposes every adapter-routed feature.
 
 ## Related
 

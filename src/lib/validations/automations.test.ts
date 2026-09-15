@@ -3,6 +3,8 @@ import {
   automationTriggerSchema,
   createAutomationSchema,
   automationActionSchema,
+  AI_STEP_ALLOWED_ACTIONS,
+  agentAutomationActionSchema,
 } from "@/lib/validations/automations";
 
 const COL = "00000000-0000-4000-8000-000000000001";
@@ -296,5 +298,46 @@ describe("ai_step action", () => {
       allow: ["notify"],
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("assign_person action", () => {
+  const valid = {
+    type: "assign_person" as const,
+    columnId: "11111111-1111-4111-8111-111111111111",
+    userId: "22222222-2222-4222-8222-222222222222",
+  };
+
+  it("accepts a people column id and a member id", () => {
+    expect(automationActionSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("rejects a non-uuid columnId", () => {
+    expect(() =>
+      automationActionSchema.parse({ ...valid, columnId: "not-a-uuid" }),
+    ).toThrow();
+  });
+
+  it("rejects a missing userId", () => {
+    const { userId: _drop, ...rest } = valid;
+    expect(() => automationActionSchema.parse(rest)).toThrow();
+  });
+
+  // An ai_step picks its action at fire time from board text the org does not
+  // control. Assigning work to a named person is reversible in data and not in
+  // perception, so it is deliberately OUTSIDE that vocabulary (spec §2.1).
+  it("is NOT in the vocabulary an ai_step may choose from", () => {
+    expect(AI_STEP_ALLOWED_ACTIONS).not.toContain("assign_person");
+  });
+
+  // The agent-filed-rule vocabulary is DERIVED from the union minus
+  // AGENT_FORBIDDEN, so inclusion here is automatic — this asserts the
+  // derivation actually carried it, by name.
+  it("IS in the vocabulary an agent may file a whole rule with", () => {
+    const types = agentAutomationActionSchema.options.map(
+      (o) => o.shape.type.value,
+    );
+    expect(types).toContain("assign_person");
+    expect(types).not.toContain("call_webhook");
   });
 });

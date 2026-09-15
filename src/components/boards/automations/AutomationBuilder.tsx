@@ -33,6 +33,7 @@ import {
 } from "@/components/boards/automations/builder-utils";
 import {
   AiStepRow,
+  AssignPersonRow,
   MoveToGroupRow,
   NotifyRow,
   SetOptionRow,
@@ -221,6 +222,17 @@ export function AutomationBuilder({
         type: "set_percent",
         columnId: percentColumns[0]?.id ?? "",
         percent: 100,
+      },
+    ]);
+  }
+  function addAssignPerson() {
+    setActions((prev) => [
+      ...prev,
+      {
+        _id: nextId(),
+        type: "assign_person",
+        columnId: peopleColumns[0]?.id ?? "",
+        userId: "",
       },
     ]);
   }
@@ -551,6 +563,13 @@ export function AutomationBuilder({
                     boardId={boardId}
                     onChange={(next) => updateAction(action._id, next)}
                   />
+                ) : action.type === "assign_person" ? (
+                  <AssignPersonRow
+                    action={action}
+                    peopleColumns={peopleColumns}
+                    members={members}
+                    onChange={(next) => updateAction(action._id, next)}
+                  />
                 ) : null}
               </div>
               <Button
@@ -589,6 +608,16 @@ export function AutomationBuilder({
           <Button type="button" variant="outline" size="sm" onClick={addAiStep}>
             <Plus className="size-3.5" /> AI step
           </Button>
+          {peopleColumns.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addAssignPerson}
+            >
+              <Plus className="size-3.5" /> Assign a person
+            </Button>
+          ) : null}
           {percentColumns.length > 0 ? (
             <Button
               type="button"

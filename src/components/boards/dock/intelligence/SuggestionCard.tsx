@@ -46,6 +46,7 @@ export function SuggestionCard({
   pending,
   onApply,
   onDismiss,
+  onAlwaysDoThis,
 }: {
   suggestion: Suggestion;
   canApply: boolean;
@@ -55,6 +56,11 @@ export function SuggestionCard({
   pending: boolean;
   onApply: (actionIndex: number) => void;
   onDismiss: () => void;
+  /** Absent when the card's primary action maps onto no engine primitive
+   *  (`ruleDraftFor` returned null) — that null IS the answer to "should
+   *  this card offer the button", so there is no second eligibility check
+   *  here. Editors only: the caller withholds this for a viewer. */
+  onAlwaysDoThis?: () => void;
 }) {
   const titleId = useId();
   const [primary, secondary] = suggestion.actions;
@@ -110,6 +116,18 @@ export function SuggestionCard({
             >
               Dismiss
             </Button>
+            {canApply && onAlwaysDoThis ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                // Opening a prefilled editor writes nothing, so a board write
+                // in flight is no reason to withhold it — the same reasoning
+                // that keeps `filter` live under `pending`.
+                onClick={onAlwaysDoThis}
+              >
+                Always do this
+              </Button>
+            ) : null}
             {suggestion.evidenceRows.length > 0 && (
               <Popover>
                 <PopoverTrigger asChild>

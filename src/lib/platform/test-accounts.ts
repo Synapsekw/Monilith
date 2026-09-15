@@ -13,18 +13,29 @@
 //     used by the platform's own agent actor (`pulse-autopilot@pulse.internal`,
 //     seeded by migration 20260720120517).
 //
+// The classification is applied INSIDE the `platform_search_users` RPC (as
+// ILIKE patterns), before LIMIT/OFFSET — so the admin can page through people
+// alone and a burst of seeded fixtures can never bury them (2026-09-12: 37
+// browser-verification accounts filled page 0 and hid every real user).
+// `isNonCustomerAccount` is the same rule in TypeScript, kept in lock-step by
+// test-accounts.test.ts.
+//
 // This is presentation-only: it decides what the admin console COLLAPSES, never
 // what is authorized or deleted. RLS remains the security boundary.
 
-/** IANA-reserved second-level domains — never registerable, so never a customer. */
-const RESERVED_TEST_DOMAINS = [
-  "@example.com",
-  "@example.net",
-  "@example.org",
-] as const;
-
-/** Reserved suffix for internal-only infrastructure names. */
-const INTERNAL_DOMAIN_SUFFIX = ".internal";
+/**
+ * SQL ILIKE patterns for every non-customer address family. Each is a pure
+ * suffix match (`%` only at the front) so it reads identically in Postgres and
+ * in `isNonCustomerAccount`.
+ */
+export const NON_CUSTOMER_EMAIL_PATTERNS = [
+  // IANA-reserved second-level domains — never registerable, so never a customer.
+  "%@example.com",
+  "%@example.net",
+  "%@example.org",
+  // Reserved suffix for internal-only infrastructure names.
+  "%.internal",
+] as const satisfies readonly `%${string}`[];
 
 /**
  * True when the address belongs to a system actor or a reserved-domain test
@@ -36,23 +47,7 @@ export function isNonCustomerAccount(
 ): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
-  if (normalized.endsWith(INTERNAL_DOMAIN_SUFFIX)) return true;
-  return RESERVED_TEST_DOMAINS.some((domain) => normalized.endsWith(domain));
-}
-
-/**
- * Split a page of users into the people an administrator came to see and the
- * system/test accounts that would otherwise bury them. Order is preserved
- * within each bucket so the caller's sort still holds.
- */
-export function partitionByAccountKind<T extends { email: string | null }>(
-  users: readonly T[],
-): { people: T[]; systemAndTest: T[] } {
-  const people: T[] = [];
-  const systemAndTest: T[] = [];
-  for (const user of users) {
-    if (isNonCustomerAccount(user.email)) systemAndTest.push(user);
-    else people.push(user);
-  }
-  return { people, systemAndTest };
+  return NON_CUSTOMER_EMAIL_PATTERNS.some((pattern) =>
+    normalized.endsWith(pattern.slice(1)),
+  );
 }
