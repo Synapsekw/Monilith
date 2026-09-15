@@ -11,7 +11,7 @@
 
 <script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-09-15 10:30",
+  "updated": "2026-09-15 13:09",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -133,9 +133,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "521dc170",
+        "value": "fbc335b7",
         "tone": "warn",
-        "note": "One unpromoted fix: /admin/users paginates people before system/test accounts (migration 20260915053143 on DEV, ledger 164/164, not on PROD). 36 fixture accounts purged from DEV. No live worktrees."
+        "note": "Unpromoted: Board Intelligence Act + Ask (24 commits, 45 files) plus the /admin/users fix. Migration 20260915062952_automation_assign_person_action is on DEV (ledger 165/165), applied, version-reconciled and live-verified in a rolled-back transaction; not on PROD, along with 20260915053143. All four gates ran against the rebased state: full suite 7797 passed / 1 skipped / 0 failed. Three /updates entries announced for 2026-09-15, publishing with the next promotion."
       },
       {
         "name": "main",
@@ -147,7 +147,7 @@
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #124 build — verified by content: /updates serves \"Board briefs arrive in seconds\". THE OWNER RAN A FULL AUTHENTICATED BROWSER PASS ON 2026-09-12 AND REPORTED EVERYTHING OK — the first human verification since the Chrome extension went down, clearing six sessions of owed walkthroughs. /sync-prod not run: DEV migrations including board_intelligence_runs are still not on PROD."
+        "note": "Still serving the PR #124 build — Board Intelligence Act + Ask is NOT live yet. The three /updates entries announced today publish with the next promotion. /sync-prod not run: DEV migrations including board_intelligence_runs and the new assign_person branch are not on PROD."
       }
     ],
     "gates": [
@@ -161,14 +161,14 @@
         "name": "lint",
         "value": "pass",
         "tone": "ok",
-        "note": "0 errors, 5 pre-existing unrelated warnings.",
+        "note": "0 errors, 5 pre-existing window.location.assign warnings in untouched files.",
         "label": "lint"
       },
       {
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7554 passing, 1 skipped, on task/intelligence-size-clamp before merge (finish-task re-ran all four gates on the rebased branch). New cases: over-cap model output truncates on every field, an untitled suggestion is dropped with contiguous ids, a bad shape still throws, and the system prompt states its budgets.",
+        "note": "7797 passing, 1 skipped, 0 failed on the rebased task/intel-act-ask before merge. +9 tests in the final fix wave alone. The one skip is the opt-in live-DB tier, which cannot run against DEV or PROD by design — the new assign_person executor was verified in a rolled-back transaction on DEV instead.",
         "label": "test"
       },
       {
@@ -179,21 +179,25 @@
       },
       {
         "name": "ledger",
-        "value": "163/163",
+        "value": "165/165",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after 20260911144351_board_intelligence_runs (runs cache table + RLS, item_activities.source, apply_intelligence_cells RPC with anon lockdown, item_updates board index). apply_migration mis-stamped it again; reconciled by keying on version.",
+        "note": "Verified by db:ledger-check after 20260915062952_automation_assign_person_action (a create-or-replace of _automation_run adding one guarded branch). apply_migration mis-stamped the version for the eleventh time; reconciled by keying on version. The check also recognises a sibling worktree's unmerged migration as parallel work, not drift.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Promote develop to main to ship the /admin/users fix",
-      "why": "The purge already made people visible on the live deployment, but the deployed code still paginates before partitioning; the next fixture burst reproduces the report until 521dc170 is in production. Check the page live as the owner after the promotion.",
-      "tags": [
-        "promote",
-        "admin"
-      ]
+      "title": "Promote develop to main",
+      "why": "It carries Board Intelligence Act + Ask plus the /admin/users fix, and the three /updates entries announced for 2026-09-15 publish with it. Nothing in the feature is gated behind an org ceiling, so it is reachable by every board editor on arrival."
+    },
+    {
+      "title": "One authenticated browser pass on two Intelligence-tab layouts",
+      "why": "jsdom renders no geometry and this project has already shipped three defects of the shape \"the class is right in the source and absent from the page\". Look at the greyed composer beside the Catch me up button on a board with no brief, and the bottom-docked composer + meta line on a board with a short brief and no suggestions. Then walk Always do this and Open in Chat."
+    },
+    {
+      "title": "Fix model-request-shape.test.ts's call-site scan",
+      "why": "It strips comments inside the destructuring pattern but not before finding call sites, so a prose runAi mention in a comment is both a false positive (it cost this branch a red suite) and a place a genuinely unmetered feature key can hide. One line; may surface other offenders."
     },
     {
       "title": "Fix requestShapeFor — it is wrong about five active models",
@@ -244,29 +248,6 @@
       "tags": [
         "owner",
         "agents"
-      ]
-    },
-    {
-      "title": "Re-read every org-admin gate against an AI actor",
-      "why": "gotcha-91: an org-admin gate authorises the actor, and a model’s actor is trusted by construction, so the gate was never a defence. Spec 2c found the sibling shape again — agent_remember refused to overwrite an owner note while nothing refused to DELETE one. Found twice now; nothing has swept the rest.",
-      "tags": [
-        "security",
-        "critical"
-      ]
-    },
-    {
-      "title": "Buy the $99 Apple Developer account",
-      "why": "The desktop signing path is code-complete and has never run signed. Owner’s move, not schedulable work.",
-      "tags": [
-        "desktop"
-      ]
-    },
-    {
-      "title": "Perf follow-ups, none blocking",
-      "why": "settings/* and admin/* still ship 0-byte shells because their own layouts await the auth guard and redirect() above any boundary. Column resize still re-renders every cell (TODO in BoardTableInner: a CSS custom property for the grid template across all row kinds). Lower value: the dashboard page's unbounded workspace-columns read for the add-widget dialog, lazy board-header dialogs and date picker, page-shaped skeletons for six thin loading.tsx files. DB scaling only: readable_board_ids() scans every tenant's boards per statement; no GIN index for the My Work people-cell lookup.",
-      "tags": [
-        "perf",
-        "follow-up"
       ]
     }
   ],
@@ -379,14 +360,16 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-15-1026-admin-users-people-first",
-    "when": "2026-09-15 10:26",
-    "title": "/admin/users shows people first again",
+    "id": "2026-09-15-1309-intelligence-act-ask",
+    "when": "2026-09-15 13:09",
+    "title": "Board Intelligence — Act and Ask",
     "bullets": [
-      "Owner report: the platform admin console listed only system and test accounts. Root cause: the page cut 25 newest rows and split people from fixtures afterwards; 37 browser-verification fixtures seeded 2026-09-12 filled page 0.",
-      "Classification moved under LIMIT: platform_search_users takes ILIKE pattern lists, people are paged alone, system/test accounts are one bounded collapsed section. Patterns single-sourced in NON_CUSTOMER_EMAIL_PATTERNS.",
-      "Purged the 36 disposable fixtures and their 36 one-member orgs from DEV after proving no real member sat in any of them. 21 users remain: 16 people, 5 system/test.",
-      "The anon-reachability conformance suite caught the missing revoke on the new function on the first full run. gotcha-55 fired again."
+      "Phases 3 (Act) and 4 (Ask) merged to develop as fbc335b7 — 9 tasks built by parallel implementers, one worktree each, every task gated and reviewed before merge.",
+      "Act: a new assign_person automation action (schema, plpgsql executor, editor row, rule sentence), a pure ruleDraftFor mapper, and an \"Always do this\" button that hands a prefilled draft to the header's automation editor.",
+      "Ask: a streaming read-only Q&A route over the cached brief, a composer holding five ephemeral pairs, and openQaInChat promoting one pair into a real board thread with the answer persisted verbatim.",
+      "The Tier-1 suite meant to prove the SQL guards can never run here, so six outcomes were verified on DEV in a rolled-back transaction — and the first reading was wrong because now() is fixed per transaction (gotcha-107).",
+      "The whole-branch review found the blocking defect for the seventh session running: a turn ending with zero tokens left the answer reading \"Thinking…\" forever, and a green test asserted around it.",
+      "Five plan defects rode along, all in test code written without running it — a nonexistent tool name, missing fixtures, a two-of-four mock, an off-by-one, and a fetch mock reusing one drained stream."
     ]
   }
 }</script>
