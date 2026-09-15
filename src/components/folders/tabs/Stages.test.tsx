@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
@@ -49,5 +49,29 @@ describe("StagesTab", () => {
     expect(onSelect).toHaveBeenCalledWith("build");
     expect(screen.getByText(/1 open item/)).toBeInTheDocument(); // carry-over
     expect(screen.getByText("Stage × board")).toBeInTheDocument();
+  });
+  it("honours a board filter: a board absent from the filtered rows does not appear in the matrix", () => {
+    const filteredRows = fx.rollup!.filter((r) => r.boardId === "b1");
+    const filteredBoards = fx.boards.filter((b) => b.id === "b1");
+    const filteredStages = buildStages(filteredRows, FIXTURE_TODAY);
+    render(
+      <StagesTab
+        rows={filteredRows}
+        allRows={fx.rollup!}
+        stages={filteredStages}
+        stage={null}
+        burn={fx.burn}
+        boards={filteredBoards}
+        todayISO={FIXTURE_TODAY}
+        onSelectStage={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    const matrixSection = screen
+      .getByText("Stage × board")
+      .closest("section") as HTMLElement;
+    expect(within(matrixSection).getByText("Backend")).toBeInTheDocument();
+    expect(within(matrixSection).queryByText("Mobile")).toBeNull();
+    expect(within(matrixSection).queryByText("Website")).toBeNull();
   });
 });

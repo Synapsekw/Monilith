@@ -48,6 +48,23 @@ export function CommandCenter({
     () => filterRows(rollup, { stageKey: stage, boardId: board }),
     [rollup, stage, board],
   );
+  // Board-only filter (ignores the stage filter) for the Stages tab: its
+  // cards, matrix and carry-over must keep showing EVERY stage — they're the
+  // stage selector — but should still honour the board filter, same as
+  // Overview's KPIs/board list do via `rows` above.
+  const stageTabRows = useMemo(
+    () => filterRows(rollup, { stageKey: null, boardId: board }),
+    [rollup, board],
+  );
+  const stageTabStages = useMemo(
+    () => buildStages(stageTabRows, payload.todayISO),
+    [stageTabRows, payload.todayISO],
+  );
+  const stageTabBoards = useMemo(
+    () =>
+      board ? payload.boards.filter((b) => b.id === board) : payload.boards,
+    [payload.boards, board],
+  );
   const itemCount = rows.reduce((s, r) => s + r.total, 0);
   const empty = payload.boards.length === 0;
   const generated = new Date(payload.generatedAt);
@@ -115,12 +132,12 @@ export function CommandCenter({
             />
           ) : tab === "stages" ? (
             <StagesTab
-              rows={rows}
+              rows={stageTabRows}
               allRows={rollup}
-              stages={stages}
+              stages={stageTabStages}
               stage={stage}
               burn={payload.burn}
-              boards={payload.boards}
+              boards={stageTabBoards}
               todayISO={payload.todayISO}
               onSelectStage={setStage}
               onRetry={() => router.refresh()}

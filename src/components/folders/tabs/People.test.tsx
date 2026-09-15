@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { WorkloadRow } from "@/lib/folders/types";
@@ -80,10 +80,19 @@ describe("PeopleTab", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByText("Ada Lovelace")).toBeInTheDocument(),
+      expect(
+        within(screen.getByTestId("workload-section")).getByText(
+          "Ada Lovelace",
+        ),
+      ).toBeInTheDocument(),
     );
     expect(screen.getByText("Who owns what")).toBeInTheDocument();
-    expect(screen.getByText("Backend, Mobile")).toBeInTheDocument();
+    const ownersSection = screen.getByTestId("owners-section");
+    // Visible (not hover-only) on the who-owns-what row too — this app is iPad-first.
+    expect(within(ownersSection).getByText("Ada Lovelace")).toBeInTheDocument();
+    expect(
+      within(ownersSection).getByText("Backend, Mobile"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Unassigned · 2 open/ }),
     ).toHaveAttribute("href", "/boards/b2");
@@ -98,7 +107,18 @@ describe("PeopleTab", () => {
         />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(screen.queryByText("Grace Hopper")).toBeNull());
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId("workload-section")).queryByText(
+          "Grace Hopper",
+        ),
+      ).toBeNull(),
+    );
+    // The stage switch removes her from BOTH sections — "who owns what" is
+    // scoped to the current stage too, not just the folder-wide totals.
+    expect(
+      within(screen.getByTestId("owners-section")).queryByText("Grace Hopper"),
+    ).toBeNull();
     expect(getFolderWorkload).toHaveBeenCalledTimes(1); // stage switch = 0 new calls
   });
 });

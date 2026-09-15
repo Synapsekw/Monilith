@@ -23,7 +23,7 @@ import {
 import type { StageSummary } from "@/lib/folders/stages";
 import type { FolderBoardRef, RollupRow } from "@/lib/folders/types";
 
-export type BoardSort = "health" | "owner" | "name";
+export type BoardSort = "health" | "size" | "name";
 const HEALTH: Record<
   BoardHealth,
   { label: string; color: StatusPillColor; rank: number }
@@ -60,7 +60,7 @@ export function BoardsTab({
           HEALTH[a.health].rank - HEALTH[b.health].rank ||
           a.name.localeCompare(b.name),
       );
-    else if (sort === "owner")
+    else if (sort === "size")
       s.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     else s.sort((a, b) => a.name.localeCompare(b.name));
     return s;
@@ -83,7 +83,7 @@ export function BoardsTab({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2" data-print-hide>
         <Kicker>Sort</Kicker>
-        {(["health", "owner", "name"] as const).map((k) => (
+        {(["health", "size", "name"] as const).map((k) => (
           <Button
             key={k}
             type="button"
@@ -92,7 +92,7 @@ export function BoardsTab({
             aria-label={`Sort by ${k}`}
             onClick={() => setSort(k)}
           >
-            {k === "health" ? "Health" : k === "owner" ? "Size" : "A–Z"}
+            {k === "health" ? "Health" : k === "size" ? "Size" : "A–Z"}
           </Button>
         ))}
       </div>

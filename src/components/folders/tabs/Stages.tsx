@@ -38,8 +38,20 @@ export function StagesTab({
   onSelectStage,
   onRetry,
 }: {
+  /**
+   * Board-filtered (never stage-filtered — the cards ARE the stage selector,
+   * so they must keep showing every stage) rows driving the stage cards, the
+   * stage × board matrix and the carry-over count.
+   */
   rows: RollupRow[];
-  /** Unfiltered rows — the matrix and carry-over always show the whole folder. */
+  /**
+   * Kept for interface/test-harness compatibility (the brief's contract and
+   * `Stages.test.tsx` both pass it); nothing in this component currently
+   * needs the folder-wide, board-unfiltered set once the caller applies the
+   * board filter to `rows` — burn is the one thing that stays
+   * folder/stage-wide regardless, but that's a `BurnRow` data-model
+   * limitation (no `boardId` on burn rows), not a use of `allRows`.
+   */
   allRows: RollupRow[];
   stages: StageSummary[];
   stage: string | null;
@@ -51,10 +63,10 @@ export function StagesTab({
 }) {
   const [mode, setMode] = useState<BurnMode>("cumulative");
   const points = burn === null ? null : burnSeries(burn, stage, todayISO);
-  const matrix = stageMatrix(allRows);
-  const carried = carryOver(allRows, stages);
+  const matrix = stageMatrix(rows);
+  const carried = carryOver(rows, stages);
   const nameOf = new Map(boards.map((b) => [b.id, b.name]));
-  void rows;
+  void allRows;
 
   return (
     <div className="flex flex-col gap-4">

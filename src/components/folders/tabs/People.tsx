@@ -100,6 +100,7 @@ export function PeopleTab({
   >();
   for (const r of rows) {
     if (r.userId === null) continue;
+    if (stage !== null && r.stageKey !== stage) continue;
     const cur = owns.get(r.userId) ?? {
       boards: new Set<string>(),
       open: 0,
@@ -116,7 +117,10 @@ export function PeopleTab({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <section className="bg-surface flex flex-col gap-3 rounded-lg border p-4 lg:col-span-2">
+      <section
+        data-testid="workload-section"
+        className="bg-surface flex flex-col gap-3 rounded-lg border p-4 lg:col-span-2"
+      >
         <div>
           <Kicker>01</Kicker>
           <h2 className="text-sm font-semibold">Workload</h2>
@@ -126,7 +130,10 @@ export function PeopleTab({
         </div>
         <WorkloadBars people={people} />
       </section>
-      <section className="bg-surface flex flex-col gap-3 rounded-lg border p-4">
+      <section
+        data-testid="owners-section"
+        className="bg-surface flex flex-col gap-3 rounded-lg border p-4"
+      >
         <div>
           <Kicker>02</Kicker>
           <h2 className="text-sm font-semibold">Who owns what</h2>
@@ -139,17 +146,15 @@ export function PeopleTab({
               const name = byId.get(userId)?.fullName ?? "Unknown member";
               const boards = [...o.boards].sort().join(", ");
               return (
-                <li
-                  key={userId}
-                  title={name}
-                  aria-label={`${name}: ${boards}, ${o.open} open, ${o.overdue} overdue`}
-                  className="flex items-center gap-2 py-2"
-                >
+                <li key={userId} className="flex items-center gap-2 py-2">
                   <Avatar className="size-6 shrink-0">
                     <AvatarFallback className="text-2xs">
                       {initials(name)}
                     </AvatarFallback>
                   </Avatar>
+                  <span className="w-28 shrink-0 truncate font-medium">
+                    {name}
+                  </span>
                   <span className="text-muted-foreground min-w-0 flex-1 truncate">
                     {boards}
                   </span>
