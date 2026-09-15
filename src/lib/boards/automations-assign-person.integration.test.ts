@@ -83,6 +83,10 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
 
   // outsider — a user who belongs to a DIFFERENT org, not orgA.
   let outsiderId: string;
+  let outsiderOrgId: string;
+
+  // Workspace id, needed again in afterAll for reverse-dependency teardown.
+  let wsAId: string;
 
   beforeAll(async () => {
     admin = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
@@ -125,7 +129,7 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
       .select("id")
       .single();
     expect(wsErr, "insert workspace(A)").toBeNull();
-    const wsAId = (wsData as { id: string }).id;
+    wsAId = (wsData as { id: string }).id;
 
     const { data: boardData, error: boardErr } = await userAAnon.rpc(
       "create_board",
@@ -242,15 +246,91 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
     expect(signInC.error, "signIn(outsider)").toBeNull();
     // outsider must belong to SOME org (so they have a valid auth session /
     // uuid resolvable elsewhere), but NOT orgA.
-    const { error: orgCErr } = await outsiderAnon.rpc("create_organization", {
-      p_name: "AssignPerson Org C",
-      p_slug: `assignperson-c-${randomUUID().slice(0, 8)}`,
-    });
+    const { data: orgCData, error: orgCErr } = await outsiderAnon.rpc(
+      "create_organization",
+      {
+        p_name: "AssignPerson Org C",
+        p_slug: `assignperson-c-${randomUUID().slice(0, 8)}`,
+      },
+    );
     expect(orgCErr, "create_organization(outsider)").toBeNull();
+    outsiderOrgId = (orgCData as { id: string }).id;
   }, 90_000);
 
+  /**
+   * Reverse-dependency teardown, asserted at every step.
+   *
+   * `organizations.created_by references auth.users(id)` has NO
+   * `on delete cascade` (supabase/migrations/20260614174043_init_auth_tenancy.sql:30)
+   * — deleting a user while an organization they created still exists fails
+   * with `organizations_created_by_fkey`. Every other org-scoped table here
+   * (org_members, workspaces, boards, groups, columns, items, cell_values,
+   * automations) DOES cascade off `organizations`, but this teardown deletes
+   * them explicitly and in reverse-dependency order anyway — belt-and-braces
+   * against relying on cascade behaviour holding forever — with each result
+   * asserted so a failure is loud, not a silent orphan (the defect this fixes:
+   * the prior version deleted only the auth users, with no error check, and
+   * never deleted the orgs/boards/etc. those users owned).
+   */
   afterAll(async () => {
-    for (const id of createdUserIds) await admin.auth.admin.deleteUser(id);
+    const { error: cellErr } = await admin
+      .from("cell_values")
+      .delete()
+      .in("board_id", [boardAId, boardA2Id]);
+    expect(cellErr, "cleanup: cell_values").toBeNull();
+
+    const { error: itemsErr } = await admin
+      .from("items")
+      .delete()
+      .in("board_id", [boardAId, boardA2Id]);
+    expect(itemsErr, "cleanup: items").toBeNull();
+
+    const { error: autoErr } = await admin
+      .from("automations")
+      .delete()
+      .eq("org_id", orgAId);
+    expect(autoErr, "cleanup: automations").toBeNull();
+
+    const { error: colErr } = await admin
+      .from("columns")
+      .delete()
+      .in("board_id", [boardAId, boardA2Id]);
+    expect(colErr, "cleanup: columns").toBeNull();
+
+    const { error: groupsErr } = await admin
+      .from("groups")
+      .delete()
+      .in("board_id", [boardAId, boardA2Id]);
+    expect(groupsErr, "cleanup: groups").toBeNull();
+
+    const { error: boardsErr } = await admin
+      .from("boards")
+      .delete()
+      .in("id", [boardAId, boardA2Id]);
+    expect(boardsErr, "cleanup: boards").toBeNull();
+
+    const { error: wsErr } = await admin
+      .from("workspaces")
+      .delete()
+      .eq("id", wsAId);
+    expect(wsErr, "cleanup: workspaces").toBeNull();
+
+    const { error: membersErr } = await admin
+      .from("org_members")
+      .delete()
+      .eq("org_id", orgAId);
+    expect(membersErr, "cleanup: org_members").toBeNull();
+
+    const { error: orgsErr } = await admin
+      .from("organizations")
+      .delete()
+      .in("id", [orgAId, outsiderOrgId]);
+    expect(orgsErr, "cleanup: organizations").toBeNull();
+
+    for (const id of createdUserIds) {
+      const { error: userErr } = await admin.auth.admin.deleteUser(id);
+      expect(userErr, `cleanup: deleteUser(${id})`).toBeNull();
+    }
   }, 60_000);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
