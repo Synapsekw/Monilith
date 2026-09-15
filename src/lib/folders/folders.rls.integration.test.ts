@@ -20,8 +20,12 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
   const createdUserIds: string[] = [];
 
   // A: own org, two workspaces, a board in each. B: a separate org.
+  // C: a plain member of A's org with NO access to aBoardWs1 (not its creator,
+  // no board_members grant) — boards are private-by-default, so org membership
+  // alone must not leak folder_boards rows for a board C cannot read.
   let aAnon: SupabaseClient<Database>;
   let bAnon: SupabaseClient<Database>;
+  let cAnon: SupabaseClient<Database>;
   let aUserId: string;
   let aOrgId: string;
   let aWs1: string;
@@ -33,6 +37,8 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
   let bOrgId: string;
   let bWs: string;
   let bBoardId: string;
+  let bFolderId: string;
+  let cUserId: string;
 
   async function provisionUser(label: string) {
     const email = `sf-${label}-${randomUUID()}@example.com`;
@@ -103,6 +109,39 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
     bOrgId = b.orgId;
     bWs = await provisionWorkspace(bAnon, bOrgId, bUserId, "B");
     bBoardId = await provisionBoard(bAnon, bWs, "B");
+    const { data: bFolder, error: bFolderErr } = await bAnon
+      .from("folders")
+      .insert({
+        org_id: bOrgId,
+        workspace_id: bWs,
+        name: "B Folder",
+        created_by: bUserId,
+      })
+      .select("id")
+      .single();
+    expect(bFolderErr, "folder(b)").toBeNull();
+    bFolderId = (bFolder as { id: string }).id;
+
+    // C: plain member of A's org, added directly (service role) so C has no
+    // creator/board_members grant on any of A's boards.
+    const cEmail = `sf-c-${randomUUID()}@example.com`;
+    const { data: cCreated, error: cCreateErr } =
+      await admin.auth.admin.createUser({
+        email: cEmail,
+        password: PASSWORD,
+        email_confirm: true,
+      });
+    expect(cCreateErr, "createUser(c)").toBeNull();
+    cUserId = cCreated.user!.id;
+    createdUserIds.push(cUserId);
+    const { error: cMemberErr } = await admin
+      .from("org_members")
+      .insert({ org_id: aOrgId, user_id: cUserId, role: "member" });
+    expect(cMemberErr, "org_members(c)").toBeNull();
+    cAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    await signInWithRetry(cAnon, { email: cEmail, password: PASSWORD });
   }, 120_000);
 
   afterAll(async () => {
@@ -157,6 +196,40 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
       .from("folder_boards")
       .insert({ folder_id: aFolderId, board_id: aBoardWs1 });
     expect(error).toBeNull();
+  });
+
+  it("lets the board's own org member (with board access) see its folder_boards row", async () => {
+    const { data } = await aAnon
+      .from("folder_boards")
+      .select("board_id")
+      .eq("folder_id", aFolderId)
+      .eq("board_id", aBoardWs1);
+    expect(data ?? []).toHaveLength(1);
+  });
+
+  it("hides a folder_boards row for a board the caller cannot read, even as an org member", async () => {
+    const { data } = await cAnon
+      .from("folder_boards")
+      .select("board_id")
+      .eq("folder_id", aFolderId)
+      .eq("board_id", aBoardWs1);
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("does not let an org member without board access delete that folder_boards row", async () => {
+    await cAnon
+      .from("folder_boards")
+      .delete()
+      .eq("folder_id", aFolderId)
+      .eq("board_id", aBoardWs1);
+    // RLS silently filters the row out of the DELETE's USING clause rather
+    // than erroring, so the only observable effect is: nothing changed.
+    const { data } = await admin
+      .from("folder_boards")
+      .select("board_id")
+      .eq("folder_id", aFolderId)
+      .eq("board_id", aBoardWs1);
+    expect(data ?? []).toHaveLength(1);
   });
 
   it("rejects filing a board from a different workspace", async () => {
@@ -228,5 +301,18 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
       .select("id")
       .eq("id", aBoardWs1);
     expect(boards ?? []).toHaveLength(1);
+  });
+
+  it("rejects moving a dashboard into another org's folder (composite FK)", async () => {
+    const { data: dash } = await aAnon.rpc("create_dashboard", {
+      p_workspace_id: aWs1,
+      p_name: "Cross-org move",
+    });
+    const dashId = (dash as { id: string }).id;
+    const { error } = await aAnon
+      .from("dashboards")
+      .update({ folder_id: bFolderId }) // B's folder, A's dashboard
+      .eq("id", dashId);
+    expect(error?.code).toBe("23503");
   });
 });

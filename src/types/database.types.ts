@@ -234,11 +234,11 @@ export type Database = {
             referencedColumns: ["id", "org_id"];
           },
           {
-            foreignKeyName: "ai_conversations_folder_id_fkey";
-            columns: ["folder_id"];
+            foreignKeyName: "ai_conversations_folder_org_fkey";
+            columns: ["folder_id", "org_id"];
             isOneToOne: false;
             referencedRelation: "folders";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "org_id"];
           },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";
@@ -1648,11 +1648,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "dashboards_folder_id_fkey";
-            columns: ["folder_id"];
+            foreignKeyName: "dashboards_folder_org_fkey";
+            columns: ["folder_id", "org_id"];
             isOneToOne: false;
             referencedRelation: "folders";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "org_id"];
           },
           {
             foreignKeyName: "dashboards_org_id_fkey";
