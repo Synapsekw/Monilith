@@ -1105,9 +1105,52 @@
   [data-print-root] * {
     visibility: visible;
   }
+  [data-print-title],
+  [data-print-title] * {
+    visibility: visible;
+  }
+  /* CommandCenter's print-only title (`hidden` on screen) — flipped to a
+     positioned block above the print root so the PDF says which folder it
+     is; PageHeader's own title sits outside [data-print-root] and would
+     otherwise never print. */
+  [data-print-title] {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 12mm 12mm 0;
+  }
   [data-print-root] {
+    /* Force the LIGHT palette inside the print root regardless of the active
+       theme — dark is the product default, but printed output must read on
+       white paper. Every seed token a card/label/border reads (bg-surface,
+       text-kicker, text-muted-foreground, border-*, bg-card, the brand/
+       primary fill) is redeclared here with the exact :root light values, so
+       nested components resolve correctly without per-class overrides.
+       color-scheme + the print-color-adjust pair keep status colors and
+       chart fills from being stripped by the browser's print renderer. */
+    color-scheme: light;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    --background: #f6f6f8;
+    --surface: #ffffff;
+    --surface-muted: #f1f1f4;
+    --surface-sunken: #f1f1f4;
+    --foreground: #1a1a1f;
+    --muted-foreground: #5b5b62;
+    --kicker: #5b5b62;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.14);
+    --border-bright: rgba(0, 0, 0, 0.22);
+    --card: #ffffff;
+    --brand: #5a6ed5;
+    --primary: var(--brand);
+
     position: absolute;
     inset: 0;
+    /* Leave room at the top of the page for [data-print-title]. */
+    top: 26mm;
     padding: 12mm;
     background: #fff;
     color: #000;

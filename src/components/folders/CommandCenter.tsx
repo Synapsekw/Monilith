@@ -85,6 +85,18 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
 
   return (
     <div className="flex flex-col gap-2 p-4 md:p-6">
+      {/* Print-only: PageHeader itself sits outside [data-print-root] and is
+          hidden by the print stylesheet's `body * { visibility: hidden }`, so
+          the exported PDF would otherwise say nothing about which folder it
+          is. `hidden` keeps this out of normal layout and the a11y tree;
+          `@media print` flips it to a positioned block above the print root. */}
+      <p
+        data-print-title
+        aria-hidden="true"
+        className="font-heading hidden text-lg font-semibold tracking-tight"
+      >
+        {payload.folder.name}
+      </p>
       <PageHeader
         kicker="Command center"
         title={payload.folder.name}

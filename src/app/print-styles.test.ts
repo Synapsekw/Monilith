@@ -16,4 +16,40 @@ describe("print stylesheet (folder Overview export)", () => {
       /\.recharts-surface[^}]*visibility:\s*visible|\[data-print-root\]\s*\*[^}]*visibility:\s*visible/,
     );
   });
+
+  it("forces the light palette inside the print root regardless of the active theme", () => {
+    const printRoot = print.match(/\[data-print-root\]\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(printRoot).not.toBe("");
+    for (const token of [
+      "--background",
+      "--surface",
+      "--surface-muted",
+      "--surface-sunken",
+      "--foreground",
+      "--muted-foreground",
+      "--kicker",
+      "--border",
+      "--border-hover",
+      "--border-bright",
+      "--card",
+      "--primary",
+      "--brand",
+    ]) {
+      expect(printRoot).toContain(`${token}:`);
+    }
+    expect(printRoot).toMatch(/color-scheme:\s*light/);
+    expect(printRoot).toMatch(/-webkit-print-color-adjust:\s*exact/);
+    expect(printRoot).toMatch(/(?<!-webkit-)print-color-adjust:\s*exact/);
+  });
+
+  it("prints the folder title above the print root", () => {
+    const titleBlock =
+      print.match(/\[data-print-title\]\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(titleBlock).not.toBe("");
+    expect(titleBlock).toMatch(/display:\s*block/);
+    expect(titleBlock).toMatch(/position:\s*absolute/);
+    expect(print).toMatch(
+      /\[data-print-title\],\s*\[data-print-title\]\s*\*\s*\{[^}]*visibility:\s*visible/,
+    );
+  });
 });
