@@ -9,7 +9,8 @@ import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
 import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { createClient } from "@/lib/supabase/server";
-import { composeBoardScope } from "@/lib/ai/ask/persona";
+import { composeBoardScope, composeFolderScope } from "@/lib/ai/ask/persona";
+import { getFolderHead } from "@/lib/folders/queries";
 import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
 import { composeAgentChatSystem } from "@/lib/ai/ask/agent-knowledge";
 import { askPulseStream } from "@/lib/ai/ask/ask-stream";
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
 
   const conv = await supabase
     .from("ai_conversations")
-    .select("summary, summarized_upto, board_id, agent_id, user_id")
+    .select("summary, summarized_upto, board_id, folder_id, agent_id, user_id")
     .eq("id", conversationId)
     .single();
   if (conv.error || !conv.data)
@@ -138,6 +139,33 @@ export async function POST(req: Request) {
       .eq("id", conv.data.board_id)
       .maybeSingle();
     system = composeBoardScope(system, board ?? null);
+  }
+
+  // Folder scope, mutually exclusive with the board branch above (a thread is
+  // scoped to one or the other; `createConversation` never stamps both). The
+  // ruling for this task: a folder read that fails — RLS hides it, it was
+  // deleted, or an unexpected transport error — degrades the turn to plain
+  // Ask rather than leaking Postgres error text or branching on a specific
+  // error code. `getFolderHead` already returns `null` for the RLS-hidden /
+  // nonexistent case; the try/catch below is only for the unexpected-failure
+  // case, which would otherwise throw and fail the whole turn.
+  if (!conv.data.board_id && conv.data.folder_id) {
+    let head: Awaited<ReturnType<typeof getFolderHead>> = null;
+    try {
+      head = await getFolderHead(supabase, conv.data.folder_id);
+    } catch {
+      head = null;
+    }
+    system = composeFolderScope(
+      system,
+      head
+        ? {
+            id: head.folder.id,
+            name: head.folder.name,
+            boards: head.boards.map((b) => ({ id: b.id, name: b.name })),
+          }
+        : null,
+    );
   }
 
   // The response body is a pure OBSERVER of the turn, never its host
