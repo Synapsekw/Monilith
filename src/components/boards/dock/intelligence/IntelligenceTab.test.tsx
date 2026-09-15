@@ -271,6 +271,16 @@ describe("IntelligenceTab — the brief", () => {
     expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
+  it("mounts the ask composer once a brief is on screen", () => {
+    // A positive assertion, not just an absence of errors: if a future change
+    // drops <AskComposer> from the tab, this fails instead of passing quietly.
+    seed(makeRun());
+    mount();
+    expect(
+      screen.getByRole("textbox", { name: /ask about this board/i }),
+    ).toBeInTheDocument();
+  });
+
   it("dates a refreshed brief from now, not from when the tab opened", async () => {
     seed(makeRun({ generatedAt: new Date(NOW - 31 * 60_000).toISOString() }));
     mount();

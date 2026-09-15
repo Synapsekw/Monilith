@@ -63,7 +63,7 @@ export function useIntelligenceAsk(runId: string | null) {
           setError(message ?? "Request failed.");
           return;
         }
-        await readAskStream<IntelAskEvent>(res, (e) => {
+        const terminated = await readAskStream<IntelAskEvent>(res, (e) => {
           if (e.type === "token")
             setPairs((prev) =>
               prev.map((p) =>
@@ -73,6 +73,13 @@ export function useIntelligenceAsk(runId: string | null) {
           else if (e.type === "status") setStatus(e.text);
           else if (e.type === "error") setError(e.message);
         });
+        // `terminated` is false when the body closed with no `done`/`error`
+        // ever parsed — a clean-looking stream end (proxy timeout, idle kill,
+        // a crash after the opening status but before `done`) that throws
+        // nothing. Unlike the main Ask chat there is no persisted answer to
+        // recover here, so a truncated bubble must say so rather than sit at
+        // "Thinking…" forever or pass off a partial answer as complete.
+        if (!terminated) setError("The answer didn't finish. Try again.");
       } catch {
         // Nothing is persisted on this surface, so a severed body has no
         // answer to recover — say so rather than leaving a blank pair.

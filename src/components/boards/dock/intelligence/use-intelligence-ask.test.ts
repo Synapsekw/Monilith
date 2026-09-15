@@ -17,6 +17,17 @@ function ndjson(events: Array<Record<string, unknown>>) {
   return new Response(body);
 }
 
+/**
+ * `ndjson` fed a list with no `done`/`error` in it IS the severed-stream
+ * shape: the body closes cleanly (no thrown exception) after `status` and/or
+ * `token` events, exactly like a proxy timeout, an idle load-balancer kill, or
+ * a server crash after the opening status but before `done`. `readAskStream`
+ * reports this via its `terminated: false` return, not a rejection — so this
+ * failure mode is invisible to a `try`/`catch` around it. Same failure shape
+ * as `severedResponse` in `use-ask-stream.test.ts`, reproduced here because
+ * `IntelAskEvent`'s framing (and this hook's handling of it) is a distinct
+ * contract from `AskStreamEvent`'s. */
+
 const fetchMock = vi.fn();
 
 afterEach(() => {
@@ -107,6 +118,44 @@ describe("useIntelligenceAsk", () => {
     const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
     await act(() => result.current.ask("q"));
     await waitFor(() => expect(result.current.streaming).toBe(false));
+  });
+
+  it("tells the user the answer didn't finish when the stream closes with no terminal event", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    // Status and a couple of tokens land, then the body just ends — no
+    // `done`, no `error`, no thrown exception. Before the fix this left
+    // `error` null and the bubble either stuck on "Thinking…" (no tokens) or
+    // silently passing off a partial answer as complete (some tokens).
+    fetchMock.mockResolvedValue(
+      ndjson([
+        { type: "status", text: "Reading this board…" },
+        { type: "token", text: "Partial ans" },
+      ]),
+    );
+    const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
+    await act(() => result.current.ask("q"));
+
+    expect(result.current.error).toBe("The answer didn't finish. Try again.");
+    // The turn settled — not stuck "streaming" with nothing in flight.
+    expect(result.current.streaming).toBe(false);
+    // The tokens that DID arrive are still there (not discarded)...
+    expect(result.current.pairs[0].answer).toBe("Partial ans");
+    // ...but `status` is cleared, so the pair can no longer render as if it
+    // were quietly still in progress ("Thinking…") once `error` is checked
+    // by the composer that reads this hook.
+    expect(result.current.status).toBeNull();
+  });
+
+  it("tells the user the answer didn't finish when the stream closes before any token arrives", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue(
+      ndjson([{ type: "status", text: "Reading this board…" }]),
+    );
+    const { result } = renderHook(() => useIntelligenceAsk(RUN_ID));
+    await act(() => result.current.ask("q"));
+
+    expect(result.current.error).toBe("The answer didn't finish. Try again.");
+    expect(result.current.streaming).toBe(false);
   });
 
   it("surfaces a recovery message when the fetch itself throws", async () => {

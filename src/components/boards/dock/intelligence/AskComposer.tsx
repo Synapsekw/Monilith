@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Kicker } from "@/components/ui/kicker";
 import { Textarea } from "@/components/ui/textarea";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import { useIntelligenceAsk, type QaPair } from "./use-intelligence-ask";
@@ -47,7 +46,14 @@ export function AskComposer({
               key={pair.id}
               className="bg-surface border-border flex flex-col gap-1 rounded-lg border p-2.5"
             >
-              <Kicker size="xs">{pair.question}</Kicker>
+              {/* Free-form user text (up to 500 chars, sentence-cased), so it
+                  reads as a quiet LABEL — muted, smaller, medium weight —
+                  never as a Kicker: that primitive's mono/uppercase/tracked
+                  treatment is reserved for short, system-authored eyebrows
+                  ("Last 7 days", "Suggested · 3"), not echoed user input. */}
+              <p className="text-muted-foreground text-xs font-medium whitespace-pre-wrap">
+                {pair.question}
+              </p>
               <p className="text-sm leading-relaxed whitespace-pre-wrap">
                 {pair.answer || (
                   <span className="text-muted-foreground">

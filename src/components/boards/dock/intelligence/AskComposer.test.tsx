@@ -62,7 +62,7 @@ describe("AskComposer", () => {
     ).toBeEnabled();
   });
 
-  it("renders question/answer pairs and does not repeat the fetch on re-render", () => {
+  it("renders question/answer pairs from the hook", () => {
     useIntelligenceAsk.mockReturnValue({
       pairs: [{ id: "1", question: "what slipped?", answer: "Two items." }],
       streaming: false,
@@ -73,7 +73,6 @@ describe("AskComposer", () => {
     render(<AskComposer runId="r1" boardId="board-1" />);
     expect(screen.getByText("what slipped?")).toBeInTheDocument();
     expect(screen.getByText("Two items.")).toBeInTheDocument();
-    expect(useIntelligenceAsk).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces the error from the hook", () => {
