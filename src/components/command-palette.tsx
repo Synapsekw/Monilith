@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   FileText,
+  FolderKanban,
   LayoutDashboard,
   LayoutGrid,
   Monitor,
@@ -42,11 +43,11 @@ const DEBOUNCE_MS = 200;
 
 export function CommandPalette({
   boards,
-  dashboards,
+  folders,
   workspaces,
 }: {
   boards: BoardListEntry[];
-  dashboards: { id: string; name: string }[];
+  folders: { id: string; name: string }[];
   workspaces: { id: string; name: string }[];
 }) {
   const open = useUIStore((s) => s.commandOpen);
@@ -203,7 +204,7 @@ export function CommandPalette({
               <CommandItem
                 onSelect={() => run(() => router.push("/dashboards"))}
               >
-                <LayoutDashboard className="size-4" /> Dashboards
+                <LayoutDashboard className="size-4" /> Folders
               </CommandItem>
               <CommandItem onSelect={() => run(() => router.push("/reports"))}>
                 <FileText className="size-4" /> Reports
@@ -217,13 +218,13 @@ export function CommandPalette({
                   <LayoutGrid className="size-4" /> {b.name}
                 </CommandItem>
               ))}
-              {dashboards.map((d) => (
+              {folders.map((f) => (
                 <CommandItem
-                  key={d.id}
-                  value={`dashboard ${d.name}`}
-                  onSelect={() => run(() => router.push(`/dashboards/${d.id}`))}
+                  key={f.id}
+                  value={`folder ${f.name}`}
+                  onSelect={() => run(() => router.push(`/folders/${f.id}`))}
                 >
-                  <LayoutDashboard className="size-4" /> {d.name}
+                  <FolderKanban className="size-4" /> {f.name} — command center
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -236,7 +237,12 @@ export function CommandPalette({
               </CommandItem>
               <CommandItem
                 disabled={!canCreate}
-                onSelect={() => run(() => setNewDashboardOpen(true))}
+                onSelect={() =>
+                  run(() => {
+                    router.push("/dashboards");
+                    setNewDashboardOpen(true);
+                  })
+                }
               >
                 <Plus className="size-4" /> New dashboard
               </CommandItem>

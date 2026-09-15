@@ -23,11 +23,25 @@ vi.mock("@/lib/boards/queries-cached", () => ({
     },
   ]),
 }));
-vi.mock("@/lib/dashboards/queries-cached", () => ({
-  listDashboardsCached: vi.fn(async () => [{ id: "d1", name: "Velocity" }]),
+vi.mock("@/lib/folders/queries-cached", () => ({
+  listFoldersCached: vi.fn(async () => ({
+    folders: [
+      {
+        id: "f1",
+        name: "Q4 Launch",
+        workspaceId: "w1",
+        orgId: "org1",
+        position: 0,
+      },
+    ],
+    placements: [],
+  })),
 }));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
+}));
+vi.mock("@/lib/workspaces/active", () => ({
+  getActiveWorkspaceId: vi.fn(async () => "w1"),
 }));
 
 beforeEach(() => {

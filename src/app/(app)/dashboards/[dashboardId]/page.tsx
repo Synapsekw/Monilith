@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
@@ -6,6 +6,7 @@ import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardPayload } from "@/lib/dashboards/queries";
+import { dashboardRedirectTarget } from "@/lib/folders/redirect";
 import { optionSchema } from "@/lib/validations/boards";
 
 export default async function DashboardPage({
@@ -22,11 +23,30 @@ export default async function DashboardPage({
   const payload = await getDashboardPayload(dashboardId);
   if (!payload) notFound();
 
+  const supabase = await createClient();
+
+  // Spec §4: a dashboard with a live folder lives on that folder's Overview.
+  // The folder FK is `on delete set null`, so folder_id being set almost
+  // always means the folder exists — the read still guards RLS-hidden
+  // folders (spec §8). `error` is intentionally unread: on RLS-hidden or any
+  // other failure `data` comes back `null` just like a real 404, so both
+  // collapse to the same "treat the folder as gone, fall back to the legacy
+  // canvas" outcome (ruling 3) without branching on the error code (42501 vs
+  // a genuine miss).
+  if (payload.dashboard.folder_id) {
+    const { data: folder } = await supabase
+      .from("folders")
+      .select("id")
+      .eq("id", payload.dashboard.folder_id)
+      .maybeSingle();
+    const target = dashboardRedirectTarget(payload.dashboard, folder !== null);
+    if (target) redirect(target);
+  }
+
   // Source-board options for the Add-widget dialog: workspace boards + their
   // columns. The columns read is filtered by the board's workspace via an inner
   // embed (columns_board_id_fkey) so it no longer waterfalls on the boards query
   // — both run in parallel. Boards with zero columns still appear (boards query).
-  const supabase = await createClient();
   const [{ data: boardRows }, { data: allCols }] = await Promise.all([
     supabase
       .from("boards")
