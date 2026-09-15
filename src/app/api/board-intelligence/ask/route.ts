@@ -68,10 +68,15 @@ export async function POST(request: Request) {
   // RLS scopes the row to the owning user; the org comes from
   // `resolveActiveOrg()` and `runId` comes from the client. A user in orgs A
   // and B, holding a run id for a board in B while A is active, would
-  // otherwise pass `requireAiEntitlement(A, …)` and have `runAi({orgId: A})`
-  // resolve A's key and write A's `ai_usage` row for a turn answered over B's
-  // board — billing A and bypassing B's entitlement entirely. A mismatch is
-  // the same 404 as "not yours".
+  // otherwise clear the entitlement check for org A and then reach `runAi`
+  // with `orgId` set to A — resolving A's key and writing A's `ai_usage` row
+  // for a turn answered over B's board, billing A and bypassing B's
+  // entitlement entirely. A mismatch is the same 404 as "not yours".
+  //
+  // The prose above deliberately avoids writing that call out as
+  // `runAi` + `(` + `{`: model-request-shape.test.ts scans for that exact
+  // sequence to find call sites, and a comment shaped like one is reported as
+  // an inert call site with no `feature:` and no `model` in its "callback".
   const row = await supabase
     .from("board_intelligence_runs")
     .select("*")
