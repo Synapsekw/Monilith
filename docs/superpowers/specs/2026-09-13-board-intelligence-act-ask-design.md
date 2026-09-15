@@ -50,7 +50,9 @@ notify (`src/lib/ai/board-intelligence/apply.ts`). Two code paths that write one
 on what writing it means; append would make the same user gesture mean two different things
 depending on which surface issued it.
 
-**Executor** — a migration extending `tg_run_automations()`. Its body must be copied from
+**Executor** — a migration extending **`public._automation_run()`**, the function that holds the
+action dispatch chain (`tg_run_automations` is only the trigger that calls it). Its body must be
+copied from
 `supabase/migrations/20260704111500_automation_run_recipient_and_target_guards.sql`, the latest of
 the **seven** migrations that redefine the function; copying from the original engine migration
 silently reverts six later fixes. The new branch is an `elsif a->>'type' = 'assign_person'` arm
@@ -72,11 +74,15 @@ sentence for the action in the rule list `AutomationsDialog` renders.
 A pure mapper, `src/lib/ai/board-intelligence/rule-draft.ts`:
 
 ```
-ruleDraftFor(action: Action, ctx: BoardContext): Draft | null
+ruleDraftFor(action: Action, meta: RuleBoardMeta): Draft | null
 ```
 
-`Draft` is the existing not-yet-persisted automation type from `recipes.ts`. The mapper holds no
-React and no I/O, so it is table-tested per card kind.
+`Draft` is the existing not-yet-persisted automation type from `recipes.ts`. `RuleBoardMeta` is the
+least the mapper needs — `{ columns: { id, kind }[]; memberIds: string[] }` — and deliberately not
+`BoardContext`: the dock is a sibling of the board provider and holds no payload, while the board
+page already has both reads in hand, so the metadata reaches the tab as a prop and the interaction
+stays at zero server round-trips. The mapper holds no React and no I/O, so it is table-tested per
+card kind.
 
 | Card         | Trigger                    | Action                            |
 | ------------ | -------------------------- | --------------------------------- |
@@ -98,10 +104,14 @@ of "fix that" is that new work on this board lands on a named owner. The suggest
 of the same intent, not a replay of the apply.
 
 The mapper returns `null` when the board lacks a column the draft needs — `nudge` and `set_status`
-need a date column, `nudge` needs a people column for the owner recipient. A `null` draft renders no
-button, which is the same behaviour the parent spec already specified for `reassign` before
-`assign_person` existed. The button is also hidden for anyone who cannot create automations; the
-`getBoardAdminStatus` read the dialog already performs is the gate.
+need a date column, `nudge` needs a people column for the owner recipient — and when a model-supplied
+id does not resolve on this board (a `reassign` naming a non-people column, or someone who is not a
+member). A `null` draft renders no button, which is the same behaviour the parent spec already
+specified for `reassign` before `assign_person` existed.
+
+The button follows the same permission as Apply (`canApply`, i.e. editor), **not** org-admin:
+`getBoardAdminStatus` gates the `call_webhook` action only, any board editor may create an ordinary
+rule, and none of these drafts contains a webhook.
 
 ### 2.3 Wiring
 
@@ -150,7 +160,11 @@ forbids.
   catalog rejects — `thinking: { type: "disabled" }` is a 400 on Fable 5/5.1, and `pickModel` lets
   an org's default model outrank a feature's tier hint, so the request shape must be valid for every
   model an org could be on.
-- Events are encoded with the existing `stream-protocol.ts`, so `useAskStream` needs no change.
+- Events use the same NDJSON framing as Ask, but a **separate two-event union** in
+  `board-intelligence/ask-protocol.ts`: `AskStreamEvent`'s `done` carries a `conversationId` and an
+  `assistantMessageId`, and this turn persists nothing, so there is no row to name. What is reused
+  is the reader — `readAskStream`, generalized over its event type — not `useAskStream`, which
+  hardcodes `POST /api/ask` with a `{ conversationId }` body and so cannot serve this route.
   Usage is recorded under `board_intelligence`.
 
 ### 3.2 The composer
@@ -215,7 +229,8 @@ Per §10 of the parent spec, plus the specifics this document introduces:
 
 - The route's tool list contains exactly `query_items` and `semantic_search_items`; the assertion
   names the write tools it excludes.
-- Stream-protocol round-trip against `useAskStream`.
+- Stream round-trip through the generalized `readAskStream`, and `useAskStream`'s own tests
+  unchanged (generalizing the reader must move no existing test).
 - An over-length `history` truncates and the call still runs; malformed `history` is rejected before
   the call is metered.
 - The composer is disabled with no run, and while `busy` is set.
