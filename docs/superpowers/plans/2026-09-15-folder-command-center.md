@@ -39,7 +39,7 @@
 8. **People tab badge:** the overloaded count is derived from `folder_workload`, which is fetched on first open of the tab (spec §6). The badge shows the red count once that query has resolved; before that the tab reads "People".
 9. **Folder reorder action:** the spec lists it under `src/lib/folders/*` but no v1 surface reorders folders (the sidebar orders by `position, name` today). Not built; `position` is assigned append-only by `createFolder`.
 10. **Ask folder scope:** the smallest change consistent with the existing board scope (`ai_conversations.board_id` → `composeBoardScope`) is a nullable `ai_conversations.folder_id` column plus `composeFolderScope`. `/ask?folder=<id>` seeds a new thread with it.
-11. **Boards-tab owner avatars:** the rollup carries no per-board owner set (spec §5.4 says "avatars from people columns"). v1 shows the org members' avatars on each row and keeps the exact per-person × board numbers on the People tab (`folder_workload` returns `user_id × board_id`). Extending `folder_rollup` with an owner array is a one-column follow-up.
+11. **Boards-tab owners column:** dropped in v1 (owner decision 2026-09-15). The rollup carries no per-board owner set; per-person numbers live on the People tab only.
 12. **Migration test on DEV:** no `pg` dependency exists; the ledger check shells out to `psql` with `DEV_SUPABASE_DB_URL` (`scripts/check-migration-ledger.mjs:236-272`). The copy-forward test does the same inside `begin; … rollback;` and skips unless `PULSE_TEST_DB=1` and `DEV_SUPABASE_DB_URL` are set.
 
 ## File Structure
@@ -437,12 +437,10 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
       })
       .select("id")
       .single();
-    const { error } = await aAnon
-      .from("folder_boards")
-      .insert({
-        folder_id: (second as { id: string }).id,
-        board_id: aBoardWs1,
-      });
+    const { error } = await aAnon.from("folder_boards").insert({
+      folder_id: (second as { id: string }).id,
+      board_id: aBoardWs1,
+    });
     expect(error?.code).toBe("23505");
   });
 
@@ -3833,16 +3831,14 @@ export async function moveBoardToFolder(input: {
       .order("position", { ascending: false })
       .limit(1);
     const position = (last?.[0]?.position ?? -1) + 1;
-    const { error } = await supabase
-      .from("folder_boards")
-      .upsert(
-        {
-          board_id: parsed.data.boardId,
-          folder_id: parsed.data.folderId,
-          position,
-        },
-        { onConflict: "board_id" },
-      );
+    const { error } = await supabase.from("folder_boards").upsert(
+      {
+        board_id: parsed.data.boardId,
+        folder_id: parsed.data.folderId,
+        position,
+      },
+      { onConflict: "board_id" },
+    );
     // A board outside the folder's workspace, or one you cannot read, is refused by RLS (folder_accepts_board).
     if (error) return fail(error.message);
   }
@@ -5923,7 +5919,6 @@ export function BoardsTab(props: {
   rows: RollupRow[];
   boards: FolderBoardRef[];
   stages: StageSummary[];
-  members: FolderMember[];
 }): JSX.Element;
 export function PeopleTab(props: {
   folderId: string;
@@ -6019,28 +6014,14 @@ describe("BoardsTab", () => {
   const fx = folderFixture();
   const stages = buildStages(fx.rollup!, FIXTURE_TODAY);
   it("lists every board with a health pill and sorts client-side", () => {
-    render(
-      <BoardsTab
-        rows={fx.rollup!}
-        boards={fx.boards}
-        stages={stages}
-        members={fx.members}
-      />,
-    );
+    render(<BoardsTab rows={fx.rollup!} boards={fx.boards} stages={stages} />);
     expect(screen.getAllByRole("row")).toHaveLength(4); // header + 3
     fireEvent.click(screen.getByRole("button", { name: "Sort by health" }));
     const names = screen.getAllByTestId("board-name").map((n) => n.textContent);
     expect(names[0]).toBe("Backend"); // at_risk (overdue) sorts before Mobile (on_track); ties A–Z
   });
   it("offers to merge a single-board stage into an existing stage via renameGroup", async () => {
-    render(
-      <BoardsTab
-        rows={fx.rollup!}
-        boards={fx.boards}
-        stages={stages}
-        members={fx.members}
-      />,
-    );
+    render(<BoardsTab rows={fx.rollup!} boards={fx.boards} stages={stages} />);
     expect(screen.getByText("Stages on only one board")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Merge Launch into a stage" }),
@@ -6363,7 +6344,6 @@ import { showMutationError } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
 import { StatusPill, type StatusPillColor } from "@/components/ui/status-pill";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6377,11 +6357,7 @@ import {
   type BoardHealth,
 } from "@/lib/folders/rollup";
 import type { StageSummary } from "@/lib/folders/stages";
-import type {
-  FolderBoardRef,
-  FolderMember,
-  RollupRow,
-} from "@/lib/folders/types";
+import type { FolderBoardRef, RollupRow } from "@/lib/folders/types";
 
 export type BoardSort = "health" | "owner" | "name";
 const HEALTH: Record<
@@ -6393,29 +6369,17 @@ const HEALTH: Record<
   on_track: { label: "On track", color: "green", rank: 2 },
 };
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 /**
- * The owners strip shows the org members passed in (`members`); the People tab
- * holds the real per-person numbers. Sorting is client state — 0 round-trips.
+ * Sorting is client state — 0 round-trips.
  */
 export function BoardsTab({
   rows,
   boards,
   stages,
-  members,
 }: {
   rows: RollupRow[];
   boards: FolderBoardRef[];
   stages: StageSummary[];
-  members: FolderMember[];
 }) {
   const router = useRouter();
   const [sort, setSort] = useState<BoardSort>("name");
@@ -6479,7 +6443,6 @@ export function BoardsTab({
               <th className="px-3 py-2 text-right font-medium">Done</th>
               <th className="px-3 py-2 text-right font-medium">Overdue</th>
               <th className="px-3 py-2 text-right font-medium">Stale</th>
-              <th className="px-3 py-2 font-medium">Owners</th>
               <th className="px-3 py-2 font-medium">Next milestone</th>
             </tr>
           </thead>
@@ -6521,23 +6484,6 @@ export function BoardsTab({
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums">
                   {b.stale}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex -space-x-1">
-                    {members.slice(0, 4).map((m) => (
-                      <Avatar
-                        key={m.userId}
-                        className="border-surface size-5 border"
-                      >
-                        {m.avatarUrl ? (
-                          <AvatarImage src={m.avatarUrl} alt="" />
-                        ) : null}
-                        <AvatarFallback className="text-3xs">
-                          {initials(m.fullName ?? "?")}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                  </div>
                 </td>
                 <td className="text-muted-foreground px-3 py-2 font-mono">
                   {b.nextMilestone ?? "—"}
@@ -6838,7 +6784,6 @@ const counts = {
         board ? payload.boards.filter((b) => b.id === board) : payload.boards
       }
       stages={stages}
-      members={payload.members}
     />
   ) : (
     <PeopleTab
