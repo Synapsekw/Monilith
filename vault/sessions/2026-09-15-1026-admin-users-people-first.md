@@ -64,6 +64,8 @@ lands on the next `develop → main` promotion. To verify the fix itself:
 
 ## Open threads
 
+- Owner ran the walkthrough on `develop` 2026-09-15 and confirmed it. Promotion deferred by owner
+  ("we wont push yet").
 - Promote `develop → main` to ship the migration-backed fix; the DEV RPC signature already changed,
   and the deployed code calls it with three args, which Postgres resolves via defaults, so
   production is not broken in the interim.
