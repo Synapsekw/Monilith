@@ -158,7 +158,10 @@ describe.skipIf(!integrationTargetReady())("RLS: folder layouts", () => {
       org_id: aOrgId,
       config: { v: 1, tabs: [] },
     });
-    expect(error).not.toBeNull();
+    // 42501 is specifically "new row violates row-level security policy". A
+    // bare non-null assertion would also pass if the insert merely tripped a
+    // check/fk constraint, which would prove nothing about tenant isolation.
+    expect(error?.code).toBe("42501");
   });
 
   it("deleting the folder cascades the layout away", async () => {
