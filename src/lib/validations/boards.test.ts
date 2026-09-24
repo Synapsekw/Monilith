@@ -45,6 +45,21 @@ describe("column settings schemas", () => {
     expect(r.success).toBe(true);
   });
 
+  it("dropdown settings default allow_multiple to true", () => {
+    const parsed = dropdownSettingsSchema.parse({
+      options: [{ id: "a", label: "A", color: "#000" }],
+    });
+    expect(parsed).toMatchObject({ allow_multiple: true });
+    expect(
+      dropdownSettingsSchema.parse({ options: [], allow_multiple: false }),
+    ).toMatchObject({ allow_multiple: false });
+  });
+
+  it("status settings have no allow_multiple (single-valued by kind)", () => {
+    const parsed = statusSettingsSchema.parse({ options: [] });
+    expect(parsed).not.toHaveProperty("allow_multiple");
+  });
+
   it("numbers settings accepts optional unit + precision", () => {
     expect(numbersSettingsSchema.safeParse({}).success).toBe(true);
     expect(

@@ -21,7 +21,9 @@ const shared = (id: string, name = id): SharedBoardEntry => ({
 describe("groupBoardsByFolder", () => {
   it("puts an owned board and a shared board in the same folder", () => {
     const result = groupBoardsByFolder({
-      folders: [{ id: "f1", name: "Acme", position: 0 }],
+      folders: [
+        { id: "f1", name: "Acme", workspaceId: "w1", orgId: "o1", position: 0 },
+      ],
       placements: [
         { boardId: "b1", folderId: "f1", position: 0 },
         { boardId: "s1", folderId: "f1", position: 1 },
@@ -44,22 +46,35 @@ describe("groupBoardsByFolder", () => {
     expect(result.unfiledShared).toEqual([]);
   });
 
-  it("hides a folder whose boards are all invisible in this context", () => {
-    // b-other lives in another workspace, so it is absent from `boards`.
+  it("renders a folder with no visible board as an empty folder", () => {
+    // A shared folder is a project: it keeps its row (and its link to the
+    // command center) even when nothing in it is currently visible.
     const result = groupBoardsByFolder({
-      folders: [{ id: "f1", name: "Elsewhere", position: 0 }],
+      folders: [
+        {
+          id: "f1",
+          name: "Elsewhere",
+          workspaceId: "w1",
+          orgId: "o1",
+          position: 0,
+        },
+      ],
       placements: [{ boardId: "b-other", folderId: "f1", position: 0 }],
       boards: [owned("b1")],
       sharedBoards: [],
     });
 
-    expect(result.folders).toEqual([]);
+    expect(result.folders).toHaveLength(1);
+    expect(result.folders[0].folder.name).toBe("Elsewhere");
+    expect(result.folders[0].boards).toEqual([]);
     expect(result.unfiledOwned.map((b) => b.id)).toEqual(["b1"]);
   });
 
   it("leaves unplaced boards unfiled, split by ownership", () => {
     const result = groupBoardsByFolder({
-      folders: [{ id: "f1", name: "Acme", position: 0 }],
+      folders: [
+        { id: "f1", name: "Acme", workspaceId: "w1", orgId: "o1", position: 0 },
+      ],
       placements: [{ boardId: "b1", folderId: "f1", position: 0 }],
       boards: [owned("b1"), owned("b2")],
       sharedBoards: [shared("s1")],
@@ -85,9 +100,15 @@ describe("groupBoardsByFolder", () => {
   it("orders folders by position then name, and boards by placement position", () => {
     const result = groupBoardsByFolder({
       folders: [
-        { id: "f2", name: "Beta", position: 1 },
-        { id: "f1", name: "Alpha", position: 1 },
-        { id: "f0", name: "Zulu", position: 0 },
+        { id: "f2", name: "Beta", workspaceId: "w1", orgId: "o1", position: 1 },
+        {
+          id: "f1",
+          name: "Alpha",
+          workspaceId: "w1",
+          orgId: "o1",
+          position: 1,
+        },
+        { id: "f0", name: "Zulu", workspaceId: "w1", orgId: "o1", position: 0 },
       ],
       placements: [
         { boardId: "b1", folderId: "f0", position: 5 },

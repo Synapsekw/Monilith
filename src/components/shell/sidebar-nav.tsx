@@ -6,6 +6,7 @@ import {
   BarChart3,
   Clock,
   FileText,
+  FolderKanban,
   Gauge,
   ListTodo,
   Target,
@@ -14,7 +15,6 @@ import {
 import type { ComponentType } from "react";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { BoardsNav } from "@/components/boards/BoardsNav";
-import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { ContextSwitcher } from "@/components/shell/context-switcher";
 import { NavSection } from "@/components/shell/nav-section";
 import {
@@ -30,10 +30,7 @@ import {
 import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
-import type {
-  BoardFolder,
-  BoardFolderPlacement,
-} from "@/lib/boards/folders/types";
+import type { FolderPlacement, FolderSummary } from "@/lib/folders/types";
 
 type NavLink = {
   label: string;
@@ -46,6 +43,10 @@ const TOP: NavLink[] = [
   { label: "Agents", href: "/ask", icon: AskAiMark },
 ];
 const PLANNING: NavLink[] = [
+  // The folder gallery. It is the ONLY surface that lists unfiled dashboards,
+  // and deleting `DashboardsNav` left it reachable from nowhere but ⌘K — which
+  // mobile has no equivalent of at all.
+  { label: "Folders", href: "/dashboards", icon: FolderKanban },
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },
@@ -101,9 +102,15 @@ function RailLink({
 
 /**
  * Keystone sidebar body. Order: context chip → My Work / Agents → Planning →
- * Boards → Dashboards, all inside ONE scroll region, then a pinned footer with
- * My Time + Trash. No separators: the ledger rules + 14px section rhythm are
- * the structure. Platform admin lives in the header, not here.
+ * Boards, all inside ONE scroll region, then a pinned footer with My Time +
+ * Trash. No separators: the ledger rules + 14px section rhythm are the
+ * structure. Platform admin lives in the header, not here.
+ *
+ * Dashboards are no longer a nav section of their own: a dashboard belongs to a
+ * folder now, so it is reached through that folder's command center rather than
+ * from a flat workspace-wide list. What Planning carries instead is one
+ * "Folders" link to `/dashboards`, the folder gallery — the only surface that
+ * lists unfiled dashboards, and the only way to reach it on mobile.
  */
 export function SidebarNav({
   orgs = [],
@@ -114,20 +121,18 @@ export function SidebarNav({
   placements,
   workspaces,
   activeWorkspaceId = "",
-  dashboards,
   forceExpanded = false,
 }: {
   orgs?: { id: string; name: string }[];
   activeOrgId?: string;
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
-  /** Private board folders for the signed-in user (optional so every existing
-   *  call site — and the folder-blind tests — stay valid). */
-  folders?: BoardFolder[];
-  placements?: BoardFolderPlacement[];
+  /** Shared folders in the active workspace (optional so every existing call
+   *  site — and the folder-blind tests — stay valid). */
+  folders?: FolderSummary[];
+  placements?: FolderPlacement[];
   workspaces: { id: string; name: string }[];
   activeWorkspaceId?: string;
-  dashboards: { id: string; name: string }[];
   forceExpanded?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -142,13 +147,6 @@ export function SidebarNav({
       sharedBoards={sharedBoards}
       folders={folders}
       placements={placements}
-      activeWorkspaceId={activeWorkspaceId}
-      collapsed={isCollapsed}
-    />
-  );
-  const dashboardsNav = (
-    <DashboardsNav
-      dashboards={dashboards}
       activeWorkspaceId={activeWorkspaceId}
       collapsed={isCollapsed}
     />
@@ -196,8 +194,6 @@ export function SidebarNav({
               ))}
               <RailDivider />
               {boardsNav}
-              <RailDivider />
-              {dashboardsNav}
             </nav>
             <div
               data-scroll-spacer=""
@@ -230,7 +226,6 @@ export function SidebarNav({
               ))}
             </NavSection>
             {boardsNav}
-            {dashboardsNav}
             <div
               data-scroll-spacer=""
               className="h-3.5 shrink-0"

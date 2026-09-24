@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Users2 } from "lucide-react";
 import type { BoardListEntry } from "@/lib/boards/queries";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import { cn } from "@/lib/utils";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { SidebarRow, sidebarLabelClass } from "@/components/shell/sidebar-row";
@@ -31,7 +31,7 @@ export function PlainBoardRow({
 }: {
   board: BoardListEntry;
   isActive: boolean;
-  folders?: BoardFolder[];
+  folders?: FolderSummary[];
   currentFolderId?: string | null;
   lead?: ReactNode;
   dragRef?: (node: HTMLElement | null) => void;

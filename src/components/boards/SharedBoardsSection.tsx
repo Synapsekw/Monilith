@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode } from "react";
 import type { SharedBoardEntry } from "@/lib/boards/queries";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
 import { Kicker } from "@/components/ui/kicker";
 
@@ -21,7 +21,7 @@ export function SharedBoardsSection({
   renderRow,
 }: {
   boards: SharedBoardEntry[];
-  folders: BoardFolder[];
+  folders: FolderSummary[];
   activeBoardId?: string;
   renderRow?: (board: SharedBoardEntry) => ReactNode;
 }) {

@@ -18,6 +18,7 @@ related: ["2026-09-15-gotcha-108-now-is-fixed-per-transaction-so-two-engine-runs
 - **Spec and plan written first** (`2026-09-13-board-intelligence-act-ask-design.md`, `2026-09-15-board-intelligence-act-ask.md`), each corrected mid-flight: the action chain lives in `_automation_run`, not `tg_run_automations`; `useAskStream` is not reusable (only `readAskStream`, now generic); the gate is `canApply`, not org-admin.
 - **The migration was applied, version-reconciled and live-verified on DEV** in a rolled-back transaction — six outcomes including "replaces, does not append" — because the Tier-1 suite that was supposed to prove it **can never run here**. Recorded as [[2026-09-15-gotcha-108-now-is-fixed-per-transaction-so-two-engine-runs-are-indistinguishable]].
 - Announced three `/updates` entries for the ship date; nine per-task branches deleted.
+- **Promoted the same session as PR #128** (40 commits) — `main` @ `2ca821a7`, live and verified by content: `/updates` serves all three new entries. Squash divergence healed (`e8d7e929`, `-s ours`, tree byte-identical). A `gotcha` number collision surfaced in the promotion delta and was fixed first: the parallel session had minted `gotcha-107` after this worktree was cut, so mine became **`gotcha-108`**.
 
 ## Why
 
@@ -36,11 +37,11 @@ Phases 1 and 2 let a board explain itself and suggest work. Act closes the loop 
 
 ## Open threads
 
-- **Not promoted.** This is on `develop`; production still runs `main`. The three `/updates` entries publish with the next promotion.
+- **Promoted and live** (PR #128, `main` @ `2ca821a7`). The DEV-only migrations, including this feature's `20260915062952`, are still not on the PROD database — `/sync-prod` was deliberately declined.
 - `model-request-shape.test.ts` counts a prose `runAi({…})` in a comment as a call site — it cost this branch a red suite, and worse, the same false positive can **hide** a genuinely unmetered feature key. One-line fix (`stripComments` when building `SOURCE_FILES`), may surface other offenders.
 - The shipped `automations.percent-sync.integration.test.ts` deletes auth users without deleting their orgs; `organizations.created_by` has no cascade, so it silently orphans users and org data on every run against a real test DB. This branch fixed only its own new suite.
 - Deferred and justified: the engine's throwing `::uuid` casts (unreachable behind uuid validation on both boundaries) discarding sibling actions' outcomes; only a card's primary action is offered as a rule; raw provider error text reaching the browser; the inert `workspaceId` check on the ask route; zero metering when a turn throws mid-loop.
 
 ## Next session entry point
 
-Promote `develop → main` (this feature plus the `/admin/users` pagination fix), or pick up the `model-request-shape` scan fix — both are small and both are named above.
+The promotion is done, so what is left is the owed browser pass on the two Intelligence-tab layouts (step 8 above, now against production), then the `model-request-shape` scan fix and the `percent-sync` teardown defect — both small, both named above.

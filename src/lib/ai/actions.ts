@@ -159,6 +159,7 @@ const proposalLayoutSchema = z.object({
 
 const createDashboardFromProposalSchema = z.object({
   workspaceId: z.string().uuid(),
+  folderId: z.string().uuid().optional(),
   proposal: z.object({
     name: z.string().min(1).max(100),
     sourceBoardId: z.string().uuid(),
@@ -178,6 +179,9 @@ const createDashboardFromProposalSchema = z.object({
 /** Materialize a validated proposal into a real dashboard + widgets + layout. */
 export async function createDashboardFromProposal(input: {
   workspaceId: string;
+  /** When given, the new dashboard is filed into this folder right away —
+   *  used by the folder Overview's "Generate with AI" entry point. */
+  folderId?: string;
   proposal: {
     name: string;
     sourceBoardId: string;
@@ -192,7 +196,7 @@ export async function createDashboardFromProposal(input: {
   const parsed = createDashboardFromProposalSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const { workspaceId, proposal } = parsed.data;
+  const { workspaceId, folderId, proposal } = parsed.data;
 
   // The schema above only checks each widget config is a generic record. Run the
   // real per-kind config schema on every widget before persisting anything, so
@@ -218,6 +222,18 @@ export async function createDashboardFromProposal(input: {
   if (dashErr || !dashboard)
     return fail(dashErr?.message ?? "Could not create dashboard.");
   const dashboardId = dashboard.id;
+
+  // Filing it is done right here (not left to a follow-up attach call) so the
+  // dashboard lands in the folder atomically with generation — mirrors
+  // attachDashboardToFolder's own-workspace guard via the `workspace_id` filter.
+  if (folderId) {
+    const { error: folderErr } = await supabase
+      .from("dashboards")
+      .update({ folder_id: folderId })
+      .eq("id", dashboardId)
+      .eq("workspace_id", workspaceId);
+    if (folderErr) return fail(folderErr.message);
+  }
 
   const layouts: { id: string; x: number; y: number; w: number; h: number }[] =
     [];

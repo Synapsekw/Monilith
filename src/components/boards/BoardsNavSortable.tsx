@@ -23,12 +23,12 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 // import would shadow it.
 import { CSS as DndCSS } from "@dnd-kit/utilities";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
-import type { BoardFolder } from "@/lib/boards/folders/types";
-import type { NavBoard } from "@/lib/boards/folders/group";
+import type { FolderSummary } from "@/lib/folders/types";
+import type { NavBoard } from "@/lib/folders/group";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { navSyncKey } from "@/lib/boards/nav-sync-key";
 import { reorderBoard } from "@/lib/boards/actions";
-import { moveBoardToFolder } from "@/lib/boards/folders/actions";
+import { moveBoardToFolder } from "@/lib/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { useUIStore } from "@/stores/ui";
@@ -54,7 +54,7 @@ import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
  * is no separate field to fall out of step with the list.
  */
 export type FolderSection = {
-  folder: BoardFolder;
+  folder: FolderSummary;
   entries: NavBoard[];
 };
 
@@ -92,7 +92,7 @@ function SortableBoardRow({
 }: {
   board: BoardListEntry;
   isActive: boolean;
-  folders: BoardFolder[];
+  folders: FolderSummary[];
 }) {
   const {
     setNodeRef,
@@ -238,7 +238,7 @@ function DraggableSharedRow({
 }: {
   board: SharedBoardEntry;
   isActive: boolean;
-  folders: BoardFolder[];
+  folders: FolderSummary[];
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } =
     useDragSource(board.id);
@@ -281,7 +281,7 @@ function DraggableFiledRow({
   entry: NavBoard;
   folderId: string;
   isActive: boolean;
-  folders: BoardFolder[];
+  folders: FolderSummary[];
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } =
     // The folder travels with the drag so `handleDragEnd` can reject a drop
@@ -323,7 +323,7 @@ function DroppableFolderRow({
 }: {
   section: FolderSection;
   activeBoardId?: string;
-  folders: BoardFolder[];
+  folders: FolderSummary[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${FOLDER_DROP_PREFIX}${section.folder.id}`,
@@ -374,7 +374,7 @@ export function BoardsNavSortable({
   sharedBoards?: SharedBoardEntry[];
   folderSections?: FolderSection[];
   activeBoardId?: string;
-  folders?: BoardFolder[];
+  folders?: FolderSummary[];
   /**
    * The board row that held focus when `BoardsNav` swapped the plain tree for
    * this one. That swap destroys the focused element, so this variant hands

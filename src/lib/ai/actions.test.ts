@@ -9,8 +9,24 @@ import {
 } from "@/lib/ai/errors";
 
 const rpc = vi.fn();
+const updateEq = vi.fn();
+/** Minimal chainable fake for `supabase.from("dashboards").update(...).eq(...).eq(...)`,
+ *  used only by createDashboardFromProposal's optional folder_id patch. */
+function fakeFrom(table: string) {
+  if (table !== "dashboards") throw new Error(`unexpected table ${table}`);
+  return {
+    update: (patch: unknown) => ({
+      eq: (f1: string, v1: string) => ({
+        eq: (f2: string, v2: string) => {
+          updateEq(patch, f1, v1, f2, v2);
+          return { error: null };
+        },
+      }),
+    }),
+  };
+}
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({ rpc })),
+  createClient: vi.fn(async () => ({ rpc, from: fakeFrom })),
 }));
 
 const getBoardPayload = vi.fn();
@@ -104,6 +120,7 @@ function payload(
 
 beforeEach(() => {
   rpc.mockReset();
+  updateEq.mockReset();
   getBoardPayload.mockReset();
   listMyBoards.mockReset();
   generateProposal.mockReset();
@@ -364,6 +381,69 @@ describe("createDashboardFromProposal", () => {
     ).toHaveLength(1);
     // read-your-own-writes: invalidates the created dashboard's org list
     expect(updateTag).toHaveBeenCalledWith("dashboards:org:org-9");
+  });
+
+  it("sets folder_id on the new dashboard when folderId is given", async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: { id: "dash-1", org_id: "org-9" },
+        error: null,
+      }) // create_dashboard
+      .mockResolvedValueOnce({ data: { id: "w-1" }, error: null }) // create_dashboard_widget
+      .mockResolvedValueOnce({ data: null, error: null }); // set_widget_layouts
+    const { createDashboardFromProposal } = await import("@/lib/ai/actions");
+    const res = await createDashboardFromProposal({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      folderId: "33333333-3333-4333-8333-333333333333",
+      proposal: {
+        name: "Sprint",
+        sourceBoardId: "22222222-2222-4222-8222-222222222222",
+        widgets: [
+          {
+            kind: "number",
+            title: "Total",
+            config: { agg: "count" },
+            layout: { x: 0, y: 0, w: 3, h: 2 },
+          },
+        ],
+      },
+    });
+    expect(res.ok).toBe(true);
+    expect(updateEq).toHaveBeenCalledWith(
+      { folder_id: "33333333-3333-4333-8333-333333333333" },
+      "id",
+      "dash-1",
+      "workspace_id",
+      "11111111-1111-4111-8111-111111111111",
+    );
+  });
+
+  it("does not touch folder_id when folderId is not given", async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: { id: "dash-1", org_id: "org-9" },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: "w-1" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    const { createDashboardFromProposal } = await import("@/lib/ai/actions");
+    const res = await createDashboardFromProposal({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      proposal: {
+        name: "Sprint",
+        sourceBoardId: "22222222-2222-4222-8222-222222222222",
+        widgets: [
+          {
+            kind: "number",
+            title: "Total",
+            config: { agg: "count" },
+            layout: { x: 0, y: 0, w: 3, h: 2 },
+          },
+        ],
+      },
+    });
+    expect(res.ok).toBe(true);
+    expect(updateEq).not.toHaveBeenCalled();
   });
 
   it("fails with the RPC error message when create_dashboard errors", async () => {

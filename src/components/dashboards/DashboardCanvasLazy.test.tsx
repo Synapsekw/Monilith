@@ -10,6 +10,7 @@ function makeCache(): DashboardCache {
       name: "Ops",
       org_id: "org1",
       workspace_id: "ws1",
+      folder_id: null,
       created_by: "u1",
       created_at: "2026-06-18T00:00:00Z",
       updated_at: "2026-06-18T00:00:00Z",

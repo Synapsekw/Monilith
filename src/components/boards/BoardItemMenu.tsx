@@ -41,7 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { FolderSummary } from "@/lib/folders/types";
 import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
 
 export function BoardItemMenu({
@@ -52,7 +52,7 @@ export function BoardItemMenu({
 }: {
   board: { id: string; name: string };
   isActive: boolean;
-  folders?: BoardFolder[];
+  folders?: FolderSummary[];
   currentFolderId?: string | null;
 }) {
   const router = useRouter();

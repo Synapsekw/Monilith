@@ -15,6 +15,16 @@ const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PASSWORD = "Test-Password-123!";
 
+/**
+ * OUTLIVES ITS MODULE ON PURPOSE. The private-folder application code is gone
+ * (the sidebar reads shared `folders`/`folder_boards` now), but
+ * `20260915123539_private_folders_copy_forward.sql` deliberately did NOT drop
+ * `board_folders` / `board_folder_boards` — they still hold the live rows the
+ * copy-forward was derived from, with their RLS untouched, until a separate
+ * migration drops them once the owner has verified the new sidebar. A table
+ * that still holds real per-user rows keeps its default-deny cover; delete this
+ * file WITH that drop migration, not before.
+ */
 describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
   let admin: SupabaseClient<Database>;
   const createdUserIds: string[] = [];

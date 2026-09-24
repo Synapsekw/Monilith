@@ -7,11 +7,11 @@ describe("DashboardsLoading", () => {
     render(<DashboardsLoading />);
     const status = screen.getByRole("status");
     expect(status).toHaveAttribute("aria-busy", "true");
-    expect(status.getAttribute("aria-label")).toMatch(/^Loading/);
+    expect(status.getAttribute("aria-label")).toBe("Loading folders");
   });
 
-  it("renders the widget grid placeholders", () => {
-    render(<DashboardsLoading />);
-    expect(screen.getAllByTestId("widget-skeleton").length).toBe(6);
+  it("renders a 6-card folder grid skeleton", () => {
+    const { container } = render(<DashboardsLoading />);
+    expect(container.querySelectorAll(".h-32").length).toBe(6);
   });
 });

@@ -82,6 +82,21 @@ async function readableBoard(boardId: string): Promise<ReadableBoard | null> {
   return data ? { id: data.id, orgId: data.org_id } : null;
 }
 
+type ReadableFolder = { id: string; orgId: string };
+
+/** Same shape and reasoning as readableBoard: a uuid-shaped id is not a folder the caller may scope a thread to. */
+async function readableFolder(
+  folderId: string,
+): Promise<ReadableFolder | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("folders")
+    .select("id, org_id")
+    .eq("id", folderId)
+    .maybeSingle();
+  return data ? { id: data.id, orgId: data.org_id } : null;
+}
+
 /**
  * Start a new conversation: insert the thread + its first user message, and
  * return the new id. Org/workspace are resolved server-side via the org switcher
@@ -91,10 +106,17 @@ async function readableBoard(boardId: string): Promise<ReadableBoard | null> {
  * `boardId`/`agentId` are optional: `/ask` calls this with neither and keeps
  * behaving exactly as before (plain thread, revalidates `/ask`). The board
  * dock passes both to open a thread scoped to that board and agent.
+ *
+ * `folderId` is mutually exclusive with `boardId` — a thread is scoped to
+ * one or the other, never both — and `boardId` wins when a caller somehow
+ * supplies both (the `/ask?folder=` entry never also passes a boardId, so
+ * this only matters as a defensive default). It is what `/ask?folder=<id>`
+ * passes so the thread's system prompt can list the folder's boards.
  */
 export async function createConversation(input: {
   firstMessage: string;
   boardId?: string;
+  folderId?: string;
   agentId?: string;
 }): Promise<ActionResult<{ conversationId: string; agentId: string | null }>> {
   const parsed = messageSchema.safeParse(input.firstMessage);
@@ -157,6 +179,20 @@ export async function createConversation(input: {
     );
   }
 
+  // Same fail-closed shape as the board check above, and the same single
+  // "not found" message for "doesn't exist" and "wrong org" — a folder in a
+  // different org is unreadable to this request either way, so naming the
+  // mismatch would only make this a membership oracle. `boardId` wins when a
+  // caller somehow supplies both.
+  let folder: ReadableFolder | null = null;
+  if (input.folderId !== undefined && board === null) {
+    const f = idSchema.safeParse(input.folderId);
+    if (!f.success) return fail("Invalid folder.");
+    folder = await readableFolder(f.data);
+    if (!folder) return fail("Folder not found.");
+    if (folder.orgId !== org.id) return fail("Folder not found.");
+  }
+
   const workspaceId = await getActiveWorkspaceId(
     await listWorkspacesCached(org.id),
   );
@@ -170,6 +206,7 @@ export async function createConversation(input: {
       workspace_id: workspaceId || null,
       title: "New chat",
       board_id: board?.id ?? null,
+      folder_id: folder?.id ?? null,
       agent_id: agentId,
       // `visibility` is deliberately omitted: the column default 'private' is
       // what makes the widened SELECT policy unable to match a fresh row.

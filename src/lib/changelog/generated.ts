@@ -6,6 +6,27 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-15",
     kind: "new",
+    title: "Folder command centers",
+    description:
+      "Open any folder to see its project at a glance: Overview, Stages, Boards and People tabs, a stage filter that recalculates every number instantly, planned-vs-completed burn, needs-attention list, Share, Export PDF and Ask about this folder.",
+  },
+  {
+    date: "2026-09-15",
+    kind: "new",
+    title: "Folders are shared with your workspace",
+    description:
+      "Folders are no longer private to you: everyone in the workspace sees the same folders and boards, and each folder name opens its command center.",
+  },
+  {
+    date: "2026-09-15",
+    kind: "improved",
+    title: "Dashboards live inside their folder",
+    description:
+      "The Dashboards page is now the folder gallery with an Unfiled section; existing dashboards fold into their folder as a Your widgets strip at the bottom of the Overview.",
+  },
+  {
+    date: "2026-09-15",
+    kind: "new",
     title: "Turn a suggestion into a rule",
     description:
       'When a board suggests something, "Always do this" opens the automation editor already filled in — review it, save it, and the board keeps doing it without being asked again.',

@@ -63,45 +63,28 @@ const board = {
 
 describe("SidebarNav", () => {
   it("renders the empty boards state when none are passed", () => {
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     expect(screen.getByText("No boards yet")).toBeInTheDocument();
-    expect(screen.getByText("No dashboards yet")).toBeInTheDocument();
+    // Dashboards are reached through a folder's command center now, so the
+    // sidebar no longer carries a section of its own for them.
+    expect(screen.queryByText("No dashboards yet")).not.toBeInTheDocument();
   });
 
   it("renders a passed board name", () => {
     renderNav(
-      <SidebarNav
-        boards={[board]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
+      <SidebarNav boards={[board]} sharedBoards={[]} workspaces={[]} />,
     );
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
   });
 
   it("renders the grouped section links and no Inbox", () => {
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
-    expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute(
-      "href",
-      "/dashboards",
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
+    expect(screen.queryByText("Dashboards")).not.toBeInTheDocument();
     for (const [label, href] of [
       ["My Work", "/my-work"],
+      // The folder gallery: the only surface listing unfiled dashboards, and
+      // on mobile the only way to reach it at all.
+      ["Folders", "/dashboards"],
       ["Goals", "/goals"],
       ["Portfolios", "/portfolios"],
       ["Reports", "/reports"],
@@ -118,14 +101,7 @@ describe("SidebarNav", () => {
 
   it("renders a Trash link to the workspace archived-boards hash", () => {
     useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const trash = screen.getByRole("link", { name: /trash/i });
     expect(trash).toHaveAttribute("href", "/boards#archived");
   });
@@ -141,7 +117,6 @@ describe("SidebarNav", () => {
         boards={[]}
         sharedBoards={[]}
         workspaces={[{ id: "w1", name: "Eng" }]}
-        dashboards={[]}
       />,
     );
     expect(
@@ -158,7 +133,6 @@ describe("SidebarNav", () => {
         boards={[]}
         sharedBoards={[]}
         workspaces={[{ id: "w1", name: "Eng" }]}
-        dashboards={[]}
       />,
     );
     expect(
@@ -176,7 +150,6 @@ describe("SidebarNav", () => {
         sharedBoards={[]}
         workspaces={[{ id: "w1", name: "Engineering" }]}
         activeWorkspaceId="w1"
-        dashboards={[]}
       />,
     );
     expect(screen.getByText("Engineering")).toBeInTheDocument();
@@ -184,14 +157,7 @@ describe("SidebarNav", () => {
 
   it("marks the active nav item with the Keystone tint + edge bar", () => {
     vi.mocked(usePathname).mockReturnValue("/my-work");
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const active = screen.getByText("My Work").closest("a")!;
     expect(active).toHaveClass("bg-state-selected");
     expect(active.className).toContain("before:bg-primary");
@@ -200,14 +166,7 @@ describe("SidebarNav", () => {
   });
 
   it("has no Personal section: My Time and Trash live in a pinned footer", () => {
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     expect(screen.queryByText("Personal")).not.toBeInTheDocument();
     const footer = screen.getByTestId("sidebar-footer");
     expect(footer).toContainElement(
@@ -220,14 +179,7 @@ describe("SidebarNav", () => {
   });
 
   it("scrolls the middle, not the footer, and draws no separators", () => {
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const body = screen.getByTestId("sidebar-scroll");
     expect(body.className).toContain("overflow-y-auto");
     expect(body.className).toContain("nav-scroll");
@@ -244,14 +196,7 @@ describe("SidebarNav", () => {
   });
 
   it("reserves the scrollbar gutter only when expanded (the 56px rail cannot spare 10px)", () => {
-    const nav = (
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />
-    );
+    const nav = <SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />;
     const expanded = renderNav(nav);
     expect(screen.getByTestId("sidebar-scroll")).toHaveAttribute(
       "data-scroll-container",
@@ -273,12 +218,11 @@ describe("SidebarNav", () => {
         sharedBoards={[]}
         workspaces={[{ id: "w1", name: "Eng" }]}
         activeWorkspaceId="w1"
-        dashboards={[]}
       />,
     );
-    // ws chip | My Work+Agents | Planning | Boards | Dashboards → 4 dividers in
-    // the body. The footer draws its own `border-t`, so no divider above it.
-    expect(document.querySelectorAll("[data-rail-divider]").length).toBe(4);
+    // ws chip | My Work+Agents | Planning | Boards → 3 dividers in the body.
+    // The footer draws its own `border-t`, so no divider above it.
+    expect(document.querySelectorAll("[data-rail-divider]").length).toBe(3);
     expect(screen.getByTestId("sidebar-footer")).toContainElement(
       screen.getByLabelText("Trash"),
     );
@@ -295,14 +239,7 @@ describe("SidebarNav", () => {
   it("collapsed: the active tile carries the edge bar, not the 80% fill", () => {
     useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
     vi.mocked(usePathname).mockReturnValue("/goals");
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const goals = screen.getByLabelText("Goals");
     expect(goals.className).toContain("bg-state-selected");
     expect(goals.className).toContain("before:bg-primary");
@@ -319,7 +256,6 @@ describe("SidebarNav", () => {
         boards={[board]}
         sharedBoards={[]}
         workspaces={[]}
-        dashboards={[]}
         forceExpanded
       />,
     );
@@ -333,19 +269,14 @@ describe("SidebarNav", () => {
 
   it("hides text labels when collapsed", () => {
     useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
-    renderNav(
-      <SidebarNav
-        boards={[]}
-        sharedBoards={[]}
-        workspaces={[]}
-        dashboards={[]}
-      />,
-    );
-    // Collapsed Dashboards renders an icon-only link, not a text label.
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
+    // The collapsed rail is icon-only: no section body text, and no Dashboards
+    // tile at all any more.
     expect(screen.queryByText("No boards yet")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Dashboards" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("link", { name: "Dashboards" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Boards")).toBeInTheDocument();
   });
 
   describe("collapsed coarse-pointer a11y (gotcha-47)", () => {
@@ -355,14 +286,7 @@ describe("SidebarNav", () => {
 
     it("renders a visible caption under each icon-only item on a coarse pointer", () => {
       vi.mocked(useCoarsePointer).mockReturnValue(true);
-      renderNav(
-        <SidebarNav
-          boards={[]}
-          sharedBoards={[]}
-          workspaces={[]}
-          dashboards={[]}
-        />,
-      );
+      renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
       // The label string that previously only lived in the never-opened tooltip
       // is now on-screen text (the gotcha-47 fix).
       for (const label of [
@@ -386,14 +310,7 @@ describe("SidebarNav", () => {
 
     it("keeps the rail icon-only (no captions) on a fine pointer", () => {
       vi.mocked(useCoarsePointer).mockReturnValue(false);
-      renderNav(
-        <SidebarNav
-          boards={[]}
-          sharedBoards={[]}
-          workspaces={[]}
-          dashboards={[]}
-        />,
-      );
+      renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
       // No visible <span> caption — label still only carried by aria-label/tooltip.
       expect(
         screen.queryByText("Goals", { selector: "span" }),
@@ -405,14 +322,7 @@ describe("SidebarNav", () => {
 
     it("gives each collapsed item a ≥44px coarse touch target", () => {
       vi.mocked(useCoarsePointer).mockReturnValue(true);
-      renderNav(
-        <SidebarNav
-          boards={[]}
-          sharedBoards={[]}
-          workspaces={[]}
-          dashboards={[]}
-        />,
-      );
+      renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
       const goals = screen.getByLabelText("Goals");
       expect(goals.className).toContain("pointer-coarse:min-h-11");
     });
@@ -422,14 +332,7 @@ describe("SidebarNav", () => {
       // usePathname is mocked to "/"; the Inbox has no href, so assert a wired
       // link keeps aria-current when its route is active is covered elsewhere —
       // here we just confirm coarse rendering doesn't drop the attribute wiring.
-      renderNav(
-        <SidebarNav
-          boards={[]}
-          sharedBoards={[]}
-          workspaces={[]}
-          dashboards={[]}
-        />,
-      );
+      renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
       // None active at "/", so no link should carry aria-current=page.
       expect(screen.getByLabelText("Goals")).not.toHaveAttribute(
         "aria-current",

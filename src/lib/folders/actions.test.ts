@@ -5,6 +5,16 @@ vi.mock("next/cache", () => ({ updateTag: (t: string) => updateTag(t) }));
 vi.mock("@/lib/auth/session", () => ({
   getUser: vi.fn(async () => ({ id: "user-1" })),
 }));
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({
+    id: "org-1",
+    name: "Org",
+    timezone: "UTC",
+  })),
+}));
+vi.mock("./resolve", () => ({
+  resolveFolderWorkload: vi.fn(async () => ({ ok: true, rows: [] })),
+}));
 
 type EqCall = [string, unknown];
 
@@ -84,13 +94,22 @@ vi.mock("@/lib/supabase/server", () => ({
         });
       qb.single = () =>
         Promise.resolve({
-          data: { id: "f-new", name: "Acme", position: 0 },
+          data: {
+            id: "f-new",
+            name: "Acme",
+            position: 0,
+            workspace_id: "w1",
+            org_id: "org-1",
+          },
           error: state.insertError,
         });
       qb.maybeSingle = () => {
         logOperation();
         return Promise.resolve({
-          data: state.affectedRows > 0 ? { id: "matched-row" } : null,
+          data:
+            state.affectedRows > 0
+              ? { id: "matched-row", workspace_id: "w1" }
+              : null,
           error: state.insertError,
         });
       };
@@ -124,8 +143,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
+  attachDashboardToFolder,
   createFolder,
   deleteFolder,
+  getFolderWorkload,
   moveBoardToFolder,
   renameFolder,
 } from "./actions";
@@ -133,7 +154,7 @@ import {
 const BOARD = "11111111-1111-4111-8111-111111111111";
 const FOLDER = "22222222-2222-4222-8222-222222222222";
 
-describe("board folder actions", () => {
+describe("folder actions", () => {
   beforeEach(() => {
     updateTag.mockClear();
     state.insertError = null;
@@ -146,7 +167,7 @@ describe("board folder actions", () => {
   });
 
   it("rejects an empty folder name before touching the database", async () => {
-    const res = await createFolder({ name: "   " });
+    const res = await createFolder({ workspaceId: FOLDER, name: "   " });
     expect(res.ok).toBe(false);
     expect(updateTag).not.toHaveBeenCalled();
   });
@@ -162,11 +183,31 @@ describe("board folder actions", () => {
     expect(updateTag).not.toHaveBeenCalled();
   });
 
-  it("invalidates only the board-folders tag on success", async () => {
-    const res = await createFolder({ name: "Acme" });
+  it("creates a folder in the workspace with the trimmed name and invalidates folders:org", async () => {
+    const res = await createFolder({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      name: "  Acme  ",
+    });
     expect(res.ok).toBe(true);
-    expect(updateTag).toHaveBeenCalledTimes(1);
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+    expect(calls.inserts[0]).toMatchObject({
+      name: "Acme",
+      workspace_id: "11111111-1111-4111-8111-111111111111",
+      org_id: "org-1",
+      created_by: "user-1",
+    });
+    expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
+  });
+
+  it("maps a duplicate-name insert (23505) to a friendly message", async () => {
+    state.insertError = { code: "23505", message: "duplicate key" };
+    const res = await createFolder({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      name: "Acme",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "A folder with that name already exists in this workspace.",
+    });
   });
 
   it("renames a folder with the trimmed name and invalidates the tag", async () => {
@@ -177,7 +218,7 @@ describe("board folder actions", () => {
       payload: { name: "New Name" },
       eq: [["id", FOLDER]],
     });
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+    expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
   });
 
   it("deletes a folder filtered on its id and invalidates the tag", async () => {
@@ -185,38 +226,59 @@ describe("board folder actions", () => {
     expect(res.ok).toBe(true);
     expect(calls.deletes).toHaveLength(1);
     expect(calls.deletes[0]).toEqual({ eq: [["id", FOLDER]] });
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+    expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
   });
 
   it("unfiles a board when folderId is null by issuing a delete", async () => {
     const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
     expect(res.ok).toBe(true);
-    // A null target deletes the placement rather than upserting one.
     expect(calls.upserts).toHaveLength(0);
     expect(calls.deletes).toHaveLength(1);
     expect(calls.deletes[0]).toEqual({ eq: [["board_id", BOARD]] });
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+    expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
   });
 
-  it("upserts on the (user_id, board_id) key when filing a board", async () => {
+  it("files a board with an upsert on board_id", async () => {
     const res = await moveBoardToFolder({ boardId: BOARD, folderId: FOLDER });
     expect(res.ok).toBe(true);
-    expect(calls.upserts).toHaveLength(1);
     expect(calls.upserts[0]?.payload).toMatchObject({
-      user_id: "user-1",
       board_id: BOARD,
       folder_id: FOLDER,
     });
-    // The conflict target is the entire mechanism enforcing "a board is in at
-    // most one folder" — assert it explicitly, not just the row shape.
-    expect(calls.upserts[0]?.options).toMatchObject({
-      onConflict: "user_id,board_id",
+    expect(calls.upserts[0]?.options).toMatchObject({ onConflict: "board_id" });
+  });
+
+  it("attaches a dashboard only inside the folder's workspace and detaches with null", async () => {
+    const res = await attachDashboardToFolder({
+      dashboardId: BOARD,
+      folderId: FOLDER,
+    });
+    expect(res.ok).toBe(true);
+    expect(calls.updates[0]).toMatchObject({
+      payload: { folder_id: FOLDER },
+      eq: [
+        ["id", BOARD],
+        ["workspace_id", "w1"],
+      ],
+    });
+    expect(updateTag).toHaveBeenCalledWith("dashboards:org:org-1");
+    const off = await attachDashboardToFolder({
+      dashboardId: BOARD,
+      folderId: null,
+    });
+    expect(off.ok).toBe(true);
+    expect(calls.updates[1]).toMatchObject({
+      payload: { folder_id: null },
+      eq: [["id", BOARD]],
     });
   });
 
   it("appends a new folder after the current highest position", async () => {
     state.maxPosition = 4;
-    await createFolder({ name: "Beta" });
+    await createFolder({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      name: "Beta",
+    });
     expect(calls.inserts[0]).toMatchObject({ position: 5 });
   });
 
@@ -225,18 +287,26 @@ describe("board folder actions", () => {
     await moveBoardToFolder({ boardId: BOARD, folderId: FOLDER });
     expect(calls.upserts[0]?.payload).toMatchObject({ position: 5 });
   });
+
+  it("getFolderWorkload validates the id and returns rows", async () => {
+    expect((await getFolderWorkload({ folderId: "nope" })).ok).toBe(false);
+    expect(await getFolderWorkload({ folderId: FOLDER })).toEqual({
+      ok: true,
+      data: [],
+    });
+  });
 });
 
 /**
- * RLS filters a folder you do not own out of the statement entirely, so the
- * write succeeds having matched zero rows. Without a RETURNING check both
- * actions reported success for a folder that was deleted in another tab — the
- * user saw "renamed" and nothing had changed.
+ * RLS filters a folder you cannot rename/delete out of the statement entirely,
+ * so the write succeeds having matched zero rows. Without a RETURNING check
+ * both actions reported success for a folder that was deleted in another tab.
  *
- * The asymmetry with `moveBoardToFolder` is deliberate and is locked below, so a
- * future "make these consistent" refactor has to argue with a red test.
+ * The asymmetry with `moveBoardToFolder`'s unfile branch is deliberate and is
+ * locked below, so a future "make these consistent" refactor has to argue
+ * with a red test.
  */
-describe("board folder actions — a 0-row match", () => {
+describe("folder actions — a 0-row match", () => {
   beforeEach(() => {
     updateTag.mockClear();
     state.insertError = null;
@@ -248,16 +318,15 @@ describe("board folder actions — a 0-row match", () => {
     calls.upserts = [];
   });
 
-  it("renameFolder reports a folder that isn't yours as missing", async () => {
+  it("renameFolder reports a folder that no longer exists as missing", async () => {
     state.affectedRows = 0;
     const res = await renameFolder({ folderId: FOLDER, name: "New Name" });
     expect(res.ok).toBe(false);
     expect(res.ok === false && res.error).toBe("That folder no longer exists.");
-    // Nothing changed, so nothing may be invalidated.
     expect(updateTag).not.toHaveBeenCalled();
   });
 
-  it("deleteFolder reports a folder that isn't yours as missing", async () => {
+  it("deleteFolder reports a folder that no longer exists as missing", async () => {
     state.affectedRows = 0;
     const res = await deleteFolder({ folderId: FOLDER });
     expect(res.ok).toBe(false);
@@ -265,35 +334,21 @@ describe("board folder actions — a 0-row match", () => {
     expect(updateTag).not.toHaveBeenCalled();
   });
 
-  it("still renames and invalidates on a real match", async () => {
-    state.affectedRows = 1;
-    const res = await renameFolder({ folderId: FOLDER, name: "  New Name  " });
-    expect(res.ok).toBe(true);
-    expect(calls.updates).toHaveLength(1);
-    expect(calls.updates[0]).toMatchObject({
-      payload: { name: "New Name" },
-      eq: [["id", FOLDER]],
-    });
-    expect(updateTag).toHaveBeenCalledTimes(1);
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
-  });
-
-  it("still deletes and invalidates on a real match", async () => {
-    state.affectedRows = 1;
-    const res = await deleteFolder({ folderId: FOLDER });
-    expect(res.ok).toBe(true);
-    expect(calls.deletes).toHaveLength(1);
-    expect(calls.deletes[0]).toEqual({ eq: [["id", FOLDER]] });
-    expect(updateTag).toHaveBeenCalledTimes(1);
-  });
-
-  it("unfiling a board with no placement stays a success", async () => {
+  it("attachDashboardToFolder reports a gone folder as missing", async () => {
     state.affectedRows = 0;
+    const res = await attachDashboardToFolder({
+      dashboardId: BOARD,
+      folderId: FOLDER,
+    });
+    expect(res.ok).toBe(false);
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("unfiles a board with a legitimate no-op when there is no placement", async () => {
+    // Deleting a placement that doesn't exist matches zero rows but is not an
+    // error — a double-click or a stale menu, not a "folder is gone" case.
     const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
-    // A double-click, or a stale ⋯ menu, is a state the user already has —
-    // failing it would surface an error toast for a no-op. Deliberately NOT
-    // symmetric with rename/delete.
     expect(res.ok).toBe(true);
-    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+    expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
   });
 });

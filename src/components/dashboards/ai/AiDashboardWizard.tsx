@@ -40,10 +40,13 @@ function formatPayloadSize(tokens: number): string {
 
 export function AiDashboardWizard({
   workspaceId,
+  folderId,
   open,
   onOpenChange,
 }: {
   workspaceId: string;
+  /** Files the generated dashboard into this folder as part of generation. */
+  folderId?: string;
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
@@ -102,6 +105,7 @@ export function AiDashboardWizard({
       }
       const created = await createDashboardFromProposal({
         workspaceId,
+        folderId,
         proposal: { ...gen.data.proposal, sourceBoardId: boardId },
       });
       if (!created.ok) {

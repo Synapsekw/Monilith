@@ -25,6 +25,7 @@ const updateConv = vi.fn();
 const deleteConv = vi.fn();
 const maybeSingleAgent = vi.fn();
 const maybeSingleBoard = vi.fn();
+const maybeSingleFolder = vi.fn();
 const maybeSingleConv = vi.fn();
 const agentEqCalls: [string, unknown][] = [];
 vi.mock("@/lib/supabase/server", () => ({
@@ -58,6 +59,12 @@ vi.mock("@/lib/supabase/server", () => ({
         return {
           select: () => ({
             eq: () => ({ maybeSingle: maybeSingleBoard }),
+          }),
+        };
+      if (t === "folders")
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: maybeSingleFolder }),
           }),
         };
       return { insert: insertMsg };
@@ -96,6 +103,7 @@ beforeEach(() => {
   getMessages.mockResolvedValue([]);
   maybeSingleAgent.mockReset();
   maybeSingleBoard.mockReset();
+  maybeSingleFolder.mockReset();
   maybeSingleConv.mockReset();
   maybeSingleConv.mockResolvedValue({ data: null, error: null });
   agentEqCalls.length = 0;
@@ -720,6 +728,85 @@ describe("createConversation — board threads", () => {
     expect(res.ok).toBe(true);
     expect(maybeSingleBoard).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith("/ask");
+  });
+});
+
+describe("createConversation — folder threads", () => {
+  const FOLDER_ID = "88888888-8888-4888-8888-888888888888";
+  const FOREIGN_FOLDER_ID = "99999999-9999-4999-8999-999999999999";
+  const OTHER_ORG_ID = "77777777-7777-4777-8777-777777777777";
+
+  beforeEach(() => {
+    insertConv.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "c9" }, error: null }),
+      }),
+    });
+    insertMsg.mockResolvedValue({ error: null });
+    // `folders` is RLS-scoped to what the caller can read, so the default here
+    // is "the caller is a member of this folder's org".
+    maybeSingleFolder.mockResolvedValue({
+      data: { id: FOLDER_ID, org_id: "org1" },
+      error: null,
+    });
+  });
+
+  it("stores folder_id for a readable folder in the active org", async () => {
+    const res = await createConversation({
+      firstMessage: "what is late in this project?",
+      folderId: FOLDER_ID,
+    });
+    expect(res.ok).toBe(true);
+    expect(insertConv).toHaveBeenCalledWith(
+      expect.objectContaining({ folder_id: FOLDER_ID }),
+    );
+  });
+
+  it("rejects a folder from another org", async () => {
+    maybeSingleFolder.mockResolvedValue({
+      data: { id: FOLDER_ID, org_id: OTHER_ORG_ID },
+      error: null,
+    });
+    const res = await createConversation({
+      firstMessage: "hi",
+      folderId: FOLDER_ID,
+    });
+    expect(res).toEqual({ ok: false, error: "Folder not found." });
+    expect(insertConv).not.toHaveBeenCalled();
+  });
+
+  it("gives the same answer for a folder that is not there at all", async () => {
+    maybeSingleFolder.mockResolvedValue({ data: null, error: null });
+    const res = await createConversation({
+      firstMessage: "hi",
+      folderId: FOREIGN_FOLDER_ID,
+    });
+    expect(res).toEqual({ ok: false, error: "Folder not found." });
+    expect(insertConv).not.toHaveBeenCalled();
+  });
+
+  it("boardId wins when both are given", async () => {
+    const BOARD_ID = "22222222-2222-4222-8222-222222222222";
+    maybeSingleBoard.mockResolvedValue({
+      data: { id: BOARD_ID, org_id: "org1" },
+      error: null,
+    });
+    const res = await createConversation({
+      firstMessage: "hi",
+      boardId: BOARD_ID,
+      folderId: FOLDER_ID,
+    });
+    expect(res.ok).toBe(true);
+    expect(insertConv).toHaveBeenCalledWith(
+      expect.objectContaining({ board_id: BOARD_ID, folder_id: null }),
+    );
+    expect(maybeSingleFolder).not.toHaveBeenCalled();
+  });
+
+  it("does not read folders at all when no folderId is given", async () => {
+    const res = await createConversation({ firstMessage: "hi" });
+    expect(res.ok).toBe(true);
+    expect(maybeSingleFolder).not.toHaveBeenCalled();
   });
 });
 
