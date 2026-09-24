@@ -14,8 +14,9 @@ import {
   nextMilestones,
 } from "@/lib/folders/rollup";
 import { stageKey, type StageSummary } from "@/lib/folders/stages";
-import type { LayoutSection } from "@/lib/validations/folder-layout";
+import type { KpiKey, LayoutSection } from "@/lib/validations/folder-layout";
 import type { FolderPayload, RollupRow } from "@/lib/folders/types";
+import { SectionChrome } from "@/components/folders/edit/SectionChrome";
 
 /**
  * Rows shown in "Needs attention". `buildFolderPayload` asks the RPC for
@@ -42,6 +43,12 @@ export function OverviewTab({
   sections,
   widgets,
   onRetry,
+  editing = false,
+  onHideSection,
+  onMoveSection,
+  onSetSectionWidth,
+  onRenameSection,
+  onSetKpiCards,
 }: {
   payload: FolderPayload;
   rows: RollupRow[];
@@ -53,6 +60,15 @@ export function OverviewTab({
   sections: LayoutSection[];
   widgets?: ReactNode;
   onRetry: () => void;
+  /** Customize mode (spec §6): when true, every builtin section renders
+   *  wrapped in `SectionChrome` instead of bare. All five handlers are drafts
+   *  on `useLayoutDraft` — nothing here reaches the server. */
+  editing?: boolean;
+  onHideSection?: (id: string) => void;
+  onMoveSection?: (id: string, dir: "up" | "down") => void;
+  onSetSectionWidth?: (id: string, w: number) => void;
+  onRenameSection?: (id: string, label: string) => void;
+  onSetKpiCards?: (id: string, cards: KpiKey[]) => void;
 }) {
   const boards = boardSummaries(rows, payload.boards, stages);
   const burn =
@@ -92,67 +108,92 @@ export function OverviewTab({
         render={(s) => {
           if (s.type !== "builtin") return null; // widget sections: spec 2
           const kicker = kickerFor(sections, s.id);
-          switch (s.panel) {
-            case "kpis":
-              return (
-                <KpisPanel
-                  cards={s.props?.cards ?? []}
-                  rows={rows}
-                  todayISO={payload.todayISO}
-                  failed={payload.rollup === null}
-                  onRetry={onRetry}
-                />
-              );
-            case "burn":
-              return (
-                <BurnPanel
-                  kicker={kicker}
-                  title={s.title}
-                  board={board}
-                  burn={burn}
-                  anyDue={anyDue}
-                  onRetry={onRetry}
-                />
-              );
-            case "boardStatus":
-              return (
-                <BoardStatusPanel
-                  kicker={kicker}
-                  title={s.title}
-                  boards={boards}
-                  failed={payload.rollup === null}
-                  onRetry={onRetry}
-                />
-              );
-            case "attention":
-              return (
-                <AttentionPanel
-                  kicker={kicker}
-                  title={s.title}
-                  attention={attention}
-                  caption={attentionCaption}
-                  onRetry={onRetry}
-                />
-              );
-            case "intelligence":
-              return payload.briefs.length > 0 ? (
-                <IntelligencePanel
-                  kicker={kicker}
-                  title={s.title}
-                  briefs={payload.briefs}
-                />
-              ) : null;
-            case "milestones":
-              return (
-                <MilestonesPanel
-                  kicker={kicker}
-                  title={s.title}
-                  milestones={milestones}
-                />
-              );
-            default:
-              return null;
-          }
+          const node = (() => {
+            switch (s.panel) {
+              case "kpis":
+                return (
+                  <KpisPanel
+                    cards={s.props?.cards ?? []}
+                    rows={rows}
+                    todayISO={payload.todayISO}
+                    failed={payload.rollup === null}
+                    onRetry={onRetry}
+                  />
+                );
+              case "burn":
+                return (
+                  <BurnPanel
+                    kicker={kicker}
+                    title={s.title}
+                    board={board}
+                    burn={burn}
+                    anyDue={anyDue}
+                    onRetry={onRetry}
+                  />
+                );
+              case "boardStatus":
+                return (
+                  <BoardStatusPanel
+                    kicker={kicker}
+                    title={s.title}
+                    boards={boards}
+                    failed={payload.rollup === null}
+                    onRetry={onRetry}
+                  />
+                );
+              case "attention":
+                return (
+                  <AttentionPanel
+                    kicker={kicker}
+                    title={s.title}
+                    attention={attention}
+                    caption={attentionCaption}
+                    onRetry={onRetry}
+                  />
+                );
+              case "intelligence":
+                return payload.briefs.length > 0 ? (
+                  <IntelligencePanel
+                    kicker={kicker}
+                    title={s.title}
+                    briefs={payload.briefs}
+                  />
+                ) : null;
+              case "milestones":
+                return (
+                  <MilestonesPanel
+                    kicker={kicker}
+                    title={s.title}
+                    milestones={milestones}
+                  />
+                );
+              default:
+                return null;
+            }
+          })();
+          if (!editing) return node;
+          const index = sections.findIndex((x) => x.id === s.id);
+          return (
+            <SectionChrome
+              panel={s.panel}
+              title={s.title}
+              cards={s.panel === "kpis" ? (s.props?.cards ?? []) : undefined}
+              index={index}
+              count={sections.length}
+              onHide={() => onHideSection?.(s.id)}
+              onMoveUp={() => onMoveSection?.(s.id, "up")}
+              onMoveDown={() => onMoveSection?.(s.id, "down")}
+              onSetWidth={(w) => onSetSectionWidth?.(s.id, w)}
+              onRename={(label) => onRenameSection?.(s.id, label)}
+              onSetCards={
+                s.panel === "kpis"
+                  ? (cards) => onSetKpiCards?.(s.id, cards)
+                  : undefined
+              }
+            >
+              {node}
+            </SectionChrome>
+          );
         }}
       />
       {widgets ? (

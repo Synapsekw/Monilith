@@ -1,7 +1,15 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { folderFixture, folderFixtureWithPreset } from "@/lib/folders/fixture";
+import type { FolderLayoutConfig } from "@/lib/validations/folder-layout";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const params = { current: new URLSearchParams("") };
 const routerPush = vi.fn();
@@ -21,15 +29,27 @@ vi.mock("@/lib/folders/actions", () => ({
 vi.mock("@/components/folders/charts/BurnChart", () => ({
   BurnChart: () => <div data-testid="burn-chart" />,
 }));
+vi.mock("@/lib/folders/layout-actions", () => ({
+  saveFolderLayout: vi.fn(),
+}));
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: Object.assign(vi.fn(), {
+    error: (...a: unknown[]) => toastError(...a),
+  }),
+}));
 
 import { getFolderWorkload } from "@/lib/folders/actions";
+import { saveFolderLayout } from "@/lib/folders/layout-actions";
 import { CommandCenter, type CommandCenterProps } from "./CommandCenter";
 
 function wrap(props: CommandCenterProps) {
   const qc = new QueryClient();
   return (
     <QueryClientProvider client={qc}>
-      <CommandCenter {...props} />
+      <TooltipProvider>
+        <CommandCenter {...props} />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
@@ -39,8 +59,10 @@ describe("CommandCenter", () => {
     params.current = new URLSearchParams("");
     window.history.replaceState({}, "", "/folders/f1");
     vi.mocked(getFolderWorkload).mockClear();
+    vi.mocked(saveFolderLayout).mockReset();
     routerPush.mockClear();
     routerRefresh.mockClear();
+    toastError.mockClear();
   });
 
   it("renders the header, snapshot chip, tab strip and filter bar from the payload", () => {
@@ -127,5 +149,107 @@ describe("CommandCenter", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Boards/ }));
     expect(routerPush).not.toHaveBeenCalled();
     expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  // Customize mode (spec §6). `useSearchParams` is mocked to a static test
+  // double above (it doesn't re-sync from `history.replaceState` the way real
+  // Next.js does), so tests that need edit mode already on preset
+  // `params.current` with `edit=1` before rendering, mirroring how the
+  // existing stage/tab tests preset params for a "deep link" scenario, rather
+  // than relying on a click-to-customize transition being visible mid-test.
+  function sectionCell(id: string) {
+    const cell = screen
+      .getAllByTestId("section-cell")
+      .find((el) => el.dataset.sectionId === id);
+    if (!cell) throw new Error(`no section-cell for "${id}"`);
+    return cell;
+  }
+  function enterEdit() {
+    params.current = new URLSearchParams("edit=1");
+    window.history.replaceState({}, "", "/folders/f1?edit=1");
+  }
+
+  it("entering edit mode makes no server call", () => {
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+    expect(routerRefresh).not.toHaveBeenCalled();
+    expect(saveFolderLayout).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("?edit=1");
+  });
+
+  it("hiding a section and moving one are local until Save", () => {
+    enterEdit();
+    render(wrap({ payload: folderFixture() }));
+    expect(screen.getByTestId("burn-chart")).toBeInTheDocument();
+    fireEvent.click(
+      within(sectionCell("burn")).getByRole("button", {
+        name: "Hide Planned vs completed",
+      }),
+    );
+    expect(screen.queryByTestId("burn-chart")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(sectionCell("attention")).getByRole("button", {
+        name: "Move up",
+      }),
+    );
+    expect(saveFolderLayout).not.toHaveBeenCalled();
+  });
+
+  it("Save sends the edited config once and refreshes", async () => {
+    enterEdit();
+    vi.mocked(saveFolderLayout).mockResolvedValueOnce({
+      ok: true,
+      data: { version: 2 },
+    });
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(
+      within(sectionCell("burn")).getByRole("button", {
+        name: "Hide Planned vs completed",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveFolderLayout).toHaveBeenCalledTimes(1));
+    const sent = vi.mocked(saveFolderLayout).mock.calls[0]![0] as {
+      config: FolderLayoutConfig;
+    };
+    const overview = sent.config.tabs.find((t) => t.id === "overview")!;
+    const panels = (overview.sections ?? [])
+      .filter((s) => s.type === "builtin")
+      .map((s) => s.panel);
+    expect(panels).not.toContain("burn");
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("Cancel restores the original layout and leaves edit mode", () => {
+    enterEdit();
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(
+      within(sectionCell("burn")).getByRole("button", {
+        name: "Hide Planned vs completed",
+      }),
+    );
+    expect(screen.queryByTestId("burn-chart")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByTestId("burn-chart")).toBeInTheDocument();
+    expect(window.location.search).not.toContain("edit");
+    expect(saveFolderLayout).not.toHaveBeenCalled();
+  });
+
+  it("a stale save surfaces the error and stays in edit mode", async () => {
+    enterEdit();
+    vi.mocked(saveFolderLayout).mockResolvedValueOnce({
+      ok: false,
+      error: "This layout changed — reload the page and try again.",
+    });
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveFolderLayout).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith("Couldn't save the layout", {
+      description: "This layout changed — reload the page and try again.",
+    });
+    expect(routerRefresh).not.toHaveBeenCalled();
+    // Save is still on screen — the failed save left edit mode intact so the
+    // user's work isn't lost.
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 });

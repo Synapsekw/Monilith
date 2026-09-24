@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetaChip } from "@/components/ui/meta-chip";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildStages } from "@/lib/folders/stages";
 import { filterRows } from "@/lib/folders/rollup";
 import { canvasSections } from "@/lib/folders/layout";
+import type { PresetKey } from "@/lib/folders/presets";
 import type { FolderPayload, WorkloadRow } from "@/lib/folders/types";
 import { useCommandCenterState } from "./command-center-state";
 import { TabStrip } from "./TabStrip";
@@ -18,6 +19,9 @@ import { StagesTab } from "./tabs/Stages";
 import { BoardsTab } from "./tabs/Boards";
 import { PeopleTab, peopleFromWorkload } from "./tabs/People";
 import { OVERLOAD_THRESHOLD } from "@/components/folders/charts/WorkloadBars";
+import { useLayoutDraft } from "./edit/use-layout-draft";
+import { CustomizeBar } from "./edit/CustomizeBar";
+import { SectionsSheet } from "./edit/SectionsSheet";
 
 export type CommandCenterProps = {
   payload: FolderPayload;
@@ -34,12 +38,41 @@ export type CommandCenterProps = {
  */
 export function CommandCenter({ payload, widgets }: CommandCenterProps) {
   const router = useRouter();
-  const layoutTabs = payload.layout.config.tabs;
+  const draft = useLayoutDraft(payload.layout.config);
+  const [presetChoice, setPresetChoice] = useState<PresetKey>(
+    payload.layout.preset,
+  );
+  // `?edit=1` is read directly here — `useCommandCenterState` below needs
+  // `tabIds` as an INPUT (to clamp `?tab=`), so which config drives those ids
+  // can't be sourced from that same hook's own return value. Both reads hit
+  // the identical `useSearchParams()` snapshot for this render, so `edit` and
+  // `useCommandCenterState`'s internal read never disagree.
+  const edit = useSearchParams().get("edit") === "1";
+  // While Customize mode is on, every tab/section read below comes from the
+  // DRAFT config instead of the persisted one — zero server round-trips per
+  // edit (working agreement #5). `payload.layout.config` (what the page
+  // actually persisted) stays untouched until Save; Cancel reverts the draft.
+  const activeConfig = edit ? draft.config : payload.layout.config;
+  const layoutTabs = activeConfig.tabs;
   const tabIds = useMemo(() => layoutTabs.map((t) => t.id), [layoutTabs]);
-  const { tab, stage, board, setTab, setStage, setBoard } =
+  const { tab, stage, board, setTab, setStage, setBoard, setEdit } =
     useCommandCenterState(tabIds);
   const activeTab = layoutTabs.find((t) => t.id === tab);
   const canExport = activeTab?.kind === "canvas";
+
+  function handleCancel() {
+    draft.revert();
+    setPresetChoice(payload.layout.preset);
+    setEdit(false);
+  }
+  function handleSaved() {
+    setEdit(false);
+    router.refresh();
+  }
+  function handleReset(key: PresetKey) {
+    draft.reset(key);
+    setPresetChoice(key);
+  }
   const rollup = useMemo(() => payload.rollup ?? [], [payload.rollup]);
   const stages = useMemo(
     () => buildStages(rollup, payload.todayISO),
@@ -115,7 +148,12 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
           </MetaChip>
         }
         actions={
-          <HeaderActions folderId={payload.folder.id} canExport={canExport} />
+          <HeaderActions
+            folderId={payload.folder.id}
+            canExport={canExport}
+            editing={edit}
+            onCustomize={() => setEdit(true)}
+          />
         }
       />
       <TabStrip
@@ -180,13 +218,43 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               stages={buildStages(rows, payload.todayISO)}
               stage={stage}
               board={board}
-              sections={canvasSections(payload.layout.config, tab)}
+              sections={canvasSections(activeConfig, tab)}
               widgets={widgets}
               onRetry={() => router.refresh()}
+              editing={edit}
+              onHideSection={draft.hide}
+              onMoveSection={draft.move}
+              onSetSectionWidth={draft.setWidth}
+              onRenameSection={draft.rename}
+              onSetKpiCards={draft.setCards}
             />
           )}
         </>
       )}
+      {edit ? (
+        <>
+          <div className="flex justify-end">
+            <SectionsSheet
+              sections={canvasSections(activeConfig, tab)}
+              tabs={activeConfig.tabs}
+              onAddSection={draft.addSection}
+              onRenameTab={draft.renameTab}
+              onHideTab={draft.hideTab}
+              onMoveTab={draft.moveTab}
+            />
+          </div>
+          <CustomizeBar
+            folderId={payload.folder.id}
+            version={payload.layout.version}
+            preset={presetChoice}
+            config={draft.config}
+            dirty={draft.dirty}
+            onReset={handleReset}
+            onCancel={handleCancel}
+            onSaved={handleSaved}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -31,6 +31,7 @@ export function useCommandCenterState(tabIds: string[]) {
   const tab = parseTab(params.get("tab"), tabIds);
   const stage = params.get("stage");
   const board = params.get("board");
+  const edit = params.get("edit") === "1";
 
   const first = tabIds[0];
   const setTab = useCallback(
@@ -54,13 +55,21 @@ export function useCommandCenterState(tabIds: string[]) {
       else url.searchParams.set("board", id);
     });
   }, []);
+  const setEdit = useCallback((on: boolean) => {
+    write((url) => {
+      if (on) url.searchParams.set("edit", "1");
+      else url.searchParams.delete("edit");
+    });
+  }, []);
 
   return {
     tab,
     stage: stage === "" ? null : stage,
     board: board === "" ? null : board,
+    edit,
     setTab,
     setStage,
     setBoard,
+    setEdit,
   };
 }

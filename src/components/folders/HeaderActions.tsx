@@ -1,17 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { Link2, Printer, Sparkles } from "lucide-react";
+import { Link2, Printer, Settings2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
-/** Spec §5.1 header extras. Export prints canvas tabs only; RLS gates the shared link. */
+/** Spec §5.1 header extras. Export prints canvas tabs only; RLS gates the shared link.
+ *  `onCustomize` (spec §6) enters Customize mode — a client-only draft edit of
+ *  the layout, so this is optional and defaults to hiding the button rather
+ *  than forcing every caller to wire it up. */
 export function HeaderActions({
   folderId,
   canExport,
+  editing = false,
+  onCustomize,
 }: {
   folderId: string;
   canExport: boolean;
+  editing?: boolean;
+  onCustomize?: () => void;
 }) {
   async function share() {
     try {
@@ -41,6 +48,11 @@ export function HeaderActions({
           <Sparkles className="size-4" /> Ask about this folder
         </Link>
       </Button>
+      {!editing && onCustomize ? (
+        <Button type="button" variant="outline" size="sm" onClick={onCustomize}>
+          <Settings2 className="size-4" /> Customize
+        </Button>
+      ) : null}
     </div>
   );
 }
