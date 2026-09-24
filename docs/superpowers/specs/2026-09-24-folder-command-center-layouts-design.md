@@ -139,8 +139,13 @@ means copying the preset object into `config` on first save.
   `folder_burn` — now conditional on the resolved layout.
 
 A project folder pays nothing extra: `folder_burn` runs in parallel with the briefs read,
-which already waited on the head read. A folder whose layout has no burn section skips
-that RPC entirely.
+which already waited on the head read.
+
+**The burn gate has two consumers, not one.** `folder_burn` feeds both the Overview burn
+section and the Stages tab's own chart (`src/components/folders/tabs/Stages.tsx:70`). The
+RPC is skipped only when the resolved layout has **no `burn` section in any canvas tab and
+no tab of kind `stages`**. Gating on the section alone would leave a folder that kept its
+stages tab rendering a permanently failed chart.
 
 `resolveLayout(row): FolderLayout` is a pure function — absent row, invalid JSON, partial
 config, and unknown panel keys all resolve to a valid layout — and is unit-tested without
@@ -204,7 +209,8 @@ Written and executed before the feature is considered done (working agreement #4
 **Unit.** `resolveLayout` across absent row, invalid JSON, partial config and unknown panel
 keys; every preset object; Zod bounds (tab count, section count, label length, KPI count,
 32 KB cap); draft reducers for hide, reorder, rename and reset; payload pruning — assert
-`folder_burn` is _not_ called when no burn section is present.
+`folder_burn` is _not_ called when the layout has neither a burn section nor a `stages`
+tab, and _is_ called when it has either one alone.
 
 **Component.** `CommandCenter` rendered from a CRM config shows no burn and no milestones
 and labels the stages tab "Pipeline"; edit-mode interactions (hide, reorder, rename, KPI
