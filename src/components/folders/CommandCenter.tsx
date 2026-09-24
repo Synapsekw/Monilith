@@ -7,6 +7,7 @@ import { MetaChip } from "@/components/ui/meta-chip";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildStages } from "@/lib/folders/stages";
 import { filterRows } from "@/lib/folders/rollup";
+import { canvasSections } from "@/lib/folders/layout";
 import type { FolderPayload, WorkloadRow } from "@/lib/folders/types";
 import { useCommandCenterState } from "./command-center-state";
 import { TabStrip } from "./TabStrip";
@@ -142,17 +143,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
             onStage={setStage}
             onBoard={setBoard}
           />
-          {tab === "overview" ? (
-            <OverviewTab
-              payload={payload}
-              rows={rows}
-              stages={buildStages(rows, payload.todayISO)}
-              stage={stage}
-              board={board}
-              widgets={widgets}
-              onRetry={() => router.refresh()}
-            />
-          ) : tab === "stages" ? (
+          {activeTab?.kind === "stages" ? (
             <StagesTab
               rows={stageTabRows}
               allRows={rollup}
@@ -165,7 +156,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               onSelectStage={setStage}
               onRetry={() => router.refresh()}
             />
-          ) : tab === "boards" ? (
+          ) : activeTab?.kind === "boards" ? (
             <BoardsTab
               rows={rows}
               boards={
@@ -175,12 +166,23 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               }
               stages={stages}
             />
-          ) : (
+          ) : activeTab?.kind === "people" ? (
             <PeopleTab
               folderId={payload.folder.id}
               stage={stage}
               members={payload.members}
               onWorkload={onWorkload}
+            />
+          ) : (
+            <OverviewTab
+              payload={payload}
+              rows={rows}
+              stages={buildStages(rows, payload.todayISO)}
+              stage={stage}
+              board={board}
+              sections={canvasSections(payload.layout.config, tab)}
+              widgets={widgets}
+              onRetry={() => router.refresh()}
             />
           )}
         </>

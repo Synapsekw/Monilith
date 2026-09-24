@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { folderFixture } from "@/lib/folders/fixture";
+import { folderFixture, folderFixtureWithPreset } from "@/lib/folders/fixture";
 
 const params = { current: new URLSearchParams("") };
 const routerPush = vi.fn();
@@ -104,5 +104,28 @@ describe("CommandCenter", () => {
   it("renders the widgets slot under #widgets", () => {
     render(wrap({ payload: folderFixture(), widgets: <div>WIDGETS</div> }));
     expect(document.getElementById("widgets")).toHaveTextContent("WIDGETS");
+  });
+
+  it("renders a CRM folder without the burn chart or milestones, with a Pipeline tab", () => {
+    render(wrap({ payload: folderFixtureWithPreset("crm") }));
+    expect(screen.queryByTestId("burn-chart")).not.toBeInTheDocument();
+    expect(screen.queryByText("Next milestones")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Pipeline/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /People/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows only the KPI cards the layout selects, in order", () => {
+    render(wrap({ payload: folderFixtureWithPreset("crm") }));
+    const labels = screen.getAllByTestId("kpi-label").map((n) => n.textContent);
+    expect(labels).toEqual(["Complete", "Overdue", "Due this week"]);
+  });
+
+  it("never navigates when switching tabs", () => {
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(screen.getByRole("tab", { name: /Boards/ }));
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 });
