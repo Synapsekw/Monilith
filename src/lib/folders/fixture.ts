@@ -1,3 +1,5 @@
+import { resolveLayout } from "./layout";
+import { PRESETS, type PresetKey } from "./presets";
 import type { FolderPayload, RollupRow } from "./types";
 
 export const FIXTURE_TODAY = "2026-09-15";
@@ -239,7 +241,17 @@ export function folderFixture(): FolderPayload {
       { userId: "u1", fullName: "Ada Lovelace", avatarUrl: null },
       { userId: "u2", fullName: "Grace Hopper", avatarUrl: null },
     ],
+    layout: resolveLayout(null),
     generatedAt: "2026-09-15T09:00:00.000Z",
     todayISO: FIXTURE_TODAY,
+  };
+}
+
+/** A fixture payload whose layout is a named preset — for tests that assert a
+ *  CRM folder hides burn and milestones. */
+export function folderFixtureWithPreset(preset: PresetKey): FolderPayload {
+  return {
+    ...folderFixture(),
+    layout: { config: PRESETS[preset], preset, version: 1 },
   };
 }
