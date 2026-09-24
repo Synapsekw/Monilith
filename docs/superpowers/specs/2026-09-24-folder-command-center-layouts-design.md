@@ -106,6 +106,13 @@ type Section =
 Grid rects use the same 12-column `GridRect` math as `DashboardCanvas` (react-grid-layout
 v2), so spec 2's widget sections drop into the same grid without a layout migration.
 
+**Spec 1 consumes only `layout.w`**, as a 12-column span inside the Overview's existing
+responsive Tailwind grid (`w: 12` = full row, `w: 8` = two thirds, `w: 4` = one third —
+exactly today's proportions). Free 2-D drag through react-grid-layout arrives with spec 2's
+widget canvas. Adopting absolutely-positioned RGL now would change how every default folder
+renders and would regress the responsive behaviour on small screens, which contradicts §8;
+`x`/`y`/`h` are stored and preserved so spec 2 inherits a complete rect.
+
 The `widget` branch ships in the schema in spec 1 even though nothing writes it yet. This
 avoids a config version bump between phases.
 
@@ -157,8 +164,11 @@ mode is client state too (`?edit=1`, replaceState); dragging, hiding, reordering
 renaming mutate local draft state only. Nothing reaches the server until Save.
 
 **The one mutation.** `saveFolderLayout` is a Server Action taking the whole config; it
-validates with Zod, writes the row, calls `updateTag(foldersTag(orgId))`, and the client
-calls `router.refresh()`. It returns `ActionResult` from `src/lib/actions/result.ts`.
+validates with Zod, writes the row, and returns `ActionResult` from
+`src/lib/actions/result.ts`; the client then calls `router.refresh()`. It does **not** call
+`updateTag(foldersTag(orgId))`: no `use cache` read holds the layout — `buildFolderPayload`
+reads it uncached on the request's RLS client — so invalidating that tag would only evict
+the sidebar nav cache on every save.
 Concurrency is last-write-wins guarded by `version`: a stale version returns
 "This layout changed — reload" instead of silently clobbering another member's edit.
 
@@ -171,8 +181,10 @@ tab.
 `HeaderActions`' overflow menu gains **Customize**, which sets `?edit=1` and swaps the
 Overview canvas into edit mode.
 
-- Each section gains a drag handle, a hide toggle, and inline title rename, using the same
-  react-grid-layout v2 grid as `DashboardCanvas`.
+- Each section gains a drag handle, a hide toggle, and inline title rename. Reordering is
+  one-dimensional within the section list (drag, plus keyboard-accessible Move up / Move
+  down), which is what a span-based grid needs; width is chosen from a three-way control
+  (full / two-thirds / one-third) writing `layout.w`.
 - A **Sections** side sheet lists hidden sections with Add-back buttons. This is also how
   a user discovers panels their preset left out.
 - The KPI section opens a drag-ordered checkbox list of the six metric keys, at most six
