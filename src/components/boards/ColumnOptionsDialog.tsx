@@ -48,11 +48,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 function settingsOptions(column: CacheColumn): ColumnOption[] {
   return (column.settings as { options?: ColumnOption[] }).options ?? [];
 }
+
+/** Dropdown multi-select flag; absent means multi (the schema's default). */
+function settingsAllowMultiple(column: CacheColumn): boolean {
+  return (
+    (column.settings as { allow_multiple?: boolean }).allow_multiple !== false
+  );
+}
+
+/** What the dialog writes back: the edited options plus every settings key it
+ *  preserves verbatim (and `allow_multiple` for dropdown columns). */
+export type ColumnSettingsDraft = Record<string, unknown> & {
+  options: ColumnOption[];
+};
 
 /**
  * Edits a status/dropdown column's options. Label/color/order edits are
@@ -72,7 +87,7 @@ export function ColumnOptionsDialog({
   open: boolean;
   column: CacheColumn;
   usageOf: (optionId: string) => number;
-  onSave: (settings: { options: ColumnOption[] }) => void;
+  onSave: (settings: ColumnSettingsDraft) => void;
   onRemoveOption: (optionId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -104,12 +119,15 @@ function OptionsEditor({
 }: {
   column: CacheColumn;
   usageOf: (optionId: string) => number;
-  onSave: (settings: { options: ColumnOption[] }) => void;
+  onSave: (settings: ColumnSettingsDraft) => void;
   onRemoveOption: (optionId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const [options, setOptions] = useState<ColumnOption[]>(() =>
     settingsOptions(column),
+  );
+  const [allowMultiple, setAllowMultiple] = useState(() =>
+    settingsAllowMultiple(column),
   );
   const [confirmRemove, setConfirmRemove] = useState<ColumnOption | null>(null);
   // The freshly-added option whose label input should grab focus.
@@ -142,7 +160,15 @@ function OptionsEditor({
   }
 
   function save() {
-    onSave({ options });
+    // `updateColumnSettings` REPLACES the settings jsonb, so carry forward the
+    // keys this dialog doesn't edit (summary_aggregation, …) instead of
+    // silently dropping them.
+    const prior = (column.settings ?? {}) as Record<string, unknown>;
+    onSave({
+      ...prior,
+      options,
+      ...(column.kind === "dropdown" ? { allow_multiple: allowMultiple } : {}),
+    });
     onOpenChange(false);
   }
 
@@ -200,6 +226,25 @@ function OptionsEditor({
         <Plus />
         Add option
       </Button>
+
+      {/* Dropdown only: Status is single-valued by kind, People has no toggle. */}
+      {column.kind === "dropdown" && (
+        <div className="border-border/60 flex items-center justify-between gap-3 border-t pt-3">
+          <div className="flex flex-col gap-0.5">
+            <Label htmlFor={`allow-multiple-${column.id}`}>
+              Allow multiple
+            </Label>
+            <p className="text-muted-foreground text-xs">
+              Off: picking a label replaces the value and closes the menu.
+            </p>
+          </div>
+          <Switch
+            id={`allow-multiple-${column.id}`}
+            checked={allowMultiple}
+            onCheckedChange={setAllowMultiple}
+          />
+        </div>
+      )}
 
       <DialogFooter>
         <Button

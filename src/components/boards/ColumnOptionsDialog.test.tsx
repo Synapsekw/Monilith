@@ -29,6 +29,23 @@ function statusCol(): CacheColumn {
   } as unknown as CacheColumn;
 }
 
+function dropdownCol(settings?: Record<string, unknown>): CacheColumn {
+  return {
+    id: "c2",
+    kind: "dropdown",
+    name: "Business Unit",
+    settings: {
+      options: [
+        { id: "a", label: "Drones", color: "#579bfc" },
+        { id: "b", label: "Robotics", color: "#a25ddc" },
+      ],
+      summary_aggregation: "count",
+      ...settings,
+    },
+    position: 0,
+  } as unknown as CacheColumn;
+}
+
 describe("ColumnOptionsDialog", () => {
   it("Add option then Save persists a new option labelled 'New label'", () => {
     const onSave = vi.fn();
@@ -121,5 +138,73 @@ describe("ColumnOptionsDialog", () => {
     for (const el of [handle, swatch, remove]) {
       expect(el.className).toContain("pointer-coarse:size-11");
     }
+  });
+});
+
+describe("ColumnOptionsDialog — dropdown selection mode", () => {
+  it("offers the multi-select toggle only for dropdown columns", () => {
+    const { unmount } = render(
+      <ColumnOptionsDialog
+        open
+        column={statusCol()}
+        usageOf={() => 0}
+        onSave={vi.fn()}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("switch", { name: /multiple/i }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <ColumnOptionsDialog
+        open
+        column={dropdownCol()}
+        usageOf={() => 0}
+        onSave={vi.fn()}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    // Absent setting means multi — the switch reads as on.
+    expect(screen.getByRole("switch", { name: /multiple/i })).toBeChecked();
+  });
+
+  it("saves allow_multiple: false and preserves unrelated settings", () => {
+    const onSave = vi.fn();
+    render(
+      <ColumnOptionsDialog
+        open
+        column={dropdownCol()}
+        usageOf={() => 0}
+        onSave={onSave}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /multiple/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allow_multiple: false,
+        summary_aggregation: "count",
+      }),
+    );
+  });
+
+  it("seeds the switch from an existing allow_multiple: false", () => {
+    render(
+      <ColumnOptionsDialog
+        open
+        column={dropdownCol({ allow_multiple: false })}
+        usageOf={() => 0}
+        onSave={vi.fn()}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("switch", { name: /multiple/i })).not.toBeChecked();
   });
 });
