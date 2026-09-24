@@ -248,6 +248,39 @@ describe("DropdownEditor", () => {
     expect(onClear).toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  // Single-select dropdowns (allow_multiple: false) behave like Status: a pick
+  // REPLACES the selection, and the caller closes the editor on commit.
+  it("replaces the selection when the column is single-select", async () => {
+    const onCommit = vi.fn();
+    render(
+      <DropdownEditor
+        value={{ optionIds: ["o1"] }}
+        settings={{ ...statusSettings, allow_multiple: false }}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("option", { name: /stuck/i }));
+    expect(onCommit).toHaveBeenCalledWith({ optionIds: ["o2"] });
+  });
+
+  it("re-picking the selected option keeps it (single-select never clears)", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <DropdownEditor
+        value={{ optionIds: ["o1"] }}
+        settings={{ ...statusSettings, allow_multiple: false }}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("option", { name: /done/i }));
+    expect(onCommit).toHaveBeenCalledWith({ optionIds: ["o1"] });
+    expect(onClear).not.toHaveBeenCalled();
+  });
 });
 
 describe("PeopleEditor", () => {
@@ -756,5 +789,20 @@ describe("commitKeepsEditorOpen", () => {
     for (const kind of ["status", "priority", "date", "text", "numbers"]) {
       expect(commitKeepsEditorOpen(kind)).toBe(false);
     }
+  });
+
+  it("closes a single-select dropdown on commit", () => {
+    expect(commitKeepsEditorOpen("dropdown", { allow_multiple: false })).toBe(
+      false,
+    );
+    expect(commitKeepsEditorOpen("dropdown", { allow_multiple: true })).toBe(
+      true,
+    );
+    // Absent means multi — every dropdown predating the setting stays open.
+    expect(commitKeepsEditorOpen("dropdown", {})).toBe(true);
+    // People has no per-column toggle: always multi.
+    expect(commitKeepsEditorOpen("people", { allow_multiple: false })).toBe(
+      true,
+    );
   });
 });

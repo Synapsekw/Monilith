@@ -79,7 +79,14 @@ export const emptySettingsSchema = baseColumnSettingsSchema.strict();
 export const statusSettingsSchema = baseColumnSettingsSchema.extend({
   options: z.array(optionSchema).default([]),
 });
-export const dropdownSettingsSchema = statusSettingsSchema;
+// Dropdown holds a SET of options, so it carries the one knob Status can't:
+// `allow_multiple`. Default true — every dropdown that predates the setting
+// keeps its multi-select editor (which stays open across picks). False makes
+// the column single-select: a pick replaces the value and closes the editor,
+// exactly like Status.
+export const dropdownSettingsSchema = statusSettingsSchema.extend({
+  allow_multiple: z.boolean().default(true),
+});
 export const numbersSettingsSchema = baseColumnSettingsSchema.extend({
   unit: z.string().optional(),
   precision: z.number().int().min(0).max(10).optional(),

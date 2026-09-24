@@ -210,10 +210,11 @@ export const EditableCell = memo(function EditableCell({
           columnName={column.name}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
-            // Multi-value kinds (people, dropdown) commit once per toggle, so
-            // closing here would end the selection after one pick. They stay
-            // open until the user dismisses them (Escape / outside click).
-            if (!commitKeepsEditorOpen(column.kind)) setEditing(null);
+            // Multi-value kinds (people, multi-select dropdown) commit once
+            // per toggle, so closing here would end the selection after one
+            // pick. They stay open until the user dismisses them (Escape /
+            // outside click). A single-select dropdown closes like Status.
+            if (!commitKeepsEditorOpen(column.kind, settings)) setEditing(null);
           }}
           onClear={() => {
             clearCellValue({ itemId: item.id, columnId: column.id });

@@ -52,9 +52,23 @@ export const MULTI_VALUE_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /** True when `kind`'s editor must stay open after `onCommit` — dismissal is the
- *  user's job (Escape / outside click → `onCancel`). Clearing always closes. */
-export function commitKeepsEditorOpen(kind: string): boolean {
+ *  user's job (Escape / outside click → `onCancel`). Clearing always closes.
+ *
+ *  A dropdown column configured `allow_multiple: false` is single-select: its
+ *  pick replaces the value, so the editor closes on commit like Status does.
+ *  The setting is absent on every dropdown that predates it, which reads as
+ *  multi — the historical behaviour. People has no such toggle. */
+export function commitKeepsEditorOpen(
+  kind: string,
+  settings?: Record<string, unknown>,
+): boolean {
+  if (kind === "dropdown") return allowsMultiple(settings);
   return MULTI_VALUE_KINDS.has(kind);
+}
+
+/** Dropdown multi-select flag: absent means multi (see the schema default). */
+function allowsMultiple(settings?: Record<string, unknown>): boolean {
+  return settings?.allow_multiple !== false;
 }
 
 /** Shared key handling: Enter commits, Escape cancels. */
@@ -256,11 +270,16 @@ export function DropdownEditor({
   onClear,
 }: EditorProps<{ optionIds: string[] }>) {
   const options = settings.options ?? [];
+  const multiple = allowsMultiple(settings);
   const [selected, setSelected] = useState<string[]>(value?.optionIds ?? []);
   function toggle(id: string) {
-    const next = selected.includes(id)
-      ? selected.filter((x) => x !== id)
-      : [...selected, id];
+    // Single-select: the pick REPLACES the selection (re-picking the current
+    // option is a no-op commit, never a clear — the Clear button owns that).
+    const next = multiple
+      ? selected.includes(id)
+        ? selected.filter((x) => x !== id)
+        : [...selected, id]
+      : [id];
     setSelected(next);
     // An empty selection clears the cell (deletes the row).
     if (next.length === 0) return (onClear ?? onCancel)();
