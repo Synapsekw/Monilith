@@ -19,9 +19,7 @@ export const attachDashboardSchema = z.object({
   dashboardId: uuid,
   folderId: uuid.nullable(),
 });
-export const commandTabSchema = z.enum([
-  "overview",
-  "stages",
-  "boards",
-  "people",
-]);
+/** A tab id from a folder's layout config. The four preset ids (overview,
+ *  stages, boards, people) are the legacy enum values, so old deep links and
+ *  any server-side use keep parsing. */
+export const commandTabSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);

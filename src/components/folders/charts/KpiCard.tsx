@@ -32,7 +32,7 @@ export function KpiCard({
         className,
       )}
     >
-      <Kicker>{label}</Kicker>
+      <Kicker data-testid="kpi-label">{label}</Kicker>
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-heading text-2xl font-semibold tracking-tight tabular-nums">
           {value}

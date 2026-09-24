@@ -1809,6 +1809,54 @@ export type Database = {
           },
         ];
       };
+      folder_layouts: {
+        Row: {
+          config: Json;
+          created_at: string;
+          folder_id: string;
+          org_id: string;
+          preset: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+        };
+        Insert: {
+          config: Json;
+          created_at?: string;
+          folder_id: string;
+          org_id: string;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          config?: Json;
+          created_at?: string;
+          folder_id?: string;
+          org_id?: string;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_layouts_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: true;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folder_layouts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folders: {
         Row: {
           created_at: string;
