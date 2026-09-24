@@ -4,15 +4,14 @@ import Link from "next/link";
 import { Link2, Printer, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { CommandTab } from "./command-center-state";
 
-/** Spec §5.1 header extras. Export prints the Overview only; RLS gates the shared link. */
+/** Spec §5.1 header extras. Export prints canvas tabs only; RLS gates the shared link. */
 export function HeaderActions({
   folderId,
-  tab,
+  canExport,
 }: {
   folderId: string;
-  tab: CommandTab;
+  canExport: boolean;
 }) {
   async function share() {
     try {
@@ -31,9 +30,9 @@ export function HeaderActions({
         type="button"
         variant="outline"
         size="sm"
-        disabled={tab !== "overview"}
+        disabled={!canExport}
         onClick={() => window.print()}
-        title={tab === "overview" ? undefined : "Switch to Overview to export"}
+        title={canExport ? undefined : "Switch to a canvas tab to export"}
       >
         <Printer className="size-4" /> Export PDF
       </Button>

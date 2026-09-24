@@ -14,7 +14,7 @@ describe("HeaderActions", () => {
   });
 
   it("Share copies the current URL and toasts", async () => {
-    render(<HeaderActions folderId="f1" tab="overview" />);
+    render(<HeaderActions folderId="f1" canExport />);
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
     await Promise.resolve();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
@@ -23,16 +23,16 @@ describe("HeaderActions", () => {
     expect(toast).toHaveBeenCalledWith("Link copied");
   });
 
-  it("Export PDF prints on the Overview and is disabled elsewhere", () => {
-    const { rerender } = render(<HeaderActions folderId="f1" tab="overview" />);
+  it("Export PDF prints on a canvas tab and is disabled elsewhere", () => {
+    const { rerender } = render(<HeaderActions folderId="f1" canExport />);
     fireEvent.click(screen.getByRole("button", { name: "Export PDF" }));
     expect(window.print).toHaveBeenCalledTimes(1);
-    rerender(<HeaderActions folderId="f1" tab="people" />);
+    rerender(<HeaderActions folderId="f1" canExport={false} />);
     expect(screen.getByRole("button", { name: "Export PDF" })).toBeDisabled();
   });
 
   it("Ask about this folder links to /ask?folder=", () => {
-    render(<HeaderActions folderId="f1" tab="overview" />);
+    render(<HeaderActions folderId="f1" canExport />);
     expect(
       screen.getByRole("link", { name: "Ask about this folder" }),
     ).toHaveAttribute("href", "/ask?folder=f1");

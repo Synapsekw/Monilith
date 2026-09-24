@@ -33,8 +33,12 @@ export type CommandCenterProps = {
  */
 export function CommandCenter({ payload, widgets }: CommandCenterProps) {
   const router = useRouter();
+  const layoutTabs = payload.layout.config.tabs;
+  const tabIds = useMemo(() => layoutTabs.map((t) => t.id), [layoutTabs]);
   const { tab, stage, board, setTab, setStage, setBoard } =
-    useCommandCenterState();
+    useCommandCenterState(tabIds);
+  const activeTab = layoutTabs.find((t) => t.id === tab);
+  const canExport = activeTab?.kind === "canvas";
   const rollup = useMemo(() => payload.rollup ?? [], [payload.rollup]);
   const stages = useMemo(
     () => buildStages(rollup, payload.todayISO),
@@ -109,9 +113,17 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
             · live
           </MetaChip>
         }
-        actions={<HeaderActions folderId={payload.folder.id} tab={tab} />}
+        actions={
+          <HeaderActions folderId={payload.folder.id} canExport={canExport} />
+        }
       />
-      <TabStrip tab={tab} counts={counts} disabled={empty} onChange={setTab} />
+      <TabStrip
+        tabs={layoutTabs}
+        tab={tab}
+        counts={counts}
+        disabled={empty}
+        onChange={setTab}
+      />
       {empty ? (
         <EmptyState className="mt-4">
           <span className="block">Add boards to this folder</span>

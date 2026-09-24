@@ -2,13 +2,16 @@
 
 import { useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { commandTabSchema } from "@/lib/validations/folders";
 
-export type CommandTab = "overview" | "stages" | "boards" | "people";
-
-export function parseTab(v: string | null): CommandTab {
-  const parsed = commandTabSchema.safeParse(v);
-  return parsed.success ? parsed.data : "overview";
+/**
+ * `?tab=` now carries a TAB ID from the folder's layout config, not a fixed
+ * enum — a CRM folder's "pipeline" is as valid as "overview". Unknown ids fall
+ * back to the first configured tab, so a deep link to a tab someone removed
+ * still renders. Preset tab ids are exactly the legacy slugs, so existing
+ * links keep working.
+ */
+export function parseTab(v: string | null, tabIds: string[]): string {
+  return v !== null && tabIds.includes(v) ? v : (tabIds[0] ?? "overview");
 }
 
 /**
@@ -23,18 +26,22 @@ function write(mutate: (url: URL) => void) {
   window.history.replaceState({}, "", url);
 }
 
-export function useCommandCenterState() {
+export function useCommandCenterState(tabIds: string[]) {
   const params = useSearchParams();
-  const tab = parseTab(params.get("tab"));
+  const tab = parseTab(params.get("tab"), tabIds);
   const stage = params.get("stage");
   const board = params.get("board");
 
-  const setTab = useCallback((t: CommandTab) => {
-    write((url) => {
-      if (t === "overview") url.searchParams.delete("tab");
-      else url.searchParams.set("tab", t);
-    });
-  }, []);
+  const first = tabIds[0];
+  const setTab = useCallback(
+    (t: string) => {
+      write((url) => {
+        if (t === first) url.searchParams.delete("tab");
+        else url.searchParams.set("tab", t);
+      });
+    },
+    [first],
+  );
   const setStage = useCallback((k: string | null) => {
     write((url) => {
       if (k === null) url.searchParams.delete("stage");
