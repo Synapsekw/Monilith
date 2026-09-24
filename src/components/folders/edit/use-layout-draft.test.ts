@@ -1,6 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { folderLayoutConfigSchema } from "@/lib/validations/folder-layout";
+import {
+  folderLayoutConfigSchema,
+  type FolderLayoutConfig,
+} from "@/lib/validations/folder-layout";
 import { PRESETS } from "@/lib/folders/presets";
 import { useLayoutDraft } from "./use-layout-draft";
 
@@ -68,6 +71,43 @@ describe("useLayoutDraft", () => {
     expect(section?.layout).toEqual({ x: 0, y: 6, w: 12, h: 5 });
   });
 
+  it("pulls a right-column section back to x 0 when it is widened", () => {
+    // board-status lives at x 8. Widening it to 12 without renormalising x
+    // emits `grid-column: 9 / span 12` — phantom implicit columns, and a
+    // panel that never actually becomes full width.
+    const { result } = draft();
+    act(() => result.current.setWidth("board-status", 12));
+    const section = (result.current.config.tabs[0].sections ?? []).find(
+      (s) => s.id === "board-status",
+    );
+    expect(section?.layout).toEqual({ x: 0, y: 2, w: 12, h: 4 });
+  });
+
+  it("keeps a widened right-column section inside the 12 columns at every width", () => {
+    const { result } = draft();
+    act(() => result.current.setWidth("milestones", 8));
+    const widened = (result.current.config.tabs[0].sections ?? []).find(
+      (s) => s.id === "milestones",
+    );
+    expect(widened?.layout).toEqual({ x: 4, y: 9, w: 8, h: 2 });
+    // Narrowing again must not drag it back to x 0 — only the overflowing
+    // case is clamped.
+    act(() => result.current.setWidth("milestones", 4));
+    const narrowed = (result.current.config.tabs[0].sections ?? []).find(
+      (s) => s.id === "milestones",
+    );
+    expect(narrowed?.layout).toEqual({ x: 4, y: 9, w: 4, h: 2 });
+  });
+
+  it("does not mutate the shared preset objects", () => {
+    // PRESETS sections are module-level singletons shared with DEFAULT_SECTION.
+    const before = structuredClone(PRESETS.project);
+    const { result } = draft();
+    act(() => result.current.setWidth("board-status", 12));
+    act(() => result.current.rename("attention", "Open risks"));
+    expect(PRESETS.project).toEqual(before);
+  });
+
   it("trims a rename and rejects an empty one", () => {
     const { result } = draft();
     act(() => result.current.rename("attention", "  Open risks  "));
@@ -125,6 +165,45 @@ describe("useLayoutDraft", () => {
     act(() => result.current.revert());
     expect(result.current.config).toEqual(PRESETS.project);
     expect(result.current.dirty).toBe(false);
+  });
+
+  it("re-seeds the draft AND the revert baseline when the saved version moves", () => {
+    // Save → router.refresh() re-renders the page with the row that was just
+    // written. Without a resync the hook keeps its mount-time baseline, so the
+    // next Cancel would restore the PRE-save layout and the following Save
+    // would write it back over the saved one.
+    const { result, rerender } = renderHook(
+      ({ config, version }: { config: FolderLayoutConfig; version: number }) =>
+        useLayoutDraft(config, version),
+      { initialProps: { config: PRESETS.project, version: 0 } },
+    );
+    act(() => result.current.hide("burn"));
+    const saved = result.current.config;
+
+    rerender({ config: saved, version: 1 });
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.config).toEqual(saved);
+
+    // Customize again → edit → Cancel reverts to the SAVED layout.
+    act(() => result.current.hide("attention"));
+    act(() => result.current.revert());
+    expect(result.current.config).toEqual(saved);
+    expect(panels(result.current.config)).not.toContain("burn");
+    expect(panels(result.current.config)).toContain("attention");
+  });
+
+  it("does not discard an in-progress draft when only the config identity changes", () => {
+    // Every RSC render hands down a fresh config object; only `version` means
+    // something was actually persisted.
+    const { result, rerender } = renderHook(
+      ({ config, version }: { config: FolderLayoutConfig; version: number }) =>
+        useLayoutDraft(config, version),
+      { initialProps: { config: PRESETS.project, version: 3 } },
+    );
+    act(() => result.current.hide("burn"));
+    rerender({ config: structuredClone(PRESETS.project), version: 3 });
+    expect(panels(result.current.config)).not.toContain("burn");
+    expect(result.current.dirty).toBe(true);
   });
 
   it("leaves a schema-valid config after any sequence of edits", () => {

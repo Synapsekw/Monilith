@@ -38,7 +38,9 @@ export type CommandCenterProps = {
  */
 export function CommandCenter({ payload, widgets }: CommandCenterProps) {
   const router = useRouter();
-  const draft = useLayoutDraft(payload.layout.config);
+  // `version` is passed so the draft re-seeds itself (and its Cancel
+  // baseline) after Save → `router.refresh()` brings back the saved row.
+  const draft = useLayoutDraft(payload.layout.config, payload.layout.version);
   const [presetChoice, setPresetChoice] = useState<PresetKey>(
     payload.layout.preset,
   );

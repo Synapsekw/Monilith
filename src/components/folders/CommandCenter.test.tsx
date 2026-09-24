@@ -220,6 +220,62 @@ describe("CommandCenter", () => {
     await waitFor(() => expect(routerRefresh).toHaveBeenCalledTimes(1));
   });
 
+  it("gives every section a width control, the KPI section included", () => {
+    // Spec §6: the KPI picker is extra chrome, not a replacement — a KPI
+    // section with no width menu is the one section the user cannot resize.
+    enterEdit();
+    render(wrap({ payload: folderFixture() }));
+    for (const id of ["kpis", "burn", "attention", "milestones"]) {
+      expect(
+        within(sectionCell(id)).getByRole("button", { name: "Section width" }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(sectionCell("kpis")).getByRole("button", {
+        name: "Choose KPI cards",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("after Save → refresh, a second Customize → Cancel keeps the SAVED layout", async () => {
+    // Repro of the stale-baseline bug: the draft was seeded only at mount, so
+    // Cancel restored the PRE-save config and the next Save wrote it back over
+    // the saved one (same user, so the version guard let it through).
+    enterEdit();
+    vi.mocked(saveFolderLayout).mockResolvedValueOnce({
+      ok: true,
+      data: { version: 1 },
+    });
+    const payload = folderFixture();
+    const { rerender } = render(wrap({ payload }));
+    fireEvent.click(
+      within(sectionCell("burn")).getByRole("button", {
+        name: "Hide Planned vs completed",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalledTimes(1));
+    const saved = (
+      vi.mocked(saveFolderLayout).mock.calls[0]![0] as {
+        config: FolderLayoutConfig;
+      }
+    ).config;
+
+    // What router.refresh() brings back: the row that was just written.
+    enterEdit();
+    rerender(
+      wrap({
+        payload: {
+          ...payload,
+          layout: { config: saved, preset: payload.layout.preset, version: 1 },
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("burn-chart")).not.toBeInTheDocument();
+    expect(saveFolderLayout).toHaveBeenCalledTimes(1);
+  });
+
   it("Cancel restores the original layout and leaves edit mode", () => {
     enterEdit();
     render(wrap({ payload: folderFixture() }));

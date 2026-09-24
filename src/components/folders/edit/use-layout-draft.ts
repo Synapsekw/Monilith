@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useReducer, useState } from "react";
 import type {
   FolderLayoutConfig,
   KpiKey,
@@ -120,7 +120,16 @@ function layoutReducer(state: State, action: Action): State {
     case "setWidth": {
       const config = updateSection(state.config, action.id, (s) => ({
         ...s,
-        layout: { ...s.layout, w: action.w },
+        // `x` has to be renormalised, not just `w`: a right-column section
+        // sits at x 8, and widening it to 12 without moving it would emit
+        // `grid-column: 9 / span 12`, which spills into phantom implicit
+        // columns and never actually renders full width. Clamp it back so the
+        // section always ends at column 12.
+        layout: {
+          ...s.layout,
+          w: action.w,
+          x: Math.min(s.layout.x, 12 - action.w),
+        },
       }));
       if (!config) return state;
       return { config, dirty: true };
@@ -205,12 +214,28 @@ function layoutReducer(state: State, action: Action): State {
  * `folderLayoutConfigSchema` accepts (proven by the "any sequence of edits"
  * test) since Save has no other validation pass before it hits the network.
  */
-export function useLayoutDraft(initial: FolderLayoutConfig) {
-  const initialRef = useRef(initial);
+export function useLayoutDraft(initial: FolderLayoutConfig, version = 0) {
   const [state, dispatch] = useReducer(layoutReducer, initial, (config) => ({
     config,
     dirty: false,
   }));
+  // Re-seeds the draft AND the Cancel baseline when the persisted layout's
+  // `version` moves — i.e. after Save → `router.refresh()` re-renders the page
+  // with the row that was just written. Without this the hook keeps the
+  // mount-time config forever, so a second Customize → Cancel would restore
+  // the PRE-save layout and the next Save would write it back over the saved
+  // one (same user, so the version guard happily lets it through).
+  //
+  // Adjusting state during render is React's documented pattern for deriving
+  // state from props (not a `useEffect`): it re-runs this render before the
+  // browser paints, so nothing stale is ever shown, and the version guard
+  // makes it idempotent. `version` is the only trigger — the config object
+  // identity changes on every RSC render and would loop.
+  const [baseline, setBaseline] = useState({ version, config: initial });
+  if (version !== baseline.version) {
+    setBaseline({ version, config: initial });
+    dispatch({ type: "revert", config: initial });
+  }
 
   const hide = useCallback((id: string) => dispatch({ type: "hide", id }), []);
   const move = useCallback(
@@ -250,8 +275,8 @@ export function useLayoutDraft(initial: FolderLayoutConfig) {
     [],
   );
   const revert = useCallback(
-    () => dispatch({ type: "revert", config: initialRef.current }),
-    [],
+    () => dispatch({ type: "revert", config: baseline.config }),
+    [baseline.config],
   );
 
   return {

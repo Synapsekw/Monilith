@@ -102,6 +102,9 @@ export function SectionChrome({
           className="h-7 max-w-56 text-xs font-semibold"
         />
         <div className="flex items-center gap-1">
+          {/* The KPI picker is ADDITIONAL chrome for the one panel that has a
+              card list — not an alternative to the width menu. Spec §6 gives
+              every section a width control, KPI cards included. */}
           {onSetCards ? (
             <Popover>
               <Tooltip>
@@ -123,35 +126,34 @@ export function SectionChrome({
                 <KpiPicker cards={cards ?? []} onChange={onSetCards} />
               </PopoverContent>
             </Popover>
-          ) : (
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Section width"
-                    >
-                      <Columns3 />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>Section width</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                {WIDTHS.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.w}
-                    onSelect={() => onSetWidth(opt.w)}
+          ) : null}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Section width"
                   >
-                    {opt.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                    <Columns3 />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Section width</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              {WIDTHS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.w}
+                  onSelect={() => onSetWidth(opt.w)}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             type="button"
             variant="ghost"
