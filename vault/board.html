@@ -9,9 +9,10 @@
   where we stand, what's next, and the percentages behind each.
 -->
 
-<script type="application/json" id="board-data">{
+<script type="application/json" id="board-data">
+{
   "schema": 2,
-  "updated": "2026-09-15 19:15",
+  "updated": "2026-09-24 10:51",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -133,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "96842942",
-        "tone": "warn",
-        "note": "main + the Folder Command Center (34 commits, 139 files, seven migrations 20260915074830…20260915145912) + its /updates announcement — unpromoted; the twelve-step folder walkthrough is owed first. Ledger 174/174 on DEV. Gates green on the merged state. The private-folder copy-forward already ran on live DEV (5 folders, 18 boards); the old tables are kept until the sidebar is verified."
+        "value": "dff1d028",
+        "tone": "ok",
+        "note": "The -s ours heal commit after PR #130, tree byte-identical to main. Nothing unpromoted. Ledger 174/174 on DEV; no new migrations this session."
       },
       {
         "name": "main",
-        "value": "2ca821a7",
+        "value": "8b20ddf5",
         "tone": "ok",
-        "note": "PR #128 merged 2026-09-15, 40 commits — Board Intelligence Act + Ask, the assign_person automation action and the /admin/users pagination fix. main CI green (run 34963744162). Squash divergence healed (e8d7e929, -s ours, tree byte-identical). Delta from heal watermark 0a0c898a — 40, against a raw range of 3174, which is squash accumulation, not work."
+        "note": "PR #130 squash-merged 2026-09-24, 39 commits — the whole Folder Command Center bundle plus single-select dropdown columns. Main CI green (run 35961028549). Delta measured from the heal watermark e8d7e929, not the raw main..develop range."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #128 build on 2ca821a7. The Folder Command Center is NOT live yet — it waits on the walkthrough and /promote."
+        "note": "Serving the PR #130 build on 8b20ddf5. Vercel deploy state success, HTTP 200. The Folder Command Center is live — and still unwalked by a human."
       }
     ],
     "gates": [
@@ -168,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7797 passing, 1 skipped, 0 failed on the rebased task/intel-act-ask before merge. +9 tests in the final fix wave alone. The one skip is the opt-in live-DB tier, which cannot run against DEV or PROD by design — the new assign_person executor was verified in a rolled-back transaction on DEV instead.",
+        "note": "7939 passing, 1 skipped, 0 failed on the rebased task/dropdown-single-select before merge. The one skip is the opt-in live-DB tier, which cannot run against DEV or PROD by design.",
         "label": "test"
       },
       {
@@ -179,21 +180,30 @@
       },
       {
         "name": "ledger",
-        "value": "165/165",
+        "value": "174/174",
         "tone": "ok",
-        "note": "Verified by db:ledger-check after 20260915062952_automation_assign_person_action (a create-or-replace of _automation_run adding one guarded branch). apply_migration mis-stamped the version for the eleventh time; reconciled by keying on version. The check also recognises a sibling worktree's unmerged migration as parallel work, not drift.",
+        "note": "Verified by db:ledger-check at the /promote preflight. No migration was minted this session, so gotcha-55 had nothing to fire on.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Walk the folder command center on DEV, then /promote",
-      "why": "Thirteen task reviews and one whole-branch review are green, but nobody has clicked it: shared folders in the sidebar (your private folders were copied forward on live DEV), the four tabs, the stage filter recalculating with zero requests, Export PDF in dark and light, the folder gallery and the legacy-dashboard redirect, 44px targets on an iPad. The twelve steps are in the session note.",
+      "title": "Walk the folder command center — against production now",
+      "why": "It shipped unverified: PR #130 put it live before anyone clicked it. Shared folders in the sidebar (your private folders were copied forward on the live DEV database), the four tabs, the stage filter recalculating with zero requests, Export PDF in dark and light, the folder gallery and the legacy-dashboard redirect, 44px targets on an iPad. The twelve steps are in the 2026-09-15 session note; the URL is now www.monolith.works.",
       "tags": [
         "owner",
         "verify",
         "critical"
+      ]
+    },
+    {
+      "title": "Confirm single-select dropdowns on the e& CRM board",
+      "why": "The reported 'Business Unit is very slow' was never latency: dropdown and people editors stay open after every pick by design, so a one-label column needs a manual dismiss. Dropdown columns now carry an Allow multiple toggle (default on). Turn it off on Business Unit and a pick should replace the value and close at once; turning it back on restores multi-select. Also check the column footer still shows its count summary after saving the dialog.",
+      "tags": [
+        "owner",
+        "verify",
+        "boards"
       ]
     },
     {
@@ -234,15 +244,6 @@
       ]
     },
     {
-      "title": "Promote develop — the dock rebuild, the latency fix and the lit seam",
-      "why": "Three merges are stacked unpromoted: the tile band that replaced the pill tabs and the persona select (bda5fa36), the Board Intelligence effort fix (38d0f4c0) and the lit-seam collapse control (7bb2d483). Two of the three carry /updates entries. None of them has been seen in an authenticated browser, so this waits on the pass above rather than going first.",
-      "tags": [
-        "promote",
-        "dock",
-        "seam"
-      ]
-    },
-    {
       "title": "E6 Stripe — the last thing before feature-complete",
       "why": "With Spec 3 merged and promoted (PR #110), E6 is the only feature epic left in the final phase, and it is blocked on you rather than on code: `stripe` is still absent from package.json, and units B, C and E need at minimum a test-mode key to be verifiable. Units A (schema) and D (/pricing) shipped 2026-08-02. This is also what gates the DEV→PROD cutover, because that call waits on declaring feature-complete.",
       "tags": [
@@ -278,9 +279,9 @@
   ],
   "risks": [
     {
-      "sev": "amber",
+      "sev": "red",
       "title": "A live data migration nobody has looked at in the UI",
-      "text": "The private-folder copy-forward ran on the DEV database that serves production: 5 folders became shared, 18 boards were placed, 0 of 2 dashboards were backfilled. Every workspace member now sees folders one person made for themselves — the spec accepted that. The old tables are still there, so it is repairable until the drop migration lands; the walkthrough is what decides."
+      "text": "The private-folder copy-forward ran on the DEV database that serves production: 5 folders became shared, 18 boards were placed, 0 of 2 dashboards were backfilled. Every workspace member now sees folders one person made for themselves — the spec accepted that. As of PR #130 this is LIVE and still unwalked. The old tables are still there, so it is repairable until the drop migration lands; the walkthrough is what decides."
     },
     {
       "sev": "open",
@@ -390,17 +391,18 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-15-1915-folder-command-center",
-    "when": "2026-09-15 19:15",
-    "title": "Folder command center shipped",
+    "id": "2026-09-24-1051-dropdown-single-select-promote",
+    "when": "2026-09-24 10:51",
+    "title": "Dropdown single-select, then the promotion",
     "bullets": [
-      "Merged to develop as d0aa29ae: shared workspace folders, five SECURITY DEFINER read RPCs behind one readable-board gate, /folders/[id] with Overview · Stages · Boards · People and a zero-refetch stage filter, the folder gallery, legacy dashboards folded into their folder, Share / Export PDF / Ask about this folder.",
-      "Brainstormed from three rejected single-page mockups to a Control Tower shape the owner chose; the live prototype is an Artifact.",
-      "15 tasks in 7 waves, one worktree each; the whole-branch review found 1 Critical and 13 Important cross-task defects that 13 green task reviews had not, and the fix wave's own print scoping inverted the CSS cascade — caught only by a Chromium print-media check, now e2e/print-styles.spec.ts.",
-      "Rulings during the build: single P0002 not-found code (no existence oracle), folder_boards reads gated on can_read_board, composite (folder_id, org_id) FKs, gallery counts over readable boards only, private tables not dropped yet."
+      "A reported 'can't change / very slow' Business Unit column turned out to be behaviour, not latency: dropdown and people editors are in MULTI_VALUE_KINDS and stay open after every pick, so a single-label column needs a manual dismiss. The write path was already optimistic with no refetch.",
+      "Dropdown columns gained allow_multiple (default true) in the settings schema, an Allow multiple switch in the options dialog, a replacing DropdownEditor and a settings-aware commitKeepsEditorOpen — 7 new tests, red first.",
+      "Same commit stopped the options dialog dropping settings keys it does not edit: updateColumnSettings replaces the whole jsonb, so every label save had been wiping summary_aggregation.",
+      "Promoted develop → main as PR #130 (39 commits, squash 8b20ddf5), healed the divergence with -s ours, main CI green and the Vercel production deploy confirmed success."
     ]
   }
-}</script>
+}
+</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
