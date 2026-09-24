@@ -252,4 +252,67 @@ describe("CommandCenter", () => {
     // user's work isn't lost.
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
+
+  it("Reset to preset re-syncs stale rename inputs (section and tab)", () => {
+    // Regression: SectionChrome/TabRow seed their rename textbox from props
+    // in local state and never resync. Section/tab ids repeat across every
+    // preset, so React keys stay stable and these rows never unmount when
+    // `draft.reset()` swaps the whole config — without the fix, the textbox
+    // keeps showing the pre-reset text.
+    enterEdit();
+    render(wrap({ payload: folderFixture() }));
+
+    // Section rename: SectionChrome's aria-label is the constant panel name,
+    // not the (possibly renamed) title, so it stays queryable across renames.
+    const sectionInput = within(sectionCell("attention")).getByRole("textbox", {
+      name: "Rename Needs attention",
+    });
+    fireEvent.change(sectionInput, { target: { value: "My section" } });
+    fireEvent.blur(sectionInput);
+    expect(
+      within(sectionCell("attention")).getByRole("textbox", {
+        name: "Rename Needs attention",
+      }),
+    ).toHaveValue("My section");
+
+    // Tab rename, via the Sections sheet.
+    fireEvent.click(screen.getByRole("button", { name: "Sections" }));
+    const tabInput = screen.getByRole("textbox", {
+      name: "Rename Stages tab",
+    });
+    fireEvent.change(tabInput, { target: { value: "Pipeline" } });
+    fireEvent.blur(tabInput);
+    expect(
+      screen.getByRole("textbox", { name: "Rename Pipeline tab" }),
+    ).toHaveValue("Pipeline");
+
+    // Reset wholesale-replaces the draft config with PRESETS.project, whose
+    // "attention" section has no custom title and whose stages tab is
+    // labelled "Stages" — both rename boxes must reflect that immediately.
+    // The Sections sheet stays open (deliberately — the TabRow instance must
+    // stay mounted, same as it would for a real user, to actually exercise
+    // the resync-on-prop-change fix rather than a fresh mount that would
+    // read the current label either way); Radix marks the rest of the page
+    // `aria-hidden` for focus-trapping while it's open, so these queries
+    // pass `hidden: true` to see past that.
+    fireEvent.click(
+      screen.getByRole("button", { name: /Reset to preset/, hidden: true }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Project", hidden: true }),
+    );
+
+    expect(
+      within(sectionCell("attention")).getByRole("textbox", {
+        name: "Rename Needs attention",
+        hidden: true,
+      }),
+    ).toHaveValue("Needs attention");
+    expect(
+      screen.getByRole("textbox", {
+        name: "Rename Stages tab",
+        hidden: true,
+      }),
+    ).toHaveValue("Stages");
+  });
 });

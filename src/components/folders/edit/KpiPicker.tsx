@@ -61,7 +61,10 @@ export function KpiPicker({
           const checked = cards.includes(key);
           const idx = cards.indexOf(key);
           return (
-            <li key={key} className="flex items-center justify-between gap-2">
+            <li
+              key={key}
+              className="flex items-center justify-between gap-2 pointer-coarse:min-h-11 pointer-coarse:py-2.5"
+            >
               <Label className="flex-1 gap-2 text-xs font-normal">
                 <input
                   type="checkbox"

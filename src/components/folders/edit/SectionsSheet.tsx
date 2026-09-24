@@ -44,6 +44,16 @@ function TabRow({
   onMove: (dir: "up" | "down") => void;
 }) {
   const [label, setLabel] = useState(tab.label);
+  // Re-seeds `label` when `tab.label` changes from OUTSIDE typing (a preset
+  // reset replaces the whole config, and tab ids repeat across presets so
+  // this row never remounts) — same pattern as `SectionChrome`'s title sync,
+  // adjusting state during render rather than fighting the user with an
+  // effect mid-keystroke.
+  const [syncedLabel, setSyncedLabel] = useState(tab.label);
+  if (tab.label !== syncedLabel) {
+    setSyncedLabel(tab.label);
+    setLabel(tab.label);
+  }
   return (
     <li className="flex items-center gap-2">
       <Input

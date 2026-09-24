@@ -76,7 +76,20 @@ export function SectionChrome({
   onSetCards?: (cards: KpiKey[]) => void;
   children: React.ReactNode;
 }) {
-  const [label, setLabel] = useState(title ?? PANEL_LABEL[panel]);
+  const displayTitle = title ?? PANEL_LABEL[panel];
+  const [label, setLabel] = useState(displayTitle);
+  // Re-seeds `label` when the section's title changes from OUTSIDE typing —
+  // "Reset to preset" replaces the whole draft config, and section ids are
+  // shared across every preset, so this component never unmounts/remounts
+  // and a plain `useState(displayTitle)` would keep showing the pre-reset
+  // text. Adjusting state during render (React's documented pattern for
+  // this, not a `useEffect`) means an in-progress edit is untouched: `title`
+  // only changes on blur/reset, never on each keystroke.
+  const [syncedTitle, setSyncedTitle] = useState(displayTitle);
+  if (displayTitle !== syncedTitle) {
+    setSyncedTitle(displayTitle);
+    setLabel(displayTitle);
+  }
 
   return (
     <div className="border-border-hover bg-surface/60 flex flex-col gap-2 rounded-lg border border-dashed p-2">
