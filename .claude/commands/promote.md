@@ -1,12 +1,14 @@
-# /promote — promote-and-watch `develop → main`
+# /promote — prepare a manually merged `develop → main` release
 
 Ship work that is **already integrated on `develop`** to production: validate the delta, open the
-`develop → main` promotion PR, **stop for explicit confirmation**, then merge and watch GitHub
-Actions CI + the Vercel production deploy — ending in a formatted, bulleted report, and offering to chain `/sync-prod` on a confirmed successful deploy.
+`develop → main` promotion PR, then **stop and give the owner the PR link to review and manually
+merge in GitHub**. On a later request after that manual merge, verify the merge and watch GitHub
+Actions CI + the Vercel production deploy. Agents never perform the production merge.
 
 This is the **promote** counterpart to `finish-task.sh` (which merges `task/* → develop`). It does
 **not** merge task branches and does **not** build features. Merging to `main` is the **only** thing
-that deploys production on Vercel, so the merge is gated behind an explicit confirmation.
+that triggers the Git production deployment on Vercel, so the owner must perform the merge.
+Never enable auto-merge, bypass branch protection, or invoke a direct production deployment.
 
 **Promotion is all-or-nothing — the entire `develop` branch as one bundle.** Pulse develops many
 features on `develop` and ships them together, never cherry-picked. This command promotes the
@@ -151,22 +153,25 @@ and **stop here** ("dry run — no PR opened, `main` untouched").
   superseded run) was the only hint. A `cancelled` conclusion means "a newer commit arrived", not
   "CI failed": re-fetch and watch the new run rather than stopping.
 
-### 5. GATE — confirm the merge
+### 5. GATE — hand off to the owner and stop
 
 Present a compact summary: the delta (count + grouped bullets), green evidence (develop CI, PR
-checks), and the PR link. Then ask for **explicit confirmation** via `AskUserQuestion`:
+checks), and the PR link. Tell the owner to review the PR and manually **Squash and merge** in
+GitHub when ready; leave `develop` intact. End the turn with the PR open. Do not offer to click
+Merge for the owner, run `gh pr merge`, or enable auto-merge, even after a conversational go-ahead.
 
-> "Merge develop → main now? This merges to `main` and **deploys production via Vercel**."
+GitHub cannot accept an approving review from the PR's author, and this repository's PRs use
+the owner's `Synapsekw` account. The release gate is the owner's manual merge, not a formal
+Approve review. Required `verify` CI, an up-to-date branch, conversation resolution, no force
+pushes/deletions, and administrator enforcement remain enabled; repository auto-merge is disabled.
 
-Options: **Merge & deploy** / **Cancel (leave PR open)**. Only an explicit "merge" proceeds; anything
-else stops cleanly (the PR stays open for later) and the report notes it as `⛔ Stopped: cancelled at
-gate`.
+Report this state as `Awaiting owner review and manual merge — production unchanged`.
 
-### 6. Merge (the irreversible step)
+### 6. Verify the owner's merge (later follow-up only)
 
-- `gh pr merge <number> --squash`. **This repo disallows merge commits** (`allow_merge_commit:
-false` — squash/rebase only), so `--merge` is rejected outright; squash is the only PR-merge mode.
-  Do **not** delete `develop` (`--delete-branch` must not be passed — `develop` is long-lived).
+- After the owner reports merging, read the PR state and merge commit via `gh pr view`.
+  Continue only if the PR is actually `MERGED`; otherwise hand back its link and stop.
+- Preserve `develop` — it is long-lived. No agent performs a production merge in this step.
 - Capture the new `main` HEAD: `git fetch origin main && git rev-parse origin/main`.
 
 ### 6b. Heal the squash divergence (required — keeps the NEXT promotion clean)
@@ -270,8 +275,9 @@ Stop (any hard stop above):
 
 ## Discipline
 
-- **Read-only until step 4; no merge until step 5 confirms.** Steps 1–3 mutate nothing. Step 4 only
-  opens/reuses a PR (reversible). The `main` merge happens **only** after the explicit gate.
+- **Read-only until step 4; owner-only merge.** Steps 1–3 mutate nothing. Step 4 only
+  opens/reuses a PR (reversible). Step 5 hands off and ends the turn. Steps 6 onward are a later
+  follow-up after the owner manually merged; agents never merge to `main` or deploy directly.
 - **Stage/commit nothing — except the step-6b heal.** This command operates via `gh`/`git` on
   branches and the PR; it stages no files and creates no source commits. The **one** exception is the
   post-merge back-merge in step 6b (`merge -s ours origin/main` + push), which records a no-op heal
