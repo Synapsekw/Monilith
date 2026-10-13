@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-24-1051
+last-updated: 2026-10-13-2304
 tags: [project/monolith, north-star]
 related:
   - "[[README]]"
@@ -51,6 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
+- **Release gate (2026-10-13):** stay on Vercel; only `main` triggers Git deployments. Repository
+  auto-merge is disabled and `main` protection now applies to administrators. Agents prepare
+  promotion PRs and stop; the owner reviews and manually clicks **Squash and merge** in GitHub.
+  Formal self-approval is unavailable because PRs use `Synapsekw`. See
+  [[2026-10-13-2304-manual-production-release-gate]].
 - **⚠️ ENVIRONMENT — the production deployment runs the DEV database.** `www.monolith.works` is
   wired to the **DEV** Supabase project (`hjqca…`); the PROD project (`jzsyq…`) is provisioned and
   mirrored but serves no traffic. This is deliberate and stands **until the app is declared

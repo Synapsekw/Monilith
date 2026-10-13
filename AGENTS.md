@@ -78,7 +78,13 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    `task/<name>` branch cut from `develop`. This is what lets multiple parallel sessions build
    different things at once
    without stomping each other's files. When `develop` is green, **promote to `main`** (open a
-   `develop → main` PR, merge once CI passes) — that, and only that, deploys production on Vercel.
+   `develop → main` PR, then stop for the owner to review and manually click Merge after CI passes)
+   — that merge deploys production on Vercel. Agents must never merge a PR into `main`, enable
+   auto-merge, bypass branch protection, or invoke a direct production deployment. Prepare the
+   PR and hand over its link; the owner performs the release in GitHub. This manual-merge gate
+   intentionally does not require an Approve review: PRs use the owner's `Synapsekw` account,
+   and GitHub cannot accept self-approval. Auto-merge is disabled and main's protections apply
+   to administrators as well.
    `develop` never deploys to production.
 
    - **One folder per session — use the helpers.** A git branch belongs to a _folder_, not a

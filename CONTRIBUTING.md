@@ -41,6 +41,10 @@ Two long-lived branches:
   (typecheck · lint · test · build) runs on every push. `develop` never deploys to production.
 - **`main`** — production. Protected, **no direct pushes**. Vercel's production branch; it only
   advances via the `develop → main` promotion PR, and every merge to `main` deploys live.
+  **The owner reviews and manually clicks Merge in GitHub.** Agents prepare the PR and stop;
+  they never merge to `main`, enable auto-merge, bypass protection, or deploy production directly.
+  Auto-merge is disabled; required CI and PR protections apply to administrators too. A formal
+  approving review is not required because the owner also authors PRs as `Synapsekw`.
 
 **Every building session works in its own git worktree on a short-lived `task/<name>` branch.**
 The main checkout (`/Users/danijeljovanovic/Dev/Monolith`) stays parked on `develop` as the
