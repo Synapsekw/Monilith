@@ -6,8 +6,8 @@ export function AssemblyBrand() {
         viewBox="0 0 434 84"
         role="img"
         aria-label="Monolith horizontal logo"
-        fill="#F4F4F6"
-        color="#F4F4F6"
+        fill="currentColor"
+        color="var(--assembly-brand-color)"
       >
         <title>Monolith horizontal logo</title>
         <g transform="scale(.84)">

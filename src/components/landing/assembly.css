@@ -53,6 +53,7 @@
   color: #080b11;
 }
 .assembly-landing {
+  --assembly-brand-color: #f4f4f6;
   --accent: #8796ff;
   --bright: #536dfe;
   --glow: rgba(82, 107, 250, 0.18);
