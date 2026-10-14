@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-24 10:51",
+  "updated": "2026-10-14 12:39",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "dff1d028",
+        "value": "5241dd27",
         "tone": "ok",
-        "note": "The -s ours heal commit after PR #130, tree byte-identical to main. Nothing unpromoted. Ledger 174/174 on DEV; no new migrations this session."
+        "note": "Assembly + Mono integrated and pushed. Vercel Preview READY; real AI/contact delivery awaits Preview credentials and owner acceptance. Production unchanged."
       },
       {
         "name": "main",
@@ -162,14 +162,14 @@
         "name": "lint",
         "value": "pass",
         "tone": "ok",
-        "note": "0 errors, 5 pre-existing window.location.assign warnings in untouched files.",
+        "note": "0 errors, 5 pre-existing warnings in untouched files.",
         "label": "lint"
       },
       {
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "7939 passing, 1 skipped, 0 failed on the rebased task/dropdown-single-select before merge. The one skip is the opt-in live-DB tier, which cannot run against DEV or PROD by design.",
+        "note": "8,076 passing, 1 skipped, 0 failed on the rebased integration branch before merge. Live destructive DB tier remains skipped.",
         "label": "test"
       },
       {
@@ -180,14 +180,23 @@
       },
       {
         "name": "ledger",
-        "value": "174/174",
+        "value": "176/176",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at the /promote preflight. No migration was minted this session, so gotcha-55 had nothing to fire on.",
+        "note": "Verified on live DEV by finish-task. Additive private Mono storage only; no tenant-data or routing changes.",
         "label": "ledger"
       }
     ]
   },
   "next": [
+    {
+      "title": "Accept Assembly + Mono on Vercel Preview",
+      "why": "Open the verified preview in the session runbook. Enter Preview-only OpenAI and bot credentials, enable callbacks, redeploy, then test a real reply and editable details → consent → Confirm & send → one Grok bot receipt. Production release is a later owner manual merge.",
+      "tags": [
+        "owner",
+        "verify",
+        "mono"
+      ]
+    },
     {
       "title": "Walk the folder command center — against production now",
       "why": "It shipped unverified: PR #130 put it live before anyone clicked it. Shared folders in the sidebar (your private folders were copied forward on the live DEV database), the four tabs, the stage filter recalculating with zero requests, Export PDF in dark and light, the folder gallery and the legacy-dashboard redirect, 44px targets on an iPad. The twelve steps are in the 2026-09-15 session note; the URL is now www.monolith.works.",
@@ -278,6 +287,11 @@
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "Mono Preview is currently in guide mode",
+      "text": "The landing and guide response are deployed and verified. OpenAI and bot credentials have not been entered into Vercel, so real replies and contact delivery are unverified. The session secret is Preview-only; production remains unchanged."
+    },
     {
       "sev": "red",
       "title": "A live data migration nobody has looked at in the UI",
@@ -391,14 +405,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-24-1051-dropdown-single-select-promote",
-    "when": "2026-09-24 10:51",
-    "title": "Dropdown single-select, then the promotion",
+    "id": "2026-10-14-1239-mono-vercel-preview-integration",
+    "when": "2026-10-14 12:39",
+    "title": "Assembly + Mono Vercel Preview",
     "bullets": [
-      "A reported 'can't change / very slow' Business Unit column turned out to be behaviour, not latency: dropdown and people editors are in MULTI_VALUE_KINDS and stay open after every pick, so a single-label column needs a manual dismiss. The write path was already optimistic with no refetch.",
-      "Dropdown columns gained allow_multiple (default true) in the settings schema, an Allow multiple switch in the options dialog, a replacing DropdownEditor and a settings-aware commitKeepsEditorOpen — 7 new tests, red first.",
-      "Same commit stopped the options dialog dropping settings keys it does not edit: updateColumnSettings replaces the whole jsonb, so every label save had been wiping summary_aggregation.",
-      "Promoted develop → main as PR #130 (39 commits, squash 8b20ddf5), healed the divergence with -s ours, main CI green and the Vercel production deploy confirmed success."
+      "Approved landing and animated Mono integrated into the existing Next.js/Vercel app.",
+      "Contact details flow from chat to an editable review and explicit send to a private bot webhook; encrypted storage and durable delivery recovery.",
+      "Full gates pass: 8,076 tests, typecheck, lint, build and ledger 176/176. Task branches and worktrees cleaned.",
+      "Preview READY and browser-verified in guide mode. Owner-entered credentials and real Grok delivery acceptance remain before production."
     ]
   }
 }
