@@ -2,7 +2,15 @@
 
 The approved Assembly landing and Mono run in the existing Monolith Next.js application. `/` is public for signed-out visitors; signed-in visitors continue to `/home`. `/landing` is available to everyone and shows the appropriate app-entry action.
 
-## Live production — 2026-10-14
+## Live scrollbar and response-speed repair — 2026-10-14
+
+[PR #136](https://github.com/Synapsekw/Monilith/pull/136) merged without conflicts after green develop and PR checks, under the owner's explicit authorization. Main `ce263ad3efa11611aac5b1fae61fef3f42d55b64` is live in [Vercel deployment HRzaham6Q4LFYdMUQb9c92Ysnuyf](https://vercel.com/synapse-solutionskw/monilith/HRzaham6Q4LFYdMUQb9c92Ysnuyf). The landing document scrollbar is now dark even with a light workspace theme, and the rule releases when the landing unmounts. Live hero and pricing-scroll checks passed with no horizontal overflow or console errors.
+
+Mono now finalizes ordinary replies with fewer serialized storage requests, preserving quota accounting, durable recovery and contact delivery safeguards. `vercel.json` places only `src/app/api/mono/route.ts` in `hnd1`, beside the existing Tokyo database; production response headers confirm the placement. No database or credential changes were made. Two post-deployment replies took **4.399s / 3.232s**, compared with pre-release pairs **9.557s / 8.388s** and **13.374s / 10.788s**. These are spot checks, not a latency guarantee; Preview follow-up replies also varied up to about 10s.
+
+The protected [repair Preview](https://monilith-kazx22i8j-synapse-solutionskw.vercel.app/landing) verified the same function placement before release. Local gates passed: 8,081 tests / 1 skipped, typecheck, lint (0 errors / 5 existing warnings), build and ledger 176/176. The isolated develop Lighthouse font-loader build failure passed a targeted retry; the PR passed normally. The model, credentials and owner-confirmed Grok flow are unchanged, with reporting disabled.
+
+## Production launch — 2026-10-14
 
 [Open the live landing page](https://www.monolith.works/landing). [PR #135](https://github.com/Synapsekw/Monilith/pull/135) was squash-merged without conflicts after develop and PR checks passed. The owner explicitly authorized the agent to merge this release when green; branch protections and the standing release policy were unchanged. Main commit `45edc70edc31b306403b839a65433bd1b55ba557` deployed successfully through the existing Vercel integration ([deployment](https://vercel.com/synapse-solutionskw/monilith/GrJG4a1A24X6EQVQkNUszHP7n7xd)). Post-merge main CI passed: [run 38577178987](https://github.com/Synapsekw/Monilith/actions/runs/38577178987).
 
@@ -10,9 +18,9 @@ Production verification returned HTTP 200 for `/`, `/landing`, `/login`, and `/s
 
 Production has its own `MONO_SESSION_SECRET` and canonical `MONO_SITE_ORIGIN=https://www.monolith.works`, alongside the owner-entered provider and bot credentials. No secret values are recorded here. The owner confirmed on 2026-10-14 that the full production chain works, including Grok delivery. This closes the remaining contact-submission acceptance check; delivery confirmation is owner-reported.
 
-## Verified preview — 2026-10-14
+## Original integration preview — 2026-10-14
 
-[Open the current Vercel Preview](https://monilith-geg46e06h-synapse-solutionskw.vercel.app). Deployment `dpl_8AQLgA9Y14uSuHy46VCaCn7MDhvi` is READY and retains Vercel authentication protection. It redeploys the approved Mono build (`231908e8`, integrated into develop at `5241dd27`) with the owner-entered Preview credentials. This Preview was verified before the production release recorded above.
+[Open the original integration Preview](https://monilith-geg46e06h-synapse-solutionskw.vercel.app). Deployment `dpl_8AQLgA9Y14uSuHy46VCaCn7MDhvi` is READY and retains Vercel authentication protection. It redeploys the approved Mono build (`231908e8`, integrated into develop at `5241dd27`) with the owner-entered Preview credentials. This Preview was verified before the production launch recorded above.
 
 **Live verification:** `/api/mono?action=status` returned HTTP 200/no-store with `mode: live`, callbacks enabled, and reporting disabled. In the deployed browser, Mono answered a real Core/Pulse question through OpenAI, extracted clearly marked test contact details, and populated the editable form and consent review without console errors. The test review was left unsent, with consent unchecked.
 
