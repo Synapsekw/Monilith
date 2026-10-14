@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMonoService } from "./service";
 import { botConfig } from "./providers";
 import { memoryStore } from "./test-store";
@@ -116,6 +116,93 @@ function fixture(
 }
 
 describe("Mono public protocol", () => {
+  it("bounds storage wait for a normal chat while preserving durable history", async () => {
+    vi.useFakeTimers();
+    try {
+      const underlying = memoryStore();
+      const wait = () =>
+        new Promise<void>((resolve) => setTimeout(resolve, 50));
+      const store: MonoStore = {
+        async read(key) {
+          await wait();
+          return underlying.read(key);
+        },
+        async write(key, value, version) {
+          await wait();
+          return underlying.write(key, value, version);
+        },
+      };
+      const f = fixture({ store, env: { MONO_REPORTING_ENABLED: "false" } });
+      const connecting = f.call("status");
+      await vi.runAllTimersAsync();
+      expect((await connecting).status).toBe(200);
+      const started = Date.now();
+      const input = {
+        message: "What is Monolith?",
+        request_id: "request-chat-latency",
+      };
+      const chat = f.call("chat", input);
+      await vi.runAllTimersAsync();
+      expect((await chat).status).toBe(200);
+      // With a 50ms store RTT, at most 10 sequential waits. Regressing to
+      // serial rate buckets / redundant saved-reply reads exceeds this budget.
+      expect(Date.now() - started).toBeLessThanOrEqual(500);
+      const restore = f.call("status");
+      await vi.runAllTimersAsync();
+      expect((await restore).body).toMatchObject({
+        last_request_id: input.request_id,
+        history: [
+          { role: "user", content: input.message },
+          { role: "assistant", content: modelReply.reply },
+        ],
+      });
+      const replay = f.call("chat", input);
+      await vi.runAllTimersAsync();
+      expect((await replay).status).toBe(200);
+      expect(f.calls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("does not spend other quotas for a message rejected by the first rate limit", async () => {
+    const fixedNow = () => 1800000000000;
+    const underlying = memoryStore(fixedNow);
+    let quotaWrites = 0;
+    const store: MonoStore = {
+      ...underlying,
+      async write(key, value, version) {
+        if (value.kind === "rate") quotaWrites++;
+        return underlying.write(key, value, version);
+      },
+    };
+    const f = fixture({
+      store,
+      env: { MONO_REPORTING_ENABLED: "false" },
+      now: fixedNow,
+    });
+    await f.call("status");
+    for (let i = 0; i < 12; i++) {
+      expect(
+        (
+          await f.call("chat", {
+            message: "Hi",
+            request_id: `request-quota-test-${i}`,
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const before = quotaWrites;
+    expect(
+      (
+        await f.call("chat", {
+          message: "Hi",
+          request_id: "request-quota-denied",
+        })
+      ).status,
+    ).toBe(429);
+    expect(quotaWrites).toBe(before);
+    expect(f.calls).toHaveLength(12);
+  });
   it("stays in guide mode without storage or network when unconfigured", async () => {
     const handle = createMonoService({
       env: {},
@@ -371,9 +458,14 @@ describe("Mono public protocol", () => {
       (await f.call("chat", { ...input, message: "Different message" })).status,
     ).toBe(409);
   });
-  it.each(["status", "chat"])(
-    "repairs a saved chat after a session write fails through %s",
-    async (recovery) => {
+  it.each([
+    ["status", "true"],
+    ["chat", "true"],
+    ["status", "false"],
+    ["chat", "false"],
+  ] as const)(
+    "repairs a saved chat after a session write fails through %s (reporting %s)",
+    async (recovery, reporting) => {
       const underlying = memoryStore();
       let failHistory = true;
       const store: MonoStore = {
@@ -390,7 +482,7 @@ describe("Mono public protocol", () => {
           return underlying.write(key, value, version);
         },
       };
-      const f = fixture({ store });
+      const f = fixture({ store, env: { MONO_REPORTING_ENABLED: reporting } });
       await f.call("status");
       const request = {
         request_id: "request-chat-repair",
@@ -416,14 +508,15 @@ describe("Mono public protocol", () => {
       ).toHaveLength(1);
       expect(
         f.calls.filter((call) => call.url === base.MONO_BOT_WEBHOOK_URL),
-      ).toHaveLength(1);
-      expect(JSON.parse(String(f.calls[1].init?.body))).toMatchObject({
-        type: "conversation_summary",
-        messages: [
-          { role: "user", content: request.message },
-          { role: "assistant", content: "Explore the workspace." },
-        ],
-      });
+      ).toHaveLength(reporting === "true" ? 1 : 0);
+      if (reporting === "true")
+        expect(JSON.parse(String(f.calls[1].init?.body))).toMatchObject({
+          type: "conversation_summary",
+          messages: [
+            { role: "user", content: request.message },
+            { role: "assistant", content: "Explore the workspace." },
+          ],
+        });
       await f.call("chat", {
         request_id: "request-chat-followup",
         message: "Continue from that reply",
@@ -440,38 +533,41 @@ describe("Mono public protocol", () => {
       });
     },
   );
-  it("serializes concurrent recovery without duplicating history or a report", async () => {
-    const underlying = memoryStore();
-    let failHistory = true;
-    const store: MonoStore = {
-      ...underlying,
-      async write(key, value, version) {
-        if (
-          value.kind === "session" &&
-          value.history.length === 2 &&
-          failHistory
-        ) {
-          failHistory = false;
-          throw new Error("simulated session write outage");
-        }
-        return underlying.write(key, value, version);
-      },
-    };
-    const f = fixture({ store });
-    await f.call("status");
-    const request = {
-      request_id: "request-chat-repair",
-      message: "Keep this conversation context",
-    };
-    expect((await f.call("chat", request)).status).toBe(503);
-    const results = await Promise.all([
-      f.call("status"),
-      f.call("chat", request),
-    ]);
-    expect(results.map((result) => result.status)).toEqual([200, 200]);
-    expect((await f.call("status")).body.history).toHaveLength(2);
-    expect(f.calls).toHaveLength(2);
-  });
+  it.each(["true", "false"] as const)(
+    "serializes concurrent recovery without duplicating history (reporting %s)",
+    async (reporting) => {
+      const underlying = memoryStore();
+      let failHistory = true;
+      const store: MonoStore = {
+        ...underlying,
+        async write(key, value, version) {
+          if (
+            value.kind === "session" &&
+            value.history.length === 2 &&
+            failHistory
+          ) {
+            failHistory = false;
+            throw new Error("simulated session write outage");
+          }
+          return underlying.write(key, value, version);
+        },
+      };
+      const f = fixture({ store, env: { MONO_REPORTING_ENABLED: reporting } });
+      await f.call("status");
+      const request = {
+        request_id: "request-chat-repair",
+        message: "Keep this conversation context",
+      };
+      expect((await f.call("chat", request)).status).toBe(503);
+      const results = await Promise.all([
+        f.call("status"),
+        f.call("chat", request),
+      ]);
+      expect(results.map((result) => result.status)).toEqual([200, 200]);
+      expect((await f.call("status")).body.history).toHaveLength(2);
+      expect(f.calls).toHaveLength(reporting === "true" ? 2 : 1);
+    },
+  );
   it("never repeats an optionally reported chat after saving its report outcome fails", async () => {
     const underlying = memoryStore();
     let failOutcome = true;
