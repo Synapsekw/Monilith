@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-10-14",
+    kind: "new",
+    title: "Meet Mono on our new website",
+    description:
+      "Explore the redesigned Monolith website and ask Mono about the product, Core and Pulse, or getting started. Mono can prepare your contact details for you to review before you choose to send them.",
+  },
+  {
     date: "2026-09-24",
     kind: "improved",
     title: "Dropdown columns can be single-select",
