@@ -1,0 +1,21 @@
+@font-face {
+  font-family: "Monolith Nunito";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(/landing/assembly/font-1.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Monolith Sans";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/landing/assembly/font-2.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Monolith Mono";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url(/landing/assembly/font-3.woff2) format("woff2");
+}

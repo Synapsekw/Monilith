@@ -1,0 +1,2846 @@
+/* Approved Assembly design, isolated from authenticated app styles. */
+.assembly-landing {
+  line-height: normal;
+  color-scheme: dark;
+}
+.assembly-landing button {
+  background-color: transparent;
+}
+.assembly-landing * {
+  box-sizing: border-box;
+}
+.assembly-landing {
+  scroll-behavior: smooth;
+  scroll-padding-top: 106px;
+}
+.assembly-landing {
+  margin: 0;
+  background: #080b11;
+  color: #eeeef3;
+  font-family: "Monolith Sans", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.assembly-landing button,
+.assembly-landing a {
+  -webkit-tap-highlight-color: transparent;
+}
+.assembly-landing button,
+.assembly-landing input {
+  font: inherit;
+}
+.assembly-landing button,
+.assembly-landing a {
+  touch-action: manipulation;
+}
+.assembly-landing button {
+  cursor: pointer;
+}
+.assembly-landing a {
+  color: inherit;
+  text-decoration: none;
+}
+.assembly-landing button {
+  color: inherit;
+}
+.assembly-landing button:focus-visible,
+.assembly-landing a:focus-visible,
+.assembly-landing summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+}
+.assembly-landing ::selection {
+  background: var(--accent);
+  color: #080b11;
+}
+.assembly-landing {
+  --accent: #8796ff;
+  --bright: #536dfe;
+  --glow: rgba(82, 107, 250, 0.18);
+  --line: #262b37;
+  --muted: #9ba3b4;
+  --panel: #10151f;
+  --panel2: #151c29;
+  --ink: #eeeef3;
+  --scroll: 0;
+  overflow-x: clip;
+}
+.assembly-landing h1,
+.assembly-landing h2,
+.assembly-landing h3,
+.assembly-landing p {
+  margin: 0;
+}
+.assembly-landing h1,
+.assembly-landing h2,
+.assembly-landing h3 {
+  font-weight: 500;
+}
+.assembly-landing button {
+  border: 0;
+}
+.assembly-landing .wrap {
+  width: min(1280px, calc(100% - 112px));
+  margin: auto;
+}
+.assembly-landing .mono,
+.assembly-landing .eyebrow,
+.assembly-landing .section-no {
+  font-family: "Monolith Mono", monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 1.6px;
+  line-height: 1.8;
+  text-transform: uppercase;
+}
+.assembly-landing .eyebrow {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.assembly-landing .eyebrow::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+}
+.assembly-landing .muted {
+  color: var(--muted);
+}
+.assembly-landing .accent {
+  color: var(--accent);
+}
+.assembly-landing .skip {
+  position: fixed;
+  top: -80px;
+  left: 20px;
+  background: var(--ink);
+  color: #000;
+  padding: 15px;
+  z-index: 1000;
+}
+.assembly-landing .skip:focus {
+  top: 12px;
+}
+.assembly-landing .site-header {
+  height: 90px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(8, 11, 17, 0.66);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  backdrop-filter: blur(20px);
+  transition: background 0.3s;
+}
+.assembly-landing .site-header .wrap {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 35px;
+}
+.assembly-landing .brand {
+  font-family: "Monolith Nunito", sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.assembly-landing .brand svg {
+  height: 0.72em;
+  width: 0.29em;
+  margin: 0 0.015em;
+}
+.assembly-landing .header-links {
+  display: flex;
+  gap: 28px;
+  margin-left: auto;
+  font-size: 12px;
+  color: #b5baca;
+}
+.assembly-landing .header-links a {
+  position: relative;
+  padding: 10px 0;
+}
+.assembly-landing .header-links a::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.25s;
+}
+.assembly-landing .header-links a:hover::after {
+  width: 100%;
+}
+.assembly-landing .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 12px;
+}
+.assembly-landing .header-actions .login {
+  color: var(--muted);
+}
+.assembly-landing .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  min-height: 53px;
+  padding: 16px 23px;
+  background: #526cf3;
+  color: white;
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+  transition:
+    background 0.25s,
+    transform 0.25s,
+    box-shadow 0.25s;
+}
+.assembly-landing .button:hover {
+  background: #6b80ff;
+  box-shadow: 0 0 28px var(--glow);
+  transform: translateY(-2px);
+}
+.assembly-landing .button .arrow {
+  font-size: 19px;
+  transition: transform 0.25s;
+}
+.assembly-landing .button:hover .arrow {
+  transform: translate(3px, -3px);
+}
+.assembly-landing .button.outline {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+.assembly-landing .button.outline:hover {
+  border-color: var(--accent);
+}
+.assembly-landing .button.small {
+  min-height: 40px;
+  padding: 11px 17px;
+  gap: 22px;
+  font-size: 11px;
+}
+.assembly-landing .text-link {
+  display: inline-flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  transition: border-color 0.25s;
+}
+.assembly-landing .text-link:hover {
+  border-color: var(--accent);
+}
+.assembly-landing .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 26px;
+  margin-top: 32px;
+}
+.assembly-landing .menu-toggle {
+  display: none;
+  background: none;
+  padding: 10px;
+  font-size: 20px;
+}
+.assembly-landing .mobile-nav {
+  display: none;
+}
+.assembly-landing .progress-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: calc(var(--scroll) * 100%);
+  background: var(--accent);
+  z-index: 110;
+}
+.assembly-landing .motion-control {
+  position: fixed;
+  bottom: 20px;
+  right: 22px;
+  z-index: 100;
+  border: 1px solid var(--line);
+  padding: 9px 13px;
+  border-radius: 30px;
+  font-size: 10px;
+  background: rgba(9, 12, 18, 0.86);
+  backdrop-filter: blur(15px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.assembly-landing .motion-control span {
+  color: var(--accent);
+}
+.assembly-landing .option-switch {
+  position: fixed;
+  bottom: 20px;
+  left: 22px;
+  z-index: 100;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  background: rgba(9, 12, 18, 0.9);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  font-size: 10px;
+}
+.assembly-landing .option-switch a {
+  padding: 8px 13px;
+  border-radius: 24px;
+  color: var(--muted);
+}
+.assembly-landing .option-switch a.active {
+  background: #242b3b;
+  color: #fff;
+}
+.assembly-landing .section {
+  padding: 130px 0;
+}
+.assembly-landing .section-title {
+  font-size: clamp(38px, 4.4vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -0.055em;
+}
+.assembly-landing .section-title em {
+  font-style: normal;
+  color: var(--muted);
+}
+.assembly-landing .section-copy {
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--muted);
+  max-width: 420px;
+}
+.assembly-landing .section-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 40px;
+  align-items: flex-end;
+  margin-bottom: 62px;
+}
+.assembly-landing .section-top .section-title {
+  margin-top: 20px;
+}
+.assembly-landing .section-top > .section-copy {
+  max-width: 320px;
+}
+.assembly-landing .reveal {
+  transition:
+    opacity 0.8s,
+    transform 0.8s;
+}
+.assembly-landing.js-motion .reveal:not(.visible) {
+  opacity: 0;
+  transform: translateY(28px);
+}
+.assembly-landing .reveal.visible {
+  opacity: 1;
+  transform: none;
+}
+.assembly-landing .reveal-delay {
+  transition-delay: 0.1s;
+}
+.assembly-landing .fine-rule {
+  height: 1px;
+  background: var(--line);
+}
+.assembly-landing .hero-a {
+  min-height: 830px;
+  height: 100svh;
+  max-height: 1100px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-top: 90px;
+  isolation: isolate;
+}
+.assembly-landing .hero-a::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 170px;
+  background: linear-gradient(transparent, #080b11);
+  pointer-events: none;
+  z-index: -1;
+}
+.assembly-landing .hero-a .hero-copy {
+  position: relative;
+  z-index: 4;
+  width: 57%;
+  padding-bottom: 40px;
+  pointer-events: none;
+}
+.assembly-landing .hero-a .hero-copy a {
+  pointer-events: auto;
+}
+.assembly-landing .hero-a h1 {
+  font-size: clamp(65px, 7.8vw, 122px);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+  margin: 28px 0;
+}
+.assembly-landing .hero-a h1 span {
+  color: var(--accent);
+}
+.assembly-landing .hero-a .intro {
+  font-size: 16px;
+  line-height: 1.9;
+  color: var(--muted);
+  max-width: 360px;
+}
+.assembly-landing .trial-note {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 20px;
+}
+.assembly-landing .hero-art {
+  position: absolute;
+  inset: 90px 0 0 40%;
+  z-index: 2;
+  touch-action: pan-y;
+}
+.assembly-landing .hero-art canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.assembly-landing .art-label {
+  position: absolute;
+  right: 13%;
+  top: 15%;
+  color: var(--muted);
+  font-size: 9px;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+}
+.assembly-landing .art-controls {
+  position: absolute;
+  bottom: 130px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: 95%;
+}
+.assembly-landing .art-controls button {
+  background: rgba(13, 20, 35, 0.7);
+  border: 1px solid #344060;
+  font-size: 10px;
+  padding: 12px 18px;
+  border-radius: 30px;
+  backdrop-filter: blur(12px);
+}
+.assembly-landing .art-controls button:hover {
+  border-color: var(--accent);
+}
+.assembly-landing .art-controls .mono {
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.assembly-landing .hero-bottom {
+  position: absolute;
+  bottom: 38px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 5;
+}
+.assembly-landing .hero-bottom span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.assembly-landing .scroll-cue {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.assembly-landing .scroll-cue .line {
+  height: 39px;
+  width: 1px;
+  background: linear-gradient(var(--accent), transparent);
+}
+.assembly-landing .signal-strip {
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.assembly-landing .signal-strip .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 12px;
+}
+.assembly-landing .signal-strip span {
+  color: var(--muted);
+}
+.assembly-landing .signal-strip b {
+  font-weight: 400;
+  color: var(--ink);
+}
+.assembly-landing .assembly-story {
+  height: 235vh;
+  min-height: 1650px;
+  position: relative;
+  margin-top: 40px;
+}
+.assembly-landing .story-pin {
+  position: sticky;
+  top: 90px;
+  min-height: calc(100svh - 90px);
+  display: grid;
+  grid-template-columns: 0.8fr 1.4fr;
+  gap: 70px;
+  align-items: center;
+  padding-top: 22px;
+  padding-bottom: 22px;
+}
+.assembly-landing .story-copy .section-title {
+  font-size: clamp(40px, 3.7vw, 58px);
+  margin: 18px 0;
+}
+.assembly-landing .story-copy .section-copy {
+  font-size: 14px;
+}
+.assembly-landing .chapter-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 22px;
+}
+.assembly-landing .chapter {
+  display: grid;
+  grid-template-columns: 35px 1fr;
+  gap: 8px;
+  text-align: left;
+  padding: 15px 0;
+  background: transparent;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  transition: color 0.25s;
+}
+.assembly-landing .chapter:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.assembly-landing .chapter .mono {
+  font-size: 9px;
+}
+.assembly-landing .chapter strong {
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  font-weight: 500;
+}
+.assembly-landing .chapter span:last-child {
+  grid-column: 2;
+  font-size: 12px;
+  line-height: 1.7;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.3s,
+    max-height 0.4s;
+}
+.assembly-landing .chapter[aria-pressed="true"] {
+  color: var(--ink);
+}
+.assembly-landing .chapter[aria-pressed="true"] .mono {
+  color: var(--accent);
+}
+.assembly-landing .chapter[aria-pressed="true"] span:last-child {
+  max-height: 80px;
+  opacity: 1;
+  color: var(--muted);
+  padding-top: 5px;
+}
+.assembly-landing .screen-stage {
+  position: relative;
+  perspective: 1600px;
+  min-width: 0;
+}
+.assembly-landing .screen-glow {
+  position: absolute;
+  inset: 15% 0 0;
+  border-radius: 50%;
+  background: var(--glow);
+  filter: blur(75px);
+  z-index: -1;
+}
+.assembly-landing .screen-stack {
+  position: relative;
+  aspect-ratio: 1.32;
+  transform-style: preserve-3d;
+  transform: translateY(calc(var(--stage-y, 0) * 1px))
+    rotateY(calc(var(--tilt-x, 0) * 1deg))
+    rotateX(calc(var(--tilt-y, 0) * 1deg));
+  transition: transform 0.3s ease-out;
+}
+.assembly-landing .screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(18px, -20px) rotate(3deg) scale(0.95);
+  opacity: 0;
+  transition:
+    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.5s;
+  pointer-events: none;
+}
+.assembly-landing .screen img {
+  width: 100%;
+  height: auto;
+  border: 1px solid #343b49;
+  border-radius: 8px;
+  box-shadow: 0 35px 100px #0008;
+}
+.assembly-landing .screen.active {
+  opacity: 1;
+  transform: translate(0, 0) rotate(-1deg) scale(1);
+  z-index: 3;
+}
+.assembly-landing .screen.prev {
+  opacity: 0.12;
+  transform: translate(-24px, -36px) rotate(-5deg) scale(0.93);
+}
+.assembly-landing .screen.next {
+  opacity: 0.1;
+  transform: translate(22px, -38px) rotate(4deg) scale(0.94);
+}
+.assembly-landing .screen-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 22px;
+  line-height: 1.7;
+}
+.assembly-landing .screen-caption span:first-child {
+  color: var(--accent);
+  font-family: "Monolith Mono", monospace;
+  letter-spacing: 1px;
+}
+.assembly-landing .manifesto {
+  padding: 110px 0 140px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 90%, var(--glow), transparent 65%);
+}
+.assembly-landing .manifesto .eyebrow {
+  justify-content: center;
+}
+.assembly-landing .manifesto h2 {
+  font-size: clamp(42px, 6vw, 88px);
+  letter-spacing: -0.06em;
+  line-height: 1.09;
+  margin: 30px auto;
+  max-width: 980px;
+}
+.assembly-landing .manifesto h2 span {
+  color: #555e72;
+  transition: color 0.3s;
+}
+.assembly-landing .manifesto .section-copy {
+  max-width: 510px;
+  margin: auto;
+}
+.assembly-landing .agent-grid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.1fr;
+  gap: 110px;
+  align-items: center;
+}
+.assembly-landing .agent-grid .section-title {
+  margin: 24px 0;
+}
+.assembly-landing .agent-mode {
+  display: inline-flex;
+  margin-top: 30px;
+  border: 1px solid var(--line);
+  padding: 4px;
+  border-radius: 30px;
+  gap: 4px;
+}
+.assembly-landing .agent-mode button {
+  font-size: 11px;
+  padding: 10px 16px;
+  background: transparent;
+  border-radius: 25px;
+  color: var(--muted);
+}
+.assembly-landing .agent-mode button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #101522;
+}
+.assembly-landing .agent-visual {
+  min-height: 400px;
+  position: relative;
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, var(--panel), transparent);
+  padding: 32px;
+  overflow: hidden;
+}
+.assembly-landing .agent-visual::before {
+  content: "";
+  position: absolute;
+  inset: -100px;
+  background: radial-gradient(
+    circle at var(--mouse-x, 60%) var(--mouse-y, 30%),
+    var(--glow),
+    transparent 50%
+  );
+  pointer-events: none;
+  opacity: 0.7;
+}
+.assembly-landing .agent-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 25px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.assembly-landing .agent-top .mono {
+  color: var(--muted);
+  font-size: 9px;
+}
+.assembly-landing .agent-orb {
+  height: 38px;
+  width: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--accent);
+  background: radial-gradient(circle at 30% 25%, #8796ff55, transparent 70%);
+  box-shadow: 0 0 25px var(--glow);
+  font-size: 18px;
+}
+.assembly-landing .agent-request {
+  font-size: 21px;
+  line-height: 1.4;
+  letter-spacing: -0.6px;
+  padding: 29px 0;
+  max-width: 330px;
+  position: relative;
+}
+.assembly-landing .event-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+.assembly-landing .event-list li {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 0;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  transition:
+    color 0.4s,
+    transform 0.4s,
+    opacity 0.4s;
+}
+.assembly-landing .event-list li .event-dot {
+  width: 6px;
+  height: 6px;
+  border: 1px solid #626f88;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.assembly-landing .event-list li.lit {
+  color: var(--ink);
+}
+.assembly-landing .event-list li.lit .event-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--glow);
+}
+.assembly-landing .event-list li small {
+  margin-left: auto;
+  font-family: "Monolith Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.assembly-landing .agent-footnote {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.assembly-landing .spotlight {
+  position: relative;
+  overflow: hidden;
+}
+.assembly-landing .spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    350px circle at var(--mouse-x, -500px) var(--mouse-y, -500px),
+    var(--glow),
+    transparent 80%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.assembly-landing .spotlight:hover::after {
+  opacity: 1;
+}
+.assembly-landing .capability-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+}
+.assembly-landing .capability {
+  padding: 42px 38px 45px 0;
+  border-bottom: 1px solid var(--line);
+}
+.assembly-landing .capability:nth-child(even) {
+  padding-left: 45px;
+  border-left: 1px solid var(--line);
+}
+.assembly-landing .capability .mono {
+  font-size: 9px;
+  color: var(--accent);
+  margin-bottom: 23px;
+}
+.assembly-landing .capability h3 {
+  font-size: 27px;
+  letter-spacing: -0.8px;
+  margin-bottom: 14px;
+}
+.assembly-landing .capability p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.85;
+  max-width: 380px;
+}
+.assembly-landing .pricing-section {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #0c111b, transparent);
+}
+.assembly-landing .billing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  padding: 4px;
+  border-radius: 30px;
+  white-space: nowrap;
+}
+.assembly-landing .billing-toggle button {
+  font-size: 11px;
+  padding: 11px 18px;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--muted);
+}
+.assembly-landing .billing-toggle button[aria-pressed="true"] {
+  background: var(--ink);
+  color: #111;
+}
+.assembly-landing .plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border: 1px solid var(--line);
+}
+.assembly-landing .plan {
+  padding: 34px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.assembly-landing .plan + .plan {
+  border-left: 1px solid var(--line);
+}
+.assembly-landing .plan.featured {
+  background: linear-gradient(150deg, var(--glow), transparent 70%);
+}
+.assembly-landing .plan-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 20px;
+}
+.assembly-landing .plan-label .mono {
+  font-size: 8px;
+  color: var(--accent);
+}
+.assembly-landing .plan-tagline {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 12px;
+  min-height: 39px;
+}
+.assembly-landing .price {
+  font-size: 59px;
+  letter-spacing: -3px;
+  line-height: 1.15;
+  margin: 22px 0 3px;
+}
+.assembly-landing .price.text {
+  font-size: 36px;
+  letter-spacing: -1px;
+  margin-top: 39px;
+}
+.assembly-landing .price-term {
+  font-size: 10px;
+  color: var(--muted);
+  min-height: 36px;
+  line-height: 1.8;
+}
+.assembly-landing .plan .button {
+  margin: 24px 0;
+  width: 100%;
+}
+.assembly-landing .plan ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.assembly-landing .plan li {
+  padding: 9px 0 9px 18px;
+  position: relative;
+}
+.assembly-landing .plan li::before {
+  content: "↗";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+.assembly-landing .pricing-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 23px;
+  text-align: center;
+  line-height: 1.8;
+}
+.assembly-landing .faq-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.3fr;
+  gap: 90px;
+}
+.assembly-landing .faq-layout .section-title {
+  margin-top: 22px;
+}
+.assembly-landing .faq-list details {
+  border-top: 1px solid var(--line);
+}
+.assembly-landing .faq-list details:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.assembly-landing .faq-list summary {
+  list-style: none;
+  padding: 25px 0;
+  cursor: pointer;
+  display: flex;
+  gap: 25px;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+}
+.assembly-landing .faq-list summary::-webkit-details-marker {
+  display: none;
+}
+.assembly-landing .faq-list summary::after {
+  content: "+";
+  font-size: 22px;
+  color: var(--muted);
+  transition: transform 0.3s;
+}
+.assembly-landing .faq-list details[open] summary::after {
+  transform: rotate(45deg);
+  color: var(--accent);
+}
+.assembly-landing .faq-list details p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.9;
+  padding: 0 35px 25px 0;
+}
+.assembly-landing .closing {
+  padding: 110px 0 85px;
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  background: radial-gradient(
+    ellipse at 50% 110%,
+    var(--glow),
+    transparent 70%
+  );
+  text-align: center;
+}
+.assembly-landing .closing .eyebrow {
+  justify-content: center;
+}
+.assembly-landing .closing h2 {
+  font-size: clamp(55px, 8vw, 118px);
+  line-height: 1;
+  letter-spacing: -0.065em;
+  margin: 27px auto;
+  max-width: 1000px;
+}
+.assembly-landing .closing .actions {
+  justify-content: center;
+}
+.assembly-landing .closing .section-copy {
+  margin: auto;
+  max-width: 450px;
+}
+.assembly-landing .site-footer {
+  padding: 44px 0 88px;
+  border-top: 1px solid var(--line);
+}
+.assembly-landing .footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 35px;
+}
+.assembly-landing .footer-row p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin-top: 16px;
+}
+.assembly-landing .footer-links {
+  display: flex;
+  gap: 55px;
+  font-size: 12px;
+}
+.assembly-landing .footer-links > div {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.assembly-landing .footer-links .mono {
+  color: var(--muted);
+  font-size: 9px;
+}
+.assembly-landing .footer-links a:hover {
+  color: var(--accent);
+}
+.assembly-landing .footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 58px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.assembly-landing .prototype-note {
+  font-size: 9px;
+  color: #778295;
+  line-height: 1.8;
+  margin-top: 25px;
+}
+.assembly-landing .big-wordmark {
+  font-family: "Monolith Nunito", sans-serif;
+  font-weight: 800;
+  font-size: clamp(55px, 15vw, 225px);
+  line-height: 1.1;
+  letter-spacing: -0.07em;
+  color: #ffffff07;
+  margin: 10px 0 -15px;
+  text-align: center;
+  user-select: none;
+}
+.assembly-landing .hero-b {
+  position: relative;
+  min-height: 1030px;
+  padding: 180px 0 80px;
+  isolation: isolate;
+  overflow: hidden;
+}
+.assembly-landing .field-canvas {
+  position: absolute;
+  inset: 90px 0 0;
+  width: 100%;
+  height: calc(100% - 90px);
+  z-index: -1;
+  opacity: 0.8;
+}
+.assembly-landing .hero-b .hero-copy {
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  max-width: 930px;
+  margin: auto;
+}
+.assembly-landing .hero-b .eyebrow {
+  justify-content: center;
+}
+.assembly-landing .hero-b h1 {
+  font-size: clamp(70px, 9vw, 134px);
+  letter-spacing: -0.07em;
+  line-height: 0.99;
+  margin: 25px auto;
+  max-width: 960px;
+}
+.assembly-landing .hero-b h1 span {
+  background: linear-gradient(110deg, #f0f4ef 15%, #9be3cb 60%, #519982);
+  background-clip: text;
+  color: transparent;
+}
+.assembly-landing .hero-b .intro {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--muted);
+  max-width: 470px;
+  margin: auto;
+}
+.assembly-landing .hero-b .actions {
+  justify-content: center;
+  margin-top: 26px;
+}
+.assembly-landing .hero-b .trial-note {
+  margin-top: 17px;
+}
+.assembly-landing .hero-b .orbit-caption {
+  margin-top: 40px;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+  position: relative;
+  z-index: 3;
+}
+.assembly-landing .showcase-fan {
+  width: min(1060px, 88vw);
+  height: 390px;
+  margin: 60px auto 0;
+  position: relative;
+  perspective: 1500px;
+  transform-style: preserve-3d;
+}
+.assembly-landing .fan-screen {
+  position: absolute;
+  width: 76%;
+  left: 12%;
+  top: 0;
+  transform: rotateX(14deg);
+  border: 1px solid #34463c;
+  border-radius: 7px;
+  box-shadow: 0 30px 80px #000b;
+  transition: transform 0.5s ease-out;
+  will-change: transform;
+}
+.assembly-landing .fan-screen img {
+  width: 100%;
+  display: block;
+  border-radius: 7px;
+}
+.assembly-landing .fan-screen.left {
+  width: 42%;
+  left: -1%;
+  top: 46px;
+  transform: translateY(calc(var(--fan-y, 0) * -0.5px)) rotate(-9deg)
+    rotateY(15deg);
+  z-index: 3;
+}
+.assembly-landing .fan-screen.right {
+  width: 40%;
+  left: auto;
+  right: -1%;
+  top: 80px;
+  transform: translateY(calc(var(--fan-y, 0) * 0.5px)) rotate(8deg)
+    rotateY(-12deg);
+  z-index: 4;
+}
+.assembly-landing .fan-screen.center {
+  transform: translateY(calc(var(--fan-y, 0) * 0.25px)) rotateX(10deg);
+  z-index: 2;
+}
+.assembly-landing .fan-screen .fan-label {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  background: #0b1615dd;
+  padding: 7px 10px;
+  border: 1px solid #40564d;
+  font-size: 8px;
+  letter-spacing: 1px;
+  backdrop-filter: blur(6px);
+}
+.assembly-landing .playground-section {
+  padding: 0 0 130px;
+}
+.assembly-landing .playground {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  box-shadow: 0 50px 120px #0003;
+}
+.assembly-landing .playground-top {
+  padding: 25px 30px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.assembly-landing .scenario-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.assembly-landing .scenario-picker button {
+  padding: 10px 15px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid transparent;
+  border-radius: 30px;
+}
+.assembly-landing .scenario-picker button[aria-pressed="true"] {
+  border-color: #6c9d8b;
+  color: var(--accent);
+  background: #a6e7d40a;
+}
+.assembly-landing .playground-top > .mono {
+  font-size: 8px;
+  color: var(--muted);
+  text-align: right;
+}
+.assembly-landing .playground-layout {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  min-height: 380px;
+}
+.assembly-landing .demo-board {
+  padding: 38px;
+}
+.assembly-landing .demo-board h3 {
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+.assembly-landing .demo-board .mono {
+  font-size: 9px;
+  color: var(--muted);
+  margin: 10px 0 30px;
+}
+.assembly-landing .board-cols,
+.assembly-landing .demo-row {
+  display: grid;
+  grid-template-columns: 1.5fr 95px 65px;
+  gap: 13px;
+  align-items: center;
+}
+.assembly-landing .board-cols {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #81998c;
+  padding: 0 0 14px;
+}
+.assembly-landing .demo-row {
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+  min-height: 60px;
+}
+.assembly-landing .demo-row .status {
+  font-size: 9px;
+  color: var(--accent);
+  padding: 5px 0;
+}
+.assembly-landing .demo-row .owner {
+  font-size: 10px;
+  color: var(--muted);
+}
+.assembly-landing .demo-row .task {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.assembly-landing .demo-row .task::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border: 1px solid #68907e;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.assembly-landing .demo-row.updated .task::before {
+  background: var(--accent);
+  box-shadow: 0 0 16px var(--glow);
+}
+.assembly-landing .demo-agent {
+  border-left: 1px solid var(--line);
+  padding: 38px;
+  background: radial-gradient(ellipse at 100% 0, var(--glow), transparent 80%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.assembly-landing .demo-agent .agent-orb {
+  margin-bottom: 22px;
+  background: var(--glow);
+  color: var(--accent);
+}
+.assembly-landing .demo-agent .mono {
+  font-size: 9px;
+  color: var(--accent);
+}
+.assembly-landing .demo-message {
+  font-size: 19px;
+  line-height: 1.6;
+  letter-spacing: -0.4px;
+  margin: 15px 0 22px;
+  min-height: 120px;
+}
+.assembly-landing .demo-agent .button {
+  margin-top: auto;
+  font-size: 11px;
+}
+.assembly-landing .demo-status {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin-top: 15px;
+  min-height: 38px;
+}
+.assembly-landing .demo-bottom {
+  padding: 16px 30px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--muted);
+  font-size: 9px;
+  align-items: center;
+}
+.assembly-landing .demo-reset {
+  background: transparent;
+  color: var(--accent);
+  font-size: 10px;
+  padding: 8px;
+}
+.assembly-landing .product-chapter {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr;
+  gap: 90px;
+  align-items: center;
+  margin: 110px 0 160px;
+}
+.assembly-landing .product-chapter:nth-child(even) {
+  grid-template-columns: 0.8fr 1.3fr;
+}
+.assembly-landing .product-chapter:nth-child(even) .product-visual {
+  order: 2;
+}
+.assembly-landing .product-visual {
+  position: relative;
+  perspective: 1300px;
+  min-width: 0;
+}
+.assembly-landing .product-visual img {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  transform: translateY(calc(var(--parallax, 0) * 1px)) rotateY(-5deg)
+    rotateX(3deg);
+  box-shadow: 0 35px 90px #0008;
+  transition: transform 0.15s ease-out;
+  display: block;
+}
+.assembly-landing .product-visual::before {
+  content: "";
+  position: absolute;
+  inset: 15% -8%;
+  background: var(--glow);
+  filter: blur(75px);
+  border-radius: 50%;
+}
+.assembly-landing .product-chapter:nth-child(even) img {
+  transform: translateY(calc(var(--parallax, 0) * 1px)) rotateY(5deg)
+    rotateX(3deg);
+}
+.assembly-landing .product-text .section-title {
+  font-size: 48px;
+  margin: 20px 0;
+}
+.assembly-landing .product-text .section-copy {
+  font-size: 14px;
+}
+.assembly-landing .product-text .mini-line {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--accent);
+  display: flex;
+  justify-content: space-between;
+}
+.assembly-landing .connection-section {
+  background: #101b17;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.assembly-landing .connection-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+.assembly-landing .connection-layout .section-title {
+  margin: 20px 0;
+}
+.assembly-landing .connection-field {
+  position: relative;
+  aspect-ratio: 1.2;
+  min-height: 350px;
+}
+.assembly-landing .connection-field svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.assembly-landing .connection-line {
+  fill: none;
+  stroke: #31513f;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 6;
+}
+.assembly-landing .connection-line.active {
+  stroke: var(--accent);
+  stroke-dasharray: 6 12;
+  animation: assembly-flow 2s linear infinite;
+}
+.assembly-landing .connection-node {
+  position: absolute;
+  background: #10251b;
+  border: 1px solid #527460;
+  border-radius: 50%;
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 11px;
+  box-shadow: 0 0 30px #0006;
+  transition:
+    transform 0.4s,
+    border-color 0.4s;
+}
+.assembly-landing .connection-node.center {
+  width: 124px;
+  height: 124px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-family: "Monolith Mono";
+  border-color: var(--accent);
+  background: radial-gradient(circle at 30% 20%, #3a5947, #112619);
+  box-shadow: 0 0 60px #a6e7d419;
+}
+.assembly-landing .connection-node.n1 {
+  left: 4%;
+  top: 10%;
+}
+.assembly-landing .connection-node.n2 {
+  right: 3%;
+  top: 8%;
+}
+.assembly-landing .connection-node.n3 {
+  left: 3%;
+  bottom: 7%;
+}
+.assembly-landing .connection-node.n4 {
+  right: 4%;
+  bottom: 9%;
+}
+.assembly-landing .connection-node.emphasized {
+  border-color: var(--accent);
+  box-shadow: 0 0 30px #a6e7d422;
+  transform: scale(1.08);
+}
+.assembly-landing .connection-caption {
+  position: absolute;
+  bottom: -18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+@keyframes assembly-flow {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+.assembly-landing.paused .connection-line {
+  animation: none;
+}
+.assembly-landing.paused .screen-stack,
+.assembly-landing.paused .product-visual img,
+.assembly-landing.paused .fan-screen {
+  transform: none !important;
+}
+.assembly-landing.paused .reveal {
+  transition: none;
+}
+.assembly-landing .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (min-width: 1700px) {
+  .assembly-landing .hero-a .hero-copy {
+    width: 61%;
+  }
+  .assembly-landing .hero-art {
+    left: 43%;
+  }
+  .assembly-landing .hero-a h1 {
+    font-size: 130px;
+  }
+}
+@media (max-width: 1100px) {
+  .assembly-landing .wrap {
+    width: calc(100% - 72px);
+  }
+  .assembly-landing .header-links {
+    gap: 19px;
+  }
+  .assembly-landing .site-header .wrap {
+    gap: 24px;
+  }
+  .assembly-landing .hero-a {
+    min-height: 750px;
+  }
+  .assembly-landing .hero-a h1 {
+    font-size: 8vw;
+  }
+  .assembly-landing .hero-a .hero-copy {
+    width: 59%;
+  }
+  .assembly-landing .hero-art {
+    left: 38%;
+  }
+  .assembly-landing .story-pin {
+    gap: 40px;
+    grid-template-columns: 0.8fr 1.1fr;
+  }
+  .assembly-landing .agent-grid {
+    gap: 60px;
+  }
+  .assembly-landing .section {
+    padding: 100px 0;
+  }
+  .assembly-landing .plan {
+    padding: 27px 23px;
+  }
+  .assembly-landing .product-chapter {
+    gap: 55px;
+  }
+  .assembly-landing .hero-b {
+    min-height: 950px;
+  }
+  .assembly-landing .showcase-fan {
+    height: 330px;
+  }
+  .assembly-landing .connection-layout {
+    gap: 40px;
+  }
+  .assembly-landing .faq-layout {
+    gap: 55px;
+  }
+  .assembly-landing .demo-board,
+  .assembly-landing .demo-agent {
+    padding: 28px;
+  }
+  .assembly-landing .product-text .section-title {
+    font-size: 40px;
+  }
+}
+@media (max-width: 780px) {
+  .assembly-landing .wrap {
+    width: calc(100% - 40px);
+  }
+  .assembly-landing .site-header {
+    height: 74px;
+  }
+  .assembly-landing .site-header .wrap {
+    gap: 15px;
+  }
+  .assembly-landing .brand {
+    font-size: 21px;
+  }
+  .assembly-landing .header-links,
+  .assembly-landing .login {
+    display: none;
+  }
+  .assembly-landing .header-actions {
+    margin-left: auto;
+    gap: 7px;
+  }
+  .assembly-landing .header-actions .button {
+    font-size: 10px;
+    padding: 10px 12px;
+    gap: 12px;
+    min-height: 37px;
+  }
+  .assembly-landing .menu-toggle {
+    display: block;
+  }
+  .assembly-landing .mobile-nav.open {
+    position: fixed;
+    inset: 74px 0 auto;
+    background: #101621;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .assembly-landing .mobile-nav a {
+    padding: 17px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 17px;
+  }
+  .assembly-landing .hero-a {
+    height: auto;
+    min-height: 1040px;
+    display: block;
+    padding: 135px 0 0;
+  }
+  .assembly-landing .hero-a .hero-copy {
+    width: 100%;
+    padding: 0;
+  }
+  .assembly-landing .hero-a h1 {
+    font-size: clamp(59px, 11vw, 86px);
+    margin: 23px 0;
+  }
+  .assembly-landing .hero-a .intro {
+    font-size: 14px;
+    max-width: 370px;
+  }
+  .assembly-landing .hero-a .actions {
+    margin-top: 26px;
+  }
+  .assembly-landing .hero-art {
+    top: 530px;
+    left: 0;
+    right: 0;
+    bottom: 64px;
+  }
+  .assembly-landing .art-label {
+    top: 8%;
+    right: 8%;
+    font-size: 8px;
+  }
+  .assembly-landing .art-controls {
+    bottom: 42px;
+  }
+  .assembly-landing .art-controls .mono {
+    display: none;
+  }
+  .assembly-landing .hero-bottom {
+    bottom: 22px;
+  }
+  .assembly-landing .hero-bottom > span:last-child {
+    display: none;
+  }
+  .assembly-landing .hero-bottom .scroll-cue span {
+    font-size: 9px;
+  }
+  .assembly-landing .hero-bottom .line {
+    height: 22px;
+  }
+  .assembly-landing .signal-strip .wrap {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px 28px;
+    font-size: 10px;
+  }
+  .assembly-landing .signal-strip {
+    padding: 23px 0;
+  }
+  .assembly-landing .section {
+    padding: 80px 0;
+  }
+  .assembly-landing .section-top {
+    display: block;
+    margin-bottom: 36px;
+  }
+  .assembly-landing .section-top > .section-copy {
+    margin-top: 23px;
+    max-width: 430px;
+    font-size: 14px;
+  }
+  .assembly-landing .section-title {
+    font-size: 44px;
+  }
+  .assembly-landing .assembly-story {
+    height: auto;
+    min-height: 0;
+    margin-top: 0;
+    padding: 70px 0;
+  }
+  .assembly-landing .story-pin {
+    position: relative;
+    top: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 45px;
+    padding: 0;
+  }
+  .assembly-landing .story-copy {
+    width: 100%;
+  }
+  .assembly-landing .story-copy .section-title {
+    font-size: 43px;
+  }
+  .assembly-landing .chapter-list {
+    margin-top: 25px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+  }
+  .assembly-landing .chapter {
+    display: block;
+    padding: 15px 0;
+  }
+  .assembly-landing .chapter:last-child {
+    border-bottom: 0;
+  }
+  .assembly-landing .chapter .mono {
+    display: block;
+    margin-bottom: 7px;
+  }
+  .assembly-landing .chapter strong {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .assembly-landing .chapter span:last-child {
+    display: none;
+  }
+  .assembly-landing .screen-stage {
+    width: 100%;
+    padding: 0 9px;
+  }
+  .assembly-landing .screen-stack {
+    aspect-ratio: 1.28;
+  }
+  .assembly-landing .screen-caption {
+    font-size: 9px;
+  }
+  .assembly-landing .screen-caption span:last-child {
+    max-width: 55%;
+    text-align: right;
+  }
+  .assembly-landing .manifesto {
+    padding: 80px 0;
+  }
+  .assembly-landing .manifesto h2 {
+    font-size: 47px;
+    margin: 24px auto;
+  }
+  .assembly-landing .manifesto .section-copy {
+    font-size: 14px;
+  }
+  .assembly-landing .agent-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .assembly-landing .agent-grid .section-title {
+    font-size: 44px;
+  }
+  .assembly-landing .agent-visual {
+    padding: 24px;
+    min-height: 370px;
+  }
+  .assembly-landing .capability-list {
+    grid-template-columns: 1fr;
+  }
+  .assembly-landing .capability {
+    padding: 28px 0 !important;
+    border-left: 0 !important;
+  }
+  .assembly-landing .capability .mono {
+    margin-bottom: 14px;
+  }
+  .assembly-landing .capability h3 {
+    font-size: 24px;
+  }
+  .assembly-landing .billing-toggle {
+    width: max-content;
+    margin-top: 26px;
+  }
+  .assembly-landing .plans {
+    grid-template-columns: 1fr;
+  }
+  .assembly-landing .plan {
+    padding: 30px;
+  }
+  .assembly-landing .plan + .plan {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .assembly-landing .plan-tagline {
+    min-height: 0;
+  }
+  .assembly-landing .price {
+    margin-top: 22px;
+    font-size: 54px;
+  }
+  .assembly-landing .price.text {
+    margin-top: 26px;
+  }
+  .assembly-landing .plan .button {
+    margin: 20px 0;
+  }
+  .assembly-landing .plan ul {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+    font-size: 11px;
+  }
+  .assembly-landing .plan li {
+    padding: 6px 0 6px 18px;
+  }
+  .assembly-landing .faq-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .assembly-landing .faq-layout .section-title {
+    font-size: 40px;
+  }
+  .assembly-landing .faq-list summary {
+    font-size: 14px;
+    padding: 23px 0;
+  }
+  .assembly-landing .closing {
+    padding: 75px 0;
+  }
+  .assembly-landing .closing h2 {
+    font-size: 64px;
+  }
+  .assembly-landing .closing .section-copy {
+    font-size: 14px;
+  }
+  .assembly-landing .footer-row {
+    flex-direction: column;
+    gap: 36px;
+  }
+  .assembly-landing .footer-links {
+    gap: 70px;
+  }
+  .assembly-landing .footer-bottom {
+    font-size: 9px;
+    line-height: 1.8;
+    margin-top: 40px;
+  }
+  .assembly-landing .motion-control {
+    bottom: 12px;
+    right: 12px;
+    font-size: 9px;
+    padding: 9px 10px;
+  }
+  .assembly-landing .option-switch {
+    bottom: 12px;
+    left: 12px;
+    font-size: 9px;
+  }
+  .assembly-landing .option-switch a {
+    padding: 8px 9px;
+  }
+  .assembly-landing .hero-b {
+    padding-top: 140px;
+    padding-bottom: 44px;
+    min-height: 830px;
+  }
+  .assembly-landing .hero-b h1 {
+    font-size: clamp(61px, 11.5vw, 89px);
+  }
+  .assembly-landing .hero-b .intro {
+    font-size: 14px;
+    max-width: 370px;
+  }
+  .assembly-landing .hero-b .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1.2px;
+  }
+  .assembly-landing .hero-b .actions {
+    gap: 20px;
+  }
+  .assembly-landing .hero-b .orbit-caption {
+    font-size: 8px;
+    padding: 0 20px;
+    line-height: 1.9;
+    margin-top: 24px;
+  }
+  .assembly-landing .showcase-fan {
+    margin-top: 45px;
+    width: 91%;
+    height: 260px;
+  }
+  .assembly-landing .fan-screen {
+    width: 91%;
+    left: 4.5%;
+  }
+  .assembly-landing .fan-screen.left {
+    width: 48%;
+    left: 0;
+    top: 73px;
+  }
+  .assembly-landing .fan-screen.right {
+    width: 48%;
+    right: 0;
+    top: 90px;
+  }
+  .assembly-landing .fan-screen .fan-label {
+    bottom: 8px;
+    left: 8px;
+    font-size: 6px;
+    padding: 5px 7px;
+  }
+  .assembly-landing .playground-section {
+    padding-bottom: 20px;
+  }
+  .assembly-landing .playground-top {
+    padding: 17px;
+    display: block;
+  }
+  .assembly-landing .playground-top > .mono {
+    margin-top: 13px;
+    text-align: left;
+  }
+  .assembly-landing .scenario-picker {
+    gap: 4px;
+  }
+  .assembly-landing .scenario-picker button {
+    font-size: 10px;
+    padding: 9px 11px;
+  }
+  .assembly-landing .playground-layout {
+    grid-template-columns: 1fr;
+  }
+  .assembly-landing .demo-board {
+    padding: 23px 18px;
+  }
+  .assembly-landing .demo-agent {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 24px;
+  }
+  .assembly-landing .demo-board h3 {
+    font-size: 25px;
+  }
+  .assembly-landing .demo-board .mono {
+    margin-bottom: 23px;
+  }
+  .assembly-landing .board-cols,
+  .assembly-landing .demo-row {
+    grid-template-columns: 1fr 75px 48px;
+    gap: 8px;
+  }
+  .assembly-landing .demo-row {
+    font-size: 10px;
+    min-height: 55px;
+  }
+  .assembly-landing .demo-row .task {
+    gap: 7px;
+  }
+  .assembly-landing .demo-row .status {
+    font-size: 8px;
+  }
+  .assembly-landing .demo-row .owner {
+    font-size: 9px;
+  }
+  .assembly-landing .demo-message {
+    font-size: 19px;
+    min-height: 0;
+    margin-bottom: 20px;
+  }
+  .assembly-landing .demo-agent .agent-orb {
+    margin-bottom: 15px;
+  }
+  .assembly-landing .demo-status {
+    min-height: 0;
+  }
+  .assembly-landing .demo-bottom {
+    padding: 13px 18px;
+    font-size: 8px;
+    align-items: flex-start;
+  }
+  .assembly-landing .demo-reset {
+    white-space: nowrap;
+    font-size: 9px;
+  }
+  .assembly-landing .product-chapter,
+  .assembly-landing .product-chapter:nth-child(even) {
+    grid-template-columns: 1fr;
+    gap: 45px;
+    margin: 80px 0 90px;
+  }
+  .assembly-landing .product-chapter:nth-child(even) .product-visual {
+    order: 0;
+  }
+  .assembly-landing .product-text .section-title {
+    font-size: 41px;
+  }
+  .assembly-landing .product-visual {
+    padding: 0 8px;
+  }
+  .assembly-landing .connection-layout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .assembly-landing .connection-field {
+    min-height: 310px;
+  }
+  .assembly-landing .connection-layout .section-title {
+    font-size: 44px;
+  }
+  .assembly-landing .connection-node {
+    width: 70px;
+    height: 70px;
+    font-size: 10px;
+  }
+  .assembly-landing .connection-node.center {
+    width: 110px;
+    height: 110px;
+    font-size: 10px;
+  }
+  .assembly-landing .connection-caption {
+    bottom: -7px;
+    font-size: 9px;
+  }
+}
+@media (max-width: 400px) {
+  .assembly-landing .hero-a h1 {
+    font-size: 58px;
+  }
+  .assembly-landing .hero-a {
+    min-height: 1040px;
+  }
+  .assembly-landing .hero-art {
+    top: 535px;
+  }
+  .assembly-landing .hero-a .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .assembly-landing .hero-a .actions {
+    gap: 17px;
+  }
+  .assembly-landing .button {
+    padding: 15px 17px;
+    gap: 20px;
+    font-size: 11px;
+  }
+  .assembly-landing .text-link {
+    font-size: 11px;
+  }
+  .assembly-landing .section-title {
+    font-size: 37px;
+  }
+  .assembly-landing .manifesto h2 {
+    font-size: 39px;
+  }
+  .assembly-landing .plan ul {
+    grid-template-columns: 1fr;
+  }
+  .assembly-landing .hero-b h1 {
+    font-size: 58px;
+  }
+  .assembly-landing .hero-b .actions {
+    gap: 16px;
+  }
+  .assembly-landing .hero-b {
+    min-height: 800px;
+  }
+  .assembly-landing .showcase-fan {
+    height: 230px;
+  }
+  .assembly-landing .closing h2 {
+    font-size: 52px;
+  }
+  .assembly-landing .board-cols,
+  .assembly-landing .demo-row {
+    grid-template-columns: 1fr 63px 40px;
+  }
+  .assembly-landing .demo-row .task::before {
+    width: 6px;
+    height: 6px;
+  }
+  .assembly-landing .connection-node {
+    width: 63px;
+    height: 63px;
+  }
+  .assembly-landing .header-actions .button .arrow {
+    display: none;
+  }
+  .assembly-landing .prototype-note {
+    padding-right: 0;
+  }
+  .assembly-landing .footer-bottom {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+.assembly-landing img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.assembly-landing .connection-layout > *,
+.assembly-landing .agent-grid > *,
+.assembly-landing .product-chapter > *,
+.assembly-landing .faq-layout > *,
+.assembly-landing .story-pin > * {
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .assembly-landing {
+    scroll-behavior: auto;
+  }
+  .assembly-landing *,
+  .assembly-landing *::before,
+  .assembly-landing *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .assembly-landing .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .assembly-landing .screen-stack,
+  .assembly-landing .product-visual img,
+  .assembly-landing .fan-screen {
+    transform: none !important;
+  }
+  .assembly-landing .assembly-story {
+    height: auto;
+    min-height: 0;
+    padding: 90px 0;
+  }
+  .assembly-landing .story-pin {
+    position: relative;
+    top: 0;
+    min-height: 650px;
+  }
+  .assembly-landing .hero-art canvas,
+  .assembly-landing .field-canvas {
+    opacity: 0.8;
+  }
+}
+
+/* Assembly: a scroll-controlled joinery study. */
+.assembly-landing.assembly {
+  --accent: #a1afff;
+  --muted: #9aa4b6;
+}
+.assembly-landing .assembly-intro {
+  height: 220svh;
+  position: relative;
+  --workspace-reveal: 0;
+  --assembly-progress: 0;
+}
+.assembly-landing.assembly .hero-a {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  min-height: 680px;
+  max-height: none;
+  padding-top: 90px;
+  overflow: hidden;
+}
+.assembly-landing.assembly .hero-a .hero-copy {
+  width: 51%;
+  padding-bottom: 42px;
+  transform: translateY(calc(var(--assembly-progress) * -13px));
+}
+.assembly-landing.assembly .hero-a h1 {
+  font-size: clamp(66px, 7.55vw, 112px);
+  line-height: 0.98;
+  margin: 25px 0 24px;
+  letter-spacing: -0.065em;
+}
+.assembly-landing.assembly .hero-a h1 span {
+  background: linear-gradient(110deg, #d4dbff, #96a8ff 75%);
+  background-clip: text;
+  color: transparent;
+}
+.assembly-landing.assembly .hero-a .intro {
+  font-size: 14px;
+  max-width: 375px;
+  line-height: 1.85;
+}
+.assembly-landing.assembly .hero-a .actions {
+  margin-top: 25px;
+  gap: 25px;
+}
+.assembly-landing.assembly .hero-a .trial-note {
+  margin-top: 16px;
+}
+.assembly-landing.assembly .hero-art {
+  left: 43%;
+  top: 88px;
+  bottom: 38px;
+  perspective: 1300px;
+}
+.assembly-landing.assembly .hero-art canvas {
+  cursor: grab;
+  opacity: calc(1 - var(--workspace-reveal));
+  transform: scale(calc(1 - var(--workspace-reveal) * 0.12));
+  touch-action: pan-y;
+}
+.assembly-landing.assembly .hero-art canvas.dragging {
+  cursor: grabbing;
+}
+.assembly-landing.assembly .art-label {
+  top: 13%;
+  right: 6%;
+  font-size: 8px;
+  opacity: calc(1 - var(--workspace-reveal));
+  color: #7f899d;
+}
+.assembly-landing.assembly .art-controls {
+  bottom: 25px;
+  gap: 14px;
+  opacity: calc(1 - var(--workspace-reveal) * 0.9);
+  transition: opacity 0.25s;
+}
+.assembly-landing.assembly .art-controls:hover,
+.assembly-landing.assembly .art-controls:focus-within {
+  opacity: 1;
+}
+.assembly-landing.assembly .art-controls button {
+  border-radius: 2px;
+  font-size: 10px;
+  border-color: #3c465f;
+  background: #111826cc;
+  padding: 11px 16px;
+  transition:
+    border-color 0.25s,
+    background 0.25s;
+}
+.assembly-landing.assembly .art-controls button:hover {
+  border-color: #a1afff;
+  background: #192338;
+}
+.assembly-landing.assembly .hero-bottom {
+  bottom: 22px;
+  gap: 28px;
+}
+.assembly-landing.assembly .hero-bottom .scroll-cue span {
+  font-family: "Monolith Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 1.2px;
+}
+.assembly-landing.assembly .hero-bottom .line {
+  height: 25px;
+}
+.assembly-landing .joint-progress {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.assembly-landing .joint-progress span {
+  font-family: "Monolith Mono", monospace;
+  font-size: 8px !important;
+  letter-spacing: 1.2px;
+  color: #586175;
+  transition: color 0.35s;
+  position: relative;
+  padding: 8px 0;
+}
+.assembly-landing .joint-progress span::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: #303746;
+  transform: scaleX(0.15);
+  transform-origin: left;
+  transition:
+    transform 0.7s,
+    background 0.7s;
+}
+.assembly-landing .joint-progress .active {
+  color: #c6cfff;
+}
+.assembly-landing .joint-progress .active::before {
+  background: #a1afff;
+  transform: scaleX(1);
+}
+.assembly-landing .hero-workspace {
+  position: absolute;
+  width: 94%;
+  left: 1%;
+  top: 50%;
+  transform: translateY(calc(-50% + (1 - var(--workspace-reveal)) * 60px))
+    rotateY(calc(-7deg - (1 - var(--workspace-reveal)) * 13deg)) rotateX(4deg)
+    scale(calc(0.7 + var(--workspace-reveal) * 0.3));
+  opacity: var(--workspace-reveal);
+  pointer-events: none;
+  border: 1px solid #4a5470;
+  border-radius: 7px;
+  background: #101723;
+  box-shadow: 0 30px 90px #0007;
+  overflow: hidden;
+  will-change: transform, opacity;
+}
+.assembly-landing .workspace-reveal-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 19px 19px;
+  color: #a1afff;
+}
+.assembly-landing .workspace-reveal-label .mono {
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.assembly-landing .hero-workspace img {
+  width: 100%;
+  border-top: 1px solid #30384a;
+  border-bottom: 1px solid #30384a;
+}
+.assembly-landing .workspace-reveal-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 17px 19px;
+  font-size: 9px;
+  color: #a3acc0;
+}
+.assembly-landing.assembly .assembly-story {
+  height: 185svh;
+  min-height: 1250px;
+  margin-top: 0;
+}
+.assembly-landing.assembly .story-pin {
+  grid-template-columns: 0.8fr 1.5fr;
+  gap: 70px;
+  padding: 35px 0;
+}
+.assembly-landing.assembly .screen-stack {
+  aspect-ratio: 1.8;
+}
+.assembly-landing.assembly .screen.active {
+  transform: translate(0, 0) rotate(-1deg) scale(1);
+}
+.assembly-landing.assembly .screen.next {
+  transform: translate(14px, -22px) rotate(2deg) scale(0.965);
+  opacity: 0.07;
+}
+.assembly-landing.assembly .screen.prev {
+  transform: translate(-12px, -26px) rotate(-3deg) scale(0.965);
+  opacity: 0.07;
+}
+.assembly-landing.assembly .screen-caption {
+  margin-top: 27px;
+}
+.assembly-landing .screen-expand {
+  background: transparent;
+  color: #c4cce0;
+  padding: 10px 0;
+  font-size: 10px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-top: 12px;
+  border-bottom: 1px solid #46516b;
+  transition:
+    color 0.25s,
+    gap 0.25s;
+}
+.assembly-landing .screen-expand:hover {
+  gap: 30px;
+  color: var(--accent);
+}
+.assembly-landing .screen-dialog {
+  padding: 0;
+  background: #111823;
+  color: var(--ink);
+  border: 1px solid #46516b;
+  border-radius: 8px;
+  width: min(1440px, 94vw);
+  max-width: 94vw;
+  max-height: 94svh;
+  box-shadow: 0 50px 150px #000a;
+}
+.assembly-landing .screen-dialog::backdrop {
+  background: #04070cdd;
+  backdrop-filter: blur(18px);
+}
+.assembly-landing .screen-dialog-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #303746;
+}
+.assembly-landing .screen-dialog-bar .mono {
+  font-size: 9px;
+  color: #bec9ee;
+}
+.assembly-landing .screen-dialog-bar button {
+  background: none;
+  color: #d0d7e8;
+  font-size: 12px;
+  padding: 8px;
+}
+.assembly-landing .screen-dialog img {
+  width: 100%;
+  height: auto;
+  max-height: 76svh;
+  object-fit: contain;
+}
+.assembly-landing .screen-dialog p {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 16px 22px;
+}
+.assembly-landing.assembly .manifesto {
+  padding: 135px 0;
+  background: radial-gradient(ellipse at 50% 110%, #1c294133, transparent 70%);
+}
+.assembly-landing.assembly .manifesto h2 {
+  max-width: 1080px;
+  font-size: clamp(44px, 5.8vw, 86px);
+  line-height: 1.15;
+}
+.assembly-landing.assembly .manifesto h2 span {
+  color: #3d475b;
+  transition: color 0.55s;
+}
+.assembly-landing.assembly .agent-visual {
+  border-radius: 3px;
+  background: linear-gradient(140deg, #192132, #0c111b 80%);
+  transition:
+    border-color 0.35s,
+    transform 0.35s;
+}
+.assembly-landing.assembly .agent-visual:hover {
+  border-color: #526381;
+  transform: translateY(-4px);
+}
+.assembly-landing.assembly .capability {
+  transition: background 0.35s;
+}
+.assembly-landing.assembly .capability h3 {
+  transition:
+    transform 0.4s,
+    color 0.4s;
+}
+.assembly-landing.assembly .capability:hover h3 {
+  transform: translateX(6px);
+  color: #c1ccff;
+}
+.assembly-landing.assembly .plan {
+  transition: background 0.3s;
+}
+.assembly-landing.assembly .plan:hover {
+  background-color: #151d2b;
+}
+.assembly-landing.assembly .option-switch {
+  display: none;
+}
+.assembly-landing.assembly.paused .hero-copy {
+  transform: none;
+}
+.assembly-landing.assembly.paused .hero-art canvas {
+  cursor: default;
+}
+@media (min-width: 781px) and (max-height: 760px) {
+  .assembly-landing.assembly .hero-a {
+    min-height: 600px;
+  }
+  .assembly-landing.assembly .hero-a h1 {
+    font-size: clamp(64px, 7.1vw, 92px);
+    margin: 20px 0;
+  }
+  .assembly-landing.assembly .hero-a .hero-copy {
+    padding-bottom: 22px;
+  }
+  .assembly-landing.assembly .hero-a .intro {
+    font-size: 13px;
+  }
+  .assembly-landing.assembly .hero-a .actions {
+    margin-top: 20px;
+  }
+  .assembly-landing.assembly .hero-art {
+    bottom: 52px;
+  }
+  .assembly-landing.assembly .art-controls {
+    bottom: 6px;
+  }
+  .assembly-landing.assembly .story-copy .section-title {
+    font-size: 45px;
+  }
+  .assembly-landing.assembly .story-copy .section-copy {
+    font-size: 13px;
+  }
+  .assembly-landing.assembly .chapter {
+    padding: 12px 0;
+  }
+  .assembly-landing.assembly .chapter-list {
+    margin-top: 19px;
+  }
+}
+@media (min-width: 781px) and (max-width: 1050px) {
+  .assembly-landing.assembly .hero-a h1 {
+    font-size: 7.7vw;
+  }
+  .assembly-landing.assembly .hero-a .hero-copy {
+    width: 53%;
+  }
+  .assembly-landing.assembly .hero-art {
+    left: 41%;
+  }
+  .assembly-landing .joint-progress {
+    gap: 14px;
+  }
+  .assembly-landing .joint-progress span {
+    font-size: 7px !important;
+  }
+  .assembly-landing.assembly .hero-bottom .scroll-cue span {
+    font-size: 7px;
+  }
+  .assembly-landing.assembly .story-pin {
+    gap: 40px;
+    grid-template-columns: 0.9fr 1.2fr;
+  }
+  .assembly-landing.assembly .hero-a .actions {
+    gap: 15px;
+  }
+}
+@media (max-width: 780px) {
+  .assembly-landing .assembly-intro {
+    height: auto;
+  }
+  .assembly-landing.assembly .hero-a {
+    position: relative;
+    height: auto;
+    min-height: 1000px;
+    padding-top: 122px;
+    overflow: hidden;
+  }
+  .assembly-landing.assembly .hero-a .hero-copy {
+    width: 100%;
+    padding: 0;
+    transform: none;
+  }
+  .assembly-landing.assembly .hero-a h1 {
+    font-size: clamp(59px, 11vw, 86px);
+    margin: 23px 0;
+    line-height: 1.01;
+  }
+  .assembly-landing.assembly .hero-a .intro {
+    font-size: 13px;
+    max-width: 360px;
+  }
+  .assembly-landing.assembly .hero-a .actions {
+    margin-top: 23px;
+    gap: 20px;
+  }
+  .assembly-landing.assembly .hero-art {
+    left: 0;
+    right: 0;
+    top: 505px;
+    bottom: 52px;
+  }
+  .assembly-landing.assembly .hero-art canvas {
+    opacity: 1;
+    transform: none;
+  }
+  .assembly-landing.assembly .art-label {
+    top: 8%;
+    right: 6%;
+    font-size: 7px;
+  }
+  .assembly-landing.assembly .art-controls {
+    bottom: 10px;
+    opacity: 1;
+  }
+  .assembly-landing.assembly .hero-bottom {
+    bottom: 15px;
+    justify-content: center;
+  }
+  .assembly-landing.assembly .hero-bottom .scroll-cue {
+    display: none;
+  }
+  .assembly-landing .joint-progress {
+    gap: 23px;
+  }
+  .assembly-landing .joint-progress span {
+    font-size: 7px !important;
+  }
+  .assembly-landing .hero-workspace {
+    display: none;
+  }
+  .assembly-landing.assembly .assembly-story {
+    height: auto;
+    min-height: 0;
+    padding: 75px 0;
+  }
+  .assembly-landing.assembly .story-pin {
+    padding: 0;
+    gap: 45px;
+  }
+  .assembly-landing.assembly .screen-stack {
+    aspect-ratio: 1.8;
+  }
+  .assembly-landing.assembly .screen-caption {
+    gap: 15px;
+    margin-top: 25px;
+    align-items: flex-start;
+  }
+  .assembly-landing.assembly .screen-stage {
+    padding: 0 4px;
+  }
+  .assembly-landing.assembly .screen-expand {
+    margin-top: 9px;
+  }
+  .assembly-landing.assembly .manifesto {
+    padding: 85px 0;
+  }
+  .assembly-landing.assembly .manifesto h2 {
+    font-size: clamp(38px, 7vw, 60px);
+  }
+  .assembly-landing .screen-dialog-bar {
+    padding: 11px 12px;
+  }
+  .assembly-landing .screen-dialog-bar .mono {
+    font-size: 7px;
+    letter-spacing: 0.8px;
+  }
+  .assembly-landing.assembly .motion-control {
+    opacity: 0.75;
+    font-size: 8px;
+    bottom: 9px;
+    padding: 8px 10px;
+  }
+}
+@media (max-width: 370px) {
+  .assembly-landing.assembly .hero-a h1 {
+    font-size: 53px;
+  }
+  .assembly-landing.assembly .hero-a .actions {
+    gap: 13px;
+  }
+  .assembly-landing.assembly .hero-a .intro {
+    font-size: 12px;
+  }
+  .assembly-landing.assembly .hero-a .actions .text-link {
+    font-size: 10px;
+  }
+  .assembly-landing.assembly .hero-a {
+    min-height: 955px;
+  }
+  .assembly-landing.assembly .hero-art {
+    top: 492px;
+  }
+  .assembly-landing .joint-progress {
+    gap: 15px;
+  }
+  .assembly-landing.assembly .header-actions .button {
+    padding: 9px;
+  }
+  .assembly-landing.assembly .hero-a .button {
+    padding: 14px;
+  }
+  .assembly-landing.assembly .agent-mode button {
+    font-size: 10px;
+    padding: 10px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assembly-landing .assembly-intro {
+    height: auto;
+  }
+  .assembly-landing.assembly .hero-a {
+    position: relative;
+    min-height: 700px;
+  }
+  .assembly-landing.assembly .hero-copy {
+    transform: none !important;
+  }
+  .assembly-landing.assembly .assembly-story {
+    height: auto;
+    min-height: 0;
+    padding: 90px 0;
+  }
+  .assembly-landing.assembly .story-pin {
+    position: relative;
+    top: 0;
+    min-height: 600px;
+  }
+  .assembly-landing.assembly .hero-art canvas {
+    opacity: 1;
+    cursor: default;
+  }
+  .assembly-landing .hero-workspace {
+    display: none;
+  }
+  .assembly-landing.assembly .capability:hover h3,
+  .assembly-landing.assembly .agent-visual:hover {
+    transform: none;
+  }
+}
+.assembly-landing.assembly .hero-art .joinery-render {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  cursor: default;
+  filter: saturate(0.76);
+}
+.assembly-landing.assembly #assembly-canvas {
+  position: relative;
+  z-index: 1;
+}
+.assembly-landing.assembly .hero-workspace,
+.assembly-landing.assembly .art-controls,
+.assembly-landing.assembly .art-label {
+  z-index: 2;
+}
+@media (max-width: 780px) {
+  .assembly-landing.assembly .hero-art {
+    top: 555px;
+    bottom: 58px;
+  }
+  .assembly-landing.assembly .hero-a {
+    min-height: 1060px;
+  }
+  .assembly-landing.assembly .hero-art .joinery-render {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 370px) {
+  .assembly-landing.assembly .hero-art {
+    top: 520px;
+  }
+  .assembly-landing.assembly .hero-a {
+    min-height: 1005px;
+  }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 780px) {
+  .assembly-landing.assembly .hero-a {
+    min-height: 1060px;
+  }
+  .assembly-landing.assembly .story-pin {
+    min-height: 0;
+  }
+}
+.assembly-landing .brand.assembly-brand {
+  display: block;
+  width: 164px;
+  line-height: 0;
+}
+.assembly-landing .brand.assembly-brand svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0;
+}
+.assembly-landing .big-wordmark .assembly-brand {
+  width: 100%;
+  opacity: 0.055;
+  max-width: 1120px;
+  margin: auto;
+}
+.assembly-landing .big-wordmark {
+  margin: 45px 0 0;
+}
+@media (max-width: 780px) {
+  .assembly-landing .brand.assembly-brand {
+    width: 144px;
+  }
+  .assembly-landing .big-wordmark .assembly-brand {
+    width: 100%;
+  }
+  .assembly-landing .site-header .wrap {
+    gap: 10px;
+  }
+  .assembly-landing .header-actions {
+    gap: 4px;
+  }
+  .assembly-landing .menu-toggle {
+    padding: 8px;
+  }
+}
+@media (max-width: 370px) {
+  .assembly-landing .header-actions .button {
+    font-size: 9px !important;
+    min-height: 33px;
+  }
+  .assembly-landing .site-header .wrap {
+    width: calc(100% - 28px);
+  }
+}
+
+/* Reserve the lower-right corner for Mono. Keep motion controls available opposite him. */
+.assembly-landing.assembly .motion-control {
+  left: max(22px, env(safe-area-inset-left));
+  right: auto;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  min-height: 40px;
+  opacity: 1;
+}
+@media (max-width: 780px) {
+  .assembly-landing.assembly .motion-control {
+    left: max(12px, env(safe-area-inset-left));
+    right: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    min-height: 44px;
+    padding: 10px 13px;
+    font-size: 10px;
+  }
+}
