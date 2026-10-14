@@ -2,13 +2,21 @@
 
 The approved Assembly landing and Mono run in the existing Monolith Next.js application. `/` is public for signed-out visitors; signed-in visitors continue to `/home`. `/landing` is available to everyone and shows the appropriate app-entry action.
 
+## Live production — 2026-10-14
+
+[Open the live landing page](https://www.monolith.works/landing). [PR #135](https://github.com/Synapsekw/Monilith/pull/135) was squash-merged without conflicts after develop and PR checks passed. The owner explicitly authorized the agent to merge this release when green; branch protections and the standing release policy were unchanged. Main commit `45edc70edc31b306403b839a65433bd1b55ba557` deployed successfully through the existing Vercel integration ([deployment](https://vercel.com/synapse-solutionskw/monilith/GrJG4a1A24X6EQVQkNUszHP7n7xd)). Post-merge main CI passed: [run 38577178987](https://github.com/Synapsekw/Monilith/actions/runs/38577178987).
+
+Production verification returned HTTP 200 for `/`, `/landing`, `/login`, and `/signup`; the signed-out root contains Assembly, and the signed-in root continues to `/home`. Mono status returned `mode: live`, callbacks enabled, reporting disabled, and `Cache-Control: no-store`. A real production OpenAI reply explained Core/Pulse and offered contact review; the browser reported no console errors.
+
+Production has its own `MONO_SESSION_SECRET` and canonical `MONO_SITE_ORIGIN=https://www.monolith.works`, alongside the owner-entered provider and bot credentials. No secret values are recorded here. The owner confirmed on 2026-10-14 that the full production chain works, including Grok delivery. This closes the remaining contact-submission acceptance check; delivery confirmation is owner-reported.
+
 ## Verified preview — 2026-10-14
 
-[Open the current Vercel Preview](https://monilith-geg46e06h-synapse-solutionskw.vercel.app). Deployment `dpl_8AQLgA9Y14uSuHy46VCaCn7MDhvi` is READY and retains Vercel authentication protection. It redeploys the approved Mono build (`231908e8`, integrated into develop at `5241dd27`) with the owner-entered Preview credentials. The production deployment is unchanged.
+[Open the current Vercel Preview](https://monilith-geg46e06h-synapse-solutionskw.vercel.app). Deployment `dpl_8AQLgA9Y14uSuHy46VCaCn7MDhvi` is READY and retains Vercel authentication protection. It redeploys the approved Mono build (`231908e8`, integrated into develop at `5241dd27`) with the owner-entered Preview credentials. This Preview was verified before the production release recorded above.
 
 **Live verification:** `/api/mono?action=status` returned HTTP 200/no-store with `mode: live`, callbacks enabled, and reporting disabled. In the deployed browser, Mono answered a real Core/Pulse question through OpenAI, extracted clearly marked test contact details, and populated the editable form and consent review without console errors. The test review was left unsent, with consent unchecked.
 
-**Still required:** confirm a reviewed test request and verify actual Grok bot receipt. Configuration availability is verified; bot authentication and delivery are not yet proven. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
+**At preview verification:** the agent left the test review unsent. The owner subsequently confirmed the complete production flow, including Grok delivery, on 2026-10-14. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
 
 The original integration gates passed: typecheck, lint (0 errors, 5 pre-existing warnings), 8,076 tests (1 skipped), production build, and DEV migration ledger 176/176. This follow-up changed deployment configuration and documentation only.
 
@@ -48,6 +56,6 @@ Mono uses the requested `gpt-6-luna` model. Redeploy the preview after changing 
 
 ## Production release
 
-After preview acceptance, configure **Production** Mono variables separately, use a separate session secret and exact canonical `MONO_SITE_ORIGIN`, and decide which bot actions to enable. Production activation follows the repository's `develop → main` PR: the owner manually reviews and merges after CI passes. Agents must not merge main, enable auto-merge or invoke a direct production deploy.
+For future releases, configure **Production** Mono variables separately, use a separate session secret and exact canonical `MONO_SITE_ORIGIN`, and decide which bot actions to enable. Production activation follows the repository's `develop → main` PR. The standing repository policy leaves the final merge to the owner unless the owner explicitly authorizes the agent for that release. Do not bypass branch protections or invoke a direct production deploy.
 
 The current live Vercel deployment uses the DEV Supabase project by deliberate repository policy. The Mono migration adds isolated storage only; this work does not change database routing or alter existing tenant records. The idle PROD database is not the preview target.
