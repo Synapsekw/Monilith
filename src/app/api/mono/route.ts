@@ -2,7 +2,6 @@ import { monoClientIp } from "@/lib/mono/config";
 import { createMonoService } from "@/lib/mono/service";
 import { createSupabaseMonoStore } from "@/lib/mono/supabase-store";
 
-export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // This approved public website protocol uses the existing widget's POST
