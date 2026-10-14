@@ -42,6 +42,18 @@ widget's `contact_request` and remains in saved assistant history, so reconnect
 restores the editable review form. Collection never invokes the contact webhook;
 only the separate confirmed callback action does, with full contact validation.
 
+A pending chat reference is saved with the session lock before calling the model.
+If the completed reply is saved but updating session history fails, status or a
+same-ID retry repairs the history and `last_request_id` with CAS before continuing.
+Concurrent recovery cannot append the exchange twice or call the model again.
+Optional summary reporting is separately claimed (`pending` to `sending`) before
+network delivery. Reconnect can finish an unclaimed report; a claimed report is
+never resent after a crash or ambiguous outcome. This deliberately prefers a
+possibly missed optional report to duplicate delivery. Reset clears the pending
+chat reference and rotates its token, so replay cannot restore cleared history.
+When callbacks are unavailable, model instructions explicitly disable collection
+and references to the absent review/send controls.
+
 Contact delivery is accepted only on the private integration's HTTP 200 contract;
 this is never presented as a booked callback. Network ambiguity stays `unknown`.
 A pending or unknown request is never sent again, survives conversation reset,

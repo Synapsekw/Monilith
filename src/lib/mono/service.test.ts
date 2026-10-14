@@ -176,6 +176,12 @@ describe("Mono public protocol", () => {
     });
     expect(chat.body).not.toHaveProperty("contact_request");
     expect(f.calls).toHaveLength(1);
+    expect(JSON.parse(String(f.calls[0].init?.body))).toMatchObject({
+      instructions: expect.stringContaining("Contact requests are unavailable"),
+    });
+    expect(
+      JSON.parse(String(f.calls[0].init?.body)).instructions,
+    ).not.toContain("help collect their name");
   });
   it("preserves a populated chat draft for review and only sends after confirmation", async () => {
     const draft = {
@@ -364,6 +370,139 @@ describe("Mono public protocol", () => {
     expect(
       (await f.call("chat", { ...input, message: "Different message" })).status,
     ).toBe(409);
+  });
+  it.each(["status", "chat"])(
+    "repairs a saved chat after a session write fails through %s",
+    async (recovery) => {
+      const underlying = memoryStore();
+      let failHistory = true;
+      const store: MonoStore = {
+        ...underlying,
+        async write(key, value, version) {
+          if (
+            value.kind === "session" &&
+            value.history.length === 2 &&
+            failHistory
+          ) {
+            failHistory = false;
+            throw new Error("simulated session write outage");
+          }
+          return underlying.write(key, value, version);
+        },
+      };
+      const f = fixture({ store });
+      await f.call("status");
+      const request = {
+        request_id: "request-chat-repair",
+        message: "Keep this conversation context",
+      };
+      expect((await f.call("chat", request)).status).toBe(503);
+      expect(
+        (await f.call(recovery, recovery === "chat" ? request : undefined))
+          .status,
+      ).toBe(200);
+      const restored = await f.call("status");
+      expect(restored.body).toMatchObject({
+        last_request_id: request.request_id,
+        history: [
+          { role: "user", content: request.message },
+          { role: "assistant", content: "Explore the workspace." },
+        ],
+      });
+      await f.call("chat", request);
+      expect((await f.call("status")).body.history).toHaveLength(2);
+      expect(
+        f.calls.filter((call) => call.url.includes("api.openai.com")),
+      ).toHaveLength(1);
+      expect(
+        f.calls.filter((call) => call.url === base.MONO_BOT_WEBHOOK_URL),
+      ).toHaveLength(1);
+      expect(JSON.parse(String(f.calls[1].init?.body))).toMatchObject({
+        type: "conversation_summary",
+        messages: [
+          { role: "user", content: request.message },
+          { role: "assistant", content: "Explore the workspace." },
+        ],
+      });
+      await f.call("chat", {
+        request_id: "request-chat-followup",
+        message: "Continue from that reply",
+      });
+      const nextModelCall = f.calls
+        .filter((call) => call.url.includes("api.openai.com"))
+        .at(-1);
+      expect(JSON.parse(String(nextModelCall?.init?.body))).toMatchObject({
+        input: [
+          { role: "user", content: request.message },
+          { role: "assistant", content: "Explore the workspace." },
+          { role: "user", content: "Continue from that reply" },
+        ],
+      });
+    },
+  );
+  it("serializes concurrent recovery without duplicating history or a report", async () => {
+    const underlying = memoryStore();
+    let failHistory = true;
+    const store: MonoStore = {
+      ...underlying,
+      async write(key, value, version) {
+        if (
+          value.kind === "session" &&
+          value.history.length === 2 &&
+          failHistory
+        ) {
+          failHistory = false;
+          throw new Error("simulated session write outage");
+        }
+        return underlying.write(key, value, version);
+      },
+    };
+    const f = fixture({ store });
+    await f.call("status");
+    const request = {
+      request_id: "request-chat-repair",
+      message: "Keep this conversation context",
+    };
+    expect((await f.call("chat", request)).status).toBe(503);
+    const results = await Promise.all([
+      f.call("status"),
+      f.call("chat", request),
+    ]);
+    expect(results.map((result) => result.status)).toEqual([200, 200]);
+    expect((await f.call("status")).body.history).toHaveLength(2);
+    expect(f.calls).toHaveLength(2);
+  });
+  it("never repeats an optionally reported chat after saving its report outcome fails", async () => {
+    const underlying = memoryStore();
+    let failOutcome = true;
+    const store: MonoStore = {
+      ...underlying,
+      async write(key, value, version) {
+        if (
+          value.kind === "operation" &&
+          value.report === "accepted" &&
+          failOutcome
+        ) {
+          failOutcome = false;
+          throw new Error("simulated report receipt outage");
+        }
+        return underlying.write(key, value, version);
+      },
+    };
+    const f = fixture({ store });
+    await f.call("status");
+    const request = {
+      request_id: "request-chat-repair",
+      message: "Keep this conversation context",
+    };
+    expect((await f.call("chat", request)).status).toBe(503);
+    expect((await f.call("status")).body.history).toHaveLength(2);
+    expect((await f.call("chat", request)).status).toBe(200);
+    expect(f.calls).toHaveLength(2);
+    await f.call("reset", {});
+    expect((await f.call("chat", request)).status).toBe(200);
+    expect((await f.call("status")).body.history).toEqual([]);
+    expect(f.calls).toHaveLength(2);
   });
   it("requires consent and valid contact fields before delivering once", async () => {
     const f = fixture();

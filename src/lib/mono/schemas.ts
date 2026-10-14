@@ -81,6 +81,7 @@ export const sessionSchema = z
       .nullable(),
     lastRequestId: receiptSchema.shape.request_id.nullable().optional(),
     lastCallback: z.string().max(200).optional(),
+    pendingChat: z.string().max(200).optional(),
     callbackReceipt: receiptSchema.optional(),
     expiresAt,
   })
@@ -92,8 +93,17 @@ export const operationSchema = z
     fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
     state: z.enum(["pending", "done", "failed"]),
     result: z.union([chatResultSchema, receiptSchema]).optional(),
+    chat: z
+      .object({
+        message: z.string().min(1).max(2000),
+        tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+        summary: answerSchema.shape.summary,
+        page: z.string().max(180),
+      })
+      .strict()
+      .optional(),
     report: z
-      .enum(["pending", "disabled", "accepted", "failed", "unknown"])
+      .enum(["pending", "sending", "disabled", "accepted", "failed", "unknown"])
       .optional(),
     expiresAt,
   })
