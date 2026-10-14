@@ -8,7 +8,7 @@ The approved Assembly landing and Mono run in the existing Monolith Next.js appl
 
 Production verification returned HTTP 200 for `/`, `/landing`, `/login`, and `/signup`; the signed-out root contains Assembly, and the signed-in root continues to `/home`. Mono status returned `mode: live`, callbacks enabled, reporting disabled, and `Cache-Control: no-store`. A real production OpenAI reply explained Core/Pulse and offered contact review; the browser reported no console errors.
 
-Production has its own `MONO_SESSION_SECRET` and canonical `MONO_SITE_ORIGIN=https://www.monolith.works`, alongside the owner-entered provider and bot credentials. No secret values are recorded here. Actual Grok webhook authentication and receipt remain unverified: no contact submission was sent during release verification. Complete step 6 below on production with reviewed test details to verify delivery.
+Production has its own `MONO_SESSION_SECRET` and canonical `MONO_SITE_ORIGIN=https://www.monolith.works`, alongside the owner-entered provider and bot credentials. No secret values are recorded here. The owner confirmed on 2026-10-14 that the full production chain works, including Grok delivery. This closes the remaining contact-submission acceptance check; delivery confirmation is owner-reported.
 
 ## Verified preview — 2026-10-14
 
@@ -16,7 +16,7 @@ Production has its own `MONO_SESSION_SECRET` and canonical `MONO_SITE_ORIGIN=htt
 
 **Live verification:** `/api/mono?action=status` returned HTTP 200/no-store with `mode: live`, callbacks enabled, and reporting disabled. In the deployed browser, Mono answered a real Core/Pulse question through OpenAI, extracted clearly marked test contact details, and populated the editable form and consent review without console errors. The test review was left unsent, with consent unchecked.
 
-**Still required:** confirm a reviewed test request and verify actual Grok bot receipt. Configuration availability is verified; bot authentication and delivery are not yet proven. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
+**At preview verification:** the agent left the test review unsent. The owner subsequently confirmed the complete production flow, including Grok delivery, on 2026-10-14. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
 
 The original integration gates passed: typecheck, lint (0 errors, 5 pre-existing warnings), 8,076 tests (1 skipped), production build, and DEV migration ledger 176/176. This follow-up changed deployment configuration and documentation only.
 
