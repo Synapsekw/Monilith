@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-10-14 18:29",
+  "updated": "2026-10-14 19:04",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "dbfc986f + notes",
+        "value": "29e2474e + release records",
         "tone": "ok",
-        "note": "Healed and pushed after the squash merge with a tree identical to main. Local release notes and wrapup docs await the next push/promotion. No task worktrees remain."
+        "note": "Healed and pushed after PR #136 with an identical application tree. Follow-up release records saved on develop; task worktree and branch removed."
       },
       {
         "name": "main",
-        "value": "45edc70e",
+        "value": "ce263ad3",
         "tone": "ok",
-        "note": "PR #135 merged without conflicts after green checks and explicit owner authorization. All post-merge main checks passed (38577178987)."
+        "note": "PR #136 merged without conflicts after green develop/PR checks under explicit owner authorization. Post-merge main CI 38587753000 passed."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY on PR #135. Assembly, expressive Mono and folder layouts are live. AI replies and routes verified; the owner confirmed the full flow through Grok delivery on 2026-10-14."
+        "note": "Vercel READY on PR #136. Dark scrollbar verified; Mono executes in Tokyo and live replies took 4.4s / 3.2s versus 8–13s before. Grok flow unchanged and owner-confirmed."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "8,076 passing, 1 skipped, 0 failed on the rebased integration branch before merge. Live destructive DB tier remains skipped.",
+        "note": "8,081 passing, 1 skipped, 0 failed; durable recovery, quota accounting and latency regressions covered. Live destructive DB tier remains skipped.",
         "label": "test"
       },
       {
@@ -182,7 +182,7 @@
         "name": "ledger",
         "value": "176/176",
         "tone": "ok",
-        "note": "Verified on live DEV by finish-task. Additive private Mono storage only; no tenant-data or routing changes.",
+        "note": "176 committed files / 176 live DEV ledger rows. No schema or database routing changes in this repair.",
         "label": "ledger"
       }
     ]
@@ -391,14 +391,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-10-14-1805-mono-production-release",
-    "when": "2026-10-14 18:05",
-    "title": "Assembly and Mono live in production",
+    "id": "2026-10-14-1904-landing-mono-latency-repair",
+    "when": "2026-10-14 19:04",
+    "title": "Landing scrollbar and Mono latency repair",
     "bullets": [
-      "PR #135 merged without conflicts under explicit owner authorization; all CI passed.",
-      "Vercel READY on main 45edc70e; develop healed and pushed.",
-      "Live OpenAI reply and route checks passed with no browser errors. The owner subsequently confirmed the complete production flow through Grok delivery.",
-      "Release notes and wrapup docs recorded locally for the next push/promotion."
+      "PR #136 merged without conflicts; Vercel production is READY.",
+      "Dark scrollbar scoped to the landing; normal Mono storage waits reduced from 17 to 10.",
+      "Mono now runs beside its Tokyo database. Live replies measured 4.4s / 3.2s; latency still varies.",
+      "Full local gates and develop/PR/main CI passed. Release records and local board refreshed."
     ]
   }
 }
