@@ -5,7 +5,7 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: ["[[2026-10-14-1239-mono-vercel-preview-integration]]"]
+related: ["[[2026-10-14-1239-mono-vercel-preview-integration]]", "[[2026-10-14-1805-mono-production-release]]"]
 ---
 
 # Mono live Preview verification

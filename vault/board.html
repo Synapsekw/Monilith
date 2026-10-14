@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-10-14 14:26",
+  "updated": "2026-10-14 18:05",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "5241dd27",
+        "value": "dbfc986f + notes",
         "tone": "ok",
-        "note": "Assembly + Mono integrated and pushed. Current Vercel Preview runs live OpenAI replies and prefilled contact review; real bot delivery awaits a confirmed test. Production deployment unchanged."
+        "note": "Healed and pushed after the squash merge with a tree identical to main. Local release notes and wrapup docs await the next push/promotion. No task worktrees remain."
       },
       {
         "name": "main",
-        "value": "8b20ddf5",
+        "value": "45edc70e",
         "tone": "ok",
-        "note": "PR #130 squash-merged 2026-09-24, 39 commits — the whole Folder Command Center bundle plus single-select dropdown columns. Main CI green (run 35961028549). Delta measured from the heal watermark e8d7e929, not the raw main..develop range."
+        "note": "PR #135 merged without conflicts after green checks and explicit owner authorization. All post-merge main checks passed (38577178987)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving the PR #130 build on 8b20ddf5. Vercel deploy state success, HTTP 200. The Folder Command Center is live — and still unwalked by a human."
+        "note": "Vercel READY on PR #135. Assembly, expressive Mono and folder layouts are live. Real OpenAI reply, routes and browser console verified; bot receipt awaits a confirmed test."
       }
     ],
     "gates": [
@@ -189,8 +189,8 @@
   },
   "next": [
     {
-      "title": "Accept Assembly + Mono on Vercel Preview",
-      "why": "Open the current verified Preview in the runbook. Live AI replies and editable contact review pass. Confirm one marked test request and verify its acceptance receipt and Grok bot arrival. Production release remains a later owner manual merge.",
+      "title": "Verify Mono contact delivery on production",
+      "why": "The new landing and real Mono replies are live. Review a marked test enquiry, confirm sending, and verify both the acceptance receipt and actual Grok bot arrival. Configuration is enabled; actual delivery is not yet proven.",
       "tags": [
         "owner",
         "verify",
@@ -289,8 +289,8 @@
   "risks": [
     {
       "sev": "amber",
-      "title": "Mono bot delivery awaits a confirmed test",
-      "text": "Preview credentials are installed. Real OpenAI replies and prefilled contact review are browser-verified; the test is unsent with consent unchecked. Callback configuration is enabled, but actual webhook authentication and bot delivery remain unverified."
+      "title": "Mono bot receipt remains unverified",
+      "text": "Production is live and real OpenAI replies passed. Callbacks are configured, reporting is off, and the contact review is available. No test contact request was sent, so actual webhook authentication and receipt remain unverified."
     },
     {
       "sev": "red",
@@ -405,14 +405,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-10-14-1426-mono-live-preview-verification",
-    "when": "2026-10-14 14:26",
-    "title": "Mono live Preview verified",
+    "id": "2026-10-14-1805-mono-production-release",
+    "when": "2026-10-14 18:05",
+    "title": "Assembly and Mono live in production",
     "bullets": [
-      "Redeployed the approved Mono Preview with owner-entered credentials after an older main build was selected.",
-      "HTTP status confirms live mode, callbacks on and reporting off.",
-      "Real OpenAI reply and conversational contact details into an editable review passed; no browser errors.",
-      "Test enquiry remains unsent. Confirm and verify actual bot arrival before any production release."
+      "PR #135 merged without conflicts under explicit owner authorization; all CI passed.",
+      "Vercel READY on main 45edc70e; develop healed and pushed.",
+      "Live OpenAI reply and route checks passed with no browser errors; bot receipt awaits a confirmed submission.",
+      "Release notes and wrapup docs recorded locally for the next push/promotion."
     ]
   }
 }
