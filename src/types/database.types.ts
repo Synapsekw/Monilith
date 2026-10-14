@@ -2510,6 +2510,30 @@ export type Database = {
           },
         ];
       };
+      mono_private_records: {
+        Row: {
+          ciphertext: string;
+          expires_at: number;
+          namespace: string;
+          record_key: string;
+          version: string;
+        };
+        Insert: {
+          ciphertext: string;
+          expires_at: number;
+          namespace: string;
+          record_key: string;
+          version?: string;
+        };
+        Update: {
+          ciphertext?: string;
+          expires_at?: number;
+          namespace?: string;
+          record_key?: string;
+          version?: string;
+        };
+        Relationships: [];
+      };
       notification_preferences: {
         Row: {
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -4713,6 +4737,25 @@ export type Database = {
           name: string;
         }[];
       };
+      mono_record_compare_swap: {
+        Args: {
+          p_ciphertext: string;
+          p_expected_version?: string;
+          p_expires_at: number;
+          p_key: string;
+          p_namespace: string;
+        };
+        Returns: string;
+      };
+      mono_record_read: {
+        Args: { p_key: string; p_namespace: string };
+        Returns: {
+          ciphertext: string;
+          expires_at: number;
+          version: string;
+        }[];
+      };
+      mono_records_cleanup: { Args: { p_limit?: number }; Returns: number };
       my_pending_invitations: {
         Args: never;
         Returns: {

@@ -90,6 +90,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: forwardedHeaders } });
   };
 
+  // The public website protocol owns its origin/cookie/CSRF checks and never
+  // reads workspace auth. Exact match keeps future sibling APIs protected.
+  if (request.nextUrl.pathname === "/api/mono") return forwardedResponse();
+
   // Standard @supabase/ssr session-refresh pattern adapted to proxy.
   let response = forwardedResponse();
 
