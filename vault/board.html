@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-10-14 19:04",
+  "updated": "2026-10-14 20:47",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "29e2474e + release records",
+        "value": "0528a291 + release records",
         "tone": "ok",
-        "note": "Healed and pushed after PR #136 with an identical application tree. Follow-up release records saved on develop; task worktree and branch removed."
+        "note": "Healed/pushed after PR #137; identical application tree. Task worktree and branch removed."
       },
       {
         "name": "main",
-        "value": "ce263ad3",
+        "value": "581449a3",
         "tone": "ok",
-        "note": "PR #136 merged without conflicts after green develop/PR checks under explicit owner authorization. Post-merge main CI 38587753000 passed."
+        "note": "PR #137 merged without conflicts after green develop/PR checks, under standing owner authorization. Post-merge main CI 38602621476 pending."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY on PR #136. Dark scrollbar verified; Mono executes in Tokyo and live replies took 4.4s / 3.2s versus 8–13s before. Grok flow unchanged and owner-confirmed."
+        "note": "Vercel READY. Mobile SVG arrows and pinned forward/reverse assembly verified live. Prior Mono latency and owner-confirmed Grok flow unchanged."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "8,081 passing, 1 skipped, 0 failed; durable recovery, quota accounting and latency regressions covered. Live destructive DB tier remains skipped.",
+        "note": "8,086 passing, 1 skipped. SVG accessibility, forward/reverse mobile progress, toolbar height changes, reduced motion and existing Mono flows covered.",
         "label": "test"
       },
       {
@@ -391,14 +391,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-10-14-1904-landing-mono-latency-repair",
-    "when": "2026-10-14 19:04",
-    "title": "Landing scrollbar and Mono latency repair",
+    "id": "2026-10-14-2047-landing-mobile-arrows-motion",
+    "when": "2026-10-14 20:47",
+    "title": "Landing mobile arrows and assembly repair",
     "bullets": [
-      "PR #136 merged without conflicts; Vercel production is READY.",
-      "Dark scrollbar scoped to the landing; normal Mono storage waits reduced from 17 to 10.",
-      "Mono now runs beside its Tokyo database. Live replies measured 4.4s / 3.2s; latency still varies.",
-      "Full local gates and develop/PR/main CI passed. Release records and local board refreshed."
+      "PR #137 merged without conflicts; Vercel production READY.",
+      "Landing, pricing and Mono use vector arrows; mobile assembly completes while visible.",
+      "Full local and develop/PR checks passed; post-merge main CI pending.",
+      "Live mobile geometry and reverse scroll passed; physical iPhone acceptance remains."
     ]
   }
 }
