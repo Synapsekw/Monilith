@@ -18,3 +18,7 @@ No new page-load requests, no UI refetches, no unbounded reads. Scrollbar stylin
 ## Verification
 
 Reproduce light-theme scrollbar before/after, at desktop and mobile widths, then navigate away to verify isolation. Add behavior tests for reduced serialized storage latency, reply recovery after storage failures, concurrent requests and unchanged rate limits. Run typecheck, lint, full tests, build and ledger check through finish-task. Record exact evidence and do not claim live speedup from a local benchmark.
+
+## Deployment locality follow-up
+
+The live Mono response identifies its function region as `iad1` (Virginia), while the active Supabase project metadata identifies `ap-northeast-1` (Tokyo). Pin only `src/app/api/mono/route.ts` to Vercel `hnd1` (Tokyo), near its existing database, using the per-function `regions` configuration. This does not move or modify data. Validate the configuration in a protected Preview deployment and verify the actual execution region before production promotion. This small configuration follow-up depends on the completed code gates; other app functions retain their existing placement.

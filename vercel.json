@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/mono/route.ts": {
+      "regions": ["hnd1"]
+    }
+  },
   "git": {
     "deploymentEnabled": {
       "**": false,
