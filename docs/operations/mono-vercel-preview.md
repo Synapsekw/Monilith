@@ -4,11 +4,15 @@ The approved Assembly landing and Mono run in the existing Monolith Next.js appl
 
 ## Verified preview — 2026-10-14
 
-[Open the Vercel Preview](https://monilith-at296yn4g-synapse-solutionskw.vercel.app). Deployment `dpl_7V4owXPSiM3qWLPtCYk32J66zThG` is READY and retains Vercel authentication protection. Integrated into `develop` at `5241dd27`; production is unchanged.
+[Open the current Vercel Preview](https://monilith-geg46e06h-synapse-solutionskw.vercel.app). Deployment `dpl_8AQLgA9Y14uSuHy46VCaCn7MDhvi` is READY and retains Vercel authentication protection. It redeploys the approved Mono build (`231908e8`, integrated into develop at `5241dd27`) with the owner-entered Preview credentials. The production deployment is unchanged.
 
-The deployed landing, Mono animation and guide reply were verified in the browser with no console errors. `/api/mono?action=status` returned HTTP 200 with `cache-control: no-store`, `mode: preview`, and both bot switches disabled. Full gates passed: typecheck, lint (0 errors, 5 pre-existing warnings), 8,076 tests (1 skipped), production build, and DEV migration ledger 176/176.
+**Live verification:** `/api/mono?action=status` returned HTTP 200/no-store with `mode: live`, callbacks enabled, and reporting disabled. In the deployed browser, Mono answered a real Core/Pulse question through OpenAI, extracted clearly marked test contact details, and populated the editable form and consent review without console errors. The test review was left unsent, with consent unchecked.
 
-**Still required:** enter the OpenAI and bot credentials directly into Vercel's Preview environment, enable `MONO_CALLBACKS_ENABLED=true`, redeploy, and run the real-reply/contact-delivery acceptance steps below. Real AI replies and Grok delivery have not been verified on Vercel. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
+**Still required:** confirm a reviewed test request and verify actual Grok bot receipt. Configuration availability is verified; bot authentication and delivery are not yet proven. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
+
+The original integration gates passed: typecheck, lint (0 errors, 5 pre-existing warnings), 8,076 tests (1 skipped), production build, and DEV migration ledger 176/176. This follow-up changed deployment configuration and documentation only.
+
+**Redeploy the correct build:** the earlier owner-started Preview used older `main` code (`8b20ddf5`) without Mono. Redeploy this current Mono Preview or deploy current develop explicitly to Preview; do not choose the older production build for Mono acceptance.
 
 ## Preview setup
 
