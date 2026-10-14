@@ -14,9 +14,8 @@ describe("Home (root route, static landing)", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Good work.",
     );
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    for (const link of screen.getAllByRole("link", { name: "Log in" })) {
+      expect(link).toHaveAttribute("href", "/login");
+    }
   });
 });

@@ -48,6 +48,19 @@ async function settle() {
 }
 
 describe("Mono landing integration", () => {
+  it("uses decorative vectors for welcome and send arrows", () => {
+    const { host } = landing();
+    const shadow = host.shadowRoot!;
+    expect(shadow.querySelector(".mono-prompts")?.textContent).not.toContain(
+      "↗",
+    );
+    expect(
+      shadow.querySelectorAll('.mono-prompt svg[aria-hidden="true"]'),
+    ).toHaveLength(3);
+    expect(
+      shadow.querySelector('.mono-send svg[aria-hidden="true"]'),
+    ).not.toBeNull();
+  });
   it.each([
     "older assistant offer",
     "latest assistant offer",

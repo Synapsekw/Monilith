@@ -2,6 +2,10 @@ import * as Core from "./core";
 import * as MonoAvatar from "./avatar";
 import * as MonoContact from "./contact";
 import { widgetStyles } from "./styles";
+const arrowUpRight =
+  '<svg class="mono-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg>';
+const arrowUp =
+  '<svg class="mono-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7M12 19V5"/></svg>';
 let current = null;
 function mount(options = {}) {
   if (current) return current;
@@ -15,8 +19,8 @@ function mount(options = {}) {
   ui.innerHTML = `<button class="mono-launcher" aria-label="Ask Mono, Monolith’s site guide" aria-haspopup="dialog" aria-expanded="false" aria-controls="mono-panel"><span class="mono-avatar"></span><span class="mono-hint">Ask Mono</span></button>
       <dialog id="mono-panel" class="mono-panel" aria-labelledby="mono-title" aria-describedby="mono-disclosure">
         <header class="mono-header"><span class="mono-avatar mono-header-avatar" aria-hidden="true"></span><div class="mono-identity"><h2 id="mono-title">Mono</h2><p>Your Monolith guide</p></div><button class="mono-icon mono-motion" type="button" aria-label="Pause Mono’s animation" aria-pressed="false">Ⅱ</button><button class="mono-icon mono-close" type="button" aria-label="Close Mono">×</button></header>
-        <div class="mono-scroll"><div class="mono-welcome"><span class="mono-eyebrow">A LITTLE ORDER. A LITTLE HELP.</span><h3>What shall we<br>put in order?</h3><p>I’m Mono. Let’s find your way around Monolith.</p><div class="mono-prompts"><button class="mono-prompt" data-prompt="Show me the workspace">Show me the workspace <span aria-hidden="true">↗</span></button><button class="mono-prompt" data-prompt="How do AI agents work?">How do AI agents work? <span aria-hidden="true">↗</span></button><button class="mono-prompt" data-prompt="Help me explore pricing">Help me explore plans <span aria-hidden="true">↗</span></button></div></div><div class="mono-messages" role="log" aria-label="Conversation with Mono" aria-live="polite" aria-relevant="additions"></div><p class="mono-thinking" role="status" hidden>Mono is finding a little order…</p><div class="mono-notice" role="alert" hidden><p></p><button type="button">Try again</button></div></div>
-        <footer class="mono-footer"><div class="mono-toolbar"><span class="mono-mode">Site guide</span><div class="mono-toolbar-actions"><button class="mono-contact-open" type="button" hidden>Contact the team</button><button class="mono-reset" type="button">New conversation</button></div></div><form class="mono-form"><label class="mono-sr" for="mono-input">Ask Mono about Monolith</label><textarea id="mono-input" rows="1" maxlength="2000" placeholder="Ask about Monolith…" enterkeyhint="send"></textarea><button class="mono-send" type="submit" aria-label="Send message" disabled>↑</button></form><p class="mono-disclosure" id="mono-disclosure">Prepared answers. Messages stay in this page.</p></footer>
+        <div class="mono-scroll"><div class="mono-welcome"><span class="mono-eyebrow">A LITTLE ORDER. A LITTLE HELP.</span><h3>What shall we<br>put in order?</h3><p>I’m Mono. Let’s find your way around Monolith.</p><div class="mono-prompts"><button class="mono-prompt" data-prompt="Show me the workspace">Show me the workspace ${arrowUpRight}</button><button class="mono-prompt" data-prompt="How do AI agents work?">How do AI agents work? ${arrowUpRight}</button><button class="mono-prompt" data-prompt="Help me explore pricing">Help me explore plans ${arrowUpRight}</button></div></div><div class="mono-messages" role="log" aria-label="Conversation with Mono" aria-live="polite" aria-relevant="additions"></div><p class="mono-thinking" role="status" hidden>Mono is finding a little order…</p><div class="mono-notice" role="alert" hidden><p></p><button type="button">Try again</button></div></div>
+        <footer class="mono-footer"><div class="mono-toolbar"><span class="mono-mode">Site guide</span><div class="mono-toolbar-actions"><button class="mono-contact-open" type="button" hidden>Contact the team</button><button class="mono-reset" type="button">New conversation</button></div></div><form class="mono-form"><label class="mono-sr" for="mono-input">Ask Mono about Monolith</label><textarea id="mono-input" rows="1" maxlength="2000" placeholder="Ask about Monolith…" enterkeyhint="send"></textarea><button class="mono-send" type="submit" aria-label="Send message" disabled>${arrowUp}</button></form><p class="mono-disclosure" id="mono-disclosure">Prepared answers. Messages stay in this page.</p></footer>
       </dialog>`;
   root.append(ui);
   (options.container || document.body).append(host);
@@ -307,7 +311,8 @@ function mount(options = {}) {
       if (!href) continue;
       const a = document.createElement("a");
       a.href = href;
-      a.textContent = link.label + " ↗";
+      a.textContent = link.label + " ";
+      a.insertAdjacentHTML("beforeend", arrowUpRight);
       a.addEventListener("click", (event) => {
         const url = new URL(href);
         if (

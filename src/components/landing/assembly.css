@@ -957,7 +957,13 @@ html:has(.assembly-landing)::-webkit-scrollbar-thumb {
   position: relative;
 }
 .assembly-landing .plan li::before {
-  content: "↗";
+  content: "";
+  top: 12px;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 17 17 7M7 7h10v10' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
   position: absolute;
   left: 0;
   color: var(--accent);
@@ -2861,5 +2867,46 @@ html:has(.assembly-landing)::-webkit-scrollbar-thumb {
     min-height: 44px;
     padding: 10px 13px;
     font-size: 10px;
+  }
+}
+
+/* Vectors keep iOS from choosing emoji glyphs for navigation arrows. */
+.assembly-landing .landing-arrow {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+.assembly-landing .assembly-art-stage {
+  display: contents;
+}
+@media (max-width: 780px) {
+  /* Copy stays in normal flow; only the art pins during its own scroll runway.
+     Neither ancestor can be an overflow scroll container for sticky to work. */
+  .assembly-landing.assembly .hero-a {
+    min-height: 0;
+    overflow: visible;
+  }
+  .assembly-landing .assembly-art-stage {
+    --art-height: min(480px, calc(100svh - 120px));
+    display: block;
+    height: calc(var(--art-height) + 85svh);
+    margin-top: 40px;
+  }
+  .assembly-landing.assembly .hero-art {
+    position: sticky;
+    inset: 84px 0 auto;
+    height: var(--art-height);
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 780px) {
+  .assembly-landing .assembly-art-stage {
+    height: var(--art-height);
+  }
+  .assembly-landing.assembly .hero-art {
+    position: relative;
+    top: 0;
   }
 }
