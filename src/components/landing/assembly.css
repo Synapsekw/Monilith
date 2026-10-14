@@ -1,4 +1,22 @@
 /* Approved Assembly design, isolated from authenticated app styles. */
+/* The document owns the scrollbar, outside the landing wrapper. Keep its
+   canvas dark even when next-themes sets an inline light color scheme. These
+   rules stop matching as soon as navigation removes the landing. */
+html:has(.assembly-landing) {
+  color-scheme: dark !important;
+  background: #080b11;
+  scrollbar-color: #485062 #080b11;
+}
+body:has(.assembly-landing) {
+  background: #080b11;
+}
+html:has(.assembly-landing)::-webkit-scrollbar-track {
+  background: #080b11;
+}
+html:has(.assembly-landing)::-webkit-scrollbar-thumb {
+  background: #485062;
+  background-clip: content-box;
+}
 .assembly-landing {
   line-height: normal;
   color-scheme: dark;

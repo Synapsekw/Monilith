@@ -115,31 +115,49 @@ export function createMonoService({
       const store = durable;
       const hash = (value: string) =>
         createHmac("sha256", secret).update(value).digest("hex");
-      async function rate(scope: string, limit: number, seconds: number) {
-        const bucket = Math.floor(now() / (seconds * 1000)),
-          key = `rates/${hash(scope)}/${bucket}`;
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const old = await readRecord(store, key, rateSchema),
-            count = old?.value.count || 0;
-          if (count >= limit)
-            rejectMono(
-              429,
-              "Mono has reached a request limit. Please try again later.",
-            );
-          if (
-            await store.write(
-              key,
-              {
-                kind: "rate",
-                count: count + 1,
-                expiresAt: (bucket + 1) * seconds * 1000 + 86400000,
-              },
-              old?.version,
-            )
-          )
-            return;
+      async function rate(
+        ...limits: Array<[scope: string, limit: number, seconds: number]>
+      ) {
+        const buckets = limits.map(([scope, limit, seconds]) => {
+          const bucket = Math.floor(now() / (seconds * 1000));
+          return {
+            key: `rates/${hash(scope)}/${bucket}`,
+            limit,
+            expiresAt: (bucket + 1) * seconds * 1000 + 86400000,
+          };
+        });
+        // Reads are independent. Quota consumption stays ordered so a request
+        // rejected by its IP limit cannot spend the shared global allowance.
+        const initial = await Promise.all(
+          buckets.map(({ key }) => readRecord(store, key, rateSchema)),
+        );
+        for (const [index, { key, limit, expiresAt }] of buckets.entries()) {
+          let accepted = false;
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const old =
+              attempt === 0
+                ? initial[index]
+                : await readRecord(store, key, rateSchema);
+            const count = old?.value.count || 0;
+            if (count >= limit)
+              rejectMono(
+                429,
+                "Mono has reached a request limit. Please try again later.",
+              );
+            if (
+              await store.write(
+                key,
+                { kind: "rate", count: count + 1, expiresAt },
+                old?.version,
+              )
+            ) {
+              accepted = true;
+              break;
+            }
+          }
+          if (!accepted)
+            rejectMono(429, "Mono is busy. Please try again shortly.");
         }
-        rejectMono(429, "Mono is busy. Please try again shortly.");
       }
       async function saveSession(key: string, entry: StoredEntry<Session>) {
         const version = await store.write(key, entry.value, entry.version);
@@ -161,12 +179,19 @@ export function createMonoService({
       async function recoverPendingChat(
         key: string,
         initial: StoredEntry<Session>,
+        completed?: { key: string; entry: StoredEntry<Operation> },
       ): Promise<StoredEntry<Session>> {
         let current = initial;
         for (let attempt = 0; attempt < 8; attempt++) {
           const pending = current.value.pendingChat;
           if (!pending) return current;
-          const saved = await readRecord(store, pending, operationSchema);
+          // The request just persisted this result. Reuse that confirmed CAS
+          // version once; conflicts/recovery always fall back to durable reads.
+          const saved =
+            completed?.key === pending
+              ? completed.entry
+              : await readRecord(store, pending, operationSchema);
+          completed = undefined;
           if (
             !saved &&
             current.value.active &&
@@ -180,6 +205,38 @@ export function createMonoService({
             if (!chat || "delivery" in result)
               throw new Error("Invalid chat recovery record");
             if (chat.tokenHash === hash(current.value.token)) {
+              if (saved.value.report === "disabled") {
+                // With no report to deliver, history, pointer and lease can be
+                // finalized in one CAS. A failed CAS leaves the durable result
+                // recoverable and can never overwrite a newer conversation.
+                const value: Session = { ...current.value };
+                if (value.lastRequestId !== saved.value.id) {
+                  value.history = [
+                    ...value.history,
+                    { role: "user", content: chat.message },
+                    {
+                      role: "assistant",
+                      content: result.reply,
+                      links: result.links,
+                      ...(result.contact_request
+                        ? { contact_request: result.contact_request }
+                        : {}),
+                    },
+                  ];
+                  value.lastRequestId = saved.value.id;
+                }
+                delete value.pendingChat;
+                if (value.active?.id === saved.value.id) value.active = null;
+                const version = await store.write(key, value, current.version);
+                if (version) return { value, version };
+                current =
+                  (await readRecord(store, key, sessionSchema)) ||
+                  rejectMono(
+                    403,
+                    "Your session expired. Reconnect to continue.",
+                  );
+                continue;
+              }
               if (current.value.lastRequestId !== saved.value.id) {
                 const value: Session = {
                   ...current.value,
@@ -283,8 +340,7 @@ export function createMonoService({
       if (action === "status") {
         let cookie: string | undefined;
         if (!session) {
-          await rate(`new:${ip}`, 30, 3600);
-          await rate("new:global", 500, 3600);
+          await rate([`new:${ip}`, 30, 3600], ["new:global", 500, 3600]);
           const id = token();
           sessionKey = `sessions/${id}`;
           const value: Session = {
@@ -338,7 +394,7 @@ export function createMonoService({
       const data = await boundedJson(request, 16000);
       if (action === "reset") {
         input(resetInputSchema, data, "Invalid request.");
-        await rate(`reset:${ip}`, 12, 60);
+        await rate([`reset:${ip}`, 12, 60]);
         if (session.value.active && session.value.active.until > now())
           rejectMono(409, "Wait for the current request to finish.");
         session.value.history = [];
@@ -428,9 +484,11 @@ export function createMonoService({
           409,
           "A previous reply is still pending. Reconnect or start a new conversation to continue.",
         );
-      await rate(`${action}:${ip}`, action === "chat" ? 12 : 3, 60);
-      await rate(`${action}:daily:${ip}`, action === "chat" ? 150 : 10, 86400);
-      await rate(`${action}:global`, action === "chat" ? 2000 : 100, 86400);
+      await rate(
+        [`${action}:${ip}`, action === "chat" ? 12 : 3, 60],
+        [`${action}:daily:${ip}`, action === "chat" ? 150 : 10, 86400],
+        [`${action}:global`, action === "chat" ? 2000 : 100, 86400],
+      );
       if (action === "chat" && session.value.history.length >= 40)
         rejectMono(409, "Start a new conversation to continue.");
       session.value.active = { id, until: now() + 60000 };
@@ -529,13 +587,20 @@ export function createMonoService({
         );
         if (!savedVersion)
           rejectMono(503, "Could not save the reply. Please reconnect.");
-        session = await recoverPendingChat(sessionKey, session);
+        session = await recoverPendingChat(sessionKey, session, {
+          key: requestKey,
+          entry: { value: operation.value, version: savedVersion },
+        });
         return monoResponse(result);
       } finally {
-        const latest = await readRecord(store, sessionKey, sessionSchema);
-        if (latest?.value.active?.id === id) {
-          latest.value.active = null;
-          await store.write(sessionKey, latest.value, latest.version);
+        // The no-report finalization already released this lease atomically.
+        // Errors and reporting/callback paths still require durable cleanup.
+        if (session.value.active?.id === id) {
+          const latest = await readRecord(store, sessionKey, sessionSchema);
+          if (latest?.value.active?.id === id) {
+            latest.value.active = null;
+            await store.write(sessionKey, latest.value, latest.version);
+          }
         }
       }
     } catch (error) {
