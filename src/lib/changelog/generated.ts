@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-10-14",
+    kind: "improved",
+    title: "A smoother mobile welcome",
+    description:
+      "Landing arrows stay crisp on iPhone and the pieces join while remaining on screen.",
+  },
+  {
+    date: "2026-10-14",
     kind: "fixed",
     title: "Landing page scrollbar matches the page",
     description:
