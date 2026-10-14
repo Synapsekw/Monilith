@@ -5,6 +5,20 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-10-14",
+    kind: "fixed",
+    title: "Landing page scrollbar matches the page",
+    description:
+      "The scrollbar stays dark on the Monolith website, including when your workspace uses a light theme.",
+  },
+  {
+    date: "2026-10-14",
+    kind: "improved",
+    title: "Less waiting for Mono",
+    description:
+      "Mono needs fewer storage round trips to return a reply while keeping conversation recovery and reviewed contact requests intact.",
+  },
+  {
+    date: "2026-10-14",
     kind: "new",
     title: "Meet Mono on our new website",
     description:
