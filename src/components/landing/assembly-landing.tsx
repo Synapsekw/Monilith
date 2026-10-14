@@ -1,6 +1,7 @@
 /* The approved Assembly uses local, already compressed product captures at their
  * original quality. Native images also let the screen viewer reuse the same URL. */
 /* eslint-disable @next/next/no-img-element */
+import { ArrowDown, ArrowUp, ArrowUpRight } from "lucide-react";
 import { AssemblyBrand } from "./assembly-brand";
 import { AssemblyEffects } from "./assembly-effects";
 import "./assembly-fonts.css";
@@ -38,7 +39,7 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
             >
               {signedIn ? "Enter app" : "Start your trial"}{" "}
               <span className="arrow" aria-hidden="true">
-                ↗
+                <ArrowUpRight className="landing-arrow" aria-hidden="true" />
               </span>
             </a>
             <button
@@ -61,7 +62,8 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
         <a href="#agents">People + agents</a>
         <a href="#pricing">Pricing</a>
         <a href={signedIn ? "/" : "/login"}>
-          {signedIn ? "Enter app" : "Log in"} ↗
+          {signedIn ? "Enter app" : "Log in"}{" "}
+          <ArrowUpRight className="landing-arrow" aria-hidden="true" />
         </a>
       </nav>
       <main id="main">
@@ -85,11 +87,17 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                   <a className="button" href={signedIn ? "/" : "/signup"}>
                     {signedIn ? "Enter app" : "Start your trial"}{" "}
                     <span className="arrow" aria-hidden="true">
-                      ↗
+                      <ArrowUpRight
+                        className="landing-arrow"
+                        aria-hidden="true"
+                      />
                     </span>
                   </a>
                   <a className="text-link" href="#product">
-                    Watch it take shape <span aria-hidden="true">↓</span>
+                    Watch it take shape{" "}
+                    <span aria-hidden="true">
+                      <ArrowDown className="landing-arrow" aria-hidden="true" />
+                    </span>
                   </a>
                 </div>
                 <p className="trial-note">
@@ -97,33 +105,40 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 </p>
               </div>
             </div>
-            <div className="hero-art" data-canvas-zone="">
-              <canvas
-                id="assembly-canvas"
-                aria-label="Four notched graphite pieces interlock into a monolith as you scroll. Drag to turn the joint."
-                role="img"
-              ></canvas>
-              <span className="art-label mono">
-                Precision in every connection.
-              </span>
-              <div className="hero-workspace" aria-hidden="true">
-                <div className="workspace-reveal-label">
-                  <span className="mono">
-                    The foundation becomes the workspace.
-                  </span>
-                  <span aria-hidden="true">↗</span>
-                </div>
-                <img
-                  src="/landing/assembly/board-blue.jpg"
-                  width="1625"
-                  height="912"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div className="workspace-reveal-footer">
-                  <span>Everything connected.</span>
-                  <span>Everyone in the picture.</span>
+            <div className="assembly-art-stage">
+              <div className="hero-art" data-canvas-zone="">
+                <canvas
+                  id="assembly-canvas"
+                  aria-label="Four notched graphite pieces interlock into a monolith as you scroll. Drag to turn the joint."
+                  role="img"
+                ></canvas>
+                <span className="art-label mono">
+                  Precision in every connection.
+                </span>
+                <div className="hero-workspace" aria-hidden="true">
+                  <div className="workspace-reveal-label">
+                    <span className="mono">
+                      The foundation becomes the workspace.
+                    </span>
+                    <span aria-hidden="true">
+                      <ArrowUpRight
+                        className="landing-arrow"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </div>
+                  <img
+                    src="/landing/assembly/board-blue.jpg"
+                    width="1625"
+                    height="912"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="workspace-reveal-footer">
+                    <span>Everything connected.</span>
+                    <span>Everyone in the picture.</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -235,7 +250,10 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 </span>
               </div>
               <button className="screen-expand" data-expand-screen="">
-                Explore the screen <span aria-hidden="true">↗</span>
+                Explore the screen{" "}
+                <span aria-hidden="true">
+                  <ArrowUpRight className="landing-arrow" aria-hidden="true" />
+                </span>
               </button>
             </div>
           </div>
@@ -418,7 +436,10 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 <a className="button outline" href={signedIn ? "/" : "/signup"}>
                   {signedIn ? "Enter app" : "Start your trial"}{" "}
                   <span className="arrow" aria-hidden="true">
-                    ↗
+                    <ArrowUpRight
+                      className="landing-arrow"
+                      aria-hidden="true"
+                    />
                   </span>
                 </a>
                 <ul>
@@ -446,7 +467,10 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 <a className="button" href={signedIn ? "/" : "/signup"}>
                   {signedIn ? "Enter app" : "Start your trial"}{" "}
                   <span className="arrow" aria-hidden="true">
-                    ↗
+                    <ArrowUpRight
+                      className="landing-arrow"
+                      aria-hidden="true"
+                    />
                   </span>
                 </a>
                 <ul>
@@ -473,7 +497,10 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 >
                   Discuss your team{" "}
                   <span className="arrow" aria-hidden="true">
-                    ↗
+                    <ArrowUpRight
+                      className="landing-arrow"
+                      aria-hidden="true"
+                    />
                   </span>
                 </a>
                 <ul>
@@ -491,7 +518,8 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
               <br />
               Prices in USD. No seat minimum.{" "}
               <a className="text-link" href="/pricing">
-                Compare all plan details ↗
+                Compare all plan details{" "}
+                <ArrowUpRight className="landing-arrow" aria-hidden="true" />
               </a>
             </p>
           </div>
@@ -568,11 +596,12 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
               <a className="button" href={signedIn ? "/" : "/signup"}>
                 {signedIn ? "Enter app" : "Start your trial"}{" "}
                 <span className="arrow" aria-hidden="true">
-                  ↗
+                  <ArrowUpRight className="landing-arrow" aria-hidden="true" />
                 </span>
               </a>
               <a className="text-link" href="#top">
-                Experience it again ↑
+                Experience it again{" "}
+                <ArrowUp className="landing-arrow" aria-hidden="true" />
               </a>
             </div>
             <p className="trial-note">
@@ -621,10 +650,17 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
               <div>
                 <span className="mono">Next steps</span>
                 <a href={signedIn ? "/" : "/signup"}>
-                  {signedIn ? "Enter app" : "Start your trial"} ↗
+                  {signedIn ? "Enter app" : "Start your trial"}{" "}
+                  <ArrowUpRight className="landing-arrow" aria-hidden="true" />
                 </a>
-                <a href="/updates">Product updates ↗</a>
-                <a href="#top">Back to top ↑</a>
+                <a href="/updates">
+                  Product updates{" "}
+                  <ArrowUpRight className="landing-arrow" aria-hidden="true" />
+                </a>
+                <a href="#top">
+                  Back to top{" "}
+                  <ArrowUp className="landing-arrow" aria-hidden="true" />
+                </a>
               </div>
             </div>
           </div>

@@ -16,6 +16,18 @@ describe("Assembly landing", () => {
     expect(html).not.toContain("LOCAL DESIGN CONCEPT");
   });
 
+  it("renders arrows as decorative vectors instead of emoji-capable text", () => {
+    const { container } = render(<AssemblyLanding />);
+    expect(container.textContent).not.toMatch(/[↗↓↑]/u);
+    const watch = screen.getByRole("link", { name: "Watch it take shape" });
+    expect(watch.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    for (const link of screen.getAllByRole("link", {
+      name: "Start your trial",
+    })) {
+      expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+  });
+
   it("keeps signup and login in this deployment", () => {
     render(<AssemblyLanding />);
     for (const link of screen.getAllByRole("link", {
