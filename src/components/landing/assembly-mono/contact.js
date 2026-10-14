@@ -16,6 +16,7 @@ function create({
   let ready = false,
     working = false,
     requestId = "",
+    latestDraft = null,
     reviewed = null,
     receipt = null,
     disposed = false;
@@ -60,7 +61,7 @@ function create({
     onChange();
     onState("idle");
   }
-  function open(draft = {}) {
+  function open(draft = latestDraft || {}) {
     if (!ready || working || disposed) return;
     if (receipt?.delivery === "unknown") {
       showReceipt(receipt);
@@ -327,11 +328,14 @@ function create({
   const api = {
     open,
     offer(draft, article) {
-      if (!Core.contactDraft(draft)) return;
+      const normalized = Core.contactDraft(draft);
+      if (!normalized) return;
+      // Both entry points can reuse details already collected in this conversation.
+      latestDraft = normalized;
       article.append(
         button(
           "Review contact details",
-          () => open(draft),
+          () => open(normalized),
           "mono-contact-offer",
         ),
       );
@@ -351,6 +355,7 @@ function create({
       if (api.unresolved) return;
       receipt = null;
       requestId = "";
+      latestDraft = null;
       reviewed = null;
       section.hidden = true;
       section.replaceChildren();
@@ -359,6 +364,7 @@ function create({
     destroy() {
       disposed = true;
       section.remove();
+      latestDraft = null;
       reviewed = null;
       receipt = null;
     },

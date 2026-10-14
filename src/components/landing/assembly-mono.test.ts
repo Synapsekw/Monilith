@@ -48,6 +48,147 @@ async function settle() {
 }
 
 describe("Mono landing integration", () => {
+  it.each(["assistant offer", "Contact the team"])(
+    "%s prefills the latest conversation details and sends only the edited, explicitly confirmed review",
+    async (entry) => {
+      const draft = {
+        name: "Avery Visitor",
+        phone: "+971501234567",
+        email: "avery@example.com",
+        reason: "Discuss a team workspace",
+        company: "Example Studio",
+        preferred_time: "Thursday afternoon",
+        timezone: "Dubai (UTC+4)",
+      };
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input, options) => {
+          const action = new URL(String(input)).searchParams.get("action");
+          if (action === "chat") {
+            return Response.json({
+              reply: "Your details are ready to review.",
+              contact_request: draft,
+            });
+          }
+          if (action === "callback") {
+            const body = JSON.parse(String(options?.body));
+            return Response.json({
+              delivery: "accepted",
+              reply: "Request submitted for review.",
+              request_id: body.request_id,
+            });
+          }
+          return Response.json({
+            mode: "live",
+            token: "test-token",
+            callbacks_enabled: true,
+            reporting_enabled: false,
+            history: [
+              {
+                role: "assistant",
+                content: "Earlier details.",
+                contact_request: {
+                  ...draft,
+                  email: "earlier@example.com",
+                  reason: "Earlier request",
+                },
+              },
+            ],
+          });
+        });
+      vi.stubGlobal("fetch", fetcher);
+      const { host } = landing();
+      const ui = within(host.shadowRoot!.querySelector("div")!);
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: /Ask Mono/ }),
+      );
+      await settle();
+      fireEvent.input(ui.getByLabelText("Ask Mono about Monolith"), {
+        target: {
+          value:
+            "Use avery@example.com and Thursday afternoon for the team workspace discussion.",
+        },
+      });
+      fireEvent.submit(host.shadowRoot!.querySelector(".mono-form")!);
+      await settle();
+      const callbacks = () =>
+        fetcher.mock.calls.filter(([url]) =>
+          String(url).includes("action=callback"),
+        );
+      expect(callbacks()).toHaveLength(0);
+      fireEvent.click(
+        entry === "assistant offer"
+          ? ui
+              .getAllByRole("button", {
+                hidden: true,
+                name: "Review contact details",
+              })
+              .at(-1)!
+          : ui.getByRole("button", { hidden: true, name: "Contact the team" }),
+      );
+      for (const [label, value] of Object.entries({
+        "Your name": "Avery Visitor",
+        "Phone with country code": "+971501234567",
+        Email: "avery@example.com",
+        "What would you like to discuss?": "Discuss a team workspace",
+        Company: "Example Studio",
+        "Preferred time": "Thursday afternoon",
+        "Time zone": "Dubai (UTC+4)",
+      }))
+        expect(ui.getByLabelText(label)).toHaveValue(value);
+      fireEvent.change(ui.getByLabelText("Email"), {
+        target: { value: "confirmed@example.com" },
+      });
+      fireEvent.change(ui.getByLabelText("What would you like to discuss?"), {
+        target: { value: "Discuss onboarding for ten people" },
+      });
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "Review request" }),
+      );
+      expect(ui.getByText("confirmed@example.com")).toBeInTheDocument();
+      expect(
+        ui.getByText("Discuss onboarding for ten people"),
+      ).toBeInTheDocument();
+      const send = ui.getByRole("button", {
+        hidden: true,
+        name: "Confirm & send",
+      });
+      expect(send).toBeDisabled();
+      expect(callbacks()).toHaveLength(0);
+      fireEvent.click(ui.getByRole("checkbox", { hidden: true }));
+      expect(send).toBeEnabled();
+      expect(callbacks()).toHaveLength(0);
+      fireEvent.click(send);
+      await settle();
+      expect(callbacks()).toHaveLength(1);
+      expect(JSON.parse(String(callbacks()[0][1]?.body))).toMatchObject({
+        confirmed: true,
+        lead: {
+          name: "Avery Visitor",
+          phone: "+971501234567",
+          email: "confirmed@example.com",
+          reason: "Discuss onboarding for ten people",
+          company: "Example Studio",
+          preferred_time: "Thursday afternoon",
+          timezone: "Dubai (UTC+4)",
+        },
+      });
+      expect(ui.getByText("Request submitted.")).toBeInTheDocument();
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "Back to chat" }),
+      );
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "New conversation" }),
+      );
+      await settle();
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "Contact the team" }),
+      );
+      expect(ui.getByLabelText("Your name")).toHaveValue("");
+      expect(ui.getByLabelText("Email")).toHaveValue("");
+    },
+  );
+
   it("uses the public endpoint once, offers a local guide and yields to the screenshot viewer", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
