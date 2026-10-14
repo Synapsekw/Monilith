@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-10-14 12:39",
+  "updated": "2026-10-14 14:26",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -136,7 +136,7 @@
         "name": "develop",
         "value": "5241dd27",
         "tone": "ok",
-        "note": "Assembly + Mono integrated and pushed. Vercel Preview READY; real AI/contact delivery awaits Preview credentials and owner acceptance. Production unchanged."
+        "note": "Assembly + Mono integrated and pushed. Current Vercel Preview runs live OpenAI replies and prefilled contact review; real bot delivery awaits a confirmed test. Production deployment unchanged."
       },
       {
         "name": "main",
@@ -190,7 +190,7 @@
   "next": [
     {
       "title": "Accept Assembly + Mono on Vercel Preview",
-      "why": "Open the verified preview in the session runbook. Enter Preview-only OpenAI and bot credentials, enable callbacks, redeploy, then test a real reply and editable details → consent → Confirm & send → one Grok bot receipt. Production release is a later owner manual merge.",
+      "why": "Open the current verified Preview in the runbook. Live AI replies and editable contact review pass. Confirm one marked test request and verify its acceptance receipt and Grok bot arrival. Production release remains a later owner manual merge.",
       "tags": [
         "owner",
         "verify",
@@ -289,8 +289,8 @@
   "risks": [
     {
       "sev": "amber",
-      "title": "Mono Preview is currently in guide mode",
-      "text": "The landing and guide response are deployed and verified. OpenAI and bot credentials have not been entered into Vercel, so real replies and contact delivery are unverified. The session secret is Preview-only; production remains unchanged."
+      "title": "Mono bot delivery awaits a confirmed test",
+      "text": "Preview credentials are installed. Real OpenAI replies and prefilled contact review are browser-verified; the test is unsent with consent unchecked. Callback configuration is enabled, but actual webhook authentication and bot delivery remain unverified."
     },
     {
       "sev": "red",
@@ -405,14 +405,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-10-14-1239-mono-vercel-preview-integration",
-    "when": "2026-10-14 12:39",
-    "title": "Assembly + Mono Vercel Preview",
+    "id": "2026-10-14-1426-mono-live-preview-verification",
+    "when": "2026-10-14 14:26",
+    "title": "Mono live Preview verified",
     "bullets": [
-      "Approved landing and animated Mono integrated into the existing Next.js/Vercel app.",
-      "Contact details flow from chat to an editable review and explicit send to a private bot webhook; encrypted storage and durable delivery recovery.",
-      "Full gates pass: 8,076 tests, typecheck, lint, build and ledger 176/176. Task branches and worktrees cleaned.",
-      "Preview READY and browser-verified in guide mode. Owner-entered credentials and real Grok delivery acceptance remain before production."
+      "Redeployed the approved Mono Preview with owner-entered credentials after an older main build was selected.",
+      "HTTP status confirms live mode, callbacks on and reporting off.",
+      "Real OpenAI reply and conversational contact details into an editable review passed; no browser errors.",
+      "Test enquiry remains unsent. Confirm and verify actual bot arrival before any production release."
     ]
   }
 }
