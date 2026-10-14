@@ -333,11 +333,7 @@ function create({
       // Both entry points can reuse details already collected in this conversation.
       latestDraft = normalized;
       article.append(
-        button(
-          "Review contact details",
-          () => open(normalized),
-          "mono-contact-offer",
-        ),
+        button("Review contact details", () => open(), "mono-contact-offer"),
       );
     },
     setReady(value) {

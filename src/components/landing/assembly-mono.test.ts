@@ -48,7 +48,11 @@ async function settle() {
 }
 
 describe("Mono landing integration", () => {
-  it.each(["assistant offer", "Contact the team"])(
+  it.each([
+    "older assistant offer",
+    "latest assistant offer",
+    "Contact the team",
+  ])(
     "%s prefills the latest conversation details and sends only the edited, explicitly confirmed review",
     async (entry) => {
       const draft = {
@@ -116,14 +120,14 @@ describe("Mono landing integration", () => {
           String(url).includes("action=callback"),
         );
       expect(callbacks()).toHaveLength(0);
+      const offers = ui.getAllByRole("button", {
+        hidden: true,
+        name: "Review contact details",
+      });
+      expect(offers).toHaveLength(2);
       fireEvent.click(
-        entry === "assistant offer"
-          ? ui
-              .getAllByRole("button", {
-                hidden: true,
-                name: "Review contact details",
-              })
-              .at(-1)!
+        entry.includes("assistant offer")
+          ? offers[entry === "older assistant offer" ? 0 : 1]
           : ui.getByRole("button", { hidden: true, name: "Contact the team" }),
       );
       for (const [label, value] of Object.entries({
@@ -136,19 +140,19 @@ describe("Mono landing integration", () => {
         "Time zone": "Dubai (UTC+4)",
       }))
         expect(ui.getByLabelText(label)).toHaveValue(value);
-      fireEvent.change(ui.getByLabelText("Email"), {
-        target: { value: "confirmed@example.com" },
+      fireEvent.change(ui.getByLabelText("Company"), {
+        target: { value: "Reviewed Studio" },
       });
-      fireEvent.change(ui.getByLabelText("What would you like to discuss?"), {
-        target: { value: "Discuss onboarding for ten people" },
+      fireEvent.change(ui.getByLabelText("Preferred time"), {
+        target: { value: "Friday afternoon" },
       });
       fireEvent.click(
         ui.getByRole("button", { hidden: true, name: "Review request" }),
       );
-      expect(ui.getByText("confirmed@example.com")).toBeInTheDocument();
-      expect(
-        ui.getByText("Discuss onboarding for ten people"),
-      ).toBeInTheDocument();
+      expect(ui.getByText("avery@example.com")).toBeInTheDocument();
+      expect(ui.getByText("Discuss a team workspace")).toBeInTheDocument();
+      expect(ui.getByText("Reviewed Studio")).toBeInTheDocument();
+      expect(ui.getByText("Friday afternoon")).toBeInTheDocument();
       const send = ui.getByRole("button", {
         hidden: true,
         name: "Confirm & send",
@@ -166,10 +170,10 @@ describe("Mono landing integration", () => {
         lead: {
           name: "Avery Visitor",
           phone: "+971501234567",
-          email: "confirmed@example.com",
-          reason: "Discuss onboarding for ten people",
-          company: "Example Studio",
-          preferred_time: "Thursday afternoon",
+          email: "avery@example.com",
+          reason: "Discuss a team workspace",
+          company: "Reviewed Studio",
+          preferred_time: "Friday afternoon",
           timezone: "Dubai (UTC+4)",
         },
       });
