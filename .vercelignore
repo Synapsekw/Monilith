@@ -1,0 +1,22 @@
+# Keep local credentials, agent worktrees and internal notes out of CLI uploads.
+.env*
+.mcp*.json
+.claude/
+.codex/
+.agents/
+.aws/
+.superpowers/
+.obsidian/
+vault/
+docs/
+brand-lab/
+desktop/
+supabase/.temp/
+supabase/.branches/
+scripts/sync-prod/.dumps/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+e2e/.artifacts/

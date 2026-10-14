@@ -10,6 +10,8 @@
 
 Preserve approved design and consent behavior. No production release. Isolated task worktrees and path-specific commits. No secrets in source, outputs, browser storage or client bundles. Main owner integrates into develop with repository gates; workers commit only their own changes for integration.
 
+User follow-up: Mono must collect contact details conversationally, carry them into an editable review form from either contact entry point, and send only the explicitly confirmed fields to the private Grok bot webhook. Conversation drafts never trigger a callback. Disabled contact configuration must not advertise an unavailable form.
+
 ## Execution DAG
 
 Parallel batch 1: A (landing), B (backend/storage). Each gets its own repository task worktree. Batch 2: C consumes both commits, checks integration, runs all gates and creates preview. Critical path max(A,B) -> C.
