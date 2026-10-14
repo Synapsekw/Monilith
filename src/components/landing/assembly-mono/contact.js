@@ -2,6 +2,7 @@ import * as Core from "./core";
 function create({
   container,
   request,
+  reconnect,
   checkDelivery,
   setBusy,
   onChange,
@@ -19,6 +20,7 @@ function create({
     latestDraft = null,
     reviewed = null,
     receipt = null,
+    rejection = null,
     disposed = false;
   const fields = [
     ["name", "Your name", 100, "name"],
@@ -62,7 +64,12 @@ function create({
     onState("idle");
   }
   function open(draft = latestDraft || {}) {
-    if (!ready || working || disposed) return;
+    if (working || disposed) return;
+    if (rejection) {
+      showRejection(rejection);
+      return;
+    }
+    if (!ready) return;
     if (receipt?.delivery === "unknown") {
       showReceipt(receipt);
       return;
@@ -202,16 +209,22 @@ function create({
             showReceipt(receipt);
             onState(receipt.delivery === "accepted" ? "done" : "needsyou");
           }
-        } catch {
+        } catch (error) {
           if (disposed) return;
-          receipt = {
-            delivery: "unknown",
-            reply:
-              "We couldn’t confirm delivery. Check this request before submitting another.",
-            reference: "",
-            request_id: requestId,
-          };
-          showReceipt(receipt);
+          // These endpoint rejections occur before dispatch. A conflict, 5xx,
+          // invalid receipt or network failure can involve a delivered request.
+          if ([400, 403, 415, 429].includes(error?.status)) {
+            showRejection(error.status);
+          } else {
+            receipt = {
+              delivery: "unknown",
+              reply:
+                "We couldn’t confirm delivery. Check this request before submitting another.",
+              reference: "",
+              request_id: requestId,
+            };
+            showReceipt(receipt);
+          }
           onState("needsyou");
         } finally {
           working = false;
@@ -235,6 +248,63 @@ function create({
     );
     actions.append(send, edit, back);
     section.append(actions);
+    reveal(h);
+  }
+  function showRejection(status) {
+    rejection = status;
+    receipt = null;
+    latestDraft = reviewed;
+    const h = heading(
+      "Request not sent.",
+      status === 403
+        ? "Your session expired or could not be verified. Reconnect, then review and confirm your saved details again."
+        : status === 429
+          ? "Mono is receiving too many contact requests. Wait a little, then review and confirm your saved details again."
+          : "Mono could not accept this request. Review your saved details and make any corrections before confirming again.",
+    );
+    const feedback = el("p", null, "mono-contact-error");
+    feedback.setAttribute("role", "alert");
+    feedback.hidden = true;
+    const actions = el("div", null, "mono-contact-actions");
+    const retry = button(
+      status === 403 ? "Reconnect & review" : "Review and retry",
+      async () => {
+        if (working || disposed) return;
+        working = true;
+        retry.disabled = true;
+        back.disabled = true;
+        feedback.hidden = true;
+        setBusy(true);
+        onState("thinking");
+        try {
+          if (status === 403) await reconnect();
+          if (disposed) return;
+          rejection = null;
+          requestId = crypto.randomUUID();
+          // Rebuild the review with fresh, unchecked consent. Never resend here.
+          showReview();
+          onState("idle");
+        } catch {
+          if (!disposed) {
+            feedback.textContent =
+              "Couldn’t reconnect. Your details are saved here. Please try again.";
+            feedback.hidden = false;
+            onState("needsyou");
+          }
+        } finally {
+          working = false;
+          if (!disposed) {
+            setBusy(false);
+            retry.disabled = false;
+            back.disabled = false;
+          }
+        }
+      },
+      "mono-contact-primary",
+    );
+    const back = button("Back to chat", hide);
+    actions.append(retry, back);
+    section.append(feedback, actions);
     reveal(h);
   }
   function showReceipt(result) {
@@ -342,6 +412,7 @@ function create({
     restore(value) {
       const normalized = Core.contactReceipt(value);
       if (normalized) {
+        rejection = null;
         receipt = normalized;
         requestId = normalized.request_id;
         if (!working) showReceipt(normalized);
@@ -350,6 +421,7 @@ function create({
     reset() {
       if (api.unresolved) return;
       receipt = null;
+      rejection = null;
       requestId = "";
       latestDraft = null;
       reviewed = null;
@@ -363,12 +435,16 @@ function create({
       latestDraft = null;
       reviewed = null;
       receipt = null;
+      rejection = null;
     },
     get visible() {
       return !section.hidden;
     },
     get unresolved() {
       return receipt?.delivery === "unknown";
+    },
+    get recoverable() {
+      return rejection !== null;
     },
     get delivery() {
       return receipt?.delivery || null;

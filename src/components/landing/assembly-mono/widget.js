@@ -99,9 +99,23 @@ function mount(options = {}) {
           page: location.pathname + location.hash,
         }),
       );
+      if (result.error?.status === 403) {
+        connected = false;
+        mode = "offline";
+        syncMode();
+      }
       if (result.error || result.stale)
         throw result.error || new Error("Request interrupted");
       return result.value;
+    },
+    async reconnect() {
+      const result = await run((signal) => transport.connect({ signal }));
+      if (result.error || result.stale)
+        throw result.error || new Error("Connection interrupted");
+      applyStatus(result.value, { hydrate: false });
+      syncMode();
+      if (!callbacksEnabled)
+        throw new Error("Contact requests are not available yet.");
     },
     async checkDelivery() {
       const result = await run((signal) => transport.connect({ signal }));
@@ -122,6 +136,12 @@ function mount(options = {}) {
       welcome.hidden = visible || !!messages.childElementCount;
       clearNotice();
       syncControls();
+      if (!visible && !connected)
+        showError(
+          new Error("Reconnect to Mono to continue."),
+          connect,
+          "Reconnect",
+        );
       if (!visible && opened) input.focus({ preventScroll: true });
     },
   });
@@ -163,7 +183,8 @@ function mount(options = {}) {
       .querySelectorAll(".mono-prompt")
       .forEach((b) => (b.disabled = busy || connecting || !connected));
     contactButton.hidden =
-      !callbacksEnabled || mode !== "live" || contactFlow.visible;
+      ((!callbacksEnabled || mode !== "live") && !contactFlow.recoverable) ||
+      contactFlow.visible;
     contactButton.disabled = busy || connecting;
     contactFlow.setReady(
       callbacksEnabled && mode === "live" && connected && !busy && !connecting,
@@ -580,7 +601,7 @@ function mount(options = {}) {
     pending = null;
     input.value = "";
     contactFlow.reset();
-    clearNotice();
+    if (connected) clearNotice();
     resizeInput();
     syncControls();
     expression("hello");

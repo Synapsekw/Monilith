@@ -232,80 +232,243 @@ describe("Mono landing integration", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("requires review and explicit consent; an unknown receipt can only check delivery", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
-      const action = new URL(String(input)).searchParams.get("action");
-      if (action === "callback")
-        return Response.json({
-          delivery: "unknown",
-          reply: "Delivery not confirmed.",
-          request_id: "receipt-1",
+  it.each([400, 403, 415, 429])(
+    "keeps reviewed details after a definite %s rejection and requires fresh confirmation before retrying",
+    async (status) => {
+      const lead = {
+        name: "Test visitor",
+        phone: "+971501234567",
+        email: "visitor@example.com",
+        reason: "Workspace setup",
+        company: "Reviewed company",
+        preferred_time: "Friday afternoon",
+        timezone: "Dubai (UTC+4)",
+      };
+      let attempts = 0;
+      let connections = 0;
+      const delivered: unknown[] = [];
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input, options) => {
+          const action = new URL(String(input)).searchParams.get("action");
+          if (action === "callback") {
+            attempts += 1;
+            if (attempts === 1)
+              return Response.json(
+                { error: "Request rejected before dispatch" },
+                { status },
+              );
+            const body = JSON.parse(String(options?.body));
+            delivered.push(body.lead);
+            return Response.json({
+              delivery: "accepted",
+              reply: "Request submitted.",
+              request_id: body.request_id,
+            });
+          }
+          connections += 1;
+          if (status === 403 && connections === 2)
+            return Response.json(
+              { error: "Temporarily unavailable" },
+              { status: 503 },
+            );
+          return Response.json({
+            mode: "live",
+            token: connections === 1 ? "expired-token" : "fresh-token",
+            callbacks_enabled: true,
+            history:
+              connections === 1
+                ? [
+                    {
+                      role: "assistant",
+                      content: "Review your details.",
+                      contact_request: { ...lead, company: "Earlier company" },
+                    },
+                  ]
+                : [],
+          });
         });
-      return Response.json({
-        mode: "live",
-        token: "test-token",
-        callbacks_enabled: true,
-        reporting_enabled: false,
-        history: [],
+      vi.stubGlobal("fetch", fetcher);
+      const { host } = landing();
+      const ui = within(host.shadowRoot!.querySelector("div")!);
+      const click = (name: string) =>
+        fireEvent.click(ui.getByRole("button", { hidden: true, name }));
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: /Ask Mono/ }),
+      );
+      await settle();
+      click("Contact the team");
+      fireEvent.change(ui.getByLabelText("Company"), {
+        target: { value: lead.company },
       });
-    });
-    vi.stubGlobal("fetch", fetcher);
-    const { host } = landing();
-    // jsdom caches the closed native dialog style inside Shadow DOM.
-    // Browser QA covers visibility; these checks assert open state and behavior.
-    const ui = within(host.shadowRoot!.querySelector("div")!);
-    fireEvent.click(ui.getByRole("button", { hidden: true, name: /Ask Mono/ }));
-    await settle();
-    fireEvent.click(
-      ui.getByRole("button", { hidden: true, name: "Contact the team" }),
-    );
-    fireEvent.change(ui.getByLabelText("Your name"), {
-      target: { value: "Test visitor" },
-    });
-    fireEvent.change(ui.getByLabelText("Email"), {
-      target: { value: "visitor@example.com" },
-    });
-    fireEvent.change(ui.getByLabelText("What would you like to discuss?"), {
-      target: { value: "Workspace setup" },
-    });
-    fireEvent.click(ui.getByRole("button", { hidden: true, name: /Review/ }));
-    const send = ui.getByRole("button", {
-      hidden: true,
-      name: "Confirm & send",
-    });
-    expect(send).toBeDisabled();
-    expect(
-      fetcher.mock.calls.filter(([url]) =>
+      click("Review request");
+      fireEvent.click(ui.getByRole("checkbox", { hidden: true }));
+      click("Confirm & send");
+      await settle();
+      expect(attempts).toBe(1);
+      expect(delivered).toHaveLength(0);
+      expect(
+        ui.getByRole("heading", { hidden: true, name: "Request not sent." }),
+      ).toBeInTheDocument();
+      expect(
+        ui.queryByRole("button", { hidden: true, name: "Check delivery" }),
+      ).toBeNull();
+      click("Back to chat");
+      expect(
+        ui.getByRole("button", { hidden: true, name: "New conversation" }),
+      ).toBeEnabled();
+      expect(
+        ui.getByRole("button", { hidden: true, name: "Contact the team" }),
+      ).not.toHaveAttribute("hidden");
+      click("Contact the team");
+      const recovery =
+        status === 403 ? "Reconnect & review" : "Review and retry";
+      click(recovery);
+      await settle();
+      if (status === 403) {
+        expect(
+          ui.getByText(
+            "Couldn’t reconnect. Your details are saved here. Please try again.",
+          ),
+        ).toBeInTheDocument();
+        expect(attempts).toBe(1);
+        click(recovery);
+        await settle();
+      }
+      expect(attempts).toBe(1);
+      expect(ui.getByRole("checkbox", { hidden: true })).not.toBeChecked();
+      expect(
+        ui.getByRole("button", { hidden: true, name: "Confirm & send" }),
+      ).toBeDisabled();
+      expect(ui.getByText(lead.company)).toBeInTheDocument();
+      click("Edit details");
+      for (const [label, value] of Object.entries({
+        "Your name": lead.name,
+        "Phone with country code": lead.phone,
+        Email: lead.email,
+        "What would you like to discuss?": lead.reason,
+        Company: lead.company,
+        "Preferred time": lead.preferred_time,
+        "Time zone": lead.timezone,
+      }))
+        expect(ui.getByLabelText(label)).toHaveValue(value);
+      click("Review request");
+      expect(ui.getByRole("checkbox", { hidden: true })).not.toBeChecked();
+      expect(
+        ui.getByRole("button", { hidden: true, name: "Confirm & send" }),
+      ).toBeDisabled();
+      fireEvent.click(ui.getByRole("checkbox", { hidden: true }));
+      expect(attempts).toBe(1);
+      expect(delivered).toHaveLength(0);
+      click("Confirm & send");
+      await settle();
+      expect(attempts).toBe(2);
+      expect(delivered).toEqual([lead]);
+      const retry = fetcher.mock.calls.filter(([url]) =>
         String(url).includes("action=callback"),
-      ),
-    ).toHaveLength(0);
-    fireEvent.click(ui.getByRole("checkbox", { hidden: true }));
-    fireEvent.click(send);
-    await settle();
-    const callback = fetcher.mock.calls.find(([url]) =>
-      String(url).includes("action=callback"),
-    )!;
-    expect(JSON.parse(String(callback[1]?.body))).toMatchObject({
-      confirmed: true,
-      lead: { name: "Test visitor", email: "visitor@example.com" },
-    });
-    expect(
-      ui.queryByRole("button", { hidden: true, name: "Confirm & send" }),
-    ).toBeNull();
-    expect(
-      ui.getByRole("button", { hidden: true, name: "New conversation" }),
-    ).toBeDisabled();
-    fireEvent.click(
-      ui.getByRole("button", { hidden: true, name: "Check delivery" }),
-    );
-    await settle();
-    expect(
-      fetcher.mock.calls.filter(([url]) =>
+      )[1];
+      expect(retry[1]?.headers).toMatchObject({
+        "X-Mono-Token": status === 403 ? "fresh-token" : "expired-token",
+      });
+      expect(JSON.parse(String(retry[1]?.body))).toMatchObject({
+        confirmed: true,
+        lead,
+      });
+      expect(
+        ui.getByRole("heading", { hidden: true, name: "Request submitted." }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each(["unknown receipt", "network failure", 409, 500, 503])(
+    "requires review and explicit consent; %s can only check delivery",
+    async (failure) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input) => {
+          const action = new URL(String(input)).searchParams.get("action");
+          if (action === "callback") {
+            if (failure === "network failure")
+              throw new TypeError("Failed to fetch");
+            if (typeof failure === "number")
+              return Response.json(
+                { error: "Delivery is uncertain" },
+                { status: failure },
+              );
+            return Response.json({
+              delivery: "unknown",
+              reply: "Delivery not confirmed.",
+              request_id: "receipt-1",
+            });
+          }
+          return Response.json({
+            mode: "live",
+            token: "test-token",
+            callbacks_enabled: true,
+            reporting_enabled: false,
+            history: [],
+          });
+        });
+      vi.stubGlobal("fetch", fetcher);
+      const { host } = landing();
+      // jsdom caches the closed native dialog style inside Shadow DOM.
+      // Browser QA covers visibility; these checks assert open state and behavior.
+      const ui = within(host.shadowRoot!.querySelector("div")!);
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: /Ask Mono/ }),
+      );
+      await settle();
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "Contact the team" }),
+      );
+      fireEvent.change(ui.getByLabelText("Your name"), {
+        target: { value: "Test visitor" },
+      });
+      fireEvent.change(ui.getByLabelText("Email"), {
+        target: { value: "visitor@example.com" },
+      });
+      fireEvent.change(ui.getByLabelText("What would you like to discuss?"), {
+        target: { value: "Workspace setup" },
+      });
+      fireEvent.click(ui.getByRole("button", { hidden: true, name: /Review/ }));
+      const send = ui.getByRole("button", {
+        hidden: true,
+        name: "Confirm & send",
+      });
+      expect(send).toBeDisabled();
+      expect(
+        fetcher.mock.calls.filter(([url]) =>
+          String(url).includes("action=callback"),
+        ),
+      ).toHaveLength(0);
+      fireEvent.click(ui.getByRole("checkbox", { hidden: true }));
+      fireEvent.click(send);
+      await settle();
+      const callback = fetcher.mock.calls.find(([url]) =>
         String(url).includes("action=callback"),
-      ),
-    ).toHaveLength(1);
-    expect(fetcher.mock.calls.at(-1)?.[0]).toContain("action=status");
-  });
+      )!;
+      expect(JSON.parse(String(callback[1]?.body))).toMatchObject({
+        confirmed: true,
+        lead: { name: "Test visitor", email: "visitor@example.com" },
+      });
+      expect(
+        ui.queryByRole("button", { hidden: true, name: "Confirm & send" }),
+      ).toBeNull();
+      expect(
+        ui.getByRole("button", { hidden: true, name: "New conversation" }),
+      ).toBeDisabled();
+      fireEvent.click(
+        ui.getByRole("button", { hidden: true, name: "Check delivery" }),
+      );
+      await settle();
+      expect(
+        fetcher.mock.calls.filter(([url]) =>
+          String(url).includes("action=callback"),
+        ),
+      ).toHaveLength(1);
+      expect(fetcher.mock.calls.at(-1)?.[0]).toContain("action=status");
+    },
+  );
 
   it("clears pending requests and all timers on navigation away", async () => {
     const signals: AbortSignal[] = [];
