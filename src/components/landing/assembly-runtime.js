@@ -55,6 +55,8 @@ export function mountAssembly(root) {
   let dragYaw = 0;
   let dragStart = null;
   const intro = $(".assembly-intro");
+  const artStage = $(".assembly-art-stage");
+  const art = $(".hero-art");
   const ease = (n) => {
     const t = clamp(n);
     return t * t * (3 - 2 * t);
@@ -223,16 +225,22 @@ export function mountAssembly(root) {
   function updateScroll() {
     if (intro) {
       const rect = intro.getBoundingClientRect();
-      if (!narrow.matches && !reduce.matches) {
+      if (reduce.matches) {
+        introTarget = 0.84;
+      } else if (!narrow.matches) {
         introTarget = clamp(-rect.top / (rect.height - innerHeight));
-      } else if (!joined) {
-        introTarget = reduce.matches
-          ? 0.84
-          : clamp(
-              (innerHeight * 0.45 -
-                $(".hero-art").getBoundingClientRect().top) /
-                (innerHeight * 0.65),
-            ) * 0.84;
+      } else if (!joined && artStage && art) {
+        // Stable layout measurements avoid jumps as iOS browser chrome expands.
+        // Finish before the pin releases so the completed joint remains visible.
+        const travel = artStage.offsetHeight - art.offsetHeight;
+        const pinTop = parseFloat(getComputedStyle(art).top) || 0;
+        introTarget =
+          travel > 0
+            ? clamp(
+                (pinTop - artStage.getBoundingClientRect().top) /
+                  (travel * 0.85),
+              ) * 0.84
+            : 0.84;
       }
       if (paused) join = introTarget;
       needsPaint = true;
@@ -741,7 +749,9 @@ export function mountAssembly(root) {
       animationTime += delta;
       smoothPointer.x += (pointer.x - smoothPointer.x) * 0.065;
       smoothPointer.y += (pointer.y - smoothPointer.y) * 0.065;
-      join += (introTarget - join) * 0.085;
+      // Keep the same response time on 30 Hz and 60 Hz mobile displays.
+      join +=
+        (introTarget - join) * (1 - Math.pow(1 - 0.085, delta / (1000 / 60)));
     }
     if (inView && (needsPaint || !paused)) {
       drawAssembly(animationTime);
