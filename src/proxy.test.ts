@@ -315,3 +315,20 @@ describe("pg_cron endpoints are exempt from the cookie gate", () => {
     },
   );
 });
+
+describe("Mono protocol is public at its exact endpoint", () => {
+  it("lets logged-out widget requests reach the endpoint", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+    expect(
+      (await proxy(req("/api/mono?action=status"))).headers.get("location"),
+    ).toBeNull();
+    expect(getClaims).not.toHaveBeenCalled();
+  });
+  it.each(["/api/mono/private", "/api/monolithic"])(
+    "keeps %s behind authentication",
+    async (path) => {
+      getClaims.mockResolvedValue({ data: null, error: null });
+      expect((await proxy(req(path))).status).toBe(307);
+    },
+  );
+});
