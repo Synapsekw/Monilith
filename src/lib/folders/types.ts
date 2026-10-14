@@ -1,3 +1,5 @@
+import type { ResolvedLayout } from "./layout";
+
 /**
  * Shared, pure data contract for the folder command center. No DB, no React.
  * Every later task (server actions, RSC pages, client widgets) imports these
@@ -128,6 +130,8 @@ export type FolderPayload = {
   attention: AttentionRow[] | null;
   briefs: IntelligenceBrief[];
   members: FolderMember[];
+  /** Resolved per-folder command center layout. Absent row = project preset. */
+  layout: ResolvedLayout;
   generatedAt: string;
   todayISO: string;
 };

@@ -1,36 +1,36 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { CommandTab } from "./command-center-state";
+import type { LayoutTab, TabKind } from "@/lib/validations/folder-layout";
 
-const TABS: { id: CommandTab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "stages", label: "Stages" },
-  { id: "boards", label: "Boards" },
-  { id: "people", label: "People" },
-];
+export type TabCounts = {
+  stages: number;
+  boards: number;
+  people: number | null;
+  overloaded: number;
+};
 
-/** Tabs under the folder header (spec §5.1). Roving tablist; counts are mono; overloaded count is red. */
+/** Tabs under the folder header (spec §5.1), rendered from the folder's
+ *  layout config — tab set, order and labels are per-folder, not a fixed
+ *  four. Roving tablist; counts are mono and keyed by tab KIND (a renamed
+ *  "Pipeline" stages tab still shows the stage count); overloaded is red. */
 export function TabStrip({
+  tabs,
   tab,
   counts,
   disabled = false,
   onChange,
 }: {
-  tab: CommandTab;
-  counts: {
-    stages: number;
-    boards: number;
-    people: number | null;
-    overloaded: number;
-  };
+  tabs: LayoutTab[];
+  tab: string;
+  counts: TabCounts;
   disabled?: boolean;
-  onChange: (t: CommandTab) => void;
+  onChange: (id: string) => void;
 }) {
-  const countFor = (id: CommandTab): { n: number | null; red: boolean } => {
-    if (id === "stages") return { n: counts.stages, red: false };
-    if (id === "boards") return { n: counts.boards, red: false };
-    if (id === "people")
+  const countFor = (kind: TabKind): { n: number | null; red: boolean } => {
+    if (kind === "stages") return { n: counts.stages, red: false };
+    if (kind === "boards") return { n: counts.boards, red: false };
+    if (kind === "people")
       return {
         n: counts.overloaded > 0 ? counts.overloaded : counts.people,
         red: counts.overloaded > 0,
@@ -44,8 +44,8 @@ export function TabStrip({
       data-print-hide
       className="flex gap-1 border-b"
     >
-      {TABS.map((t) => {
-        const c = countFor(t.id);
+      {tabs.map((t) => {
+        const c = countFor(t.kind);
         const active = t.id === tab;
         return (
           <button
@@ -53,7 +53,7 @@ export function TabStrip({
             type="button"
             role="tab"
             aria-selected={active}
-            disabled={disabled && t.id !== "overview"}
+            disabled={disabled && t.kind !== "canvas"}
             onClick={() => onChange(t.id)}
             className={cn(
               // Hand-rolled control: it has to buy its own 44px coarse touch

@@ -1,0 +1,64 @@
+export function AssemblyBrand() {
+  return (
+    <span className="brand assembly-brand">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 434 84"
+        role="img"
+        aria-label="Monolith horizontal logo"
+        fill="currentColor"
+        color="var(--assembly-brand-color)"
+      >
+        <title>Monolith horizontal logo</title>
+        <g transform="scale(.84)">
+          <path d="M6 27L24 16V73L6 84Z"></path>
+          <path d="M30 16L47 27V53L30 42Z"></path>
+          <path d="M53 27L70 16V42L53 53Z"></path>
+          <path d="M76 16L94 27V84L76 73Z"></path>
+        </g>
+        <g transform="translate(103 17)">
+          <path
+            transform="translate(0 1)"
+            fillRule="evenodd"
+            d="M0 48V0H10L23 21L36 0H46V48H36V17L23 37L10 17V48Z"
+          ></path>
+          <path
+            transform="translate(52 1)"
+            fillRule="evenodd"
+            d="M21.5-1C7-1 0 8 0 24S7 49 21.5 49S43 40 43 24S36-1 21.5-1ZM21.5 9C30 9 33 14 33 24S30 39 21.5 39S10 34 10 24S13 9 21.5 9Z"
+          ></path>
+          <path
+            transform="translate(100 1)"
+            fillRule="evenodd"
+            d="M0 48V0H10L30 30V0H40V48H30L10 18V48Z"
+          ></path>
+          <path
+            transform="translate(145 1)"
+            fillRule="evenodd"
+            d="M21.5-1C7-1 0 8 0 24S7 49 21.5 49S43 40 43 24S36-1 21.5-1ZM21.5 9C30 9 33 14 33 24S30 39 21.5 39S10 34 10 24S13 9 21.5 9Z"
+          ></path>
+          <path
+            transform="translate(194 1)"
+            fillRule="evenodd"
+            d="M0 0H10V38H33V48H0Z"
+          ></path>
+          <path
+            transform="translate(234 1)"
+            fillRule="evenodd"
+            d="M0 6L10 0V48H0Z"
+          ></path>
+          <path
+            transform="translate(246 1)"
+            fillRule="evenodd"
+            d="M0 0H40V10H25V48H15V10H0Z"
+          ></path>
+          <path
+            transform="translate(291 1)"
+            fillRule="evenodd"
+            d="M0 0H10V19H30V0H40V48H30V29H10V48H0Z"
+          ></path>
+        </g>
+      </svg>
+    </span>
+  );
+}

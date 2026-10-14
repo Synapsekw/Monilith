@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestBoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import type { Database, Tables } from "@/types/database.types";
+import type { FolderLayoutRow } from "./layout";
 import type { FolderBoardRef, FolderSummary, IntelligenceBrief } from "./types";
 
 type DB = SupabaseClient<Database>;
@@ -60,6 +61,30 @@ export async function getFolderHead(
       position: row.position,
     })),
   };
+}
+
+/**
+ * The folder's layout row. A primary-key lookup on `folder_layouts`; `null`
+ * means "never customized", which `resolveLayout` turns into the project
+ * preset — today's layout. A read error is treated the same as absence and
+ * logged, because a layout must never be the reason a folder page fails.
+ */
+export async function getFolderLayoutRow(
+  supabase: DB,
+  folderId: string,
+): Promise<FolderLayoutRow | null> {
+  const { data, error } = await supabase
+    .from("folder_layouts")
+    .select("preset, config, version")
+    .eq("folder_id", folderId)
+    .maybeSingle();
+  if (error) {
+    console.error("folder_layouts read failed", error.message);
+    return null;
+  }
+  return data
+    ? { preset: data.preset, config: data.config, version: data.version }
+    : null;
 }
 
 /**

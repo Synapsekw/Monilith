@@ -1809,6 +1809,54 @@ export type Database = {
           },
         ];
       };
+      folder_layouts: {
+        Row: {
+          config: Json;
+          created_at: string;
+          folder_id: string;
+          org_id: string;
+          preset: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+        };
+        Insert: {
+          config: Json;
+          created_at?: string;
+          folder_id: string;
+          org_id: string;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          config?: Json;
+          created_at?: string;
+          folder_id?: string;
+          org_id?: string;
+          preset?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_layouts_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: true;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folder_layouts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folders: {
         Row: {
           created_at: string;
@@ -2461,6 +2509,30 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      mono_private_records: {
+        Row: {
+          ciphertext: string;
+          expires_at: number;
+          namespace: string;
+          record_key: string;
+          version: string;
+        };
+        Insert: {
+          ciphertext: string;
+          expires_at: number;
+          namespace: string;
+          record_key: string;
+          version?: string;
+        };
+        Update: {
+          ciphertext?: string;
+          expires_at?: number;
+          namespace?: string;
+          record_key?: string;
+          version?: string;
+        };
+        Relationships: [];
       };
       notification_preferences: {
         Row: {
@@ -4665,6 +4737,25 @@ export type Database = {
           name: string;
         }[];
       };
+      mono_record_compare_swap: {
+        Args: {
+          p_ciphertext: string;
+          p_expected_version?: string;
+          p_expires_at: number;
+          p_key: string;
+          p_namespace: string;
+        };
+        Returns: string;
+      };
+      mono_record_read: {
+        Args: { p_key: string; p_namespace: string };
+        Returns: {
+          ciphertext: string;
+          expires_at: number;
+          version: string;
+        }[];
+      };
+      mono_records_cleanup: { Args: { p_limit?: number }; Returns: number };
       my_pending_invitations: {
         Args: never;
         Returns: {

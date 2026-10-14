@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-24",
+    kind: "improved",
+    title: "Dropdown columns can be single-select",
+    description:
+      'Open a dropdown column\'s Edit labels dialog and switch off "Allow multiple". Picking a label then replaces the current one and closes the menu immediately, the way Status already works. Leave it on to keep choosing several labels per item.',
+  },
+  {
     date: "2026-09-15",
     kind: "new",
     title: "Folder command centers",

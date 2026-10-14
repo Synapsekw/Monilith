@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
-import { listLatestBriefs } from "./queries";
+import { getFolderLayoutRow, listLatestBriefs } from "./queries";
 import type { FolderBoardRef } from "./types";
 
 function runRow(
@@ -146,5 +146,81 @@ describe("listLatestBriefs", () => {
     );
     expect(out).toEqual([]);
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * Mocks the exact chain `getFolderLayoutRow` issues:
+ * `.from("folder_layouts").select("preset, config, version")
+ *   .eq("folder_id", X).maybeSingle()`.
+ */
+function makeLayoutClient(result: {
+  data?: { preset: string; config: unknown; version: number } | null;
+  error?: { message: string } | null;
+}) {
+  const calls: Array<{ folderId?: string }> = [];
+  const client = {
+    from: () => {
+      let folderId: string | undefined;
+      const qb: Record<string, unknown> = {};
+      qb.select = () => qb;
+      qb.eq = (col: string, val: string) => {
+        if (col === "folder_id") folderId = val;
+        return qb;
+      };
+      qb.maybeSingle = () => {
+        calls.push({ folderId });
+        return Promise.resolve({
+          data: result.data ?? null,
+          error: result.error ?? null,
+        });
+      };
+      return qb;
+    },
+  };
+  return { client, calls };
+}
+
+describe("getFolderLayoutRow", () => {
+  it("returns the row when the folder has a saved layout", async () => {
+    const { client, calls } = makeLayoutClient({
+      data: { preset: "crm", config: { v: 1, tabs: [] }, version: 2 },
+    });
+    const row = await getFolderLayoutRow(
+      client as unknown as SupabaseClient<Database>,
+      "f1",
+    );
+    expect(row).toEqual({
+      preset: "crm",
+      config: { v: 1, tabs: [] },
+      version: 2,
+    });
+    expect(calls).toEqual([{ folderId: "f1" }]);
+  });
+
+  it("returns null when the folder has never been customized", async () => {
+    const { client } = makeLayoutClient({ data: null });
+    const row = await getFolderLayoutRow(
+      client as unknown as SupabaseClient<Database>,
+      "f1",
+    );
+    expect(row).toBeNull();
+  });
+
+  it("treats a read error the same as absence, and logs it", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = makeLayoutClient({
+      error: { message: "connection reset" },
+    });
+    const row = await getFolderLayoutRow(
+      client as unknown as SupabaseClient<Database>,
+      "f1",
+    );
+    expect(row).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "folder_layouts read failed",
+      "connection reset",
+    );
+    errorSpy.mockRestore();
   });
 });

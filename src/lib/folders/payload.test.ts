@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
@@ -42,6 +42,12 @@ vi.mock("./queries", () => ({
       },
     ];
   }),
+  getFolderLayoutRow: vi.fn(async () => {
+    order.push("start:layout");
+    await tick();
+    order.push("end:layout");
+    return null;
+  }),
 }));
 vi.mock("./resolve", () => ({
   resolveFolderRollup: vi.fn(async () => {
@@ -70,13 +76,24 @@ vi.mock("@/lib/org/queries-cached", () => ({
   }),
 }));
 
-import { getFolderHead, listLatestBriefs } from "./queries";
-import { resolveFolderAttention } from "./resolve";
+import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
+import { resolveFolderAttention, resolveFolderBurn } from "./resolve";
 import { ATTENTION_LIMIT, buildFolderPayload } from "./payload";
 
 const supabase = {} as SupabaseClient<Database>;
 
 describe("buildFolderPayload", () => {
+  // Mocks are module-scoped (shared across every `it` in this file), and
+  // several new cases assert exact call counts (`toHaveBeenCalledTimes`,
+  // `not.toHaveBeenCalled`) on `resolveFolderBurn`/`getFolderLayoutRow` — those
+  // would see calls left over from earlier tests without a reset. Clearing
+  // call history (not implementations) each test keeps every case reading
+  // only its own invocation.
+  beforeEach(() => {
+    order.length = 0;
+    vi.clearAllMocks();
+  });
+
   it("runs head + three RPCs concurrently, then briefs; a failed RPC is null, not a throw", async () => {
     const p = await buildFolderPayload(supabase, "f1", "u1");
     expect(p).not.toBeNull();
@@ -107,7 +124,9 @@ describe("buildFolderPayload", () => {
     // ANY of them ENDS. A regression to sequential awaits would instead
     // produce start:head, end:head, start:rollup, end:rollup, ... — one
     // complete start/end pair before the next read even starts.
-    const firstPaintReads = ["head", "rollup", "burn", "attention"] as const;
+    // `burn` moved into wave B behind the layout gate (Task 3); `layout`
+    // takes its place as the fourth wave-A read alongside head/rollup/attention.
+    const firstPaintReads = ["head", "rollup", "layout", "attention"] as const;
     const startIdx = Object.fromEntries(
       firstPaintReads.map((name) => [name, order.indexOf(`start:${name}`)]),
     );
@@ -128,5 +147,51 @@ describe("buildFolderPayload", () => {
   it("returns null when the folder is hidden or absent", async () => {
     vi.mocked(getFolderHead).mockResolvedValueOnce(null);
     expect(await buildFolderPayload(supabase, "f1", "u1")).toBeNull();
+  });
+
+  it("reads the layout in wave A, alongside head/rollup/attention", async () => {
+    await buildFolderPayload(supabase, "f1", "u1");
+    // Every wave-A read starts before any of them ends.
+    const firstEnd = order.findIndex((e) => e.startsWith("end:"));
+    expect(order.slice(0, firstEnd)).toContain("start:layout");
+  });
+
+  it("skips folder_burn when the layout needs neither a burn section nor a stages tab", async () => {
+    vi.mocked(getFolderLayoutRow).mockResolvedValueOnce({
+      preset: "blank",
+      config: {
+        v: 1,
+        tabs: [
+          { id: "overview", label: "Overview", kind: "canvas", sections: [] },
+        ],
+      },
+      version: 3,
+    });
+    const payload = await buildFolderPayload(supabase, "f1", "u1");
+    expect(resolveFolderBurn).not.toHaveBeenCalled();
+    expect(payload?.burn).toBeNull();
+  });
+
+  it("still runs folder_burn when the layout has a stages tab but no burn section", async () => {
+    vi.mocked(getFolderLayoutRow).mockResolvedValueOnce({
+      preset: "crm",
+      config: {
+        v: 1,
+        tabs: [
+          { id: "overview", label: "Overview", kind: "canvas", sections: [] },
+          { id: "stages", label: "Pipeline", kind: "stages" },
+        ],
+      },
+      version: 3,
+    });
+    await buildFolderPayload(supabase, "f1", "u1");
+    expect(resolveFolderBurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the project preset when the folder has no layout row", async () => {
+    vi.mocked(getFolderLayoutRow).mockResolvedValueOnce(null);
+    const payload = await buildFolderPayload(supabase, "f1", "u1");
+    expect(payload?.layout.preset).toBe("project");
+    expect(payload?.layout.version).toBe(0);
   });
 });

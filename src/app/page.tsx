@@ -1,4 +1,4 @@
-import { EditorialLanding } from "@/components/landing/editorial-landing";
+import { AssemblyLanding } from "@/components/landing/assembly-landing";
 
 /**
  * Public landing. A pure static Server Component — it reads no cookies and does
@@ -8,5 +8,5 @@ import { EditorialLanding } from "@/components/landing/editorial-landing";
  * routes them on to their board.
  */
 export default function Home() {
-  return <EditorialLanding />;
+  return <AssemblyLanding />;
 }

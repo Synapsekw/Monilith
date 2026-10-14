@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
+import { canvasSections } from "@/lib/folders/layout";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
 
 vi.mock("@/components/folders/charts/BurnChart", () => ({
@@ -25,6 +26,7 @@ function renderOverview(
       stages={stages}
       stage={opts.stage ?? null}
       board={opts.board ?? null}
+      sections={canvasSections(payload.layout.config, "overview")}
       onRetry={onRetry}
     />,
   );
