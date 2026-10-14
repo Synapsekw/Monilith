@@ -4,7 +4,7 @@ export const allowedLinks = [
   "#product",
   "#agents",
   "#pricing",
-  "https://www.monolith.works/signup",
+  "/signup",
 ] as const;
 const linkSchema = z
   .object({
@@ -12,11 +12,35 @@ const linkSchema = z
     href: z.enum(allowedLinks),
   })
   .strict();
+const field = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f]*$/);
+
+// A draft may be incomplete; unknown details stay empty until the visitor fills
+// and explicitly confirms the review form. Structured output requires every key.
+export const contactDraftSchema = z
+  .object({
+    name: field(100),
+    phone: field(40),
+    email: field(254),
+    reason: field(1000),
+    company: field(120),
+    preferred_time: field(160),
+    timezone: field(80),
+  })
+  .strict();
+// Accept sparse/legacy drafts (including {}) when reading saved replies.
+const contactRequestSchema = contactDraftSchema.partial();
+
 export const answerSchema = z
   .object({
     reply: z.string().trim().min(1).max(8000),
     summary: z.string().max(1500),
     offer_contact: z.boolean(),
+    contact_draft: contactDraftSchema.nullable(),
     links: z.array(linkSchema).max(4),
   })
   .strict();
@@ -24,7 +48,7 @@ export const chatResultSchema = z
   .object({
     reply: answerSchema.shape.reply,
     links: answerSchema.shape.links,
-    contact_request: z.object({}).strict().optional(),
+    contact_request: contactRequestSchema.optional(),
   })
   .strict();
 export const receiptSchema = z
@@ -41,7 +65,7 @@ const messageSchema = z
     role: z.enum(["user", "assistant"]),
     content: z.string().max(8000),
     links: answerSchema.shape.links.optional(),
-    contact_request: z.object({}).strict().optional(),
+    contact_request: contactRequestSchema.optional(),
   })
   .strict();
 export type MonoMessage = z.infer<typeof messageSchema>;
@@ -89,22 +113,15 @@ export const recordSchema = z.discriminatedUnion("kind", [
 export type Session = z.infer<typeof sessionSchema>;
 export type Operation = z.infer<typeof operationSchema>;
 
-const field = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .refine((value) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value))
-    .default("");
 export const leadSchema = z
   .object({
-    name: field(100),
-    phone: field(40),
-    email: field(254),
-    reason: field(1000),
-    company: field(120),
-    preferred_time: field(160),
-    timezone: field(80),
+    name: contactDraftSchema.shape.name.default(""),
+    phone: contactDraftSchema.shape.phone.default(""),
+    email: contactDraftSchema.shape.email.default(""),
+    reason: contactDraftSchema.shape.reason.default(""),
+    company: contactDraftSchema.shape.company.default(""),
+    preferred_time: contactDraftSchema.shape.preferred_time.default(""),
+    timezone: contactDraftSchema.shape.timezone.default(""),
   })
   .strict()
   .refine(

@@ -7,7 +7,8 @@ All responses are non-cacheable JSON. The Node handler accesses the request, so 
 is dynamic without a `dynamic` route option (Cache Components is enabled).
 
 The assistant uses `gpt-6-luna` through Responses with `store: false`, no tools,
-strict structured output and a fixed allowlist of links. No API key means guide
+strict structured output and a fixed allowlist of links (including relative
+`/signup` so preview traffic stays on preview). No API key means guide
 status, with no database client or provider request. See `.env.example` for the
 server-only configuration names. Bot callbacks and reports each require their
 own explicit `true` switch; merely setting bot credentials does not enable them.
@@ -32,6 +33,14 @@ across instances. The `mono-private-records-expiry` pg_cron job deletes at most 
 expired rows each minute using the expiry index, even with no website traffic.
 The cleanup function accepts at most 250 rows per call and never touches tenant
 records.
+
+When visitors request contact, the model collects only details explicitly supplied
+in their messages. Its nullable `contact_draft` contains the seven bounded string
+fields `name`, `phone`, `email`, `reason`, `company`, `preferred_time`, and `timezone`;
+unknown details stay empty. When callbacks are enabled, that draft becomes the
+widget's `contact_request` and remains in saved assistant history, so reconnect
+restores the editable review form. Collection never invokes the contact webhook;
+only the separate confirmed callback action does, with full contact validation.
 
 Contact delivery is accepted only on the private integration's HTTP 200 contract;
 this is never presented as a booked callback. Network ambiguity stays `unknown`.

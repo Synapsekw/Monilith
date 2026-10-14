@@ -25,6 +25,7 @@ const modelReply = {
   reply: "Explore the workspace.",
   summary: "Visitor asks about Monolith.",
   offer_contact: true,
+  contact_draft: null,
   links: [{ label: "Workspace", href: "#product" }],
 };
 const modelResponse = (answer: unknown = modelReply) =>
@@ -175,6 +176,159 @@ describe("Mono public protocol", () => {
     });
     expect(chat.body).not.toHaveProperty("contact_request");
     expect(f.calls).toHaveLength(1);
+  });
+  it("preserves a populated chat draft for review and only sends after confirmation", async () => {
+    const draft = {
+      name: "Example Visitor",
+      phone: "+971501234567",
+      email: "visitor@example.test",
+      reason: "Discuss a Monolith demo",
+      company: "Example Co",
+      preferred_time: "Tuesday afternoon",
+      timezone: "Dubai",
+    };
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const f = fixture({
+      env: { MONO_REPORTING_ENABLED: "false" },
+      fetcher: async (url, init) => {
+        calls.push({ url: String(url), init });
+        return String(url).includes("api.openai.com")
+          ? modelResponse({ ...modelReply, contact_draft: draft })
+          : new Response("", { status: 200 });
+      },
+    });
+    await f.call("status");
+    const request = {
+      request_id: "request-chat-draft1",
+      message:
+        "I am Example Visitor at Example Co. Contact me at visitor@example.test or +971501234567 for a Monolith demo Tuesday afternoon, Dubai time.",
+    };
+    const reply = await f.call("chat", request);
+    expect(reply.status).toBe(200);
+    expect(reply.body).toMatchObject({ contact_request: draft });
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://api.openai.com/v1/responses",
+    ]);
+    expect((await f.call("status")).body.history).toMatchObject([
+      { role: "user" },
+      { role: "assistant", contact_request: draft },
+    ]);
+    expect((await f.call("chat", request)).body).toEqual(reply.body);
+    expect(
+      (
+        await f.call("callback", {
+          request_id: "request-contact-001",
+          lead: draft,
+        })
+      ).status,
+    ).toBe(400);
+    expect(calls).toHaveLength(1);
+    expect(
+      (
+        await f.call("callback", {
+          request_id: "request-contact-001",
+          lead: draft,
+          confirmed: true,
+        })
+      ).body.delivery,
+    ).toBe("accepted");
+    expect(calls).toHaveLength(2);
+    expect(calls[1].url).toBe(base.MONO_BOT_WEBHOOK_URL);
+    expect(JSON.parse(String(calls[1].init?.body))).toMatchObject({
+      type: "contact_request",
+      confirmed: true,
+      lead: draft,
+    });
+  });
+  it("allows incomplete draft fields for review but requires completeness to send", async () => {
+    const draft = {
+      name: "Example Visitor",
+      phone: "",
+      email: "",
+      reason: "",
+      company: "",
+      preferred_time: "",
+      timezone: "",
+    };
+    const f = fixture({
+      env: { MONO_REPORTING_ENABLED: "false" },
+      fetcher: async () =>
+        modelResponse({
+          ...modelReply,
+          offer_contact: false,
+          contact_draft: draft,
+        }),
+    });
+    await f.call("status");
+    const reply = await f.call("chat", {
+      request_id: "request-chat-draft1",
+      message: "I am Example Visitor. Can someone contact me?",
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.body).toMatchObject({ contact_request: draft });
+    expect(
+      (
+        await f.call("callback", {
+          request_id: "request-contact-001",
+          confirmed: true,
+          lead: draft,
+        })
+      ).status,
+    ).toBe(400);
+  });
+  it("suppresses the extracted draft when callbacks and reports are off", async () => {
+    const draft = {
+      name: "Example Visitor",
+      phone: "",
+      email: "visitor@example.test",
+      reason: "Demo",
+      company: "",
+      preferred_time: "",
+      timezone: "",
+    };
+    let calls = 0;
+    const f = fixture({
+      env: { MONO_CALLBACKS_ENABLED: "false", MONO_REPORTING_ENABLED: "false" },
+      fetcher: async () => {
+        calls++;
+        return modelResponse({ ...modelReply, contact_draft: draft });
+      },
+    });
+    await f.call("status");
+    const reply = await f.call("chat", {
+      request_id: "request-chat-draft1",
+      message: "Can someone contact me?",
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.body).not.toHaveProperty("contact_request");
+    expect((await f.call("status")).body.history).toEqual([
+      { role: "user", content: "Can someone contact me?" },
+      {
+        role: "assistant",
+        content: "Explore the workspace.",
+        links: [{ label: "Workspace", href: "#product" }],
+      },
+    ]);
+    expect(calls).toBe(1);
+  });
+  it("returns signup links on the current deployment", async () => {
+    const f = fixture({
+      env: { MONO_REPORTING_ENABLED: "false" },
+      fetcher: async () =>
+        modelResponse({
+          ...modelReply,
+          links: [{ label: "Create workspace", href: "/signup" }],
+        }),
+    });
+    await f.call("status");
+    const reply = await f.call("chat", {
+      request_id: "request-chat-signup",
+      message: "How do I sign up?",
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.body).toMatchObject({
+      links: [{ label: "Create workspace", href: "/signup" }],
+    });
   });
   it("replays one saved chat reply and report, and restores history", async () => {
     const f = fixture();

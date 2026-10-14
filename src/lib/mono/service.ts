@@ -384,7 +384,9 @@ export function createMonoService({
         const result = {
           reply: answer.reply,
           links: answer.links,
-          ...(callbacks && answer.offer_contact ? { contact_request: {} } : {}),
+          ...(callbacks && (answer.offer_contact || answer.contact_draft)
+            ? { contact_request: answer.contact_draft ?? {} }
+            : {}),
         };
         session.value.history.push(
           { role: "user", content: parsed.data.message },
