@@ -2,6 +2,14 @@
 
 The approved Assembly landing and Mono run in the existing Monolith Next.js application. `/` is public for signed-out visitors; signed-in visitors continue to `/home`. `/landing` is available to everyone and shows the appropriate app-entry action.
 
+## Verified preview — 2026-10-14
+
+[Open the Vercel Preview](https://monilith-at296yn4g-synapse-solutionskw.vercel.app). Deployment `dpl_7V4owXPSiM3qWLPtCYk32J66zThG` is READY and retains Vercel authentication protection. Integrated into `develop` at `5241dd27`; production is unchanged.
+
+The deployed landing, Mono animation and guide reply were verified in the browser with no console errors. `/api/mono?action=status` returned HTTP 200 with `cache-control: no-store`, `mode: preview`, and both bot switches disabled. Full gates passed: typecheck, lint (0 errors, 5 pre-existing warnings), 8,076 tests (1 skipped), production build, and DEV migration ledger 176/176.
+
+**Still required:** enter the OpenAI and bot credentials directly into Vercel's Preview environment, enable `MONO_CALLBACKS_ENABLED=true`, redeploy, and run the real-reply/contact-delivery acceptance steps below. Real AI replies and Grok delivery have not been verified on Vercel. Keep reporting disabled unless conversation-summary delivery is explicitly wanted.
+
 ## Preview setup
 
 Use the existing Vercel project `synapse-solutionskw/monilith`. Create a **Preview** deployment, never a production deployment for acceptance testing. The repository disables automatic deployments for non-main branches, so create the preview explicitly through the Vercel CLI or dashboard.
