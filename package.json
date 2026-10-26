@@ -65,7 +65,7 @@
     "cmdk": "^1.1.1",
     "docx-preview": "^0.4.0",
     "exceljs": "^4.4.0",
-    "framer-motion": "^13.2.0",
+    "framer-motion": "^14.6.0",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.40.0",
     "mcp-handler": "^2.1.1",
