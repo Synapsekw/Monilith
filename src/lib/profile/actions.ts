@@ -7,9 +7,12 @@ import { orgMembersTag, profileTag } from "@/lib/cache/tags";
 import { pathFromPublicUrl } from "@/lib/profile/avatar-path";
 import {
   updateProfileAvatarSchema,
+  updateProfileCelebrateDoneSchema,
   updateProfileFullNameSchema,
   updateProfileThemePresetSchema,
+  updateProfileThemeReachSchema,
   updateProfileTimezoneSchema,
+  type THEME_REACH_VALUES,
 } from "@/lib/validations/profile";
 import type { ThemePresetId } from "@/lib/theme/presets";
 import { fail, type ActionResult } from "@/lib/actions/result";
@@ -77,6 +80,64 @@ export async function updateProfileThemePreset(input: {
   // Read-your-own-writes: the shell's ThemePresetSync reads
   // `getUserThemePresetCached(user.id)` on every route, so expire the same tag
   // the timezone write does rather than revalidating a path.
+  updateTag(profileTag(user.id));
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Persist the signed-in user's theme reach. Same contract as
+ * `updateProfileThemePreset`: the client stamps the attribute first, this call
+ * makes the choice durable, and the caller reverts on a failed result.
+ */
+export async function updateProfileThemeReach(input: {
+  themeReach: (typeof THEME_REACH_VALUES)[number];
+}): Promise<ActionResult> {
+  const parsed = updateProfileThemeReachSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // RLS ("profiles: update self") restricts the write to the caller's own row.
+  const { error } = await supabase
+    .from("profiles")
+    .update({ theme_reach: parsed.data.themeReach })
+    .eq("id", user.id);
+
+  if (error) return fail("Could not update theme.");
+
+  // Read-your-own-writes: `getUserThemeReachCached(user.id)` carries this tag.
+  updateTag(profileTag(user.id));
+  return { ok: true, data: undefined };
+}
+
+/** Persist whether the signed-in user wants the done celebration. */
+export async function updateProfileCelebrateDone(input: {
+  celebrateDone: boolean;
+}): Promise<ActionResult> {
+  const parsed = updateProfileCelebrateDoneSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // RLS ("profiles: update self") restricts the write to the caller's own row.
+  const { error } = await supabase
+    .from("profiles")
+    .update({ celebrate_done: parsed.data.celebrateDone })
+    .eq("id", user.id);
+
+  if (error) return fail("Could not update preference.");
+
+  // Read-your-own-writes: `getUserCelebrateDoneCached(user.id)` carries this tag.
   updateTag(profileTag(user.id));
   return { ok: true, data: undefined };
 }

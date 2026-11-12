@@ -7,6 +7,10 @@ import {
   isThemePresetId,
   type ThemePresetId,
 } from "@/lib/theme/presets";
+import { THEME_REACH_VALUES } from "@/lib/validations/profile";
+
+type ThemeReachValue = (typeof THEME_REACH_VALUES)[number];
+const DEFAULT_THEME_REACH_VALUE: ThemeReachValue = "tinted";
 
 /**
  * Cached read of a user's personal display timezone (null = Automatic / unset).
@@ -62,4 +66,52 @@ export async function getUserThemePresetCached(
     .maybeSingle();
   const value = data?.theme_preset;
   return isThemePresetId(value) ? value : DEFAULT_THEME_PRESET;
+}
+
+/**
+ * Cached read of a user's theme reach. Same shape and invalidation contract as
+ * `getUserThemePresetCached` — `userId` is the cache key AND the cacheTag, and
+ * the explicit `id = userId` filter is the tenant boundary.
+ *
+ * The column is free text, so the value is NARROWED here: anything the running
+ * build does not know falls back to the default ("tinted").
+ */
+export async function getUserThemeReachCached(
+  userId: string,
+): Promise<ThemeReachValue> {
+  "use cache";
+  cacheLife("nav");
+  cacheTag(profileTag(userId));
+
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("theme_reach")
+    .eq("id", userId)
+    .maybeSingle();
+  const value = data?.theme_reach;
+  return (THEME_REACH_VALUES as readonly unknown[]).includes(value)
+    ? (value as ThemeReachValue)
+    : DEFAULT_THEME_REACH_VALUE;
+}
+
+/**
+ * Cached read of whether a user wants the done celebration. Same key, tag and
+ * tenant filter as the reads above. Defaults to `true` (the column default) when
+ * the row is missing.
+ */
+export async function getUserCelebrateDoneCached(
+  userId: string,
+): Promise<boolean> {
+  "use cache";
+  cacheLife("nav");
+  cacheTag(profileTag(userId));
+
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("celebrate_done")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.celebrate_done ?? true;
 }

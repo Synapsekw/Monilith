@@ -123,3 +123,45 @@ export function applyThemePreset(id: ThemePresetId): void {
   if (id === DEFAULT_THEME_PRESET) root.removeAttribute(THEME_PRESET_ATTR);
   else root.setAttribute(THEME_PRESET_ATTR, id);
 }
+
+/**
+ * Theme reach — how far a preset's colour travels into the app. A third axis
+ * beside mode and preset, stamped on `<html>` as `data-theme-reach`.
+ *
+ * Reach never touches a preset's seed tokens: it is a derived layer declared
+ * once in `src/app/globals.css` (the four `--reach-*` tokens) that mixes a
+ * little `--brand` into the content card, the raised surfaces and the hover
+ * fill. `subtle` zeroes every token — the pre-reach look, exactly. `tinted` is
+ * the default and, like `keystone`, has NO CSS block: it IS the `:root`
+ * values. `vivid` raises the mix and switches the header glow on.
+ */
+export const THEME_REACH_IDS = ["subtle", "tinted", "vivid"] as const;
+
+export type ThemeReachId = (typeof THEME_REACH_IDS)[number];
+
+/** The `:root` percentages. Has no override block. */
+export const DEFAULT_THEME_REACH: ThemeReachId = "tinted";
+
+/** localStorage key for the inline no-flash script. */
+export const THEME_REACH_STORAGE_KEY = "monolith-theme-reach";
+
+/** Attribute stamped on `<html>`. Absent means the default reach. */
+export const THEME_REACH_ATTR = "data-theme-reach";
+
+/** Boundary guard — the DB column is free text, so every read is narrowed. */
+export function isThemeReachId(v: unknown): v is ThemeReachId {
+  return (
+    typeof v === "string" && (THEME_REACH_IDS as readonly string[]).includes(v)
+  );
+}
+
+/**
+ * Stamp (or clear) the reach attribute on `<html>`. The default REMOVES the
+ * attribute rather than writing `tinted`, mirroring `applyThemePreset`.
+ */
+export function applyThemeReach(id: ThemeReachId): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (id === DEFAULT_THEME_REACH) root.removeAttribute(THEME_REACH_ATTR);
+  else root.setAttribute(THEME_REACH_ATTR, id);
+}

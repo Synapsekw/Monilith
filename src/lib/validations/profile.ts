@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isValidTimeZone } from "@/lib/validations/org";
-import { THEME_PRESET_IDS } from "@/lib/theme/presets";
+import { THEME_PRESET_IDS, THEME_REACH_IDS } from "@/lib/theme/presets";
 
 /**
  * Personal display timezone. A non-null value must be a runtime-valid IANA id;
@@ -70,4 +70,29 @@ export const updateProfileThemePresetSchema = z.object({
 });
 export type UpdateProfileThemePresetInput = z.infer<
   typeof updateProfileThemePresetSchema
+>;
+
+/**
+ * Theme reach ids at the boundary. `THEME_REACH_IDS` is the single source of
+ * truth, exactly as `THEME_PRESET_IDS` is for presets.
+ */
+export const THEME_REACH_VALUES = THEME_REACH_IDS;
+
+/**
+ * Per-user theme reach (how far the accent tints the surfaces). Like the preset,
+ * the DB column is free text, so this enum IS the boundary.
+ */
+export const updateProfileThemeReachSchema = z.object({
+  themeReach: z.enum(THEME_REACH_VALUES),
+});
+export type UpdateProfileThemeReachInput = z.infer<
+  typeof updateProfileThemeReachSchema
+>;
+
+/** Per-user toggle for the done celebration. Strict boolean, no coercion. */
+export const updateProfileCelebrateDoneSchema = z.object({
+  celebrateDone: z.boolean(),
+});
+export type UpdateProfileCelebrateDoneInput = z.infer<
+  typeof updateProfileCelebrateDoneSchema
 >;

@@ -8,6 +8,12 @@ import {
   THEME_PRESET_ATTR,
   applyThemePreset,
   isThemePresetId,
+  THEME_REACH_IDS,
+  DEFAULT_THEME_REACH,
+  THEME_REACH_STORAGE_KEY,
+  THEME_REACH_ATTR,
+  applyThemeReach,
+  isThemeReachId,
 } from "./presets";
 
 const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
@@ -113,5 +119,50 @@ describe("theme presets", () => {
     expect(document.documentElement.hasAttribute(THEME_PRESET_ATTR)).toBe(
       false,
     );
+  });
+});
+
+describe("theme reach", () => {
+  it("declares the three levels, tinted by default", () => {
+    expect([...THEME_REACH_IDS]).toEqual(["subtle", "tinted", "vivid"]);
+    expect(DEFAULT_THEME_REACH).toBe("tinted");
+    expect(THEME_REACH_STORAGE_KEY).toBe("monolith-theme-reach");
+    expect(THEME_REACH_ATTR).toBe("data-theme-reach");
+  });
+
+  it("narrows unknown stored values", () => {
+    for (const id of THEME_REACH_IDS) expect(isThemeReachId(id)).toBe(true);
+    expect(isThemeReachId("loud")).toBe(false);
+    expect(isThemeReachId("")).toBe(false);
+    expect(isThemeReachId(null)).toBe(false);
+    expect(isThemeReachId(1)).toBe(false);
+  });
+
+  it("applyThemeReach stamps the attribute and removes it for the default", () => {
+    applyThemeReach("vivid");
+    expect(document.documentElement.getAttribute(THEME_REACH_ATTR)).toBe(
+      "vivid",
+    );
+    applyThemeReach("subtle");
+    expect(document.documentElement.getAttribute(THEME_REACH_ATTR)).toBe(
+      "subtle",
+    );
+    applyThemeReach(DEFAULT_THEME_REACH);
+    expect(document.documentElement.hasAttribute(THEME_REACH_ATTR)).toBe(false);
+  });
+
+  it("has a CSS block for every non-default level and none for the default", () => {
+    for (const id of THEME_REACH_IDS.filter((i) => i !== DEFAULT_THEME_REACH))
+      expect(CSS, id).toContain(`[${THEME_REACH_ATTR}="${id}"] {`);
+    expect(CSS).not.toContain(`${THEME_REACH_ATTR}="${DEFAULT_THEME_REACH}"`);
+  });
+
+  it("no preset block declares a reach token — reach is a derived layer", () => {
+    for (const id of THEME_PRESET_IDS.filter((i) => i !== DEFAULT_THEME_PRESET))
+      for (const sel of [
+        `:root[data-theme-preset="${id}"]`,
+        `.dark[data-theme-preset="${id}"]`,
+      ])
+        expect(block(sel), sel).not.toMatch(/--reach-/);
   });
 });
