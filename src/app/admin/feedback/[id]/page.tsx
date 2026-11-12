@@ -27,7 +27,7 @@ export default async function AdminFeedbackDetailPage({
       </Link>
 
       <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
+        <h1 className="text-foreground font-heading text-xl font-bold tracking-[-0.02em]">
           Feedback detail
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">

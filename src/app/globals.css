@@ -25,6 +25,15 @@
   /* Brand highlight (semantic alias of the configurable accent) */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  /* The two-accent fill (`bg-brand-gradient`) and the primary Button's hover
+     (`bg-brand-gradient-hover`): the same two stops at 80% alpha, which for a
+     single-accent preset is exactly the old `hover:bg-primary/80`. */
+  --background-image-brand-gradient: var(--brand-gradient);
+  --background-image-brand-gradient-hover: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--brand) 80%, transparent),
+    color-mix(in oklab, var(--brand-2) 80%, transparent)
+  );
 
   /* Keystone additions */
   --color-kicker: var(--kicker);
@@ -33,15 +42,42 @@
   --shadow-glow-primary: var(--glow-primary);
   --ease-keystone: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Wash & inset-card surfaces */
-  --color-content-surface: var(--content-surface);
+  /* Wash & inset-card surfaces.
+     Reach-derived: this alias and the nine marked "reach" below mix a share of
+     --brand into their seed (see "Theme reach" after the .dark block). Because
+     this block is `@theme inline`, the color-mix is written into each utility
+     and resolves on the ELEMENT, from the inherited seeds and --reach-*
+     tokens — so a nested scope that re-seeds (the print root) re-derives too.
+     The mixes are `in srgb` so globals.contrast.test.ts can reproduce them.
+     The SEED is written first on purpose: Tailwind emits the first colour of a
+     color-mix as the fallback for engines without it, and that fallback must
+     be the untinted surface, never a solid --brand fill.
+     Arbitrary values that need one of these surfaces read the emitted theme
+     variable (`var(--color-card)`), not the raw seed (`var(--card)`). */
+  --color-content-surface: color-mix(
+    in srgb,
+    var(--content-surface),
+    var(--brand) var(--reach-content)
+  );
   --color-content-edge: var(--content-edge);
   --shadow-content-lift: var(--content-lift);
 
-  /* Alpha-on-parent interaction states */
-  --color-state-hover: var(--state-hover);
+  /* Alpha-on-parent interaction states (hover is reach-derived; its seed is
+     translucent, so the mix stays translucent and simply leans to the brand) */
+  --color-state-hover: color-mix(
+    in srgb,
+    var(--state-hover),
+    var(--brand) var(--reach-hover)
+  );
   --color-state-active: var(--state-active);
-  --color-state-selected: var(--state-selected);
+  /* Selected is reach-derived too, so it keeps its lead over a hover fill
+     that reach has leaned to the brand: both sides of the mix are the brand,
+     so only the alpha moves — 14% at subtle, 14% + 12% of the rest above. */
+  --color-state-selected: color-mix(
+    in srgb,
+    var(--state-selected),
+    var(--brand) var(--reach-selected)
+  );
   --color-chrome-fill: var(--chrome-fill);
 
   /* Named motion scale (durations are literal — not aliases) */
@@ -57,10 +93,22 @@
   --text-cell: 0.8125rem; /* 13px — board table data cells */
   --text-item: 0.84375rem; /* 13.5px — board table item + group names */
 
-  /* Surfaces (brief's semantic names) */
-  --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-surface-sunken: var(--surface-sunken);
+  /* Surfaces (brief's semantic names) — reach */
+  --color-surface: color-mix(
+    in srgb,
+    var(--surface),
+    var(--brand) var(--reach-surface)
+  );
+  --color-surface-muted: color-mix(
+    in srgb,
+    var(--surface-muted),
+    var(--brand) var(--reach-surface)
+  );
+  --color-surface-sunken: color-mix(
+    in srgb,
+    var(--surface-sunken),
+    var(--brand) var(--reach-surface)
+  );
 
   /* Status palette */
   --color-status-gray: var(--status-gray);
@@ -102,17 +150,38 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
+  /* accent, muted, secondary, popover, card — reach */
+  --color-accent: color-mix(
+    in srgb,
+    var(--accent),
+    var(--brand) var(--reach-surface)
+  );
   --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
+  --color-muted: color-mix(
+    in srgb,
+    var(--muted),
+    var(--brand) var(--reach-surface)
+  );
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
+  --color-secondary: color-mix(
+    in srgb,
+    var(--secondary),
+    var(--brand) var(--reach-surface)
+  );
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
+  --color-popover: color-mix(
+    in srgb,
+    var(--popover),
+    var(--brand) var(--reach-surface)
+  );
   --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --color-card: color-mix(
+    in srgb,
+    var(--card),
+    var(--brand) var(--reach-surface)
+  );
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -138,6 +207,11 @@
      turn streams. A box-shadow ring 0 → 6px — nothing scales — on the keystone
      curve; the reduced-motion block below collapses it like every animation. */
   --animate-pulse-ring: pulse-ring 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  /* Status pill pop: one 380ms scale bump when the user changes a status. The
+     class is added and removed imperatively by components/ui/done-burst.tsx —
+     it is never part of a pill's resting className, so a row re-mounting in
+     the virtualized table cannot replay it. Transform only. */
+  --animate-pill-pop: pill-pop 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadein {
@@ -194,13 +268,35 @@
   }
 }
 
+@keyframes pill-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+  }
+}
+
 :root {
   /* Keystone light — deepened periwinkle for AA on white. The last digit of
      each channel is load-bearing: #5b6fd6 measured 4.48:1 against the white
      button label, a hair UNDER AA. globals.contrast.test.ts now enforces the
      4.5 floor on --brand-foreground vs --brand in every palette block. */
   --brand: #5a6ed5;
+  /* The second accent — a SEED token. Single-accent presets (this one
+     included) declare it equal to their own --brand, a degenerate gradient;
+     aurora / sunset / nebula give it a second hue. It only ever appears as
+     the far stop of --brand-gradient and of the chart spectrum, and as the
+     header glow's second bloom. --ring, links and text stay on --brand. */
+  --brand-2: #5a6ed5;
   --brand-foreground: #ffffff;
+  /* Derived ONCE, here — never in a preset block and not in .dark. Both
+     stops are seeds every block re-declares on <html>, so this follows the
+     mode and the preset by itself. Sanctioned in exactly four places: the
+     primary Button fill, the active sidebar indicator, progress-bar fills
+     and the chart spectrum below. Utility: `bg-brand-gradient`. */
+  --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
 
   --background: #f6f6f8;
   --foreground: #1a1a1f;
@@ -268,6 +364,20 @@
      seed token: preset blocks must not redeclare it. */
   --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
 
+  /* Theme reach — Tinted, the default (no attribute on <html>). How much of
+     --brand is mixed into the content card / the raised surfaces / the hover
+     fill / the selected fill, plus the header glow's opacity. NOT seed
+     tokens: a preset block must never redeclare them. At Tinted all but one
+     are mode-invariant and declared only here; --reach-content is per-mode
+     (.dark carries its own value), because in light mode tinting the card
+     darkens it towards the chrome — see the "Theme reach" comment after the
+     .dark block. */
+  --reach-content: 2.5%;
+  --reach-surface: 4%;
+  --reach-hover: 8%;
+  --reach-selected: 12%;
+  --reach-glow: 0;
+
   --state-hover: rgb(0 0 0 / 4%);
   --state-active: rgb(0 0 0 / 7%);
   --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
@@ -327,22 +437,41 @@
   --file-media: oklch(0.52 0.14 300);
   --file-generic: oklch(0.52 0 0);
 
-  --chart-1: oklch(0.72 0 0);
-  --chart-2: oklch(0.58 0 0);
-  --chart-3: oklch(0.46 0 0);
-  --chart-4: oklch(0.34 0 0);
-  --chart-5: oklch(0.22 0 0);
-  --chart-cat-1: #6366f1;
-  --chart-cat-2: #22d3ee;
+  /* Chart colours follow the preset (Tinted and Vivid). --chart-1..5 is a
+     sequential ramp: the brand, then --brand-2 fading into the content card
+     at 72 / 50 / 34 / 22% (the spec started at 32 / 18; the tail was raised
+     until it held 1.15:1 off the dark Vivid card in the two-accent presets).
+     Every faded step reads --brand-2 so a two-accent preset runs brand to
+     brand-2 and the ramp stays monotonic in lightness (alternating the two
+     seeds did not: dark aurora measured 1.16:1 between neighbours). Mixed
+     `in srgb` towards the card SEED so globals.contrast.test.ts can
+     reproduce every step.
+     The categorical six: cat-1 is the brand. The cat-2..6 values HERE are the
+     fallback for engines without relative colour syntax (a brand tint and
+     four fixed hues); everywhere else the "Categorical chart colours"
+     @supports block after .dark replaces them with rotations of the brand's
+     own hue.
+     NOT seed tokens: a preset block must never redeclare them. Subtle pins
+     the pre-reach literals back (see "Theme reach" after the .dark block). */
+  --chart-1: var(--brand);
+  --chart-2: color-mix(in srgb, var(--brand-2) 72%, var(--content-surface));
+  --chart-3: color-mix(in srgb, var(--brand-2) 50%, var(--content-surface));
+  --chart-4: color-mix(in srgb, var(--brand-2) 34%, var(--content-surface));
+  --chart-5: color-mix(in srgb, var(--brand-2) 22%, var(--content-surface));
+  --chart-cat-1: var(--brand);
+  --chart-cat-2: color-mix(in srgb, var(--brand-2) 60%, var(--foreground));
   --chart-cat-3: #a855f7;
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
   /* Spectrum hero gradient for a single uncolored metric — derived from
-     --brand so every theme preset gets a coherent 3-stop ramp for free. */
+     --brand so every theme preset gets a coherent 3-stop ramp for free.
+     The far stop reads --brand-2, so a two-accent preset's ramp runs brand to
+     brand-2; in a single-accent preset --brand-2 IS --brand and the ramp is
+     unchanged. */
   --chart-spectrum-1: color-mix(in oklab, var(--brand) 85%, black);
   --chart-spectrum-2: var(--brand);
-  --chart-spectrum-3: color-mix(in oklab, var(--brand) 60%, white);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand-2) 60%, white);
   --radius: 0.875rem; /* 14px — Keystone cards/panels; radius-sm→~8px chips */
   --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
   --elevation-card: none;
@@ -371,6 +500,7 @@
    *   txt #e7e7ea · txt-dim #a1a1aa
    */
   --brand: #8ea2eb; /* periwinkle */
+  --brand-2: #8ea2eb; /* single accent — see :root */
   --brand-foreground: #0e0e10; /* near-black text on periwinkle fill (AA) */
 
   --background: #0e0e10;
@@ -451,13 +581,15 @@
   --file-media: oklch(0.565 0.14 300);
   --file-generic: oklch(0.55 0 0);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --chart-cat-1: #6366f1;
-  --chart-cat-2: #22d3ee;
+  /* Chart colours — dark. The same derivation as :root, repeated because
+     the light/dark parity test requires both palettes to declare them. */
+  --chart-1: var(--brand);
+  --chart-2: color-mix(in srgb, var(--brand-2) 72%, var(--content-surface));
+  --chart-3: color-mix(in srgb, var(--brand-2) 50%, var(--content-surface));
+  --chart-4: color-mix(in srgb, var(--brand-2) 34%, var(--content-surface));
+  --chart-5: color-mix(in srgb, var(--brand-2) 22%, var(--content-surface));
+  --chart-cat-1: var(--brand);
+  --chart-cat-2: color-mix(in srgb, var(--brand-2) 60%, var(--foreground));
   --chart-cat-3: #a855f7;
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
@@ -466,7 +598,7 @@
      the near-black base rather than white. */
   --chart-spectrum-1: color-mix(in oklab, var(--brand) 70%, white);
   --chart-spectrum-2: var(--brand);
-  --chart-spectrum-3: color-mix(in oklab, var(--brand) 55%, black);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand-2) 55%, black);
 
   --sidebar: transparent;
   --sidebar-foreground: #f4f4f6;
@@ -479,6 +611,165 @@
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
   --elevation-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
+
+  /* Theme reach, dark Tinted. The one per-mode reach token: a near-black card
+     can take twice the brand the paper one can before it meets the chrome. */
+  --reach-content: 5%;
+}
+
+/* ---------------------------------------------------------------------------
+   Categorical chart colours — six series that are told apart in EVERY preset.
+   cat-1 is the brand (base blocks). cat-2..6 are rotations of the brand's own
+   hue at 60-degree steps, by relative colour syntax, so they sit a sixth of
+   the wheel from the brand and from each other whatever the brand is. The
+   old palette (a tint of the brand plus four fixed hues) could not promise
+   that: cat-2 shared cat-1's hue in every single-accent preset, and a warm or
+   green brand landed on a fixed hue (dark sunset vs #f59e0b measured OKLab
+   dE 0.046, dark forest vs #34d399 0.052).
+
+   Lightness and chroma are FIXED per slot and chosen inside the sRGB gamut at
+   every hue (the inscribed chroma is 0.119 at L 0.70, 0.111 at 0.78, 0.105 at
+   0.62, 0.088 at 0.52), so no engine has to gamut-map and
+   globals.contrast.test.ts can predict the painted colour exactly. Lightness
+   alternates between neighbours, which buys distance that hue alone cannot at
+   this chroma: every pair is >= 0.10 apart (the test's floor; worst shipped
+   pair 0.11) and every colour is a >= 3:1 mark on the card. A near-grey brand
+   (graphite) still has a hue, and the rotations carry their own chroma, so
+   it gets five colours beside its grey rather than six greys.
+
+   Engines without relative colour keep the base-block fallbacks. ORDER IS
+   LOAD-BEARING: this block ties the subtle block on specificity and must come
+   BEFORE it, so Subtle's literals still win.
+   --------------------------------------------------------------------------- */
+@supports (color: oklch(from red l c h)) {
+  :root {
+    --chart-cat-2: oklch(from var(--brand) 0.62 0.1 calc(h + 60));
+    --chart-cat-3: oklch(from var(--brand) 0.52 0.085 calc(h + 120));
+    --chart-cat-4: oklch(from var(--brand) 0.62 0.1 calc(h + 180));
+    --chart-cat-5: oklch(from var(--brand) 0.52 0.085 calc(h + 240));
+    --chart-cat-6: oklch(from var(--brand) 0.62 0.1 calc(h + 300));
+  }
+  .dark {
+    --chart-cat-2: oklch(from var(--brand) 0.7 0.115 calc(h + 60));
+    --chart-cat-3: oklch(from var(--brand) 0.78 0.105 calc(h + 120));
+    --chart-cat-4: oklch(from var(--brand) 0.7 0.115 calc(h + 180));
+    --chart-cat-5: oklch(from var(--brand) 0.78 0.105 calc(h + 240));
+    --chart-cat-6: oklch(from var(--brand) 0.7 0.115 calc(h + 300));
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Theme reach — how far the preset's colour travels into the app. A third axis
+   beside mode and preset, stamped on <html> as [data-theme-reach]. It is a
+   DERIVED layer: the five --reach-* tokens feed the color-mix() aliases in the
+   @theme block at the top of this file, so every preset and both modes follow
+   with no per-preset CSS. Registry: src/lib/theme/presets.ts.
+
+     token             mixes --brand into                         subtle tinted vivid
+     --reach-content   the content card (bg-content-surface)
+                         light                                       0%    2.5%  2.5%
+                         dark                                        0%     5%    8%
+     --reach-surface   surface, surface-muted, surface-sunken,
+                       card, popover, muted, accent, secondary
+                         light                                       0%     4%    5%
+                         dark                                        0%     4%    7%
+     --reach-hover     the hover fill (bg-state-hover)               0%     8%    8%
+     --reach-selected  the selected fill (bg-state-selected)         0%    12%   12%
+     --reach-glow      opacity of the content-card header glow       0      0     1
+
+   Where each value lives (all on <html>, so the cascade does the matrix):
+     light tinted   the base light block      dark tinted   the base dark block
+     light vivid    the vivid block           dark vivid    the dark-vivid block
+     subtle         the subtle block, for both modes
+   Tinted is the default and has no block of its own on purpose. Subtle zeroes
+   everything: color-mix(in srgb, seed, X 0%) is the seed, so it is the
+   pre-reach look exactly. ORDER IS LOAD-BEARING: the subtle and vivid blocks
+   tie the base light and dark blocks on specificity (one class or attribute
+   each) and win only by coming after both; the dark-vivid block out-ranks the
+   vivid block by carrying two.
+
+   The numbers are bound by tests, not by taste. globals.contrast.test.ts
+   re-runs every check below for every preset x mode x reach.
+
+   1. Light --reach-content is capped at 2.5% (the spec started at 5% / 9%).
+      Mixing brand into a white card darkens it towards the chrome, and the
+      bloomed header band must stay >= 1.15:1 against the card. 2.5% is the
+      highest 0.5% step that holds in all six light presets (floor 1.152,
+      forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
+      equals light tinted here and differs by surface and glow only.
+   2. Light vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8%.
+      A hover fill is alpha-on-parent, so muted text on a hovered row inside a
+      raised surface sits on two doses of brand. At 7% / 13% that measured
+      4.12-4.40:1 on light --surface-muted in all six presets (and 4.11 on
+      dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
+      tinted's is 4.58. Raising either again needs a darker light
+      --muted-foreground in the preset seeds first.
+   3. Dark vivid is content 8% / surface 7% (it shipped as 9% / 5%). The
+      seeds put a raised surface about 1.07:1 above the dark content card, and
+      a content mix that outruns the surface mix closes that gap: at 9% / 5%
+      cards measured 1.000-1.020 against the page in all nine presets and
+      the red channel inverted in ember and sunset. The two have to climb
+      together. Surface is capped at 7% by the same hovered-row check as (2)
+      with hover at 8% (floor 4.52, dark rose --secondary; 8% is 4.44), and
+      content sits one point above it, exactly as at Tinted (5% / 4%): the
+      card/page separation is then 1.061-1.073, against 1.068-1.073 at
+      Subtle. Dark vivid differs from dark tinted by +3 points of brand on
+      the page and on every raised surface, plus the glow.
+   4. --reach-selected is 12%. Selected is the brand at 14% alpha; at 8% reach
+      the hover fill is itself a brand tint at 12.6% alpha, and an active row
+      and a hovered one composited to the same colour (hover was the stronger
+      of the two on the dark wash). Mixing 12% more brand in makes selected
+      the brand at 24.3% alpha, which restores the lead it has at Subtle: its
+      luminance lift over the ground is >= 1.5x the hover fill's everywhere a
+      row can sit, and --foreground on it stays >= 4.9:1.
+
+   Chart colours ride the same axis without a --reach-* token: at Tinted and
+   Vivid --chart-1..5 and --chart-cat-1..6 derive from the preset (the base
+   blocks and the @supports block above); Subtle pins the pre-reach literals
+   back. The categorical six were mode-invariant and sit in the subtle block;
+   the five greys were per-mode, so the light ones sit in the subtle block
+   (which beats the base blocks by order) and the dark ones in a dark-subtle
+   block (which beats it by specificity). That block may hold chart greys
+   ONLY — never a --reach-* token (globals.contrast.test.ts).
+   --------------------------------------------------------------------------- */
+[data-theme-reach="subtle"] {
+  --reach-content: 0%;
+  --reach-surface: 0%;
+  --reach-hover: 0%;
+  --reach-selected: 0%;
+  --reach-glow: 0;
+  --chart-1: oklch(0.72 0 0);
+  --chart-2: oklch(0.58 0 0);
+  --chart-3: oklch(0.46 0 0);
+  --chart-4: oklch(0.34 0 0);
+  --chart-5: oklch(0.22 0 0);
+  --chart-cat-1: #6366f1;
+  --chart-cat-2: #22d3ee;
+  --chart-cat-3: #a855f7;
+  --chart-cat-4: #f59e0b;
+  --chart-cat-5: #fb7185;
+  --chart-cat-6: #34d399;
+}
+
+.dark[data-theme-reach="subtle"] {
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+}
+
+[data-theme-reach="vivid"] {
+  --reach-content: 2.5%;
+  --reach-surface: 5%;
+  --reach-hover: 8%;
+  --reach-selected: 12%;
+  --reach-glow: 1;
+}
+
+.dark[data-theme-reach="vivid"] {
+  --reach-content: 8%;
+  --reach-surface: 7%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -502,6 +793,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="graphite"] {
   --brand: #4b4b55;
+  --brand-2: #4b4b55;
   --brand-foreground: #ffffff;
   --background: #f5f5f6;
   --foreground: #1a1a1e;
@@ -536,6 +828,7 @@
 
 .dark[data-theme-preset="graphite"] {
   --brand: #c9c9d2;
+  --brand-2: #c9c9d2;
   --brand-foreground: #0e0e10;
   --background: #0f0f10;
   --foreground: #f4f4f6;
@@ -567,6 +860,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="ocean"] {
   --brand: #1f7a8c;
+  --brand-2: #1f7a8c;
   --brand-foreground: #ffffff;
   --background: #f4f7f8;
   --foreground: #14191b;
@@ -601,6 +895,7 @@
 
 .dark[data-theme-preset="ocean"] {
   --brand: #6fc6d6;
+  --brand-2: #6fc6d6;
   --brand-foreground: #0e0e10;
   --background: #0e1112;
   --foreground: #f1f5f6;
@@ -632,6 +927,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="forest"] {
   --brand: #2f7a4f;
+  --brand-2: #2f7a4f;
   --brand-foreground: #ffffff;
   --background: #f4f7f5;
   --foreground: #151b17;
@@ -666,6 +962,7 @@
 
 .dark[data-theme-preset="forest"] {
   --brand: #7fcf9c;
+  --brand-2: #7fcf9c;
   --brand-foreground: #0e0e10;
   --background: #0e110f;
   --foreground: #f1f6f2;
@@ -697,6 +994,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="ember"] {
   --brand: #b4581a;
+  --brand-2: #b4581a;
   --brand-foreground: #ffffff;
   --background: #f8f5f2;
   --foreground: #1e1712;
@@ -731,6 +1029,7 @@
 
 .dark[data-theme-preset="ember"] {
   --brand: #f0a868;
+  --brand-2: #f0a868;
   --brand-foreground: #0e0e10;
   --background: #12100e;
   --foreground: #f6f3f0;
@@ -762,6 +1061,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="rose"] {
   --brand: #b8375f;
+  --brand-2: #b8375f;
   --brand-foreground: #ffffff;
   --background: #f8f4f6;
   --foreground: #1e1418;
@@ -796,6 +1096,7 @@
 
 .dark[data-theme-preset="rose"] {
   --brand: #f08fb0;
+  --brand-2: #f08fb0;
   --brand-foreground: #0e0e10;
   --background: #120f10;
   --foreground: #f6f2f3;
@@ -820,6 +1121,216 @@
     transparent 58%
   );
   --content-surface: #120f10;
+}
+
+/* ---------------------------------------------------------------------------
+   Two-accent ("gradient") presets — opt-in. Same seed set as the six above;
+   the only difference is that --brand-2 is a second hue instead of a copy of
+   --brand, so --brand-gradient and the chart spectrum actually travel. The
+   wash leans from the first accent (top-left, under the bloom) towards the
+   second. Light brands are the dark hues deepened until the white label
+   clears AA on BOTH stops (globals.contrast.test.ts enforces it).
+   --------------------------------------------------------------------------- */
+
+/* Aurora — teal into violet over a sea-glass wash that cools to lavender.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="aurora"] {
+  --brand: #0f7d71;
+  --brand-2: #6b59d3;
+  --brand-foreground: #ffffff;
+  --background: #f4f7f7;
+  --foreground: #141a19;
+  --surface: #ffffff;
+  --surface-muted: #e9f0ef;
+  --surface-sunken: #e9f0ef;
+  --card: #ffffff;
+  --card-foreground: #141a19;
+  --popover: #ffffff;
+  --popover-foreground: #141a19;
+  --secondary: #e9f0ef;
+  --secondary-foreground: #141a19;
+  --muted: #e9f0ef;
+  --muted-foreground: #4b5c59;
+  --kicker: #4b5c59;
+  --accent: #e9f0ef;
+  --accent-foreground: #141a19;
+  --glow-primary: 0 0 30px -8px rgba(15, 125, 113, 0.35);
+  --app-wash: linear-gradient(168deg, #d9ebe7 0%, #d5dfe9 46%, #d0d3e8 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="aurora"] {
+  --brand: #5fd6c4;
+  --brand-2: #9d8df7;
+  --brand-foreground: #0e0e10;
+  --background: #0e1111;
+  --foreground: #f1f6f5;
+  --surface: #161919;
+  --surface-muted: #1c1f1f;
+  --surface-sunken: #1c1f1f;
+  --card: #161919;
+  --card-foreground: #f1f6f5;
+  --popover: #1c1f1f;
+  --popover-foreground: #f1f6f5;
+  --secondary: #262929;
+  --secondary-foreground: #f1f6f5;
+  --muted: #1c1f1f;
+  --muted-foreground: #b5c6c3;
+  --kicker: #b5c6c3;
+  --accent: #1c1f1f;
+  --accent-foreground: #f1f6f5;
+  --app-wash: linear-gradient(168deg, #182f2d 0%, #17192c 46%, #08090d 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0e1111;
+}
+
+/* Sunset — amber into pink over a sand wash that warms to rose.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="sunset"] {
+  --brand: #b65318;
+  --brand-2: #c0386f;
+  --brand-foreground: #ffffff;
+  --background: #f8f5f3;
+  --foreground: #1e1613;
+  --surface: #ffffff;
+  --surface-muted: #f1ebe8;
+  --surface-sunken: #f1ebe8;
+  --card: #ffffff;
+  --card-foreground: #1e1613;
+  --popover: #ffffff;
+  --popover-foreground: #1e1613;
+  --secondary: #f1ebe8;
+  --secondary-foreground: #1e1613;
+  --muted: #f1ebe8;
+  --muted-foreground: #66544c;
+  --kicker: #66544c;
+  --accent: #f1ebe8;
+  --accent-foreground: #1e1613;
+  --glow-primary: 0 0 30px -8px rgba(182, 83, 24, 0.35);
+  --app-wash: linear-gradient(168deg, #f0e3d9 0%, #ead8d6 46%, #e1cad2 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="sunset"] {
+  --brand: #f7a45c;
+  --brand-2: #ee6fa3;
+  --brand-foreground: #0e0e10;
+  --background: #12100f;
+  --foreground: #f6f2f1;
+  --surface: #1a1817;
+  --surface-muted: #201e1d;
+  --surface-sunken: #201e1d;
+  --card: #1a1817;
+  --card-foreground: #f6f2f1;
+  --popover: #201e1d;
+  --popover-foreground: #f6f2f1;
+  --secondary: #2a2827;
+  --secondary-foreground: #f6f2f1;
+  --muted: #201e1d;
+  --muted-foreground: #c1b1ab;
+  --kicker: #c1b1ab;
+  --accent: #201e1d;
+  --accent-foreground: #f6f2f1;
+  --app-wash: linear-gradient(168deg, #33231a 0%, #23151b 46%, #0d0809 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #12100f;
+}
+
+/* Nebula — violet into blue over a lilac wash that cools to slate blue.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="nebula"] {
+  --brand: #7450d6;
+  --brand-2: #2f6cc0;
+  --brand-foreground: #ffffff;
+  --background: #f6f5f9;
+  --foreground: #19171f;
+  --surface: #ffffff;
+  --surface-muted: #f0eef5;
+  --surface-sunken: #f0eef5;
+  --card: #ffffff;
+  --card-foreground: #19171f;
+  --popover: #ffffff;
+  --popover-foreground: #19171f;
+  --secondary: #f0eef5;
+  --secondary-foreground: #19171f;
+  --muted: #f0eef5;
+  --muted-foreground: #5a5666;
+  --kicker: #5a5666;
+  --accent: #f0eef5;
+  --accent-foreground: #19171f;
+  --glow-primary: 0 0 30px -8px rgba(116, 80, 214, 0.35);
+  --app-wash: linear-gradient(168deg, #e2dcf2 0%, #d9dcef 46%, #cdd6e8 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="nebula"] {
+  --brand: #b79cf7;
+  --brand-2: #6fa8ee;
+  --brand-foreground: #0e0e10;
+  --background: #0f0e12;
+  --foreground: #f4f3f7;
+  --surface: #17161a;
+  --surface-muted: #1d1c21;
+  --surface-sunken: #1d1c21;
+  --card: #17161a;
+  --card-foreground: #f4f3f7;
+  --popover: #1d1c21;
+  --popover-foreground: #f4f3f7;
+  --secondary: #27262c;
+  --secondary-foreground: #f4f3f7;
+  --muted: #1d1c21;
+  --muted-foreground: #b6b2c2;
+  --kicker: #b6b2c2;
+  --accent: #1d1c21;
+  --accent-foreground: #f4f3f7;
+  --app-wash: linear-gradient(168deg, #261f40 0%, #131a2c 46%, #08090d 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0f0e12;
 }
 
 @layer base {
@@ -911,6 +1422,41 @@
   .app-wash {
     background-image: var(--app-bloom), var(--app-wash);
     background-attachment: fixed;
+  }
+  /* Reach header glow — the content card's one decorative layer (the <main> in
+     app-shell.tsx and ask/layout.tsx). Two brand blooms along the card's top
+     edge, gated by --reach-glow: 0 at subtle/tinted, 1 at vivid.
+     Deliberately an IN-FLOW block, not a positioned one: an in-flow box's
+     background paints before every sibling's text and before any positioned
+     descendant, so the glow sits behind the page content with no z-index and
+     without turning the card into a stacking context (which would re-order
+     the sticky headers inside it against the seam laid over it). The negative
+     margin hands its height back, so layout is unchanged; `flex: none` keeps
+     that true where the card is a flex column (/ask).
+     The second bloom reaches zero at 97% of the width (76% + 0.7 x 30%): the
+     box stops at the card's reserved scrollbar gutter, and a bloom still lit
+     there would end in a hard vertical edge 10px inside the card.
+     Peaks are 10% and 8%: globals.contrast.test.ts stacks BOTH on the vivid
+     card and still requires AA for muted text (floor 4.65, light graphite). */
+  .content-glow::before {
+    content: "";
+    display: block;
+    flex: none;
+    height: 14rem;
+    margin-bottom: -14rem;
+    pointer-events: none;
+    opacity: var(--reach-glow);
+    background-image:
+      radial-gradient(
+        60% 100% at 14% 0%,
+        color-mix(in srgb, transparent, var(--brand) 10%) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        30% 100% at 76% 0%,
+        color-mix(in srgb, transparent, var(--brand-2, var(--brand)) 8%) 0%,
+        transparent 70%
+      );
   }
   /* Keystone signature: interactive cards lift + hairline brightens on hover. */
   .card-lift {
@@ -1106,6 +1652,10 @@
   :where(body:has([data-print-root])) * {
     visibility: hidden;
   }
+  /* The reach header glow is screen decoration — never ink. */
+  .content-glow::before {
+    display: none !important;
+  }
   [data-print-root],
   [data-print-root] * {
     visibility: visible;
@@ -1150,7 +1700,32 @@
     --border-bright: rgba(0, 0, 0, 0.22);
     --card: #ffffff;
     --brand: #5a6ed5;
+    --brand-2: #5a6ed5;
+    /* Re-derived: the :root declaration resolved on <html>, against the
+       SCREEN preset's stops. */
+    --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
     --primary: var(--brand);
+    /* Reach off: the surface aliases mix --brand into the seeds above, and
+       paper must stay white whatever reach the screen is on. */
+    --reach-content: 0%;
+    --reach-surface: 0%;
+    --reach-hover: 0%;
+    --reach-selected: 0%;
+    --reach-glow: 0;
+    /* Charts print as at Subtle, for the same reason: the screen ramp is
+       resolved on <html> against the SCREEN preset and mode, and a dark
+       preset's pale series would vanish on paper. */
+    --chart-1: oklch(0.72 0 0);
+    --chart-2: oklch(0.58 0 0);
+    --chart-3: oklch(0.46 0 0);
+    --chart-4: oklch(0.34 0 0);
+    --chart-5: oklch(0.22 0 0);
+    --chart-cat-1: #6366f1;
+    --chart-cat-2: #22d3ee;
+    --chart-cat-3: #a855f7;
+    --chart-cat-4: #f59e0b;
+    --chart-cat-5: #fb7185;
+    --chart-cat-6: #34d399;
 
     /* Positioned (not `inset: 0`) so the root can grow PAST one page height:
        `inset: 0` pinned bottom to the viewport, clipping a multi-page Overview

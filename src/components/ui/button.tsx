@@ -9,11 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // The fill is --brand-gradient: flat --brand in a single-accent preset,
+        // brand -> brand-2 in aurora / sunset / nebula. It is a background-IMAGE,
+        // so the hover is its own image (the same stops at 80% alpha) rather
+        // than `hover:bg-primary/80`, which the image would paint over.
+        default:
+          "bg-brand-gradient text-primary-foreground hover:bg-brand-gradient-hover",
         outline:
           "border-border bg-background hover:bg-state-hover hover:text-foreground aria-expanded:bg-state-selected aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-state-selected aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--color-secondary),var(--foreground)_5%)] aria-expanded:bg-state-selected aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-state-hover hover:text-foreground aria-expanded:bg-state-selected aria-expanded:text-foreground dark:hover:bg-state-hover/50",
         destructive:

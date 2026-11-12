@@ -10,11 +10,19 @@ import { SidebarNavSkeleton } from "@/components/shell/sidebar-nav-skeleton";
 import { HeaderUserSkeleton } from "@/components/shell/header-user-skeleton";
 import { getUser } from "@/lib/auth/session";
 import {
+  getUserCelebrateDoneCached,
   getUserThemePresetCached,
+  getUserThemeReachCached,
   getUserTimeZoneCached,
 } from "@/lib/profile/queries-cached";
 import { ThemePresetSync } from "@/components/theme-preset-sync";
-import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
+import { CelebrateDoneSync } from "@/components/ui/done-burst";
+import {
+  DEFAULT_THEME_PRESET,
+  DEFAULT_THEME_REACH,
+  type ThemePresetId,
+  type ThemeReachId,
+} from "@/lib/theme/presets";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
 import {
   DEVICE_TZ_COOKIE,
@@ -46,6 +54,24 @@ function resolveUserTimeZone(): Promise<string | null> {
 function resolveUserThemePreset(): Promise<ThemePresetId> {
   return getUser().then((user) =>
     user ? getUserThemePresetCached(user.id) : DEFAULT_THEME_PRESET,
+  );
+}
+
+/** The reach twin of the preset promise above — same unawaited shape, same
+ *  Suspense boundary, same consumer. `getUser` is request-memoised, so the
+ *  second call costs no extra auth round-trip. */
+function resolveUserThemeReach(): Promise<ThemeReachId> {
+  return getUser().then((user) =>
+    user ? getUserThemeReachCached(user.id) : DEFAULT_THEME_REACH,
+  );
+}
+
+/** Whether the done celebration plays — the third value on that same boundary,
+ *  stamped on `<html>` by CelebrateDoneSync. Unawaited like its neighbours; a
+ *  signed-out frame resolves to off. */
+function resolveUserCelebrateDone(): Promise<boolean> {
+  return getUser().then((user) =>
+    user ? getUserCelebrateDoneCached(user.id) : false,
   );
 }
 
@@ -118,7 +144,15 @@ export function AuthenticatedShell({ children }: { children: ReactNode }) {
       }
     >
       <Suspense fallback={null}>
-        <ThemePresetSync preset={resolveUserThemePreset()} />
+        <ThemePresetSync
+          preset={resolveUserThemePreset()}
+          reach={resolveUserThemeReach()}
+        />
+      </Suspense>
+      {/* Its own boundary: the celebration preference must not hold the theme
+          correction back, nor the other way round. */}
+      <Suspense fallback={null}>
+        <CelebrateDoneSync enabled={resolveUserCelebrateDone()} />
       </Suspense>
       <DeviceTimeZoneProvider initial={resolveDeviceTimeZone()}>
         <TimeZoneProvider timeZone={resolveUserTimeZone()}>

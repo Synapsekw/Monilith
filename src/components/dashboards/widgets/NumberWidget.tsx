@@ -39,7 +39,7 @@ export function NumberWidget({ widget }: { widget: CacheWidget }) {
             cy="46"
             r={r}
             fill="none"
-            stroke="var(--muted)"
+            stroke="var(--color-muted)"
             strokeWidth="9"
           />
           <circle

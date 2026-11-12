@@ -15,14 +15,19 @@ export function ColorChip({
   color,
   className,
   children,
+  "data-status-pill": statusPill,
 }: {
   color: string;
   className?: string;
   children: ReactNode;
+  /** Set by the board status cell so the status-change pop can find its pill
+   *  (components/ui/done-burst.tsx). */
+  "data-status-pill"?: "";
 }) {
   const fg = softPillText(color);
   return (
     <span
+      data-status-pill={statusPill}
       style={
         {
           "--pill": color,

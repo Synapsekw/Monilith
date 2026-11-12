@@ -12,6 +12,14 @@ vi.mock("@/components/ai/ask/AskRailData", () => ({
     return <div>RAIL_DATA</div>;
   },
 }));
+// The layout hands ThemePresetSync two unawaited per-user promises (preset and
+// reach). Outside a request `getUser` rejects on `cookies()`; the first rejection
+// is thrown by `use()`, which leaves the second one unobserved and fails the
+// run as an unhandled rejection. Signed-out is the honest stand-in here: both
+// promises resolve to their defaults. (Under RSC, Flight observes both.)
+vi.mock("@/lib/auth/session", () => ({
+  getUser: vi.fn(async () => null),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/ask",

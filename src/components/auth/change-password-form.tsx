@@ -111,7 +111,7 @@ export function ChangePasswordForm({
   const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   return (
-    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
       <CardHeader>
         <div className="bg-surface mb-1 flex size-9 items-center justify-center rounded-lg border">
           <KeyRound className="text-primary size-4" />

@@ -52,7 +52,7 @@ export default async function AdminOrgPage({
         >
           ← Organizations
         </Link>
-        <h1 className="text-foreground font-heading mt-2 text-xl font-semibold tracking-tight">
+        <h1 className="text-foreground font-heading mt-2 text-xl font-bold tracking-[-0.02em]">
           Organization members
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">

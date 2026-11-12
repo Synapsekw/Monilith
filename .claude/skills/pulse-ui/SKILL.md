@@ -14,8 +14,9 @@ project-specific source of truth. Ground truth for every value: `src/app/globals
 
 ## Core principle
 
-**Chrome is strictly monochrome. Color is earned.** Navigation, surfaces, borders, and text
-use neutrals only. The single brand accent — periwinkle `#8ea2eb` in dark, deepened `#5a6ed5`
+**Chrome is neutral, lightly tinted by the theme. Color is still earned.** Navigation, surfaces,
+borders, and text are neutrals that take a small brand tint through the **reach** layer (see
+"Theme reach" below) — never a hand-picked colour. The single brand accent — periwinkle `#8ea2eb` in dark, deepened `#5a6ed5`
 in light for AA-on-white (`--brand` → `primary`/`ring`) — marks primary actions and focus.
 The status palette is the _one_ sanctioned multi-color set, and only for status/label pills —
 never for chrome. **Elevation is surface steps + hairlines, not shadows**
@@ -57,13 +58,14 @@ items (semantic token, not raw color) — the only non-status color beyond the b
 ## Theme presets
 
 Users pick a preset in Settings → Preferences → Theme: `keystone` (default),
-`graphite`, `ocean`, `forest`, `ember`, `rose`. A preset is **not** a third mode
+`graphite`, `ocean`, `forest`, `ember`, `rose`, plus three two-accent ("gradient") presets
+`aurora`, `sunset`, `nebula`. A preset is **not** a third mode
 — it re-seeds accent, neutral tint and chrome wash _inside_ light or dark, via
 `[data-theme-preset]` on `<html>`. Registry: `src/lib/theme/presets.ts`; CSS
 blocks live after `.dark` in `globals.css` (`keystone` has none — it IS
 `:root`/`.dark`).
 
-**Seed-token rule:** an override block declares ONLY the seed set (brand,
+**Seed-token rule:** an override block declares ONLY the seed set (brand, `--brand-2`,
 surfaces, text, wash/bloom, `--content-surface`, plus `--glow-primary` in light).
 Never redeclare alpha tokens (`--border`, `--state-*`, `--chrome-fill`) or
 brand-derived ones (`--primary`, `--ring`) — they follow. Adding a preset means
@@ -71,6 +73,40 @@ all three of: a `THEME_PRESETS` entry, both CSS blocks, and a green
 `globals.contrast.test.ts` (it re-runs every AA check per block; `presets.test.ts`
 enforces the exact token set). Component code never reads a preset — style with
 the same semantic tokens and every preset works for free.
+
+## Second accent and the brand gradient
+
+`--brand-2` is a seed token. Single-accent presets set it equal to `--brand`; the gradient
+presets set a second hue. `--brand-gradient` (utility `bg-brand-gradient`, hover
+`hover:bg-brand-gradient-hover`) is sanctioned in exactly four places: the primary `Button`
+fill, the active sidebar indicator, progress-bar fills, and the chart spectrum. `--ring`,
+links and text stay on `--brand`. Do not add a fifth use without a spec.
+
+## Theme reach
+
+A third axis next to mode and preset: `<html data-theme-reach="subtle|vivid">`, absent =
+`tinted` (the default). Registry and helpers live in `src/lib/theme/presets.ts`
+(`THEME_REACH_IDS`, `applyThemeReach`); the user control is Settings → Preferences → Theme
+reach. Reach mixes `--brand` into the content card, raised surfaces and hover as a DERIVED
+layer in `globals.css` (`--reach-content`, `--reach-surface`, `--reach-hover`,
+`--reach-selected`, `--reach-glow`),
+so component code never reads it — keep using `bg-content-surface`, `bg-surface`, `bg-card`,
+`hover:bg-accent` and every level works for free.
+
+- `subtle` is the pre-reach look: every derived token resolves to its seed.
+- Never paint a surface with a raw seed in an arbitrary value (`bg-[var(--card)]`,
+  `[background:…var(--surface)]`) — that bypasses reach. Use the utility or `var(--color-card)`.
+- `--chart-1..5` and `--chart-cat-1..6` follow the brand at `tinted`/`vivid` and fall back to
+  the old greys/hues at `subtle`. `--chart-cat-1` is the brand; `--chart-cat-2..6` are 60°
+  rotations of the brand's hue (`oklch(from var(--brand) L C calc(h + N))`, fixed in-gamut L/C,
+  behind `@supports`), so the six are distinct in every preset. Status-coloured series keep
+  status colours.
+- `--reach-selected` (12%) strengthens `bg-state-selected` so a selected row always out-lifts
+  a hovered one (≥ 1.5×). Dark `vivid` is content 8% / surface 7% — the two must climb
+  together or cards sink into the page.
+- Reach values are pinned by `globals.contrast.test.ts` (text AA on every surface, and the
+  light chrome/card separation floor). Light mode's content tint is deliberately weaker than
+  dark's. Change a value only with that test green for every preset × mode × reach.
 
 ## Typography
 
@@ -169,7 +205,12 @@ chip radius.
   specialty cells (`FilesCell`, `RelationCell`, `MirrorCell`, `TimeTrackingCell`) alongside.
 - **Item panel:** `src/components/boards/item-panel/ItemPanel.tsx` (+ Updates/Files/Activity
   tabs, `MentionTextarea`).
-- **Support:** `src/components/ui/empty-state.tsx`, `skeleton.tsx`, `drag-handle.tsx`,
+- **Mascot:** `src/components/brand/mono.tsx` (`<Mono mood="idle"|"happy">`) — empty states
+  and the Ask page only; never in tables, toolbars or dialogs.
+- **Delight:** `src/components/ui/done-burst.tsx` (`fireDoneBurst`, `celebrateStatusEdit`) and
+  the `animate-pill-pop` utility — gated by the user's "Celebrate completed items" preference
+  (`<html data-celebrate>`) and by reduced motion.
+- **Support:** `src/components/ui/empty-state.tsx` (optional `mascot` / `title` / `actions`), `skeleton.tsx`, `drag-handle.tsx`,
   `reveal-on-hover.tsx`, `src/components/ui/chart.tsx` (dashboards).
 
 Each new primitive: one clear purpose, typed props, no cross-org data assumptions (data is

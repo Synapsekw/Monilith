@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { THEME_PRESET_ATTR } from "@/lib/theme/presets";
+import { THEME_PRESET_ATTR, THEME_PRESETS } from "@/lib/theme/presets";
 import { ThemeToggle } from "./theme-toggle";
 
 // vi.mock factories are hoisted above these declarations, so the spies have to
@@ -36,7 +36,7 @@ async function openMenu() {
 }
 
 describe("ThemeToggle", () => {
-  it("shows the mode items, a Theme label, and six preset radios with the current one checked", async () => {
+  it("shows the mode items, a Theme label, and one radio per preset with the current one checked", async () => {
     await openMenu();
 
     expect(screen.getByText("Light")).toBeInTheDocument();
@@ -45,10 +45,46 @@ describe("ThemeToggle", () => {
     expect(screen.getByText("Theme")).toBeInTheDocument();
 
     const radios = screen.getAllByRole("menuitemradio");
-    expect(radios).toHaveLength(6);
+    expect(radios).toHaveLength(THEME_PRESETS.length);
+    for (const label of ["Aurora", "Sunset", "Nebula"]) {
+      expect(
+        screen.getByRole("menuitemradio", { name: label }),
+      ).toBeInTheDocument();
+    }
 
     const keystone = screen.getByRole("menuitemradio", { name: "Keystone" });
     expect(keystone).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("previews a two-accent preset as a gradient pill and a single-accent one as a dot", async () => {
+    await openMenu();
+    const swatch = (name: string) =>
+      screen
+        .getByRole("menuitemradio", { name })
+        .querySelector<HTMLElement>("[data-swatch-accent]")!;
+
+    // resolvedTheme is "dark" in this suite.
+    for (const [name, gradient] of [
+      [
+        "Aurora",
+        "linear-gradient(90deg, rgb(95, 214, 196), rgb(157, 141, 247))",
+      ],
+      [
+        "Sunset",
+        "linear-gradient(90deg, rgb(247, 164, 92), rgb(238, 111, 163))",
+      ],
+      [
+        "Nebula",
+        "linear-gradient(90deg, rgb(183, 156, 247), rgb(111, 168, 238))",
+      ],
+    ]) {
+      expect(swatch(name)).toHaveAttribute("data-swatch-shape", "pill");
+      expect(swatch(name)).toHaveClass("h-3", "w-6", "rounded-full");
+      expect(swatch(name).style.background).toBe(gradient);
+    }
+    expect(swatch("Ocean")).toHaveAttribute("data-swatch-shape", "dot");
+    expect(swatch("Ocean")).toHaveClass("size-3", "rounded-full");
+    expect(swatch("Ocean").style.background).toBe("rgb(111, 198, 214)");
   });
 
   it("selecting Ocean stamps the attribute synchronously and persists it", async () => {

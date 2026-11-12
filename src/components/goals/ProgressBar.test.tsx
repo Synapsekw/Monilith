@@ -5,9 +5,9 @@ import { ProgressBar } from "@/components/goals/ProgressBar";
 describe("ProgressBar", () => {
   it("renders the fill with keystone transition classes and the data-driven width", () => {
     const { container } = render(<ProgressBar progress={0.5} />);
-    const fill = container.querySelector(".bg-primary");
+    const fill = container.querySelector(".bg-brand-gradient");
     expect(fill).not.toBeNull();
-    expect(fill).toHaveClass("bg-primary");
+    expect(fill).toHaveClass("bg-brand-gradient");
     expect(fill).toHaveClass("rounded-full");
     expect(fill).toHaveClass("ease-keystone");
     expect(fill).toHaveStyle({ width: "50%" });

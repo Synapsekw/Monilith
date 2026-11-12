@@ -3,7 +3,9 @@
 import { forwardRef } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import { signOut } from "@/app/auth/actions";
+import { forgetCelebrateDone } from "@/components/ui/done-burst";
 import { wipeOfflineData } from "@/lib/offline/wipe";
+import { forgetThemeReach } from "@/lib/theme/presets";
 
 /**
  * Sign-out control, split out of `UserMenu` as its own client component.
@@ -33,6 +35,13 @@ export const SignOutForm = forwardRef<
         // at which the signed-out user's boards can be removed from
         // disk.
         await wipeOfflineData();
+        // Same deadline, same reason: the redirect is a client navigation,
+        // so `<html>` and its attributes survive it. Theme reach and the
+        // celebration switch are account preferences mirrored onto this
+        // device; left behind, the next account on a shared browser
+        // inherits them.
+        forgetThemeReach();
+        forgetCelebrateDone();
         await signOut();
       }}
     >
