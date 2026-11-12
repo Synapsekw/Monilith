@@ -1,7 +1,7 @@
 # Visual Refresh — theme reach, gradient presets, charts, delight
 
 **Date:** 2026-11-12
-**Status:** Draft for owner review
+**Status:** Approved by owner 2026-11-12; built on `task/visual-refresh`
 **Prototype:** https://claude.ai/artifact/25JaM6mKUJWoy8KWAJh8qF (theme lab, now/proposed tiles, delight demo)
 **Earlier structural review:** https://claude.ai/artifact/JgTmDjhP8gTGhbQWZRb1rn
 
@@ -69,17 +69,23 @@ every preset follows without new per-preset CSS:
 
 | Derived token                                                              | Subtle | Tinted | Vivid |
 | -------------------------------------------------------------------------- | ------ | ------ | ----- |
-| `--reach-content` (brand mixed into the content surface)                   | 0%     | 5%     | 9%    |
-| `--reach-surface` (brand mixed into `surface`, `surface-muted`, `popover`) | 0%     | 4%     | 7%    |
-| `--reach-hover` (brand mixed into `--state-hover`)                         | 0%     | 8%     | 13%   |
+| `--reach-content`, dark (brand mixed into the content surface)             | 0%     | 5%     | 9%    |
+| `--reach-content`, light                                                   | 0%     | 2.5%   | 2.5%  |
+| `--reach-surface` (brand mixed into `surface`, `surface-muted`, `popover`) | 0%     | 4%     | 5%    |
+| `--reach-hover` (brand mixed into `--state-hover`)                         | 0%     | 8%     | 8%    |
 | `--reach-glow` (opacity of the content-card header glow)                   | 0      | 0      | 1     |
+
+These are the shipped values. The first draft (content 5% / 9% in both modes, surface 7% and
+hover 13% at Vivid) failed two guards and was lowered: muted-text AA on a hovered row inside a
+raised surface, and the light chrome/card separation floor of 1.15:1. See decision-42.
 
 The Tailwind colour aliases (`--color-content-surface`, `--color-surface`, …) are repointed at
 `color-mix(in oklab, var(--brand) var(--reach-…), <seed>)`. Component code does not change: it
 keeps using `bg-content-surface`, `bg-surface`, `hover:bg-accent`.
 
-The percentages above are starting values. The binding constraint is that every AA check in
-`globals.contrast.test.ts` passes for every preset × mode × reach. If a value fails, lower it.
+The binding constraint is that every check in `globals.contrast.test.ts` passes for every
+preset × mode × reach. Mixes are written `color-mix(in srgb, <seed>, var(--brand) <pct>)` so the
+test can reproduce them.
 
 The header glow is one `::before` on the app-shell content card (`app-shell.tsx` and
 `ask/layout.tsx`), two radial gradients from `--brand` and `--brand-2`, multiplied by
