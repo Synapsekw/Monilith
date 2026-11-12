@@ -7,8 +7,16 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ThemePresetSync } from "@/components/theme-preset-sync";
 import { Toaster } from "@/components/ui/sonner";
 import { getUser } from "@/lib/auth/session";
-import { getUserThemePresetCached } from "@/lib/profile/queries-cached";
-import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
+import {
+  getUserThemePresetCached,
+  getUserThemeReachCached,
+} from "@/lib/profile/queries-cached";
+import {
+  DEFAULT_THEME_PRESET,
+  DEFAULT_THEME_REACH,
+  type ThemePresetId,
+  type ThemeReachId,
+} from "@/lib/theme/presets";
 
 /**
  * Layout B for the full-page Agents surface. `/ask` lives OUTSIDE the `(app)`
@@ -58,11 +66,21 @@ function resolveUserThemePreset(): Promise<ThemePresetId> {
   );
 }
 
+/** The reach twin of the preset promise above; same unawaited shape. */
+function resolveUserThemeReach(): Promise<ThemeReachId> {
+  return getUser().then((user) =>
+    user ? getUserThemeReachCached(user.id) : DEFAULT_THEME_REACH,
+  );
+}
+
 export default function AskLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-wash flex h-svh w-full overflow-hidden">
       <Suspense fallback={null}>
-        <ThemePresetSync preset={resolveUserThemePreset()} />
+        <ThemePresetSync
+          preset={resolveUserThemePreset()}
+          reach={resolveUserThemeReach()}
+        />
       </Suspense>
       <aside className="flex w-60 shrink-0 flex-col">
         <div className="flex min-h-14 shrink-0 items-center gap-1 px-3 py-2">

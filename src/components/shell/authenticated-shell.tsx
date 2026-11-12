@@ -11,10 +11,16 @@ import { HeaderUserSkeleton } from "@/components/shell/header-user-skeleton";
 import { getUser } from "@/lib/auth/session";
 import {
   getUserThemePresetCached,
+  getUserThemeReachCached,
   getUserTimeZoneCached,
 } from "@/lib/profile/queries-cached";
 import { ThemePresetSync } from "@/components/theme-preset-sync";
-import { DEFAULT_THEME_PRESET, type ThemePresetId } from "@/lib/theme/presets";
+import {
+  DEFAULT_THEME_PRESET,
+  DEFAULT_THEME_REACH,
+  type ThemePresetId,
+  type ThemeReachId,
+} from "@/lib/theme/presets";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
 import {
   DEVICE_TZ_COOKIE,
@@ -46,6 +52,15 @@ function resolveUserTimeZone(): Promise<string | null> {
 function resolveUserThemePreset(): Promise<ThemePresetId> {
   return getUser().then((user) =>
     user ? getUserThemePresetCached(user.id) : DEFAULT_THEME_PRESET,
+  );
+}
+
+/** The reach twin of the preset promise above — same unawaited shape, same
+ *  Suspense boundary, same consumer. `getUser` is request-memoised, so the
+ *  second call costs no extra auth round-trip. */
+function resolveUserThemeReach(): Promise<ThemeReachId> {
+  return getUser().then((user) =>
+    user ? getUserThemeReachCached(user.id) : DEFAULT_THEME_REACH,
   );
 }
 
@@ -118,7 +133,10 @@ export function AuthenticatedShell({ children }: { children: ReactNode }) {
       }
     >
       <Suspense fallback={null}>
-        <ThemePresetSync preset={resolveUserThemePreset()} />
+        <ThemePresetSync
+          preset={resolveUserThemePreset()}
+          reach={resolveUserThemeReach()}
+        />
       </Suspense>
       <DeviceTimeZoneProvider initial={resolveDeviceTimeZone()}>
         <TimeZoneProvider timeZone={resolveUserTimeZone()}>
