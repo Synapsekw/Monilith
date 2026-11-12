@@ -3170,6 +3170,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null;
+          celebrate_done: boolean;
           created_at: string;
           email: string | null;
           email_briefing_opt_out: boolean;
@@ -3178,11 +3179,13 @@ export type Database = {
           id: string;
           is_agent: boolean;
           theme_preset: string;
+          theme_reach: string;
           timezone: string | null;
           updated_at: string;
         };
         Insert: {
           avatar_url?: string | null;
+          celebrate_done?: boolean;
           created_at?: string;
           email?: string | null;
           email_briefing_opt_out?: boolean;
@@ -3191,11 +3194,13 @@ export type Database = {
           id: string;
           is_agent?: boolean;
           theme_preset?: string;
+          theme_reach?: string;
           timezone?: string | null;
           updated_at?: string;
         };
         Update: {
           avatar_url?: string | null;
+          celebrate_done?: boolean;
           created_at?: string;
           email?: string | null;
           email_briefing_opt_out?: boolean;
@@ -3204,6 +3209,7 @@ export type Database = {
           id?: string;
           is_agent?: boolean;
           theme_preset?: string;
+          theme_reach?: string;
           timezone?: string | null;
           updated_at?: string;
         };
