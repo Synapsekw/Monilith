@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
@@ -212,104 +213,108 @@ export function TimeCard({
         }
       />
 
-      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20">
-            <tr>
-              <th className="bg-card sticky left-0 z-30 w-64 min-w-64 border-r border-b px-4 py-2 text-left">
-                <Kicker>Task / Category</Kicker>
-              </th>
-              {data.days.map((day) => (
-                <th
-                  key={day}
-                  className="bg-card min-w-20 border-b px-2 py-2 text-center"
-                >
-                  <Kicker>{dayLabel(day)}</Kicker>
-                </th>
-              ))}
-              <th className="bg-card min-w-20 border-b border-l px-2 py-2 text-center">
-                <Kicker>Total</Kicker>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              // Overlay-aware per-row total so the Total column moves in step
-              // with an edited cell (server row.totalSecs lags until the
-              // coalesced router.refresh() lands fresh data.rows).
-              const rowTotal = row.cells.reduce(
-                (s, c) => s + effManual(row.key, c) + c.timerSecs,
-                0,
-              );
-              return (
-                <tr key={row.key} className="group">
-                  <td className="bg-background group-hover:bg-state-hover/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {row.label}
-                      </p>
-                      <p className="text-muted-foreground text-2xs truncate">
-                        {row.kind === "item"
-                          ? (row.boardName ?? "Item")
-                          : "Category"}
-                      </p>
-                    </div>
-                  </td>
-                  {row.cells.map((cell) => (
-                    <td
-                      key={cell.day}
-                      className="border-b px-1.5 py-1.5 text-center align-middle"
-                    >
-                      <TimeCell
-                        manualSecs={cell.manualSecs}
-                        timerSecs={cell.timerSecs}
-                        ariaLabel={`${row.label}, ${dayLabel(cell.day)}`}
-                        onCommit={(h) => commitCell(row, cell.day, h)}
-                        onClear={() => clearCell(row, cell.day)}
-                      />
-                    </td>
-                  ))}
-                  <td className="border-b border-l px-2 py-1.5 text-center align-middle font-mono tabular-nums">
-                    {formatHours(rowTotal) || "0"}h
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 ? (
+      {rows.length === 0 ? (
+        // Nothing logged or added this week: a grid of headers over no rows
+        // says nothing, so offer the same picker the header does (same
+        // `addRow` handler). Outside the table — Mono never sits in a table.
+        <div data-scroll-container className="min-h-0 flex-1 overflow-auto p-6">
+          <EmptyState
+            mascot
+            title="Your time for this week will appear here"
+            actions={<AddRowPicker categories={categories} onPick={addRow} />}
+          >
+            Add a row to log hours against a task or category.
+          </EmptyState>
+        </div>
+      ) : (
+        <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
+          <table className="w-full border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-20">
               <tr>
-                <td
-                  colSpan={data.days.length + 2}
-                  className="text-muted-foreground px-4 py-10 text-center text-sm"
-                >
-                  No rows yet. Use “Add row” to log time against a task or
-                  category.
+                <th className="bg-card sticky left-0 z-30 w-64 min-w-64 border-r border-b px-4 py-2 text-left">
+                  <Kicker>Task / Category</Kicker>
+                </th>
+                {data.days.map((day) => (
+                  <th
+                    key={day}
+                    className="bg-card min-w-20 border-b px-2 py-2 text-center"
+                  >
+                    <Kicker>{dayLabel(day)}</Kicker>
+                  </th>
+                ))}
+                <th className="bg-card min-w-20 border-b border-l px-2 py-2 text-center">
+                  <Kicker>Total</Kicker>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                // Overlay-aware per-row total so the Total column moves in step
+                // with an edited cell (server row.totalSecs lags until the
+                // coalesced router.refresh() lands fresh data.rows).
+                const rowTotal = row.cells.reduce(
+                  (s, c) => s + effManual(row.key, c) + c.timerSecs,
+                  0,
+                );
+                return (
+                  <tr key={row.key} className="group">
+                    <td className="bg-background group-hover:bg-state-hover/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {row.label}
+                        </p>
+                        <p className="text-muted-foreground text-2xs truncate">
+                          {row.kind === "item"
+                            ? (row.boardName ?? "Item")
+                            : "Category"}
+                        </p>
+                      </div>
+                    </td>
+                    {row.cells.map((cell) => (
+                      <td
+                        key={cell.day}
+                        className="border-b px-1.5 py-1.5 text-center align-middle"
+                      >
+                        <TimeCell
+                          manualSecs={cell.manualSecs}
+                          timerSecs={cell.timerSecs}
+                          ariaLabel={`${row.label}, ${dayLabel(cell.day)}`}
+                          onCommit={(h) => commitCell(row, cell.day, h)}
+                          onClear={() => clearCell(row, cell.day)}
+                        />
+                      </td>
+                    ))}
+                    <td className="border-b border-l px-2 py-1.5 text-center align-middle font-mono tabular-nums">
+                      {formatHours(rowTotal) || "0"}h
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="bg-card sticky left-0 z-10 border-t border-r px-4 py-2">
+                  <Kicker>Daily total</Kicker>
+                </td>
+                {dayTotals.map((secs, i) => (
+                  <td
+                    key={data.days[i]}
+                    className={cn(
+                      "border-t px-2 py-2 text-center font-mono text-xs tabular-nums",
+                      secs > 0 ? "text-foreground" : "text-muted-foreground/50",
+                    )}
+                  >
+                    {formatHours(secs) || "0"}h
+                  </td>
+                ))}
+                <td className="border-t border-l px-2 py-2 text-center font-mono text-xs font-semibold tabular-nums">
+                  {formatHours(weekTotal) || "0"}h
                 </td>
               </tr>
-            ) : null}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td className="bg-card sticky left-0 z-10 border-t border-r px-4 py-2">
-                <Kicker>Daily total</Kicker>
-              </td>
-              {dayTotals.map((secs, i) => (
-                <td
-                  key={data.days[i]}
-                  className={cn(
-                    "border-t px-2 py-2 text-center font-mono text-xs tabular-nums",
-                    secs > 0 ? "text-foreground" : "text-muted-foreground/50",
-                  )}
-                >
-                  {formatHours(secs) || "0"}h
-                </td>
-              ))}
-              <td className="border-t border-l px-2 py-2 text-center font-mono text-xs font-semibold tabular-nums">
-                {formatHours(weekTotal) || "0"}h
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
