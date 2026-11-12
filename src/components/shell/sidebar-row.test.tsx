@@ -16,7 +16,7 @@ describe("sidebarRowClass", () => {
     const active = sidebarRowClass({ active: true });
     expect(active).toContain("bg-state-selected");
     expect(active).toContain("text-foreground");
-    expect(active).toContain("before:bg-primary");
+    expect(active).toContain("before:bg-brand-gradient");
     expect(active).toContain("before:-left-2");
     expect(active).not.toContain("bg-primary/80");
     expect(active).not.toMatch(/\bborder-primary/);
@@ -132,7 +132,7 @@ describe("rail", () => {
     expect(idle).not.toContain("hover:border");
     const active = railTileClass({ active: true });
     expect(active).toContain("bg-state-selected");
-    expect(active).toContain("before:bg-primary");
+    expect(active).toContain("before:bg-brand-gradient");
     expect(active).not.toContain("bg-primary/80");
   });
 

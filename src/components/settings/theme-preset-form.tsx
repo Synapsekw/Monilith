@@ -1,6 +1,10 @@
 "use client";
 
-import { THEME_PRESETS, type ThemePresetId } from "@/lib/theme/presets";
+import {
+  THEME_PRESETS,
+  swatchAccentFill,
+  type ThemePresetId,
+} from "@/lib/theme/presets";
 import { useThemePreset } from "@/lib/theme/use-theme-preset";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +62,7 @@ export function ThemePresetForm({
                 />
                 {/* Inline hex is correct here and nowhere else: the swatch IS
                     the data. Semantic tokens describe the ACTIVE palette, and
-                    this tile has to show the five palettes on offer. */}
+                    this tile has to show every palette on offer. */}
                 <span
                   aria-hidden
                   className="flex h-7 overflow-hidden rounded-sm"
@@ -68,8 +72,9 @@ export function ThemePresetForm({
                     style={{ background: p.swatch.light.chrome }}
                   >
                     <span
+                      data-swatch-accent="light"
                       className="size-2.5 rounded-full"
-                      style={{ background: p.swatch.light.accent }}
+                      style={{ background: swatchAccentFill(p.swatch.light) }}
                     />
                   </span>
                   <span
@@ -77,8 +82,9 @@ export function ThemePresetForm({
                     style={{ background: p.swatch.dark.chrome }}
                   >
                     <span
+                      data-swatch-accent="dark"
                       className="size-2.5 rounded-full"
-                      style={{ background: p.swatch.dark.accent }}
+                      style={{ background: swatchAccentFill(p.swatch.dark) }}
                     />
                   </span>
                 </span>

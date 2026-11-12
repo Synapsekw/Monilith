@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { THEME_PRESET_ATTR } from "@/lib/theme/presets";
+import { THEME_PRESET_ATTR, THEME_PRESETS } from "@/lib/theme/presets";
 import { ThemeToggle } from "./theme-toggle";
 
 // vi.mock factories are hoisted above these declarations, so the spies have to
@@ -36,7 +36,7 @@ async function openMenu() {
 }
 
 describe("ThemeToggle", () => {
-  it("shows the mode items, a Theme label, and six preset radios with the current one checked", async () => {
+  it("shows the mode items, a Theme label, and one radio per preset with the current one checked", async () => {
     await openMenu();
 
     expect(screen.getByText("Light")).toBeInTheDocument();
@@ -45,7 +45,12 @@ describe("ThemeToggle", () => {
     expect(screen.getByText("Theme")).toBeInTheDocument();
 
     const radios = screen.getAllByRole("menuitemradio");
-    expect(radios).toHaveLength(6);
+    expect(radios).toHaveLength(THEME_PRESETS.length);
+    for (const label of ["Aurora", "Sunset", "Nebula"]) {
+      expect(
+        screen.getByRole("menuitemradio", { name: label }),
+      ).toBeInTheDocument();
+    }
 
     const keystone = screen.getByRole("menuitemradio", { name: "Keystone" });
     expect(keystone).toHaveAttribute("aria-checked", "true");

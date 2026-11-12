@@ -25,6 +25,15 @@
   /* Brand highlight (semantic alias of the configurable accent) */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  /* The two-accent fill (`bg-brand-gradient`) and the primary Button's hover
+     (`bg-brand-gradient-hover`): the same two stops at 80% alpha, which for a
+     single-accent preset is exactly the old `hover:bg-primary/80`. */
+  --background-image-brand-gradient: var(--brand-gradient);
+  --background-image-brand-gradient-hover: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--brand) 80%, transparent),
+    color-mix(in oklab, var(--brand-2) 80%, transparent)
+  );
 
   /* Keystone additions */
   --color-kicker: var(--kicker);
@@ -253,7 +262,19 @@
      button label, a hair UNDER AA. globals.contrast.test.ts now enforces the
      4.5 floor on --brand-foreground vs --brand in every palette block. */
   --brand: #5a6ed5;
+  /* The second accent — a SEED token. Single-accent presets (this one
+     included) declare it equal to their own --brand, a degenerate gradient;
+     aurora / sunset / nebula give it a second hue. It only ever appears as
+     the far stop of --brand-gradient and of the chart spectrum, and as the
+     header glow's second bloom. --ring, links and text stay on --brand. */
+  --brand-2: #5a6ed5;
   --brand-foreground: #ffffff;
+  /* Derived ONCE, here — never in a preset block and not in .dark. Both
+     stops are seeds every block re-declares on <html>, so this follows the
+     mode and the preset by itself. Sanctioned in exactly four places: the
+     primary Button fill, the active sidebar indicator, progress-bar fills
+     and the chart spectrum below. Utility: `bg-brand-gradient`. */
+  --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
 
   --background: #f6f6f8;
   --foreground: #1a1a1f;
@@ -404,10 +425,13 @@
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
   /* Spectrum hero gradient for a single uncolored metric — derived from
-     --brand so every theme preset gets a coherent 3-stop ramp for free. */
+     --brand so every theme preset gets a coherent 3-stop ramp for free.
+     The far stop reads --brand-2, so a two-accent preset's ramp runs brand to
+     brand-2; in a single-accent preset --brand-2 IS --brand and the ramp is
+     unchanged. */
   --chart-spectrum-1: color-mix(in oklab, var(--brand) 85%, black);
   --chart-spectrum-2: var(--brand);
-  --chart-spectrum-3: color-mix(in oklab, var(--brand) 60%, white);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand-2) 60%, white);
   --radius: 0.875rem; /* 14px — Keystone cards/panels; radius-sm→~8px chips */
   --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
   --elevation-card: none;
@@ -436,6 +460,7 @@
    *   txt #e7e7ea · txt-dim #a1a1aa
    */
   --brand: #8ea2eb; /* periwinkle */
+  --brand-2: #8ea2eb; /* single accent — see :root */
   --brand-foreground: #0e0e10; /* near-black text on periwinkle fill (AA) */
 
   --background: #0e0e10;
@@ -531,7 +556,7 @@
      the near-black base rather than white. */
   --chart-spectrum-1: color-mix(in oklab, var(--brand) 70%, white);
   --chart-spectrum-2: var(--brand);
-  --chart-spectrum-3: color-mix(in oklab, var(--brand) 55%, black);
+  --chart-spectrum-3: color-mix(in oklab, var(--brand-2) 55%, black);
 
   --sidebar: transparent;
   --sidebar-foreground: #f4f4f6;
@@ -634,6 +659,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="graphite"] {
   --brand: #4b4b55;
+  --brand-2: #4b4b55;
   --brand-foreground: #ffffff;
   --background: #f5f5f6;
   --foreground: #1a1a1e;
@@ -668,6 +694,7 @@
 
 .dark[data-theme-preset="graphite"] {
   --brand: #c9c9d2;
+  --brand-2: #c9c9d2;
   --brand-foreground: #0e0e10;
   --background: #0f0f10;
   --foreground: #f4f4f6;
@@ -699,6 +726,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="ocean"] {
   --brand: #1f7a8c;
+  --brand-2: #1f7a8c;
   --brand-foreground: #ffffff;
   --background: #f4f7f8;
   --foreground: #14191b;
@@ -733,6 +761,7 @@
 
 .dark[data-theme-preset="ocean"] {
   --brand: #6fc6d6;
+  --brand-2: #6fc6d6;
   --brand-foreground: #0e0e10;
   --background: #0e1112;
   --foreground: #f1f5f6;
@@ -764,6 +793,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="forest"] {
   --brand: #2f7a4f;
+  --brand-2: #2f7a4f;
   --brand-foreground: #ffffff;
   --background: #f4f7f5;
   --foreground: #151b17;
@@ -798,6 +828,7 @@
 
 .dark[data-theme-preset="forest"] {
   --brand: #7fcf9c;
+  --brand-2: #7fcf9c;
   --brand-foreground: #0e0e10;
   --background: #0e110f;
   --foreground: #f1f6f2;
@@ -829,6 +860,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="ember"] {
   --brand: #b4581a;
+  --brand-2: #b4581a;
   --brand-foreground: #ffffff;
   --background: #f8f5f2;
   --foreground: #1e1712;
@@ -863,6 +895,7 @@
 
 .dark[data-theme-preset="ember"] {
   --brand: #f0a868;
+  --brand-2: #f0a868;
   --brand-foreground: #0e0e10;
   --background: #12100e;
   --foreground: #f6f3f0;
@@ -894,6 +927,7 @@
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="rose"] {
   --brand: #b8375f;
+  --brand-2: #b8375f;
   --brand-foreground: #ffffff;
   --background: #f8f4f6;
   --foreground: #1e1418;
@@ -928,6 +962,7 @@
 
 .dark[data-theme-preset="rose"] {
   --brand: #f08fb0;
+  --brand-2: #f08fb0;
   --brand-foreground: #0e0e10;
   --background: #120f10;
   --foreground: #f6f2f3;
@@ -952,6 +987,216 @@
     transparent 58%
   );
   --content-surface: #120f10;
+}
+
+/* ---------------------------------------------------------------------------
+   Two-accent ("gradient") presets — opt-in. Same seed set as the six above;
+   the only difference is that --brand-2 is a second hue instead of a copy of
+   --brand, so --brand-gradient and the chart spectrum actually travel. The
+   wash leans from the first accent (top-left, under the bloom) towards the
+   second. Light brands are the dark hues deepened until the white label
+   clears AA on BOTH stops (globals.contrast.test.ts enforces it).
+   --------------------------------------------------------------------------- */
+
+/* Aurora — teal into violet over a sea-glass wash that cools to lavender.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="aurora"] {
+  --brand: #0f7d71;
+  --brand-2: #6b59d3;
+  --brand-foreground: #ffffff;
+  --background: #f4f7f7;
+  --foreground: #141a19;
+  --surface: #ffffff;
+  --surface-muted: #e9f0ef;
+  --surface-sunken: #e9f0ef;
+  --card: #ffffff;
+  --card-foreground: #141a19;
+  --popover: #ffffff;
+  --popover-foreground: #141a19;
+  --secondary: #e9f0ef;
+  --secondary-foreground: #141a19;
+  --muted: #e9f0ef;
+  --muted-foreground: #4b5c59;
+  --kicker: #4b5c59;
+  --accent: #e9f0ef;
+  --accent-foreground: #141a19;
+  --glow-primary: 0 0 30px -8px rgba(15, 125, 113, 0.35);
+  --app-wash: linear-gradient(168deg, #d9ebe7 0%, #d5dfe9 46%, #d0d3e8 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="aurora"] {
+  --brand: #5fd6c4;
+  --brand-2: #9d8df7;
+  --brand-foreground: #0e0e10;
+  --background: #0e1111;
+  --foreground: #f1f6f5;
+  --surface: #161919;
+  --surface-muted: #1c1f1f;
+  --surface-sunken: #1c1f1f;
+  --card: #161919;
+  --card-foreground: #f1f6f5;
+  --popover: #1c1f1f;
+  --popover-foreground: #f1f6f5;
+  --secondary: #262929;
+  --secondary-foreground: #f1f6f5;
+  --muted: #1c1f1f;
+  --muted-foreground: #b5c6c3;
+  --kicker: #b5c6c3;
+  --accent: #1c1f1f;
+  --accent-foreground: #f1f6f5;
+  --app-wash: linear-gradient(168deg, #182f2d 0%, #17192c 46%, #08090d 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0e1111;
+}
+
+/* Sunset — amber into pink over a sand wash that warms to rose.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="sunset"] {
+  --brand: #b65318;
+  --brand-2: #c0386f;
+  --brand-foreground: #ffffff;
+  --background: #f8f5f3;
+  --foreground: #1e1613;
+  --surface: #ffffff;
+  --surface-muted: #f1ebe8;
+  --surface-sunken: #f1ebe8;
+  --card: #ffffff;
+  --card-foreground: #1e1613;
+  --popover: #ffffff;
+  --popover-foreground: #1e1613;
+  --secondary: #f1ebe8;
+  --secondary-foreground: #1e1613;
+  --muted: #f1ebe8;
+  --muted-foreground: #66544c;
+  --kicker: #66544c;
+  --accent: #f1ebe8;
+  --accent-foreground: #1e1613;
+  --glow-primary: 0 0 30px -8px rgba(182, 83, 24, 0.35);
+  --app-wash: linear-gradient(168deg, #f0e3d9 0%, #ead8d6 46%, #e1cad2 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="sunset"] {
+  --brand: #f7a45c;
+  --brand-2: #ee6fa3;
+  --brand-foreground: #0e0e10;
+  --background: #12100f;
+  --foreground: #f6f2f1;
+  --surface: #1a1817;
+  --surface-muted: #201e1d;
+  --surface-sunken: #201e1d;
+  --card: #1a1817;
+  --card-foreground: #f6f2f1;
+  --popover: #201e1d;
+  --popover-foreground: #f6f2f1;
+  --secondary: #2a2827;
+  --secondary-foreground: #f6f2f1;
+  --muted: #201e1d;
+  --muted-foreground: #c1b1ab;
+  --kicker: #c1b1ab;
+  --accent: #201e1d;
+  --accent-foreground: #f6f2f1;
+  --app-wash: linear-gradient(168deg, #33231a 0%, #23151b 46%, #0d0809 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #12100f;
+}
+
+/* Nebula — violet into blue over a lilac wash that cools to slate blue.
+   Seeded from the :root / .dark recipe — only the tokens a preset can move are
+   redeclared; everything alpha-based or brand-derived follows. */
+:root[data-theme-preset="nebula"] {
+  --brand: #7450d6;
+  --brand-2: #2f6cc0;
+  --brand-foreground: #ffffff;
+  --background: #f6f5f9;
+  --foreground: #19171f;
+  --surface: #ffffff;
+  --surface-muted: #f0eef5;
+  --surface-sunken: #f0eef5;
+  --card: #ffffff;
+  --card-foreground: #19171f;
+  --popover: #ffffff;
+  --popover-foreground: #19171f;
+  --secondary: #f0eef5;
+  --secondary-foreground: #19171f;
+  --muted: #f0eef5;
+  --muted-foreground: #5a5666;
+  --kicker: #5a5666;
+  --accent: #f0eef5;
+  --accent-foreground: #19171f;
+  --glow-primary: 0 0 30px -8px rgba(116, 80, 214, 0.35);
+  --app-wash: linear-gradient(168deg, #e2dcf2 0%, #d9dcef 46%, #cdd6e8 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(
+        in oklab,
+        color-mix(in oklab, var(--brand) 12%, white) 70%,
+        transparent
+      )
+      0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="nebula"] {
+  --brand: #b79cf7;
+  --brand-2: #6fa8ee;
+  --brand-foreground: #0e0e10;
+  --background: #0f0e12;
+  --foreground: #f4f3f7;
+  --surface: #17161a;
+  --surface-muted: #1d1c21;
+  --surface-sunken: #1d1c21;
+  --card: #17161a;
+  --card-foreground: #f4f3f7;
+  --popover: #1d1c21;
+  --popover-foreground: #f4f3f7;
+  --secondary: #27262c;
+  --secondary-foreground: #f4f3f7;
+  --muted: #1d1c21;
+  --muted-foreground: #b6b2c2;
+  --kicker: #b6b2c2;
+  --accent: #1d1c21;
+  --accent-foreground: #f4f3f7;
+  --app-wash: linear-gradient(168deg, #261f40 0%, #131a2c 46%, #08090d 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0f0e12;
 }
 
 @layer base {
@@ -1321,6 +1566,10 @@
     --border-bright: rgba(0, 0, 0, 0.22);
     --card: #ffffff;
     --brand: #5a6ed5;
+    --brand-2: #5a6ed5;
+    /* Re-derived: the :root declaration resolved on <html>, against the
+       SCREEN preset's stops. */
+    --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
     --primary: var(--brand);
     /* Reach off: the surface aliases mix --brand into the seeds above, and
        paper must stay white whatever reach the screen is on. */

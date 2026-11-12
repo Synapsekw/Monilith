@@ -327,7 +327,7 @@ export function OrgAiSettingsForm({
             aria-valuenow={initial.creditsUsed}
           >
             <div
-              className="bg-primary h-full rounded-full"
+              className="bg-brand-gradient h-full rounded-full"
               style={{ width: `${usedPct}%` }}
             />
           </div>

@@ -11,6 +11,11 @@
  * `--state-*`) or brand-derived (`--primary`, `--ring`, `--app-bloom`) follows
  * on its own.
  *
+ * `--brand-2` is one of those seeds. Six presets are single-accent and declare
+ * it equal to `--brand`; `aurora`, `sunset` and `nebula` give it a second hue,
+ * which is all that makes them "gradient" presets — `--brand-gradient` is
+ * derived once in `:root` from the two.
+ *
  * Adding a preset means three things, all guarded by tests: an entry here, the
  * two CSS blocks (`presets.test.ts` checks the token sets match exactly), and a
  * green `globals.contrast.test.ts` (which iterates this list).
@@ -23,6 +28,9 @@ export const THEME_PRESET_IDS = [
   "forest",
   "ember",
   "rose",
+  "aurora",
+  "sunset",
+  "nebula",
 ] as const;
 
 export type ThemePresetId = (typeof THEME_PRESET_IDS)[number];
@@ -43,14 +51,33 @@ export const KEYSTONE_BRAND_HEX = {
   dark: "#8ea2eb",
 } as const;
 
+/** One mode's preview. `accent2` mirrors `--brand-2` and is set ONLY by the
+ *  two-accent presets (aurora, sunset, nebula): its presence is what turns the
+ *  accent dot into a two-stop gradient. */
+export type ThemePresetSwatch = {
+  chrome: string;
+  accent: string;
+  accent2?: string;
+};
+
+/** The CSS `background` for a swatch's accent dot: flat for a single-accent
+ *  preset; the same two stops and direction as `--brand-gradient` when the
+ *  preset carries a second one. Shared by every surface that previews presets. */
+export function swatchAccentFill({
+  accent,
+  accent2,
+}: ThemePresetSwatch): string {
+  return accent2 ? `linear-gradient(90deg, ${accent}, ${accent2})` : accent;
+}
+
 export type ThemePreset = {
   id: ThemePresetId;
   label: string;
   /** Two-tone preview: the chrome wash behind an accent dot, per mode. Mirrors
    *  the mid wash stop (light) / top wash stop (dark) and `--brand`. */
   swatch: {
-    light: { chrome: string; accent: string };
-    dark: { chrome: string; accent: string };
+    light: ThemePresetSwatch;
+    dark: ThemePresetSwatch;
   };
 };
 
@@ -101,6 +128,30 @@ export const THEME_PRESETS: ReadonlyArray<ThemePreset> = [
     swatch: {
       light: { chrome: "#e8d5dc", accent: "#b8375f" },
       dark: { chrome: "#33202a", accent: "#f08fb0" },
+    },
+  },
+  {
+    id: "aurora",
+    label: "Aurora",
+    swatch: {
+      light: { chrome: "#d5dfe9", accent: "#0f7d71", accent2: "#6b59d3" },
+      dark: { chrome: "#182f2d", accent: "#5fd6c4", accent2: "#9d8df7" },
+    },
+  },
+  {
+    id: "sunset",
+    label: "Sunset",
+    swatch: {
+      light: { chrome: "#ead8d6", accent: "#b65318", accent2: "#c0386f" },
+      dark: { chrome: "#33231a", accent: "#f7a45c", accent2: "#ee6fa3" },
+    },
+  },
+  {
+    id: "nebula",
+    label: "Nebula",
+    swatch: {
+      light: { chrome: "#d9dcef", accent: "#7450d6", accent2: "#2f6cc0" },
+      dark: { chrome: "#261f40", accent: "#b79cf7", accent2: "#6fa8ee" },
     },
   },
 ];

@@ -15,7 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { THEME_PRESETS, type ThemePresetId } from "@/lib/theme/presets";
+import {
+  THEME_PRESETS,
+  swatchAccentFill,
+  type ThemePresetId,
+} from "@/lib/theme/presets";
 import { useThemePreset } from "@/lib/theme/use-theme-preset";
 
 export function ThemeToggle() {
@@ -69,10 +73,9 @@ export function ThemeToggle() {
                 aria-hidden
                 className="size-3 rounded-full"
                 style={{
-                  background:
-                    resolvedTheme === "dark"
-                      ? p.swatch.dark.accent
-                      : p.swatch.light.accent,
+                  background: swatchAccentFill(
+                    resolvedTheme === "dark" ? p.swatch.dark : p.swatch.light,
+                  ),
                 }}
               />
               {p.label}

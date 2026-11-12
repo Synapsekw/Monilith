@@ -374,6 +374,7 @@ describe.each([
   ...DARK_SELECTORS.map((s) => [s, "dark"] as const),
 ])("text clears WCAG AA on reach-tinted surfaces — %s", (selector, mode) => {
   const brand = hex(declaration(selector, "--brand"));
+  const brand2 = hex(declaration(selector, "--brand-2"));
 
   describe.each(["--muted-foreground", "--kicker"] as const)("%s", (token) => {
     const fg = hex(declaration(selector, token));
@@ -417,9 +418,10 @@ describe.each([
 
     it("on the content card under the header glow at its peak (vivid)", () => {
       // Conservative: both gradients at full strength on the same pixel, which
-      // their geometry never produces. --brand-2 falls back to --brand.
+      // their geometry never produces. The first bloom is --brand, the second
+      // --brand-2 (the same colour in a single-accent preset).
       const lit = glowPeaks().reduce<RGB>(
-        (bg, peak) => over(brand, peak, bg),
+        (bg, peak, i) => over(i === 0 ? brand : brand2, peak, bg),
         contentCard(selector, "vivid"),
       );
       expect(contrast(fg, lit)).toBeGreaterThanOrEqual(AA);
@@ -541,6 +543,47 @@ describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
         ),
       ).toBeGreaterThanOrEqual(AA);
     });
+
+    // The gradient's far stop sits under the same label: a primary button, an
+    // active pill or a filled bar can put --brand-foreground anywhere along
+    // --brand-gradient. In an sRGB gradient every channel lies between the two
+    // stops, but luminance is not monotonic in hue, so both ENDS are pinned
+    // here and the midpoint just below.
+    it("brand button label clears AA on the second accent (--brand-2)", () => {
+      expect(
+        contrast(
+          hex(declaration(selector, "--brand-foreground")),
+          hex(declaration(selector, "--brand-2")),
+        ),
+      ).toBeGreaterThanOrEqual(AA);
+    });
+
+    it("brand button label clears AA at the middle of --brand-gradient", () => {
+      expect(
+        contrast(
+          hex(declaration(selector, "--brand-foreground")),
+          mixSrgb(
+            hex(declaration(selector, "--brand")),
+            hex(declaration(selector, "--brand-2")),
+            50,
+          ),
+        ),
+      ).toBeGreaterThanOrEqual(AA);
+    });
+
+    // Progress fills and the sidebar indicator are non-text marks, and their
+    // far end is --brand-2.
+    it.each(REACH_LEVELS)(
+      "the second accent is a visible non-text mark on the content card (≥3:1) at reach %s",
+      (level) => {
+        expect(
+          contrast(
+            hex(declaration(selector, "--brand-2")),
+            contentCard(selector, level),
+          ),
+        ).toBeGreaterThanOrEqual(3);
+      },
+    );
 
     // Reach tints the card WITH the brand, so the mark and its ground converge.
     it.each(REACH_LEVELS)(

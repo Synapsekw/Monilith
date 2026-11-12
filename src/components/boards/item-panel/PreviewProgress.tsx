@@ -48,7 +48,7 @@ export function PreviewProgress({
         {determinate ? (
           <div
             data-testid="preview-progress-fill"
-            className="bg-primary h-full rounded-full transition-[width] duration-150 ease-out"
+            className="bg-brand-gradient h-full rounded-full transition-[width] duration-150 ease-out"
             style={{ width: `${pct}%` }}
           />
         ) : (

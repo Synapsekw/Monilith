@@ -8,6 +8,7 @@ import {
   THEME_PRESET_ATTR,
   applyThemePreset,
   isThemePresetId,
+  swatchAccentFill,
   THEME_REACH_IDS,
   DEFAULT_THEME_REACH,
   THEME_REACH_STORAGE_KEY,
@@ -27,6 +28,7 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
  */
 const SEEDS = [
   "--brand",
+  "--brand-2",
   "--brand-foreground",
   "--app-wash",
   "--app-bloom",
@@ -101,11 +103,70 @@ describe("theme presets", () => {
       for (const m of ["light", "dark"] as const) {
         expect(p.swatch[m].chrome).toMatch(/^#[0-9a-f]{6}$/);
         expect(p.swatch[m].accent).toMatch(/^#[0-9a-f]{6}$/);
+        const { accent2 } = p.swatch[m];
+        if (accent2 !== undefined) expect(accent2).toMatch(/^#[0-9a-f]{6}$/);
       }
+  });
+
+  /** One declared value out of a palette block (`:root` / `.dark` for keystone). */
+  function seed(id: string, mode: "light" | "dark", token: string) {
+    const base = mode === "light" ? ":root" : ".dark";
+    const b = block(
+      id === DEFAULT_THEME_PRESET ? base : `${base}[data-theme-preset="${id}"]`,
+    );
+    return b?.match(new RegExp(`^\\s{2}${token}:\\s*([^;]+);`, "m"))?.[1];
+  }
+
+  it("swatch accents mirror the stylesheet's --brand and --brand-2", () => {
+    for (const p of THEME_PRESETS)
+      for (const m of ["light", "dark"] as const) {
+        const where = `${p.id} ${m}`;
+        const brand = seed(p.id, m, "--brand");
+        const brand2 = seed(p.id, m, "--brand-2");
+        expect(p.swatch[m].accent, where).toBe(brand);
+        // A second accent is listed exactly when the block has a second hue:
+        // a single-accent preset's --brand-2 is its own --brand, and its dot
+        // stays flat.
+        expect(p.swatch[m].accent2, where).toBe(
+          brand2 === brand ? undefined : brand2,
+        );
+      }
+  });
+
+  it("swatchAccentFill is flat for one accent and a 90deg gradient for two", () => {
+    expect(swatchAccentFill({ chrome: "#000000", accent: "#112233" })).toBe(
+      "#112233",
+    );
+    expect(
+      swatchAccentFill({
+        chrome: "#000000",
+        accent: "#112233",
+        accent2: "#445566",
+      }),
+    ).toBe("linear-gradient(90deg, #112233, #445566)");
+  });
+
+  it("ships exactly three two-accent presets, after the single-accent ones", () => {
+    const twoAccent = THEME_PRESETS.filter(
+      (p) => p.swatch.light.accent2 && p.swatch.dark.accent2,
+    ).map((p) => p.id);
+    expect(twoAccent).toEqual(["aurora", "sunset", "nebula"]);
+    expect([...THEME_PRESET_IDS].slice(-3)).toEqual(twoAccent);
+  });
+
+  it("derives --brand-gradient once, in :root, from the two brand seeds", () => {
+    expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(2); // :root + print root
+    expect(block(":root")).toContain(
+      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));",
+    );
+    expect(block(".dark")).not.toMatch(/--brand-gradient:/);
+    expect(block(":root")).toMatch(/^\s{2}--brand-2:/m);
+    expect(block(".dark")).toMatch(/^\s{2}--brand-2:/m);
   });
 
   it("narrows unknown stored values", () => {
     expect(isThemePresetId("ocean")).toBe(true);
+    expect(isThemePresetId("aurora")).toBe(true);
     expect(isThemePresetId("teal")).toBe(false);
     expect(isThemePresetId(null)).toBe(false);
   });

@@ -3,6 +3,7 @@ import {
   THEME_REACH_VALUES,
   updateProfileCelebrateDoneSchema,
   updateProfileFullNameSchema,
+  updateProfileThemePresetSchema,
   updateProfileThemeReachSchema,
   updateProfileTimezoneSchema,
 } from "./profile";
@@ -115,5 +116,25 @@ describe("updateProfileCelebrateDoneSchema", () => {
         updateProfileCelebrateDoneSchema.safeParse({ celebrateDone }).success,
       ).toBe(false);
     }
+  });
+});
+
+describe("updateProfileThemePresetSchema", () => {
+  it("accepts the two-accent presets — the enum derives from THEME_PRESET_IDS", () => {
+    for (const themePreset of ["aurora", "sunset", "nebula"]) {
+      const r = updateProfileThemePresetSchema.safeParse({ themePreset });
+      expect(r.success, themePreset).toBe(true);
+      expect(r.success && r.data.themePreset).toBe(themePreset);
+    }
+  });
+
+  it("still accepts a single-accent preset and rejects an unknown id", () => {
+    expect(
+      updateProfileThemePresetSchema.safeParse({ themePreset: "ocean" })
+        .success,
+    ).toBe(true);
+    expect(
+      updateProfileThemePresetSchema.safeParse({ themePreset: "teal" }).success,
+    ).toBe(false);
   });
 });

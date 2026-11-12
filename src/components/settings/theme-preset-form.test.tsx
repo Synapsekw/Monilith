@@ -26,10 +26,53 @@ describe("ThemePresetForm", () => {
       "Forest",
       "Ember",
       "Rose",
+      "Aurora",
+      "Sunset",
+      "Nebula",
     ]) {
       expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("radio", { name: "Keystone" })).toBeChecked();
+  });
+
+  it("draws a two-stop gradient dot for a two-accent preset, in both modes", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const tile = screen
+      .getByRole("radio", { name: "Aurora" })
+      .closest("label")!;
+    const dot = (mode: string) =>
+      tile.querySelector<HTMLElement>(`[data-swatch-accent="${mode}"]`)!;
+
+    expect(dot("light").style.background).toBe(
+      "linear-gradient(90deg, rgb(15, 125, 113), rgb(107, 89, 211))",
+    );
+    expect(dot("dark").style.background).toBe(
+      "linear-gradient(90deg, rgb(95, 214, 196), rgb(157, 141, 247))",
+    );
+  });
+
+  it("keeps a flat dot for a single-accent preset", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const tile = screen.getByRole("radio", { name: "Ocean" }).closest("label")!;
+    const dot = tile.querySelector<HTMLElement>(
+      '[data-swatch-accent="light"]',
+    )!;
+
+    expect(dot.style.background).toBe("rgb(31, 122, 140)");
+  });
+
+  it("selects a two-accent preset like any other", async () => {
+    const user = userEvent.setup();
+    render(<ThemePresetForm currentPreset="keystone" />);
+
+    await user.click(screen.getByRole("radio", { name: "Nebula" }));
+
+    expect(document.documentElement.getAttribute(THEME_PRESET_ATTR)).toBe(
+      "nebula",
+    );
+    expect(updateProfileThemePreset).toHaveBeenCalledWith({
+      themePreset: "nebula",
+    });
   });
 
   it("stamps the attribute synchronously on selection and persists it", async () => {

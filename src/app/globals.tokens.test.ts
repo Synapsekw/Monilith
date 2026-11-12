@@ -47,6 +47,9 @@ const THEME_INVARIANT = new Set([
   "--reach-surface",
   "--reach-hover",
   "--reach-glow",
+  // Derived from --brand and --brand-2, which every mode and preset block
+  // re-seeds on <html> — so one declaration follows them all.
+  "--brand-gradient",
 ]);
 
 describe("Keystone token contract", () => {
@@ -86,6 +89,8 @@ describe("Keystone token contract", () => {
       "--color-chart-spectrum-1:",
       "--color-chart-spectrum-2:",
       "--color-chart-spectrum-3:",
+      "--background-image-brand-gradient:",
+      "--background-image-brand-gradient-hover:",
     ]) {
       expect(CSS, `${entry} not registered in @theme`).toContain(entry);
     }
@@ -242,6 +247,54 @@ describe("theme reach tokens", () => {
     for (const t of ["--reach-content", "--reach-surface", "--reach-hover"]) {
       expect(printRoot).toContain(`${t}: 0%`);
     }
+  });
+});
+
+describe("brand gradient tokens", () => {
+  it("exposes the gradient as a background-image utility backed by the token", () => {
+    expect(FLAT).toContain(
+      "--background-image-brand-gradient: var(--brand-gradient);",
+    );
+  });
+
+  it("the hover fill is the same two stops at the old bg-primary/80 alpha", () => {
+    expect(FLAT).toContain(
+      "--background-image-brand-gradient-hover: linear-gradient(90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent));",
+    );
+  });
+
+  it("runs the chart spectrum from --brand to --brand-2, keeping today's stops", () => {
+    expect(valueIn(":root", "--chart-spectrum-1")).toBe(
+      "color-mix(in oklab, var(--brand) 85%, black)",
+    );
+    expect(valueIn(":root", "--chart-spectrum-2")).toBe("var(--brand)");
+    expect(valueIn(":root", "--chart-spectrum-3")).toBe(
+      "color-mix(in oklab, var(--brand-2) 60%, white)",
+    );
+    expect(valueIn(".dark", "--chart-spectrum-1")).toBe(
+      "color-mix(in oklab, var(--brand) 70%, white)",
+    );
+    expect(valueIn(".dark", "--chart-spectrum-2")).toBe("var(--brand)");
+    expect(valueIn(".dark", "--chart-spectrum-3")).toBe(
+      "color-mix(in oklab, var(--brand-2) 55%, black)",
+    );
+  });
+
+  it("keeps the focus ring and the primary colour on the first accent", () => {
+    for (const sel of [":root", ".dark"]) {
+      expect(valueIn(sel, "--ring")).toBe("var(--brand)");
+      expect(valueIn(sel, "--primary")).toBe("var(--brand)");
+    }
+  });
+
+  it("re-seeds both stops and the gradient inside the print root", () => {
+    const print = FLAT.split("@media print")[1] ?? "";
+    const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
+    expect(printRoot).toContain("--brand: #5a6ed5;");
+    expect(printRoot).toContain("--brand-2: #5a6ed5;");
+    expect(printRoot).toContain(
+      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));",
+    );
   });
 });
 
