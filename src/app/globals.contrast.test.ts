@@ -333,8 +333,12 @@ describe("reach levels", () => {
     expect(at('.dark[data-theme-reach="vivid"]')).toBeGreaterThan(
       at('[data-theme-reach="vivid"]'),
     );
-    // Nothing more specific may redeclare subtle away from zero.
-    expect(CSS).not.toMatch(/\.dark\[data-theme-reach="subtle"\]/);
+    // Nothing more specific may redeclare subtle away from zero: the one
+    // dark-subtle block carries the pre-reach chart greys and no reach token.
+    expect(blockOf('.dark[data-theme-reach="subtle"]')).not.toMatch(/--reach-/);
+    expect(
+      CSS.match(/\.dark\[data-theme-reach="subtle"\][^{]*\{/g),
+    ).toHaveLength(1);
   });
 });
 
@@ -608,6 +612,115 @@ describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
         expect(
           contrast(fg, contentCard(selector, level)),
         ).toBeGreaterThanOrEqual(7);
+      },
+    );
+  },
+);
+
+/**
+ * Chart colours (tinted and vivid; subtle keeps the pre-reach greys, pinned in
+ * globals.tokens.test.ts). `--chart-1` and `--chart-cat-1` ARE --brand, whose
+ * >= 3:1 floor on the content card at every reach level is "the brand is a
+ * visible non-text mark" above. What is left to prove here is the rest of the
+ * ramp and the second categorical series, which are read out of the stylesheet
+ * and recomputed for every preset and mode.
+ */
+function chartColour(selector: string, token: string): RGB {
+  // Chart tokens are derived once per MODE; the preset only moves the seeds.
+  const raw = declaration(
+    modeOf(selector) === "light" ? ":root" : ".dark",
+    token,
+  ).replace(/\s+/g, " ");
+  if (raw === "var(--brand)") return hex(declaration(selector, "--brand"));
+  const m = raw.match(
+    /^color-mix\( ?in srgb, var\((--[a-z0-9-]+)\) (\d+)%, var\((--[a-z0-9-]+)\) ?\)$/,
+  );
+  if (!m)
+    throw new Error(`${token} is not var(--brand) or an sRGB mix: ${raw}`);
+  return mixSrgb(
+    hex(declaration(selector, m[1])),
+    hex(declaration(selector, m[3])),
+    Number(m[2]),
+  );
+}
+
+/** sRGB → OKLab, for a perceptual distance between two series colours. */
+function oklab(rgb: RGB): [number, number, number] {
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function deltaE(a: RGB, b: RGB): number {
+  const [x, y] = [oklab(a), oklab(b)];
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+
+describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
+  "chart colours — %s",
+  (selector) => {
+    const ramp = () =>
+      [1, 2, 3, 4, 5].map((n) => chartColour(selector, `--chart-${n}`));
+
+    it("the series ramp and the first categorical colour start at --brand", () => {
+      const brand = hex(declaration(selector, "--brand"));
+      expect(chartColour(selector, "--chart-1")).toEqual(brand);
+      expect(chartColour(selector, "--chart-cat-1")).toEqual(brand);
+    });
+
+    it("adjacent ramp steps stay distinguishable (≥ 1.15:1)", () => {
+      const steps = ramp();
+      for (let i = 1; i < steps.length; i++) {
+        expect(
+          contrast(steps[i - 1], steps[i]),
+          `--chart-${i} vs --chart-${i + 1}`,
+        ).toBeGreaterThanOrEqual(1.15);
+      }
+    });
+
+    it.each(REACH_LEVELS)(
+      "the ramp fades monotonically into the content card at reach %s, and its last step is still off it",
+      (level) => {
+        const card = contentCard(selector, level);
+        const vsCard = ramp().map((c) => contrast(c, card));
+        for (let i = 1; i < vsCard.length; i++) {
+          expect(vsCard[i], `--chart-${i + 1}`).toBeLessThan(vsCard[i - 1]);
+        }
+        expect(vsCard[4]).toBeGreaterThanOrEqual(1.15);
+      },
+    );
+
+    it("the second categorical series is told apart from the first", () => {
+      // WCAG contrast is luminance-only and would fail a two-accent preset
+      // whose stops differ by hue, so this is an OKLab distance. 0.05 is about
+      // 2.5 just-noticeable differences; the floor is dark graphite, a
+      // near-grey accent with no hue to spend.
+      expect(
+        deltaE(
+          chartColour(selector, "--chart-cat-1"),
+          chartColour(selector, "--chart-cat-2"),
+        ),
+      ).toBeGreaterThanOrEqual(0.05);
+    });
+
+    it.each(REACH_LEVELS)(
+      "the second categorical series is a visible mark on the content card (≥ 3:1) at reach %s",
+      (level) => {
+        expect(
+          contrast(
+            chartColour(selector, "--chart-cat-2"),
+            contentCard(selector, level),
+          ),
+        ).toBeGreaterThanOrEqual(3);
       },
     );
   },

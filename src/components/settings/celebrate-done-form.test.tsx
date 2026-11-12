@@ -82,6 +82,27 @@ describe("CelebrateDoneForm", () => {
     expect(toggle).toHaveAttribute("aria-describedby", alert.id);
   });
 
+  it("takes effect in the open tab at once, and reverts with a failed save", async () => {
+    const root = document.documentElement;
+    root.setAttribute("data-celebrate", "on");
+    const user = userEvent.setup();
+    render(<CelebrateDoneForm initialCelebrateDone />);
+    const toggle = screen.getByRole("switch", { name: NAME });
+
+    await user.click(toggle);
+    expect(root.getAttribute("data-celebrate")).toBe("off");
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-busy", "false"));
+
+    updateProfileCelebrateDone.mockResolvedValue({
+      ok: false,
+      error: "Could not update preference.",
+    });
+    await user.click(toggle);
+    await screen.findByRole("alert");
+    expect(root.getAttribute("data-celebrate")).toBe("off");
+    root.removeAttribute("data-celebrate");
+  });
+
   it("clears the error on the next attempt", async () => {
     updateProfileCelebrateDone.mockResolvedValueOnce({
       ok: false,

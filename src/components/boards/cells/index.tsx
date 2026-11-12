@@ -53,10 +53,20 @@ function optionById(settings: Settings, id: string | null) {
  * contrast-clamped per-theme text). Interactive (the cell is click-to-edit),
  * so it opts into the pill hover motion.
  */
-function OptionPill({ option }: { option: ColumnOption }) {
+function OptionPill({
+  option,
+  statusPill = false,
+}: {
+  option: ColumnOption;
+  /** Status cells only: marks the pill the pop plays on when the user changes
+   *  the status (see components/ui/done-burst.tsx, which finds it by this
+   *  attribute — no ref, no state, nothing per row). */
+  statusPill?: boolean;
+}) {
   return (
     <ColorChip
       color={option.color}
+      data-status-pill={statusPill ? "" : undefined}
       className="hover:-translate-y-px hover:brightness-110"
     >
       {option.label}
@@ -73,7 +83,7 @@ export function StatusCell({
 }) {
   const opt = optionById(settings, value?.optionId ?? null);
   if (!opt) return <span className="text-cell" />;
-  return <OptionPill option={opt} />;
+  return <OptionPill option={opt} statusPill />;
 }
 
 export function DropdownCell({

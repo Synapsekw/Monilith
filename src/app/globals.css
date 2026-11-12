@@ -200,6 +200,11 @@
      turn streams. A box-shadow ring 0 → 6px — nothing scales — on the keystone
      curve; the reduced-motion block below collapses it like every animation. */
   --animate-pulse-ring: pulse-ring 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  /* Status pill pop: one 380ms scale bump when the user changes a status. The
+     class is added and removed imperatively by components/ui/done-burst.tsx —
+     it is never part of a pill's resting className, so a row re-mounting in
+     the virtualized table cannot replay it. Transform only. */
+  --animate-pill-pop: pill-pop 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadein {
@@ -253,6 +258,16 @@
   }
   60% {
     box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@keyframes pill-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
   }
 }
 
@@ -413,13 +428,25 @@
   --file-media: oklch(0.52 0.14 300);
   --file-generic: oklch(0.52 0 0);
 
-  --chart-1: oklch(0.72 0 0);
-  --chart-2: oklch(0.58 0 0);
-  --chart-3: oklch(0.46 0 0);
-  --chart-4: oklch(0.34 0 0);
-  --chart-5: oklch(0.22 0 0);
-  --chart-cat-1: #6366f1;
-  --chart-cat-2: #22d3ee;
+  /* Chart colours follow the preset (Tinted and Vivid). --chart-1..5 is a
+     sequential ramp: the brand, then --brand-2 fading into the content card
+     at 72 / 50 / 34 / 22% (the spec started at 32 / 18; the tail was raised
+     until it held 1.15:1 off the dark Vivid card in the two-accent presets).
+     Every faded step reads --brand-2 so a two-accent preset runs brand to
+     brand-2 and the ramp stays monotonic in lightness (alternating the two
+     seeds did not: dark aurora measured 1.16:1 between neighbours). The first two categorical series follow the preset too;
+     cat-2 leans 40% into the ink so it is told apart from cat-1 even when
+     --brand-2 IS --brand; cat-3..6 stay fixed hues. Mixed `in srgb` towards
+     the card SEED so globals.contrast.test.ts can reproduce every step.
+     NOT seed tokens: a preset block must never redeclare them. Subtle pins
+     the pre-reach literals back (see "Theme reach" after the .dark block). */
+  --chart-1: var(--brand);
+  --chart-2: color-mix(in srgb, var(--brand-2) 72%, var(--content-surface));
+  --chart-3: color-mix(in srgb, var(--brand-2) 50%, var(--content-surface));
+  --chart-4: color-mix(in srgb, var(--brand-2) 34%, var(--content-surface));
+  --chart-5: color-mix(in srgb, var(--brand-2) 22%, var(--content-surface));
+  --chart-cat-1: var(--brand);
+  --chart-cat-2: color-mix(in srgb, var(--brand-2) 60%, var(--foreground));
   --chart-cat-3: #a855f7;
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
@@ -541,13 +568,15 @@
   --file-media: oklch(0.565 0.14 300);
   --file-generic: oklch(0.55 0 0);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --chart-cat-1: #6366f1;
-  --chart-cat-2: #22d3ee;
+  /* Chart colours — dark. The same derivation as :root, repeated because
+     the light/dark parity test requires both palettes to declare them. */
+  --chart-1: var(--brand);
+  --chart-2: color-mix(in srgb, var(--brand-2) 72%, var(--content-surface));
+  --chart-3: color-mix(in srgb, var(--brand-2) 50%, var(--content-surface));
+  --chart-4: color-mix(in srgb, var(--brand-2) 34%, var(--content-surface));
+  --chart-5: color-mix(in srgb, var(--brand-2) 22%, var(--content-surface));
+  --chart-cat-1: var(--brand);
+  --chart-cat-2: color-mix(in srgb, var(--brand-2) 60%, var(--foreground));
   --chart-cat-3: #a855f7;
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
@@ -619,12 +648,36 @@
       dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
       tinted's is 4.58. Raising either again needs a darker light
       --muted-foreground in the preset seeds first.
+
+   Chart colours ride the same axis without a --reach-* token: at Tinted and
+   Vivid --chart-1..5 and --chart-cat-1/2 derive from the preset (declared in
+   the base blocks); Subtle pins the pre-reach literals back. The categorical
+   pair was mode-invariant and sits in the subtle block; the five greys were
+   per-mode, so the light ones sit in the subtle block (which beats the base
+   blocks by order) and the dark ones in a dark-subtle block (which beats it by
+   specificity). That block may hold chart greys ONLY — never a --reach-*
+   token (globals.contrast.test.ts).
    --------------------------------------------------------------------------- */
 [data-theme-reach="subtle"] {
   --reach-content: 0%;
   --reach-surface: 0%;
   --reach-hover: 0%;
   --reach-glow: 0;
+  --chart-1: oklch(0.72 0 0);
+  --chart-2: oklch(0.58 0 0);
+  --chart-3: oklch(0.46 0 0);
+  --chart-4: oklch(0.34 0 0);
+  --chart-5: oklch(0.22 0 0);
+  --chart-cat-1: #6366f1;
+  --chart-cat-2: #22d3ee;
+}
+
+.dark[data-theme-reach="subtle"] {
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
 }
 
 [data-theme-reach="vivid"] {
@@ -1577,6 +1630,16 @@
     --reach-surface: 0%;
     --reach-hover: 0%;
     --reach-glow: 0;
+    /* Charts print as at Subtle, for the same reason: the screen ramp is
+       resolved on <html> against the SCREEN preset and mode, and a dark
+       preset's pale series would vanish on paper. */
+    --chart-1: oklch(0.72 0 0);
+    --chart-2: oklch(0.58 0 0);
+    --chart-3: oklch(0.46 0 0);
+    --chart-4: oklch(0.34 0 0);
+    --chart-5: oklch(0.22 0 0);
+    --chart-cat-1: #6366f1;
+    --chart-cat-2: #22d3ee;
 
     /* Positioned (not `inset: 0`) so the root can grow PAST one page height:
        `inset: 0` pinned bottom to the viewport, clipping a multi-page Overview

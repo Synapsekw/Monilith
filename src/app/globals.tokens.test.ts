@@ -169,9 +169,13 @@ describe("theme reach tokens", () => {
       "0%",
       "0",
     ]);
-    expect([...tokensIn('[data-theme-reach="subtle"]')].sort()).toEqual(
-      [...REACH_TOKENS].sort(),
-    );
+    // Besides the four reach tokens the block only pins the chart colours back
+    // to their pre-reach literals (see "chart colours follow the preset").
+    expect(
+      [...tokensIn('[data-theme-reach="subtle"]')]
+        .filter((t) => !t.startsWith("--chart-"))
+        .sort(),
+    ).toEqual([...REACH_TOKENS].sort());
   });
 
   it("vivid sets the documented values", () => {
@@ -246,6 +250,99 @@ describe("theme reach tokens", () => {
     const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
     for (const t of ["--reach-content", "--reach-surface", "--reach-hover"]) {
       expect(printRoot).toContain(`${t}: 0%`);
+    }
+  });
+});
+
+describe("chart colours follow the preset", () => {
+  const flatValue = (selector: string, token: string) =>
+    valueIn(selector, token)
+      .replace(/\s+/g, " ")
+      .replace(/\( /g, "(")
+      .replace(/ \)/g, ")");
+
+  /** Today's (pre-reach) greys, per mode. Subtle must reproduce them exactly. */
+  const LIGHT_GREYS = [
+    "oklch(0.72 0 0)",
+    "oklch(0.58 0 0)",
+    "oklch(0.46 0 0)",
+    "oklch(0.34 0 0)",
+    "oklch(0.22 0 0)",
+  ];
+  const DARK_GREYS = [
+    "oklch(0.87 0 0)",
+    "oklch(0.556 0 0)",
+    "oklch(0.439 0 0)",
+    "oklch(0.371 0 0)",
+    "oklch(0.269 0 0)",
+  ];
+  const RAMP = [72, 50, 34, 22];
+
+  it.each([":root", ".dark"])(
+    "the default ramp in %s starts at --brand and fades --brand-2 into the card",
+    (selector) => {
+      expect(valueIn(selector, "--chart-1")).toBe("var(--brand)");
+      RAMP.forEach((pct, i) => {
+        expect(flatValue(selector, `--chart-${i + 2}`)).toBe(
+          `color-mix(in srgb, var(--brand-2) ${pct}%, var(--content-surface))`,
+        );
+      });
+    },
+  );
+
+  it.each([":root", ".dark"])(
+    "the first two categorical series in %s derive from the preset",
+    (selector) => {
+      expect(valueIn(selector, "--chart-cat-1")).toBe("var(--brand)");
+      expect(flatValue(selector, "--chart-cat-2")).toBe(
+        "color-mix(in srgb, var(--brand-2) 60%, var(--foreground))",
+      );
+      // The rest stay fixed hues: categorical series need distinct hues.
+      expect(valueIn(selector, "--chart-cat-3")).toBe("#a855f7");
+      expect(valueIn(selector, "--chart-cat-4")).toBe("#f59e0b");
+      expect(valueIn(selector, "--chart-cat-5")).toBe("#fb7185");
+      expect(valueIn(selector, "--chart-cat-6")).toBe("#34d399");
+    },
+  );
+
+  it("subtle holds today's exact greys and categorical hues, per mode", () => {
+    const light = '[data-theme-reach="subtle"]';
+    const dark = '.dark[data-theme-reach="subtle"]';
+    LIGHT_GREYS.forEach((grey, i) => {
+      expect(valueIn(light, `--chart-${i + 1}`)).toBe(grey);
+    });
+    DARK_GREYS.forEach((grey, i) => {
+      expect(valueIn(dark, `--chart-${i + 1}`)).toBe(grey);
+    });
+    // Mode-invariant before this change, so declared once.
+    expect(valueIn(light, "--chart-cat-1")).toBe("#6366f1");
+    expect(valueIn(light, "--chart-cat-2")).toBe("#22d3ee");
+    // The dark-subtle block exists ONLY for the five greys: it out-ranks the
+    // subtle block, so anything else in it would be a per-mode reach override.
+    expect([...tokensIn(dark)]).toEqual([
+      "--chart-1",
+      "--chart-2",
+      "--chart-3",
+      "--chart-4",
+      "--chart-5",
+    ]);
+  });
+
+  it("prints charts as at subtle — never the screen preset's ramp", () => {
+    const print = FLAT.split("@media print")[1] ?? "";
+    const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
+    LIGHT_GREYS.forEach((grey, i) => {
+      expect(printRoot).toContain(`--chart-${i + 1}: ${grey};`);
+    });
+    expect(printRoot).toContain("--chart-cat-1: #6366f1;");
+    expect(printRoot).toContain("--chart-cat-2: #22d3ee;");
+  });
+
+  it("no preset block redeclares a chart token — the ramp is derived", () => {
+    const presetBlocks = CSS.match(/\[data-theme-preset="[a-z]+"\] \{[^}]*\}/g);
+    expect(presetBlocks?.length).toBeGreaterThan(0);
+    for (const block of presetBlocks ?? []) {
+      expect(block).not.toMatch(/--chart-/);
     }
   });
 });

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateProfileCelebrateDone } from "@/lib/profile/actions";
 import { Switch } from "@/components/ui/switch";
+import { applyCelebrateDone } from "@/components/ui/done-burst";
 
 const ERROR_ID = "celebrate-done-error";
 
@@ -41,12 +42,16 @@ export function CelebrateDoneForm({
             if (pending) return;
             setError(null);
             setCelebrateDone(next);
+            // Takes effect in this tab now — the shell only re-reads the
+            // account's value on the next navigation that re-renders it.
+            applyCelebrateDone(next);
             startTransition(async () => {
               const res = await updateProfileCelebrateDone({
                 celebrateDone: next,
               });
               if (res.ok) return;
               setCelebrateDone(!next);
+              applyCelebrateDone(!next);
               setError(res.error);
             });
           }}
