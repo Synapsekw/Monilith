@@ -15,6 +15,8 @@ import { DashboardWidget } from "@/components/dashboards/DashboardWidget";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { PAGE_TITLE_CLASS } from "@/components/ui/page-header";
+import { cn } from "@/lib/utils";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
@@ -116,14 +118,14 @@ export function DashboardCanvas({
               }
             }}
             aria-label="Dashboard name"
-            className="h-8 max-w-md text-lg font-semibold"
+            className={cn(PAGE_TITLE_CLASS, "h-8 max-w-md")}
           />
         ) : (
           // A rename-in-place control, not a static page title — PageHeader's
           // static ReactNode title can't host the input/h1 swap above, so this
           // adopts the shared type ramp's classes directly (same treatment as
           // BoardHeader's dense toolbar row).
-          <h1 className="font-heading text-lg font-semibold tracking-tight">
+          <h1 className={PAGE_TITLE_CLASS}>
             <button
               type="button"
               onClick={openRename}

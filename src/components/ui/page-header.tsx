@@ -3,6 +3,18 @@ import { cn } from "@/lib/utils";
 import { Kicker } from "@/components/ui/kicker";
 
 /**
+ * The page-title type scale: 20px bold, tight tracking. A page's title is its
+ * anchor, so it must outweigh card headings and list rows (16px semibold).
+ * Exported for the few titles that cannot be a `<PageHeader>` because they are
+ * rename-in-place controls (board, dashboard) — they adopt the scale directly.
+ */
+export const PAGE_TITLE_CLASS =
+  "font-heading text-xl font-bold tracking-[-0.02em]";
+
+/** Nested `as="h2"` section headings sit one step below the page title. */
+const SECTION_TITLE_CLASS = "font-heading text-lg font-semibold tracking-tight";
+
+/**
  * The one page-title recipe. Kicker (optional) above an h1 on the shared type
  * ramp, optional description, right-aligned actions. Every top-level route
  * renders this so headings stop drifting between weights and sizes.
@@ -32,7 +44,7 @@ export function PageHeader({
             {kicker}
           </Kicker>
         ) : null}
-        <Tag className="font-heading text-lg font-semibold tracking-tight">
+        <Tag className={Tag === "h1" ? PAGE_TITLE_CLASS : SECTION_TITLE_CLASS}>
           {title}
         </Tag>
         {description ? (

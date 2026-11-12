@@ -204,6 +204,14 @@ describe("BoardHeader", () => {
     const title = screen.getByRole("button", { name: "Sprint backlog" });
     expect(title.className).toContain("h-7");
     expect(title.className).toContain("items-center");
+    // Page-title scale (20px bold) — and it must still truncate a long name.
+    expect(title).toHaveClass(
+      "text-xl",
+      "font-bold",
+      "tracking-[-0.02em]",
+      "truncate",
+    );
+    expect(title).not.toHaveClass("text-lg");
   });
 
   it("viewer heading occupies the same stable h-7 line box", () => {
@@ -220,6 +228,12 @@ describe("BoardHeader", () => {
     const heading = screen.getByRole("heading", { name: "Sprint backlog" });
     expect(heading.className).toContain("h-7");
     expect(heading.className).toContain("items-center");
+    expect(heading).toHaveClass(
+      "text-xl",
+      "font-bold",
+      "tracking-[-0.02em]",
+      "truncate",
+    );
   });
 
   it("opens the import wizard dialog from the overflow menu", async () => {
