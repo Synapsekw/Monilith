@@ -171,6 +171,18 @@ const stacked: SeriesData = {
 const widget = (id: string) =>
   ({ id, source_board_id: "b1", config: {} }) as never;
 
+/** A v2 chart widget whose measure uses the given aggregate. */
+const measured = (id: string, chartType: string, agg: string) =>
+  ({
+    id,
+    source_board_id: "b1",
+    config: {
+      chartType,
+      primary: { kind: "status", columnId: "c1" },
+      measure: agg === "count" ? { agg } : { agg, valueColumnId: "c-numbers" },
+    },
+  }) as never;
+
 /** Angle (degrees, 0 = 3 o'clock, counter-clockwise) of an SVG point. */
 function angleOf(x: number, y: number, cx: number, cy: number) {
   const deg = (Math.atan2(cy - y, x - cx) * 180) / Math.PI;
@@ -277,6 +289,40 @@ describe("ChartWidget donut total", () => {
     expect(getByTestId("chart-total")).toHaveTextContent("1,228");
   });
 
+  it.each(["sum", "count"] as const)(
+    "keeps the centre total for an additive %s measure",
+    (agg) => {
+      h.data = circular("donut");
+      const { getByTestId } = render(
+        <ChartWidget widget={measured(`w-total-${agg}`, "donut", agg)} />,
+      );
+      expect(getByTestId("chart-total")).toHaveTextContent("1,228");
+    },
+  );
+
+  // A sum of per-slice averages is not the average of anything.
+  it("shows no centre total when the measure is an average", () => {
+    h.data = circular("donut");
+    const { queryByTestId, container } = render(
+      <ChartWidget widget={measured("w-total-avg", "donut", "avg")} />,
+    );
+    expect(queryByTestId("chart-total")).toBeNull();
+    // ...but each slice still reports its own (correct) value.
+    expect(
+      [...container.querySelectorAll("[data-testid=chart-legend-value]")].map(
+        (n) => n.textContent,
+      ),
+    ).toEqual(["14", "9", "5", "1,200"]);
+  });
+
+  it("treats an aggregate it does not know as non-additive", () => {
+    h.data = circular("donut");
+    const { queryByTestId } = render(
+      <ChartWidget widget={measured("w-total-max", "donut", "max")} />,
+    );
+    expect(queryByTestId("chart-total")).toBeNull();
+  });
+
   it("does not show a centre total on a pie", () => {
     h.data = circular("pie");
     const { queryByTestId } = render(<ChartWidget widget={widget("w-pie")} />);
@@ -327,6 +373,53 @@ describe("ChartWidget legend", () => {
       { name: "Done", value: "11", color: "#22c55e" },
     ]);
   });
+
+  it.each(["sum", "count"] as const)(
+    "keeps the per-series total for an additive %s measure",
+    (agg) => {
+      h.data = stacked;
+      const { container } = render(
+        <ChartWidget widget={measured(`l-stack-${agg}`, "stackedBar", agg)} />,
+      );
+      expect(legendRows(container).map((r) => r.value)).toEqual([
+        "7",
+        "5",
+        "11",
+      ]);
+    },
+  );
+
+  // Summing a series' per-bucket averages across the axis is misinformation:
+  // the legend keeps its names and colour keys and drops the number.
+  it.each(["stackedBar", "line"] as const)(
+    "%s with an average measure lists names and colour keys but no summed value",
+    (ct) => {
+      h.data = { ...stacked, chartType: ct };
+      const { container } = render(
+        <ChartWidget widget={measured(`l-avg-${ct}`, ct, "avg")} />,
+      );
+      const items = [
+        ...container.querySelectorAll<HTMLElement>(
+          "[data-slot=chart-legend-item]",
+        ),
+      ];
+      expect(
+        items.map((li) => ({
+          name: within(li).getByTestId("chart-legend-name").textContent,
+          color: within(li)
+            .getByTestId("chart-legend-key")
+            .getAttribute("data-color"),
+        })),
+      ).toEqual([
+        { name: "To Do", color: "#9ca3af" },
+        { name: "In Progress", color: CATEGORICAL_PALETTE[1] },
+        { name: "Done", color: "#22c55e" },
+      ]);
+      expect(
+        container.querySelectorAll("[data-testid=chart-legend-value]"),
+      ).toHaveLength(0);
+    },
+  );
 
   it("paints each key with the same colour as its mark", () => {
     h.data = circular("pie");

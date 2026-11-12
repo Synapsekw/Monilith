@@ -12,9 +12,8 @@ import {
   updateProfileThemePresetSchema,
   updateProfileThemeReachSchema,
   updateProfileTimezoneSchema,
-  type THEME_REACH_VALUES,
 } from "@/lib/validations/profile";
-import type { ThemePresetId } from "@/lib/theme/presets";
+import type { ThemePresetId, ThemeReachId } from "@/lib/theme/presets";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 const AVATARS_BUCKET = "avatars";
@@ -90,7 +89,7 @@ export async function updateProfileThemePreset(input: {
  * makes the choice durable, and the caller reverts on a failed result.
  */
 export async function updateProfileThemeReach(input: {
-  themeReach: (typeof THEME_REACH_VALUES)[number];
+  themeReach: ThemeReachId;
 }): Promise<ActionResult> {
   const parsed = updateProfileThemeReachSchema.safeParse(input);
   if (!parsed.success)

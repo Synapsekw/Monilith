@@ -132,16 +132,117 @@ describe("fireDoneBurst", () => {
     expect(particles()).toHaveLength(5);
   });
 
-  it("runs each square for 500ms, animating transform and opacity only", () => {
+  type Frame = {
+    offset: number;
+    transform: string;
+    opacity: string;
+    easing?: string;
+  };
+  const calls = () =>
+    animate.mock.calls as unknown as [Frame[], KeyframeAnimationOptions][];
+  /** The px arguments of every `translate(Xpx, Ypx)` in a transform list. */
+  const translates = (transform: string) =>
+    [...transform.matchAll(/translate\((-?[\d.]+)px, (-?[\d.]+)px\)/g)].map(
+      // `+ 0` folds the "-0.0px" a zero throw to the left serialises to.
+      (m) => [Number(m[1]) + 0, Number(m[2]) + 0] as const,
+    );
+
+  it("runs each square for 650–700ms, animating transform and opacity only", () => {
     fireDoneBurst(cell());
-    const [keyframes, options] = animate.mock.calls[0] as [
-      Record<string, string>[],
-      KeyframeAnimationOptions,
-    ];
-    expect(options.duration).toBe(500);
-    for (const frame of keyframes) {
-      expect(Object.keys(frame).sort()).toEqual(["opacity", "transform"]);
+    for (const [keyframes, options] of calls()) {
+      expect(options.duration).toBeGreaterThanOrEqual(650);
+      expect(options.duration).toBeLessThanOrEqual(700);
+      for (const frame of keyframes) {
+        expect(
+          Object.keys(frame)
+            .filter((k) => k !== "offset" && k !== "easing")
+            .sort(),
+        ).toEqual(["opacity", "transform"]);
+      }
     }
+  });
+
+  it("stays fully opaque while it travels and fades only over the last ~35%", () => {
+    // The first version faded on the same ease-out as the movement: 0.51
+    // opacity 50ms in and 0.06 at 200ms, so nothing was ever seen.
+    fireDoneBurst(cell());
+    for (const [keyframes, options] of calls()) {
+      // Keyframe offsets are fractions of EASED progress. Only a linear
+      // timing function makes "offset 0.65" mean "65% of the duration".
+      expect(options.easing ?? "linear").toBe("linear");
+
+      const offsets = keyframes.map((f) => f.offset);
+      expect(offsets[0]).toBe(0);
+      expect(offsets.at(-1)).toBe(1);
+      expect([...offsets].sort((a, b) => a - b)).toEqual(offsets);
+
+      const fadeFrom = offsets.at(-2)!;
+      expect(fadeFrom).toBeGreaterThanOrEqual(0.6);
+      expect(fadeFrom).toBeLessThanOrEqual(0.7);
+      for (const frame of keyframes.slice(0, -1)) {
+        expect(frame.opacity, `offset ${frame.offset}`).toBe("1");
+      }
+      expect(keyframes.at(-1)!.opacity).toBe("0");
+    }
+  });
+
+  it("has covered most of its travel by the time the fade starts", () => {
+    fireDoneBurst(cell());
+    for (const [keyframes] of calls()) {
+      const radial = (f: Frame) => Math.hypot(...translates(f.transform)[1]);
+      expect(radial(keyframes.at(-2)!)).toBeGreaterThanOrEqual(
+        0.85 * radial(keyframes.at(-1)!),
+      );
+    }
+  });
+
+  it.each([
+    ["shortest", 0],
+    ["longest", 0.999999],
+  ])(
+    "flings 28–64px radially with a slight downward drift (%s throw)",
+    (_name, random) => {
+      vi.spyOn(Math, "random").mockReturnValue(random);
+      fireDoneBurst(cell());
+      for (const [keyframes] of calls()) {
+        const first = keyframes[0].transform;
+        const last = keyframes.at(-1)!.transform;
+        // Anchored on the cell's centre, starting there.
+        expect(first.startsWith("translate(-50%, -50%)")).toBe(true);
+        expect(translates(first)).toEqual([
+          [0, 0],
+          [0, 0],
+        ]);
+        // translate #1 is the drift (straight down), #2 the radial throw.
+        const [drift, radial] = translates(last);
+        expect(drift[0]).toBe(0);
+        expect(drift[1]).toBeGreaterThan(0);
+        expect(drift[1]).toBeLessThanOrEqual(12);
+        const reach = Math.hypot(...radial);
+        expect(reach).toBeGreaterThanOrEqual(27.9);
+        expect(reach).toBeLessThanOrEqual(64.1);
+        // A little rotation — a tumble, not a spin.
+        const turn = Math.abs(Number(last.match(/rotate\((-?[\d.]+)deg\)/)![1]));
+        expect(turn).toBeGreaterThan(0);
+        expect(turn).toBeLessThanOrEqual(90);
+      }
+      vi.restoreAllMocks();
+    },
+  );
+
+  it("staggers the squares by a small random delay and holds the start pose through it", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.999999);
+    fireDoneBurst(cell());
+    for (const [, options] of calls()) {
+      expect(options.delay).toBeGreaterThan(0);
+      expect(options.delay).toBeLessThanOrEqual(60);
+      expect(options.fill).toBe("both");
+    }
+    random.mockReturnValue(0);
+    animate.mockClear();
+    fireDoneBurst(cell());
+    for (const [, options] of calls()) expect(options.delay).toBe(0);
+    vi.restoreAllMocks();
   });
 
   it("removes every square when its animation finishes", () => {

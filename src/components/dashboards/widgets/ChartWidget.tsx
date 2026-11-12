@@ -43,6 +43,7 @@ import { useReducedMotion } from "@/components/dashboards/widgets/use-reduced-mo
 import { CHART_MOTION } from "@/components/dashboards/widgets/chart-theme";
 import { useWidgetSeries } from "@/lib/dashboards/use-widget-series";
 import { pivotSeries, type PivotRow } from "@/lib/dashboards/series";
+import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import {
   AXIS_PROPS,
   GRID_STROKE,
@@ -87,16 +88,35 @@ function sliceEntries(
   }));
 }
 
-/** One legend row per series: its colour and its total across the axis. */
+/**
+ * Whether values of this measure may be ADDED across buckets. Counts and sums
+ * can; an average cannot (a sum of averages is the average of nothing). This
+ * is an allow-list on purpose: an aggregate this build does not know — a
+ * future min/max/percent/distinct count — is treated as non-additive, so a
+ * new aggregate can at worst hide a total, never invent one.
+ */
+function isAdditiveMeasure(config: Record<string, unknown>): boolean {
+  const agg = normalizeChartConfig(config).measure?.agg as unknown;
+  return agg === "count" || agg === "sum";
+}
+
+/**
+ * One legend row per series: its colour and — for an additive measure only —
+ * its total across the axis. A non-additive measure has no honest per-series
+ * number, so the row keeps its colour key and name and carries no value.
+ */
 function seriesEntries(
   rows: PivotRow[],
   series: { key: string; paint: Paint }[],
+  additive: boolean,
 ): ChartLegendEntry[] {
   return series.map((s) => ({
     key: s.key,
     label: s.key,
     color: solidOf(s.paint),
-    value: rows.reduce((sum, r) => sum + num(r[s.key]), 0),
+    ...(additive
+      ? { value: rows.reduce((sum, r) => sum + num(r[s.key]), 0) }
+      : {}),
   }));
 }
 
@@ -199,8 +219,9 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
     animationEasing: "ease-out" as const,
   };
   const glow = { filter: `url(#${glowId(wid)})` };
+  const additive = isAdditiveMeasure(config);
   const seriesLegend =
-    series.length > 1 ? seriesEntries(rows, colors.series) : null;
+    series.length > 1 ? seriesEntries(rows, colors.series, additive) : null;
 
   // ── circular charts ── (per-cell colors from resolver.cells)
   if (ct === "pie" || ct === "donut") {
@@ -212,8 +233,12 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
         side
         enter={CIRCULAR_ENTER}
         overlay={
-          ct === "donut" ? (
-            <DonutTotal total={legend.reduce((t, e) => t + e.value, 0)} />
+          // Each slice's own value is always true; their SUM only is for an
+          // additive measure, so an average donut has an empty hole.
+          ct === "donut" && additive ? (
+            <DonutTotal
+              total={legend.reduce((t, e) => t + (e.value ?? 0), 0)}
+            />
           ) : null
         }
       >

@@ -64,23 +64,32 @@ export function ThemeToggle() {
           value={preset}
           onValueChange={(value) => setPreset(value as ThemePresetId)}
         >
-          {THEME_PRESETS.map((p) => (
-            <DropdownMenuRadioItem key={p.id} value={p.id}>
-              {/* Inline hex is correct here and nowhere else: the swatch IS
-                  the data — it previews palettes that aren't active yet, so
-                  semantic tokens can't stand in for it. */}
-              <span
-                aria-hidden
-                className="size-3 rounded-full"
-                style={{
-                  background: swatchAccentFill(
-                    resolvedTheme === "dark" ? p.swatch.dark : p.swatch.light,
-                  ),
-                }}
-              />
-              {p.label}
-            </DropdownMenuRadioItem>
-          ))}
+          {THEME_PRESETS.map((p) => {
+            const swatch =
+              resolvedTheme === "dark" ? p.swatch.dark : p.swatch.light;
+            // Same rule as the settings tiles: a second accent stretches the
+            // dot into a pill, or the gradient cannot be seen.
+            const pill = swatch.accent2 !== undefined;
+            return (
+              <DropdownMenuRadioItem key={p.id} value={p.id}>
+                {/* Inline hex is correct here and nowhere else: the swatch IS
+                    the data — it previews palettes that aren't active yet, so
+                    semantic tokens can't stand in for it. */}
+                <span
+                  aria-hidden
+                  data-swatch-accent=""
+                  data-swatch-shape={pill ? "pill" : "dot"}
+                  className={
+                    pill
+                      ? "h-3 w-6 shrink-0 rounded-full"
+                      : "size-3 shrink-0 rounded-full"
+                  }
+                  style={{ background: swatchAccentFill(swatch) }}
+                />
+                {p.label}
+              </DropdownMenuRadioItem>
+            );
+          })}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

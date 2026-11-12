@@ -116,7 +116,8 @@ function darkBloomPeak(selector: string): number {
  */
 const REACH_LEVELS = ["subtle", "tinted", "vivid"] as const;
 type ReachLevel = (typeof REACH_LEVELS)[number];
-type ReachToken = "--reach-content" | "--reach-surface" | "--reach-hover";
+type ReachToken =
+  "--reach-content" | "--reach-surface" | "--reach-hover" | "--reach-selected";
 
 type Mode = "light" | "dark";
 
@@ -125,12 +126,21 @@ function modeOf(selector: string): Mode {
   return selector.startsWith(".dark") ? "dark" : "light";
 }
 
+const DARK_VIVID = '.dark[data-theme-reach="vivid"]';
+
+/** Does this block declare the token itself (rather than inherit it)? */
+function declares(selector: string, token: string): boolean {
+  return new RegExp(`^\\s{2}${token}:`, "m").test(blockOf(selector));
+}
+
 /**
  * The block that decides a reach token for a mode × level, mirroring the
  * cascade on <html>. Tinted is the default and lives in `:root`; subtle and
- * vivid have a block each. `--reach-content` alone is per-mode: `.dark`
- * redeclares the tinted value and `.dark[data-theme-reach="vivid"]` the vivid
- * one. Subtle is one block for both modes — it comes after `.dark` and wins.
+ * vivid have a block each. Dark overrides ride more specific blocks and are
+ * read off the stylesheet, not restated: `.dark` redeclares the tinted
+ * `--reach-content`, and `.dark[data-theme-reach="vivid"]` whichever vivid
+ * tokens it lists (content and surface). Subtle is one block for both modes —
+ * it comes after `.dark` and wins.
  */
 function reachSelector(
   level: ReachLevel,
@@ -138,10 +148,11 @@ function reachSelector(
   mode: Mode,
 ): string {
   if (level === "subtle") return '[data-theme-reach="subtle"]';
-  const perMode = token === "--reach-content" && mode === "dark";
-  if (level === "tinted") return perMode ? ".dark" : ":root";
-  return perMode
-    ? '.dark[data-theme-reach="vivid"]'
+  if (level === "tinted") {
+    return mode === "dark" && declares(".dark", token) ? ".dark" : ":root";
+  }
+  return mode === "dark" && declares(DARK_VIVID, token)
+    ? DARK_VIVID
     : '[data-theme-reach="vivid"]';
 }
 
@@ -295,6 +306,7 @@ describe("reach levels", () => {
         "--reach-content",
         "--reach-surface",
         "--reach-hover",
+        "--reach-selected",
       ] as const) {
         const [s, t, v] = REACH_LEVELS.map((l) => reachPct(l, token, mode));
         expect(s, `${mode} ${token}`).toBe(0);
@@ -304,20 +316,38 @@ describe("reach levels", () => {
     }
   });
 
-  it("only --reach-content is per-mode, and dark carries more than light", () => {
+  it("dark overrides exactly content (tinted, vivid) and surface (vivid), and carries more than light", () => {
     for (const level of ["tinted", "vivid"] as const) {
       expect(reachPct(level, "--reach-content", "dark")).toBeGreaterThan(
         reachPct(level, "--reach-content", "light"),
       );
     }
+    expect(reachPct("vivid", "--reach-surface", "dark")).toBeGreaterThan(
+      reachPct("vivid", "--reach-surface", "light"),
+    );
     // The dark blocks redeclare nothing else, so the other tokens cannot
-    // silently diverge between modes.
+    // silently diverge between modes. Dark vivid carries --reach-surface as
+    // well: the raised surfaces have to climb WITH the content card or they
+    // sink into it (see "raised surfaces stay off the content card" below).
     expect(blockOf(".dark").match(/--reach-[a-z]+(?=:)/g)).toEqual([
       "--reach-content",
     ]);
-    expect(
-      blockOf('.dark[data-theme-reach="vivid"]').match(/--reach-[a-z]+(?=:)/g),
-    ).toEqual(["--reach-content"]);
+    expect(blockOf(DARK_VIVID).match(/--reach-[a-z]+(?=:)/g)).toEqual([
+      "--reach-content",
+      "--reach-surface",
+    ]);
+  });
+
+  it("dark vivid stays stronger than dark tinted, on the card and on raised surfaces", () => {
+    // Fixing the flattened cards must not be done by quietly turning Vivid
+    // into Tinted-with-a-glow: both dark mixes keep at least two percentage
+    // points over their tinted value.
+    for (const token of ["--reach-content", "--reach-surface"] as const) {
+      expect(
+        reachPct("vivid", token, "dark") - reachPct("tinted", token, "dark"),
+        token,
+      ).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it("orders the blocks so the cascade resolves mode × reach on <html>", () => {
@@ -330,15 +360,169 @@ describe("reach levels", () => {
     expect(dark).toBeGreaterThan(at(":root"));
     expect(at('[data-theme-reach="subtle"]')).toBeGreaterThan(dark);
     expect(at('[data-theme-reach="vivid"]')).toBeGreaterThan(dark);
-    expect(at('.dark[data-theme-reach="vivid"]')).toBeGreaterThan(
-      at('[data-theme-reach="vivid"]'),
-    );
+    expect(at(DARK_VIVID)).toBeGreaterThan(at('[data-theme-reach="vivid"]'));
     // Nothing more specific may redeclare subtle away from zero: the one
     // dark-subtle block carries the pre-reach chart greys and no reach token.
     expect(blockOf('.dark[data-theme-reach="subtle"]')).not.toMatch(/--reach-/);
     expect(
       CSS.match(/\.dark\[data-theme-reach="subtle"\][^{]*\{/g),
     ).toHaveLength(1);
+  });
+});
+
+/**
+ * Raised surfaces vs the content card they sit on. The seeds put `--surface` /
+ * `--card` about 1.07:1 above the dark content card; reach mixes the brand
+ * into BOTH, by different amounts, so a content mix that outruns the surface
+ * mix closes that gap. The first dark Vivid values (content 9%, surface 5%)
+ * measured 1.000-1.020 in all nine presets and inverted the red channel in
+ * ember and sunset: cards dissolved into the page.
+ *
+ * Floor: the separation the seeds have at subtle, minus 0.02. The tolerance
+ * is what Tinted already spends (forest: 1.072 -> 1.058) plus one 8-bit
+ * rounding step of a near-black mix (about 0.005); the absolute 1.05 in dark
+ * is the lowest subtle value (1.068) less the same tolerance, rounded down.
+ * Light seeds are identical (white on white, told apart by the hairline), so
+ * there the floor is trivially met and only the direction is pinned.
+ */
+describe.each([
+  ...LIGHT_SELECTORS.map((s) => [s, "light"] as const),
+  ...DARK_SELECTORS.map((s) => [s, "dark"] as const),
+])("raised surfaces stay off the content card — %s", (selector, mode) => {
+  describe.each(["--surface", "--card"] as const)("%s", (seed) => {
+    it.each(REACH_LEVELS)(
+      "keeps its subtle separation (−0.02) and never inverts at reach %s",
+      (level) => {
+        const atSubtle = contrast(
+          raised(selector, seed, "subtle"),
+          contentCard(selector, "subtle"),
+        );
+        const surface = raised(selector, seed, level);
+        const card = contentCard(selector, level);
+
+        expect(contrast(surface, card)).toBeGreaterThanOrEqual(atSubtle - 0.02);
+        if (mode === "dark") {
+          expect(contrast(surface, card)).toBeGreaterThanOrEqual(1.05);
+          expect(luminance(surface)).toBeGreaterThan(luminance(card));
+        }
+        // No channel may cross: a raised surface is lighter than the card in
+        // dark and never lighter than it in light.
+        surface.forEach((channel, i) => {
+          if (mode === "dark") {
+            expect(channel, `channel ${i}`).toBeGreaterThanOrEqual(card[i]);
+          } else {
+            expect(channel, `channel ${i}`).toBeLessThanOrEqual(card[i]);
+          }
+        });
+      },
+    );
+  });
+});
+
+/** `--state-selected` is the brand at N% alpha, declared per MODE. */
+function stateSelectedAlpha(mode: Mode): number {
+  const raw = declaration(
+    mode === "light" ? ":root" : ".dark",
+    "--state-selected",
+  );
+  const m = raw.match(
+    /^color-mix\(in oklab, var\(--brand\) (\d+(?:\.\d+)?)%, transparent\)$/,
+  );
+  if (!m) throw new Error(`--state-selected is not brand N% alpha: ${raw}`);
+  return Number(m[1]) / 100;
+}
+
+/**
+ * A selected row on `bg` at a reach level. The alias is
+ * `color-mix(in srgb, var(--state-selected), var(--brand) var(--reach-selected))`:
+ * both sides are the brand, so only the alpha interpolates — the fill is the
+ * brand at `p + (1 − p) × seed alpha`.
+ */
+function selectedOn(
+  selector: string,
+  mode: Mode,
+  level: ReachLevel,
+  bg: RGB,
+): RGB {
+  const p = reachPct(level, "--reach-selected", mode) / 100;
+  return over(
+    hex(declaration(selector, "--brand")),
+    p + (1 - p) * stateSelectedAlpha(mode),
+    bg,
+  );
+}
+
+/** Every ground a selected or hovered row is painted on, at a reach level. */
+function rowGrounds(
+  selector: string,
+  mode: Mode,
+  level: ReachLevel,
+): Array<[string, RGB]> {
+  const grounds: Array<[string, RGB]> = [
+    ["content card", contentCard(selector, level)],
+    ...RAISED_SURFACE_SEEDS.map(
+      (seed) => [seed, raised(selector, seed, level)] as [string, RGB],
+    ),
+    // The sidebar: rows sit straight on the wash.
+    ...washStops(selector).map(
+      (stop) => [`wash ${stop}`, hex(stop)] as [string, RGB],
+    ),
+  ];
+  if (mode === "dark") {
+    // …and under the brand bloom at its declared peak (dark only; the light
+    // bloom is near-white and is the easier case for both checks).
+    const brand = hex(declaration(selector, "--brand"));
+    const peak = darkBloomPeak(selector);
+    for (const stop of washStops(selector)) {
+      grounds.push([`bloomed wash ${stop}`, over(brand, peak, hex(stop))]);
+    }
+  }
+  return grounds;
+}
+
+/**
+ * Selected vs hover. Selected is the brand at 14% alpha; once reach leaned the
+ * hover fill to the brand too (12.6% alpha at tinted), an active sidebar row
+ * and a hovered one composited to the same colour — hover was even the
+ * stronger of the two on the dark wash (0.82x). `--reach-selected` adds brand
+ * to the selected fill so it keeps its lead.
+ *
+ * Metric: the luminance lift of the composited fill over its own ground,
+ * `contrast(fill on bg, bg) − 1`. Selected must lift at least 1.5x what hover
+ * does, on every ground a row can sit on. 1.5 is not a taste number: it is
+ * the worst ratio the pre-reach look has (subtle: 1.51, dark keystone under
+ * the bloom), so the rule reads "no reach level is worse than subtle".
+ */
+describe.each([
+  ...LIGHT_SELECTORS.map((s) => [s, "light"] as const),
+  ...DARK_SELECTORS.map((s) => [s, "dark"] as const),
+])("selected is visibly stronger than hover — %s", (selector, mode) => {
+  const lift = (fill: RGB, bg: RGB) => contrast(fill, bg) - 1;
+
+  describe.each(REACH_LEVELS)("at reach %s", (level) => {
+    it("selected lifts ≥ 1.5× the hover fill on every ground", () => {
+      for (const [name, bg] of rowGrounds(selector, mode, level)) {
+        const selected = lift(selectedOn(selector, mode, level, bg), bg);
+        const hover = lift(hovered(selector, mode, level, bg), bg);
+        expect(selected / hover, name).toBeGreaterThanOrEqual(1.5);
+      }
+    });
+
+    it("body text clears AA on a selected row and on a hovered row", () => {
+      // Active rows, open menu triggers and the picked option all set
+      // `text-foreground` on the fill.
+      const fg = hex(declaration(selector, "--foreground"));
+      for (const [name, bg] of rowGrounds(selector, mode, level)) {
+        expect(
+          contrast(fg, selectedOn(selector, mode, level, bg)),
+          `selected on ${name}`,
+        ).toBeGreaterThanOrEqual(AA);
+        expect(
+          contrast(fg, hovered(selector, mode, level, bg)),
+          `hover on ${name}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    });
   });
 });
 
@@ -665,6 +849,202 @@ function deltaE(a: RGB, b: RGB): number {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
 
+/** sRGB → OKLCH: lightness, chroma, hue in degrees [0, 360). */
+function oklch(rgb: RGB): [number, number, number] {
+  const [l, a, b] = oklab(rgb);
+  return [
+    l,
+    Math.hypot(a, b),
+    ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360,
+  ];
+}
+
+/** OKLCH → LINEAR sRGB, unclamped — a channel outside [0, 1] is out of gamut. */
+function oklchToLinearSrgb([L, C, h]: [number, number, number]): number[] {
+  const a = C * Math.cos((h * Math.PI) / 180);
+  const b = C * Math.sin((h * Math.PI) / 180);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+function inSrgbGamut(lch: [number, number, number]): boolean {
+  return oklchToLinearSrgb(lch).every((v) => v >= 0 && v <= 1);
+}
+
+function oklchToSrgb(lch: [number, number, number]): RGB {
+  return oklchToLinearSrgb(lch).map((v) => {
+    const c = Math.min(1, Math.max(0, v));
+    return Math.round(
+      255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055),
+    );
+  }) as RGB;
+}
+
+describe("OKLCH helpers", () => {
+  it("round-trips sRGB → OKLCH → sRGB exactly, in 8-bit", () => {
+    for (const colour of [
+      [127, 207, 156],
+      [90, 110, 213],
+      [201, 201, 210],
+      [255, 255, 255],
+      [14, 14, 16],
+    ] as RGB[]) {
+      expect(oklchToSrgb(oklch(colour))).toEqual(colour);
+    }
+  });
+
+  it("matches the CSS Color 4 reference value for sRGB red", () => {
+    // red is oklch(0.628 0.2577 29.23).
+    const [l, c, h] = oklch([255, 0, 0]);
+    expect(l).toBeCloseTo(0.628, 3);
+    expect(c).toBeCloseTo(0.2577, 3);
+    expect(h).toBeCloseTo(29.23, 1);
+  });
+});
+
+/**
+ * Categorical chart colours (tinted and vivid; subtle pins the old literals).
+ *
+ * `--chart-cat-1` is the brand. `--chart-cat-2..6` used to be a tint of the
+ * brand plus four FIXED hues, which collided two ways: cat-2 was the same hue
+ * as cat-1 in every single-accent preset, and a warm or green brand landed on
+ * top of a fixed hue (dark sunset vs #f59e0b: ΔE 0.046; dark forest vs
+ * #34d399: 0.052). They are now ROTATIONS of the brand's own hue —
+ * `oklch(from var(--brand) L C calc(h + N))` at 60° steps — so the six sit a
+ * sixth of the wheel apart whatever the brand is.
+ *
+ * Lightness and chroma are fixed numbers, chosen INSIDE the sRGB gamut at
+ * every hue. That is what makes this file able to predict the browser: an
+ * in-gamut oklch() needs no gamut mapping, which engines do differently.
+ */
+const ROTATED_SUPPORTS = "@supports (color: oklch(from red l c h)) {";
+
+function rotatedBlock(mode: Mode): string {
+  const start = CSS.indexOf(`\n${ROTATED_SUPPORTS}`);
+  if (start === -1) throw new Error("no relative-colour @supports block");
+  const body = CSS.slice(start, CSS.indexOf("\n}", start + 1));
+  const open = body.indexOf(mode === "light" ? "\n  :root {" : "\n  .dark {");
+  if (open === -1) throw new Error(`no ${mode} block inside @supports`);
+  return body.slice(open, body.indexOf("\n  }", open));
+}
+
+type Rotation = { l: number; c: number; turn: number };
+
+function rotation(mode: Mode, n: number): Rotation {
+  const m = rotatedBlock(mode).match(
+    new RegExp(
+      `--chart-cat-${n}:\\s*oklch\\(\\s*from var\\(--brand\\)\\s+([\\d.]+)\\s+([\\d.]+)\\s+calc\\(h \\+ (\\d+)\\)\\s*\\);`,
+    ),
+  );
+  if (!m) {
+    throw new Error(
+      `--chart-cat-${n} (${mode}) is not oklch(from var(--brand) L C calc(h + N))`,
+    );
+  }
+  return { l: Number(m[1]), c: Number(m[2]), turn: Number(m[3]) };
+}
+
+const ROTATED = [2, 3, 4, 5, 6] as const;
+
+/** The six categorical colours as an engine with relative colour paints them. */
+function categorical(selector: string): RGB[] {
+  const brand = hex(declaration(selector, "--brand"));
+  const hue = oklch(brand)[2];
+  return [
+    brand,
+    ...ROTATED.map((n) => {
+      const { l, c, turn } = rotation(modeOf(selector), n);
+      return oklchToSrgb([l, c, (hue + turn) % 360]);
+    }),
+  ];
+}
+
+describe.each(["light", "dark"] as const)(
+  "categorical chart colours — the %s rotation",
+  (mode) => {
+    it("redeclares exactly --chart-cat-2..6, at five 60° steps from the brand", () => {
+      expect(
+        [...rotatedBlock(mode).matchAll(/^\s{4}(--[a-z0-9-]+):/gm)].map(
+          (m) => m[1],
+        ),
+      ).toEqual(ROTATED.map((n) => `--chart-cat-${n}`));
+      expect(ROTATED.map((n) => rotation(mode, n).turn)).toEqual([
+        60, 120, 180, 240, 300,
+      ]);
+    });
+
+    it("every rotated colour is inside sRGB at EVERY hue — no gamut mapping, for any brand", () => {
+      for (const n of ROTATED) {
+        const { l, c } = rotation(mode, n);
+        for (let h = 0; h < 360; h++) {
+          expect(inSrgbGamut([l, c, h]), `--chart-cat-${n} at hue ${h}`).toBe(
+            true,
+          );
+        }
+      }
+    });
+
+    it("neighbouring rotations are ≥ 0.10 apart by construction, whatever the brand", () => {
+      // Two colours 60° apart at chroma c1, c2 and lightness l1, l2 are
+      // sqrt(Δl² + c1² + c2² − c1·c2) apart in OKLab — independent of hue.
+      for (let i = 1; i < ROTATED.length; i++) {
+        const a = rotation(mode, ROTATED[i - 1]);
+        const b = rotation(mode, ROTATED[i]);
+        expect(
+          Math.sqrt((a.l - b.l) ** 2 + a.c ** 2 + b.c ** 2 - a.c * b.c),
+        ).toBeGreaterThanOrEqual(0.1);
+      }
+    });
+  },
+);
+
+describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
+  "categorical chart colours — %s",
+  (selector) => {
+    it("all six are told apart pairwise (OKLab ΔE ≥ 0.10)", () => {
+      // WCAG contrast is luminance-only and blind to hue, so this is an OKLab
+      // distance. 0.02 is roughly one just-noticeable difference; 0.10 is five
+      // of them, and twice what the old palette's worst pairs had (0.046-0.072
+      // in five dark presets). It is also what the geometry can promise: the
+      // largest chroma that stays inside sRGB at every hue is about 0.12, and
+      // 60° of hue at that chroma is 0.12 apart before any lightness step.
+      const colours = categorical(selector);
+      for (let i = 0; i < colours.length; i++) {
+        for (let j = i + 1; j < colours.length; j++) {
+          expect(
+            deltaE(colours[i], colours[j]),
+            `--chart-cat-${i + 1} vs --chart-cat-${j + 1}`,
+          ).toBeGreaterThanOrEqual(0.1);
+        }
+      }
+    });
+
+    // Subtle is not listed: there the six are the pre-reach literals.
+    it.each(["tinted", "vivid"] as const)(
+      "each is a visible non-text mark (≥ 3:1) on the content card and on --card at reach %s",
+      (level) => {
+        categorical(selector).forEach((colour, i) => {
+          for (const ground of [
+            contentCard(selector, level),
+            raised(selector, "--card", level),
+          ]) {
+            expect(
+              contrast(colour, ground),
+              `--chart-cat-${i + 1}`,
+            ).toBeGreaterThanOrEqual(3);
+          }
+        });
+      },
+    );
+  },
+);
+
 describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
   "chart colours — %s",
   (selector) => {
@@ -699,21 +1079,11 @@ describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
       },
     );
 
-    it("the second categorical series is told apart from the first", () => {
-      // WCAG contrast is luminance-only and would fail a two-accent preset
-      // whose stops differ by hue, so this is an OKLab distance. 0.05 is about
-      // 2.5 just-noticeable differences; the floor is dark graphite, a
-      // near-grey accent with no hue to spend.
-      expect(
-        deltaE(
-          chartColour(selector, "--chart-cat-1"),
-          chartColour(selector, "--chart-cat-2"),
-        ),
-      ).toBeGreaterThanOrEqual(0.05);
-    });
-
+    // The base-block --chart-cat-2 is now only the FALLBACK for engines
+    // without relative colour syntax; the six-way distinctness guarantee is
+    // "categorical chart colours" below.
     it.each(REACH_LEVELS)(
-      "the second categorical series is a visible mark on the content card (≥ 3:1) at reach %s",
+      "the fallback second categorical series is a visible mark on the content card (≥ 3:1) at reach %s",
       (level) => {
         expect(
           contrast(

@@ -47,6 +47,14 @@ landing page.
   presets to 1.11–1.14; shipped light value is **2.5% for both Tinted and Vivid** (3% fails in
   Forest). Dark keeps 5% / 9%. So in light mode Vivid differs from Tinted only by the glow and a
   slightly stronger surface tint. This is intended: the app is dark-first.
+- **Dark Vivid content cannot outrun the raised surfaces** (browser screenshot pass, same day).
+  At content 9% / surface 5% cards measured 1.00–1.02:1 against the page in every dark preset.
+  Shipped: **dark vivid content 8% / surface 7%** (7% is the dark AA cap with hover at 8%),
+  which keeps 1.06–1.07:1. This supersedes the "Dark keeps 5% / 9%" above.
+- **Selected must out-lift hover.** Reach turned hover into a brand tint as strong as the 14%
+  selected fill. `--reach-selected: 12%` restores a ≥ 1.5× lead (text stays ≥ 4.9:1).
+- **Categorical chart colours are hue rotations of the brand** (`oklch(from var(--brand) …)`,
+  60° steps, fixed in-gamut L/C). Fixed hues collided with warm/green brands (ΔE 0.05).
 - **`color-mix` argument order matters.** Tailwind emits the FIRST colour as the fallback for
   engines without `color-mix`. Brand-first compiled to a solid brand fill; the mixes are written
   seed-first.

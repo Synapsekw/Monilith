@@ -26,7 +26,10 @@ export function Mono({
 }) {
   return (
     <svg
-      viewBox="-109 -109 224 224"
+      // Centred on the BODY's bounds (x −98.3…108.1, y −86.3…91.9), not on
+      // the origin: the shell bulges right and down, and a box around 0,0
+      // sat it 1.6px right of centre at 96px. mono.test.tsx pins this.
+      viewBox="-107.1 -109.2 224 224"
       width={size}
       height={size}
       fill="none"

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { THEME_REACH_IDS } from "@/lib/theme/presets";
+import * as profileValidations from "./profile";
 import {
-  THEME_REACH_VALUES,
   updateProfileCelebrateDoneSchema,
   updateProfileFullNameSchema,
   updateProfileThemePresetSchema,
@@ -79,12 +80,21 @@ describe("updateProfileTimezoneSchema", () => {
 
 describe("updateProfileThemeReachSchema", () => {
   it("accepts each of the three reach ids", () => {
-    expect(THEME_REACH_VALUES).toEqual(["subtle", "tinted", "vivid"]);
-    for (const themeReach of ["subtle", "tinted", "vivid"]) {
+    expect(THEME_REACH_IDS).toEqual(["subtle", "tinted", "vivid"]);
+    for (const themeReach of THEME_REACH_IDS) {
       const r = updateProfileThemeReachSchema.safeParse({ themeReach });
       expect(r.success).toBe(true);
       expect(r.success && r.data.themeReach).toBe(themeReach);
     }
+  });
+
+  // `THEME_REACH_IDS` in the theme registry is the one id list. A second name
+  // for it here invited a second default and a second narrowing check.
+  it("re-exports no alias of the reach id list", () => {
+    expect(profileValidations).not.toHaveProperty("THEME_REACH_VALUES");
+    expect(updateProfileThemeReachSchema.shape.themeReach.options).toEqual([
+      ...THEME_REACH_IDS,
+    ]);
   });
 
   it("rejects an unknown reach id", () => {

@@ -46,6 +46,7 @@ const THEME_INVARIANT = new Set([
   "--reach-content",
   "--reach-surface",
   "--reach-hover",
+  "--reach-selected",
   "--reach-glow",
   // Derived from --brand and --brand-2, which every mode and preset block
   // re-seeds on <html> — so one declaration follows them all.
@@ -141,6 +142,7 @@ const REACH_TOKENS = [
   "--reach-content",
   "--reach-surface",
   "--reach-hover",
+  "--reach-selected",
   "--reach-glow",
 ] as const;
 
@@ -153,7 +155,8 @@ describe("theme reach tokens", () => {
     // Light content is 2.5%, not the spec's 5%: tinting a white card darkens
     // it towards the chrome, and 2.5% is the most that keeps the 1.15:1
     // band/card floor in every light preset (globals.contrast.test.ts).
-    expect(reachValues(":root")).toEqual(["2.5%", "4%", "8%", "0"]);
+    // Selected takes 12% so it keeps its lead over the brand-leaning hover.
+    expect(reachValues(":root")).toEqual(["2.5%", "4%", "8%", "12%", "0"]);
     // --reach-content is the ONE per-mode reach token.
     expect(valueIn(".dark", "--reach-content")).toBe("5%");
     const dark = tokensIn(".dark");
@@ -162,14 +165,15 @@ describe("theme reach tokens", () => {
     }
   });
 
-  it("subtle zeroes all four — every derived token resolves to its seed", () => {
+  it("subtle zeroes all five — every derived token resolves to its seed", () => {
     expect(reachValues('[data-theme-reach="subtle"]')).toEqual([
+      "0%",
       "0%",
       "0%",
       "0%",
       "0",
     ]);
-    // Besides the four reach tokens the block only pins the chart colours back
+    // Besides the five reach tokens the block only pins the chart colours back
     // to their pre-reach literals (see "chart colours follow the preset").
     expect(
       [...tokensIn('[data-theme-reach="subtle"]')]
@@ -182,22 +186,31 @@ describe("theme reach tokens", () => {
     // Surface and hover are 5% / 8%, not the spec's starting 7% / 13%: those
     // failed AA for muted text on a hovered row inside a muted surface, and
     // the spec's rule is "if a value fails, lower it" (globals.contrast.test.ts).
-    // Light content stays at the tinted 2.5% (the separation floor again);
-    // dark vivid gets the spec's 9% from its own, more specific block.
+    // Light content stays at the tinted 2.5% (the separation floor again).
     expect(reachValues('[data-theme-reach="vivid"]')).toEqual([
       "2.5%",
       "5%",
       "8%",
+      "12%",
       "1",
     ]);
     expect([...tokensIn('[data-theme-reach="vivid"]')].sort()).toEqual(
       [...REACH_TOKENS].sort(),
     );
+    // Dark vivid moves content AND surface, from its own, more specific
+    // block: 8% / 7%, not the 9% / 5% it first shipped with. Content outran
+    // the raised surfaces and cards dissolved into the page (1.00-1.02:1);
+    // the pair now climbs together, one point apart as at Tinted (5% / 4%).
+    // 7% is the most the hovered-row AA check allows in dark.
     expect([...tokensIn('.dark[data-theme-reach="vivid"]')]).toEqual([
       "--reach-content",
+      "--reach-surface",
     ]);
     expect(valueIn('.dark[data-theme-reach="vivid"]', "--reach-content")).toBe(
-      "9%",
+      "8%",
+    );
+    expect(valueIn('.dark[data-theme-reach="vivid"]', "--reach-surface")).toBe(
+      "7%",
     );
   });
 
@@ -231,6 +244,8 @@ describe("theme reach tokens", () => {
       expect(FLAT, name).toContain(alias(name, "surface"));
     }
     expect(FLAT).toContain(alias("state-hover", "hover"));
+    // Selected rides its own token: it must out-lift the hover fill.
+    expect(FLAT).toContain(alias("state-selected", "selected"));
   });
 
   it("draws the header glow as one decorative, reach-gated ::before", () => {
@@ -248,7 +263,12 @@ describe("theme reach tokens", () => {
     const print = FLAT.split("@media print")[1] ?? "";
     expect(print).toMatch(/\.content-glow::before \{[^}]*display: none/);
     const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
-    for (const t of ["--reach-content", "--reach-surface", "--reach-hover"]) {
+    for (const t of [
+      "--reach-content",
+      "--reach-surface",
+      "--reach-hover",
+      "--reach-selected",
+    ]) {
       expect(printRoot).toContain(`${t}: 0%`);
     }
   });
@@ -298,12 +318,50 @@ describe("chart colours follow the preset", () => {
         "color-mix(in srgb, var(--brand-2) 60%, var(--foreground))",
       );
       // The rest stay fixed hues: categorical series need distinct hues.
+      // (All five are the FALLBACK now — see the rotation tests below.)
       expect(valueIn(selector, "--chart-cat-3")).toBe("#a855f7");
       expect(valueIn(selector, "--chart-cat-4")).toBe("#f59e0b");
       expect(valueIn(selector, "--chart-cat-5")).toBe("#fb7185");
       expect(valueIn(selector, "--chart-cat-6")).toBe("#34d399");
     },
   );
+
+  describe("categorical rotation (relative colour syntax)", () => {
+    const SUPPORTS = "@supports (color: oklch(from red l c h)) {";
+    const supportsBlock = () => {
+      const start = CSS.indexOf(`\n${SUPPORTS}`);
+      expect(start, "no relative-colour @supports block").toBeGreaterThan(-1);
+      return CSS.slice(start, CSS.indexOf("\n}", start + 1));
+    };
+
+    it("rotates the brand's hue for --chart-cat-2..6 behind @supports, per mode", () => {
+      const block = supportsBlock();
+      for (const selector of [":root", ".dark"]) {
+        const open = block.indexOf(`\n  ${selector} {`);
+        expect(open, selector).toBeGreaterThan(-1);
+        const body = block.slice(open, block.indexOf("\n  }", open));
+        [60, 120, 180, 240, 300].forEach((turn, i) => {
+          expect(body, `${selector} --chart-cat-${i + 2}`).toMatch(
+            new RegExp(
+              `--chart-cat-${i + 2}: oklch\\(from var\\(--brand\\) [\\d.]+ [\\d.]+ calc\\(h \\+ ${turn}\\)\\);`,
+            ),
+          );
+        });
+        // cat-1 stays the brand, from the base block; nothing else moves here.
+        expect(body).not.toMatch(/--chart-cat-1:/);
+        expect(body.match(/--[a-z0-9-]+(?=:)/g)).toHaveLength(5);
+      }
+    });
+
+    it("sits after .dark and BEFORE the subtle block, so subtle's literals win", () => {
+      const at = CSS.indexOf(`\n${SUPPORTS}`);
+      expect(at).toBeGreaterThan(CSS.indexOf("\n.dark {"));
+      expect(at).toBeLessThan(CSS.indexOf('\n[data-theme-reach="subtle"] {'));
+      // One block only: a second one further down could out-order subtle.
+      expect(CSS.split(SUPPORTS).length - 1).toBe(1);
+      expect(CSS.match(/--chart-cat-\d: oklch\(from /g)).toHaveLength(10);
+    });
+  });
 
   it("subtle holds today's exact greys and categorical hues, per mode", () => {
     const light = '[data-theme-reach="subtle"]';
@@ -317,6 +375,12 @@ describe("chart colours follow the preset", () => {
     // Mode-invariant before this change, so declared once.
     expect(valueIn(light, "--chart-cat-1")).toBe("#6366f1");
     expect(valueIn(light, "--chart-cat-2")).toBe("#22d3ee");
+    // cat-3..6 were the base blocks' fixed hues; now that a supporting engine
+    // rotates them, subtle has to pin the old literals itself.
+    expect(valueIn(light, "--chart-cat-3")).toBe("#a855f7");
+    expect(valueIn(light, "--chart-cat-4")).toBe("#f59e0b");
+    expect(valueIn(light, "--chart-cat-5")).toBe("#fb7185");
+    expect(valueIn(light, "--chart-cat-6")).toBe("#34d399");
     // The dark-subtle block exists ONLY for the five greys: it out-ranks the
     // subtle block, so anything else in it would be a per-mode reach override.
     expect([...tokensIn(dark)]).toEqual([
@@ -336,6 +400,10 @@ describe("chart colours follow the preset", () => {
     });
     expect(printRoot).toContain("--chart-cat-1: #6366f1;");
     expect(printRoot).toContain("--chart-cat-2: #22d3ee;");
+    expect(printRoot).toContain("--chart-cat-3: #a855f7;");
+    expect(printRoot).toContain("--chart-cat-4: #f59e0b;");
+    expect(printRoot).toContain("--chart-cat-5: #fb7185;");
+    expect(printRoot).toContain("--chart-cat-6: #34d399;");
   });
 
   it("no preset block redeclares a chart token — the ramp is derived", () => {

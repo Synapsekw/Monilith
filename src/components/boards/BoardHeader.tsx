@@ -30,7 +30,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { PAGE_TITLE_CLASS } from "@/components/ui/page-header";
+import {
+  PAGE_TITLE_CLASS,
+  PAGE_TITLE_INPUT_CLASS,
+} from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
@@ -172,7 +175,7 @@ export function BoardHeader({
                 }
               }}
               aria-label="Board name"
-              className={cn(PAGE_TITLE_CLASS, "h-7 w-56")}
+              className={cn(PAGE_TITLE_INPUT_CLASS, "h-7 w-56")}
             />
           ) : isViewer ? (
             <h1

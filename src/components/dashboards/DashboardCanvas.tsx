@@ -15,7 +15,10 @@ import { DashboardWidget } from "@/components/dashboards/DashboardWidget";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { PAGE_TITLE_CLASS } from "@/components/ui/page-header";
+import {
+  PAGE_TITLE_CLASS,
+  PAGE_TITLE_INPUT_CLASS,
+} from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
@@ -118,7 +121,7 @@ export function DashboardCanvas({
               }
             }}
             aria-label="Dashboard name"
-            className={cn(PAGE_TITLE_CLASS, "h-8 max-w-md")}
+            className={cn(PAGE_TITLE_INPUT_CLASS, "h-8 max-w-md")}
           />
         ) : (
           // A rename-in-place control, not a static page title — PageHeader's

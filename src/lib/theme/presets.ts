@@ -216,3 +216,20 @@ export function applyThemeReach(id: ThemeReachId): void {
   if (id === DEFAULT_THEME_REACH) root.removeAttribute(THEME_REACH_ATTR);
   else root.setAttribute(THEME_REACH_ATTR, id);
 }
+
+/**
+ * Forget this device's copy of the account's reach: the `<html>` attribute and
+ * the localStorage key the no-flash script reads. Called at sign-out, so the
+ * next person on a shared browser starts from the default instead of the
+ * previous account's choice. The attribute goes first and unconditionally;
+ * storage may be unavailable (private mode), which must not stop a sign-out.
+ */
+export function forgetThemeReach(): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.removeAttribute(THEME_REACH_ATTR);
+  try {
+    localStorage.removeItem(THEME_REACH_STORAGE_KEY);
+  } catch {
+    // Storage disabled — there is no stored copy to leak.
+  }
+}

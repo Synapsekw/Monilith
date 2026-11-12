@@ -35,30 +35,94 @@ describe("ThemePresetForm", () => {
     expect(screen.getByRole("radio", { name: "Keystone" })).toBeChecked();
   });
 
-  it("draws a two-stop gradient dot for a two-accent preset, in both modes", () => {
+  it("draws a two-stop gradient PILL for a two-accent preset, in both modes", () => {
     render(<ThemePresetForm currentPreset="keystone" />);
     const tile = screen
       .getByRole("radio", { name: "Aurora" })
       .closest("label")!;
-    const dot = (mode: string) =>
+    const swatch = (mode: string) =>
       tile.querySelector<HTMLElement>(`[data-swatch-accent="${mode}"]`)!;
 
-    expect(dot("light").style.background).toBe(
+    expect(swatch("light").style.background).toBe(
       "linear-gradient(90deg, rgb(15, 125, 113), rgb(107, 89, 211))",
     );
-    expect(dot("dark").style.background).toBe(
+    expect(swatch("dark").style.background).toBe(
       "linear-gradient(90deg, rgb(95, 214, 196), rgb(157, 141, 247))",
     );
+    // A 10px dot cannot show two stops; a 20×10 pill can.
+    for (const mode of ["light", "dark"]) {
+      expect(swatch(mode)).toHaveAttribute("data-swatch-shape", "pill");
+      expect(swatch(mode)).toHaveClass("h-2.5", "w-5", "rounded-full");
+      expect(swatch(mode)).not.toHaveClass("size-2.5");
+    }
   });
 
-  it("keeps a flat dot for a single-accent preset", () => {
-    render(<ThemePresetForm currentPreset="keystone" />);
-    const tile = screen.getByRole("radio", { name: "Ocean" }).closest("label")!;
-    const dot = tile.querySelector<HTMLElement>(
-      '[data-swatch-accent="light"]',
-    )!;
+  it.each(["Aurora", "Sunset", "Nebula"])(
+    "%s is a pill — every two-accent preset is",
+    (label) => {
+      render(<ThemePresetForm currentPreset="keystone" />);
+      const tile = screen.getByRole("radio", { name: label }).closest("label")!;
+      expect(tile.querySelectorAll('[data-swatch-shape="pill"]')).toHaveLength(
+        2,
+      );
+    },
+  );
 
-    expect(dot.style.background).toBe("rgb(31, 122, 140)");
+  it("keeps a flat round dot for a single-accent preset", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    for (const label of [
+      "Keystone",
+      "Graphite",
+      "Ocean",
+      "Forest",
+      "Ember",
+      "Rose",
+    ]) {
+      const tile = screen.getByRole("radio", { name: label }).closest("label")!;
+      const dots = tile.querySelectorAll<HTMLElement>("[data-swatch-accent]");
+      expect(dots).toHaveLength(2);
+      for (const dot of dots) {
+        expect(dot).toHaveAttribute("data-swatch-shape", "dot");
+        expect(dot).toHaveClass("size-2.5", "rounded-full");
+        expect(dot).not.toHaveClass("w-5");
+      }
+    }
+    const ocean = screen
+      .getByRole("radio", { name: "Ocean" })
+      .closest("label")!
+      .querySelector<HTMLElement>('[data-swatch-accent="light"]')!;
+    expect(ocean.style.background).toBe("rgb(31, 122, 140)");
+  });
+
+  it("marks the selected tile with a bright border, a brand ring and a check — and only that tile", async () => {
+    const user = userEvent.setup();
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const tile = (name: string) =>
+      screen.getByRole("radio", { name }).closest("label")!;
+
+    expect(tile("Keystone")).toHaveAttribute("data-selected", "true");
+    expect(tile("Keystone")).toHaveClass(
+      "border-border-bright",
+      "ring-1",
+      "ring-primary",
+    );
+    expect(tile("Keystone").querySelector("[data-selected-check]")).not.toBe(
+      null,
+    );
+
+    expect(tile("Nebula")).not.toHaveAttribute("data-selected");
+    expect(tile("Nebula")).not.toHaveClass("ring-1");
+    expect(tile("Nebula")).not.toHaveClass("border-border-bright");
+    expect(document.querySelectorAll("[data-selected-check]")).toHaveLength(1);
+
+    await user.click(screen.getByRole("radio", { name: "Nebula" }));
+
+    expect(tile("Nebula")).toHaveAttribute("data-selected", "true");
+    expect(tile("Nebula")).toHaveClass("ring-primary");
+    expect(tile("Keystone")).not.toHaveAttribute("data-selected");
+    expect(document.querySelectorAll("[data-selected-check]")).toHaveLength(1);
+    // The check is decoration: the radio's name is still just the label.
+    expect(screen.getByRole("radio", { name: "Nebula" })).toBeChecked();
   });
 
   it("selects a two-accent preset like any other", async () => {

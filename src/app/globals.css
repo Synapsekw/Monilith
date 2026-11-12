@@ -70,7 +70,14 @@
     var(--brand) var(--reach-hover)
   );
   --color-state-active: var(--state-active);
-  --color-state-selected: var(--state-selected);
+  /* Selected is reach-derived too, so it keeps its lead over a hover fill
+     that reach has leaned to the brand: both sides of the mix are the brand,
+     so only the alpha moves — 14% at subtle, 14% + 12% of the rest above. */
+  --color-state-selected: color-mix(
+    in srgb,
+    var(--state-selected),
+    var(--brand) var(--reach-selected)
+  );
   --color-chrome-fill: var(--chrome-fill);
 
   /* Named motion scale (durations are literal — not aliases) */
@@ -359,14 +366,16 @@
 
   /* Theme reach — Tinted, the default (no attribute on <html>). How much of
      --brand is mixed into the content card / the raised surfaces / the hover
-     fill, plus the header glow's opacity. NOT seed tokens: a preset block
-     must never redeclare them. Three are mode-invariant and declared only
-     here; --reach-content alone is per-mode (.dark carries its own value),
-     because in light mode tinting the card darkens it towards the chrome —
-     see the "Theme reach" comment after the .dark block. */
+     fill / the selected fill, plus the header glow's opacity. NOT seed
+     tokens: a preset block must never redeclare them. At Tinted all but one
+     are mode-invariant and declared only here; --reach-content is per-mode
+     (.dark carries its own value), because in light mode tinting the card
+     darkens it towards the chrome — see the "Theme reach" comment after the
+     .dark block. */
   --reach-content: 2.5%;
   --reach-surface: 4%;
   --reach-hover: 8%;
+  --reach-selected: 12%;
   --reach-glow: 0;
 
   --state-hover: rgb(0 0 0 / 4%);
@@ -434,10 +443,14 @@
      until it held 1.15:1 off the dark Vivid card in the two-accent presets).
      Every faded step reads --brand-2 so a two-accent preset runs brand to
      brand-2 and the ramp stays monotonic in lightness (alternating the two
-     seeds did not: dark aurora measured 1.16:1 between neighbours). The first two categorical series follow the preset too;
-     cat-2 leans 40% into the ink so it is told apart from cat-1 even when
-     --brand-2 IS --brand; cat-3..6 stay fixed hues. Mixed `in srgb` towards
-     the card SEED so globals.contrast.test.ts can reproduce every step.
+     seeds did not: dark aurora measured 1.16:1 between neighbours). Mixed
+     `in srgb` towards the card SEED so globals.contrast.test.ts can
+     reproduce every step.
+     The categorical six: cat-1 is the brand. The cat-2..6 values HERE are the
+     fallback for engines without relative colour syntax (a brand tint and
+     four fixed hues); everywhere else the "Categorical chart colours"
+     @supports block after .dark replaces them with rotations of the brand's
+     own hue.
      NOT seed tokens: a preset block must never redeclare them. Subtle pins
      the pre-reach literals back (see "Theme reach" after the .dark block). */
   --chart-1: var(--brand);
@@ -605,19 +618,63 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Categorical chart colours — six series that are told apart in EVERY preset.
+   cat-1 is the brand (base blocks). cat-2..6 are rotations of the brand's own
+   hue at 60-degree steps, by relative colour syntax, so they sit a sixth of
+   the wheel from the brand and from each other whatever the brand is. The
+   old palette (a tint of the brand plus four fixed hues) could not promise
+   that: cat-2 shared cat-1's hue in every single-accent preset, and a warm or
+   green brand landed on a fixed hue (dark sunset vs #f59e0b measured OKLab
+   dE 0.046, dark forest vs #34d399 0.052).
+
+   Lightness and chroma are FIXED per slot and chosen inside the sRGB gamut at
+   every hue (the inscribed chroma is 0.119 at L 0.70, 0.111 at 0.78, 0.105 at
+   0.62, 0.088 at 0.52), so no engine has to gamut-map and
+   globals.contrast.test.ts can predict the painted colour exactly. Lightness
+   alternates between neighbours, which buys distance that hue alone cannot at
+   this chroma: every pair is >= 0.10 apart (the test's floor; worst shipped
+   pair 0.11) and every colour is a >= 3:1 mark on the card. A near-grey brand
+   (graphite) still has a hue, and the rotations carry their own chroma, so
+   it gets five colours beside its grey rather than six greys.
+
+   Engines without relative colour keep the base-block fallbacks. ORDER IS
+   LOAD-BEARING: this block ties the subtle block on specificity and must come
+   BEFORE it, so Subtle's literals still win.
+   --------------------------------------------------------------------------- */
+@supports (color: oklch(from red l c h)) {
+  :root {
+    --chart-cat-2: oklch(from var(--brand) 0.62 0.1 calc(h + 60));
+    --chart-cat-3: oklch(from var(--brand) 0.52 0.085 calc(h + 120));
+    --chart-cat-4: oklch(from var(--brand) 0.62 0.1 calc(h + 180));
+    --chart-cat-5: oklch(from var(--brand) 0.52 0.085 calc(h + 240));
+    --chart-cat-6: oklch(from var(--brand) 0.62 0.1 calc(h + 300));
+  }
+  .dark {
+    --chart-cat-2: oklch(from var(--brand) 0.7 0.115 calc(h + 60));
+    --chart-cat-3: oklch(from var(--brand) 0.78 0.105 calc(h + 120));
+    --chart-cat-4: oklch(from var(--brand) 0.7 0.115 calc(h + 180));
+    --chart-cat-5: oklch(from var(--brand) 0.78 0.105 calc(h + 240));
+    --chart-cat-6: oklch(from var(--brand) 0.7 0.115 calc(h + 300));
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Theme reach — how far the preset's colour travels into the app. A third axis
    beside mode and preset, stamped on <html> as [data-theme-reach]. It is a
-   DERIVED layer: the four --reach-* tokens feed the color-mix() aliases in the
+   DERIVED layer: the five --reach-* tokens feed the color-mix() aliases in the
    @theme block at the top of this file, so every preset and both modes follow
    with no per-preset CSS. Registry: src/lib/theme/presets.ts.
 
      token             mixes --brand into                         subtle tinted vivid
      --reach-content   the content card (bg-content-surface)
                          light                                       0%    2.5%  2.5%
-                         dark                                        0%     5%    9%
-     --reach-surface   surface, surface-muted, surface-sunken,       0%     4%    5%
+                         dark                                        0%     5%    8%
+     --reach-surface   surface, surface-muted, surface-sunken,
                        card, popover, muted, accent, secondary
+                         light                                       0%     4%    5%
+                         dark                                        0%     4%    7%
      --reach-hover     the hover fill (bg-state-hover)               0%     8%    8%
+     --reach-selected  the selected fill (bg-state-selected)         0%    12%   12%
      --reach-glow      opacity of the content-card header glow       0      0     1
 
    Where each value lives (all on <html>, so the cascade does the matrix):
@@ -639,29 +696,47 @@
       bloomed header band must stay >= 1.15:1 against the card. 2.5% is the
       highest 0.5% step that holds in all six light presets (floor 1.152,
       forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
-      equals light tinted here and differs by surface and glow only. Dark has
-      no such floor and keeps the spec's 5% / 9%.
-   2. Vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8% (both modes).
+      equals light tinted here and differs by surface and glow only.
+   2. Light vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8%.
       A hover fill is alpha-on-parent, so muted text on a hovered row inside a
       raised surface sits on two doses of brand. At 7% / 13% that measured
       4.12-4.40:1 on light --surface-muted in all six presets (and 4.11 on
       dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
       tinted's is 4.58. Raising either again needs a darker light
       --muted-foreground in the preset seeds first.
+   3. Dark vivid is content 8% / surface 7% (it shipped as 9% / 5%). The
+      seeds put a raised surface about 1.07:1 above the dark content card, and
+      a content mix that outruns the surface mix closes that gap: at 9% / 5%
+      cards measured 1.000-1.020 against the page in all nine presets and
+      the red channel inverted in ember and sunset. The two have to climb
+      together. Surface is capped at 7% by the same hovered-row check as (2)
+      with hover at 8% (floor 4.52, dark rose --secondary; 8% is 4.44), and
+      content sits one point above it, exactly as at Tinted (5% / 4%): the
+      card/page separation is then 1.061-1.073, against 1.068-1.073 at
+      Subtle. Dark vivid differs from dark tinted by +3 points of brand on
+      the page and on every raised surface, plus the glow.
+   4. --reach-selected is 12%. Selected is the brand at 14% alpha; at 8% reach
+      the hover fill is itself a brand tint at 12.6% alpha, and an active row
+      and a hovered one composited to the same colour (hover was the stronger
+      of the two on the dark wash). Mixing 12% more brand in makes selected
+      the brand at 24.3% alpha, which restores the lead it has at Subtle: its
+      luminance lift over the ground is >= 1.5x the hover fill's everywhere a
+      row can sit, and --foreground on it stays >= 4.9:1.
 
    Chart colours ride the same axis without a --reach-* token: at Tinted and
-   Vivid --chart-1..5 and --chart-cat-1/2 derive from the preset (declared in
-   the base blocks); Subtle pins the pre-reach literals back. The categorical
-   pair was mode-invariant and sits in the subtle block; the five greys were
-   per-mode, so the light ones sit in the subtle block (which beats the base
-   blocks by order) and the dark ones in a dark-subtle block (which beats it by
-   specificity). That block may hold chart greys ONLY — never a --reach-*
-   token (globals.contrast.test.ts).
+   Vivid --chart-1..5 and --chart-cat-1..6 derive from the preset (the base
+   blocks and the @supports block above); Subtle pins the pre-reach literals
+   back. The categorical six were mode-invariant and sit in the subtle block;
+   the five greys were per-mode, so the light ones sit in the subtle block
+   (which beats the base blocks by order) and the dark ones in a dark-subtle
+   block (which beats it by specificity). That block may hold chart greys
+   ONLY — never a --reach-* token (globals.contrast.test.ts).
    --------------------------------------------------------------------------- */
 [data-theme-reach="subtle"] {
   --reach-content: 0%;
   --reach-surface: 0%;
   --reach-hover: 0%;
+  --reach-selected: 0%;
   --reach-glow: 0;
   --chart-1: oklch(0.72 0 0);
   --chart-2: oklch(0.58 0 0);
@@ -670,6 +745,10 @@
   --chart-5: oklch(0.22 0 0);
   --chart-cat-1: #6366f1;
   --chart-cat-2: #22d3ee;
+  --chart-cat-3: #a855f7;
+  --chart-cat-4: #f59e0b;
+  --chart-cat-5: #fb7185;
+  --chart-cat-6: #34d399;
 }
 
 .dark[data-theme-reach="subtle"] {
@@ -684,11 +763,13 @@
   --reach-content: 2.5%;
   --reach-surface: 5%;
   --reach-hover: 8%;
+  --reach-selected: 12%;
   --reach-glow: 1;
 }
 
 .dark[data-theme-reach="vivid"] {
-  --reach-content: 9%;
+  --reach-content: 8%;
+  --reach-surface: 7%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1629,6 +1710,7 @@
     --reach-content: 0%;
     --reach-surface: 0%;
     --reach-hover: 0%;
+    --reach-selected: 0%;
     --reach-glow: 0;
     /* Charts print as at Subtle, for the same reason: the screen ramp is
        resolved on <html> against the SCREEN preset and mode, and a dark
@@ -1640,6 +1722,10 @@
     --chart-5: oklch(0.22 0 0);
     --chart-cat-1: #6366f1;
     --chart-cat-2: #22d3ee;
+    --chart-cat-3: #a855f7;
+    --chart-cat-4: #f59e0b;
+    --chart-cat-5: #fb7185;
+    --chart-cat-6: #34d399;
 
     /* Positioned (not `inset: 0`) so the root can grow PAST one page height:
        `inset: 0` pinned bottom to the viewport, clipping a multi-page Overview

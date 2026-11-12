@@ -56,6 +56,37 @@ describe("ThemeToggle", () => {
     expect(keystone).toHaveAttribute("aria-checked", "true");
   });
 
+  it("previews a two-accent preset as a gradient pill and a single-accent one as a dot", async () => {
+    await openMenu();
+    const swatch = (name: string) =>
+      screen
+        .getByRole("menuitemradio", { name })
+        .querySelector<HTMLElement>("[data-swatch-accent]")!;
+
+    // resolvedTheme is "dark" in this suite.
+    for (const [name, gradient] of [
+      [
+        "Aurora",
+        "linear-gradient(90deg, rgb(95, 214, 196), rgb(157, 141, 247))",
+      ],
+      [
+        "Sunset",
+        "linear-gradient(90deg, rgb(247, 164, 92), rgb(238, 111, 163))",
+      ],
+      [
+        "Nebula",
+        "linear-gradient(90deg, rgb(183, 156, 247), rgb(111, 168, 238))",
+      ],
+    ]) {
+      expect(swatch(name)).toHaveAttribute("data-swatch-shape", "pill");
+      expect(swatch(name)).toHaveClass("h-3", "w-6", "rounded-full");
+      expect(swatch(name).style.background).toBe(gradient);
+    }
+    expect(swatch("Ocean")).toHaveAttribute("data-swatch-shape", "dot");
+    expect(swatch("Ocean")).toHaveClass("size-3", "rounded-full");
+    expect(swatch("Ocean").style.background).toBe("rgb(111, 198, 214)");
+  });
+
   it("selecting Ocean stamps the attribute synchronously and persists it", async () => {
     const user = await openMenu();
 

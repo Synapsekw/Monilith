@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import {
   THEME_PRESETS,
   swatchAccentFill,
@@ -18,7 +19,8 @@ const ERROR_ID = "theme-preset-error";
  * Each tile previews the preset in BOTH modes at once: the light chrome with its
  * accent on the left, the dark chrome with its accent on the right. A preset is
  * not a third mode — it re-tints whichever mode you are in — and a single-tone
- * swatch would imply otherwise.
+ * swatch would imply otherwise. The accent is a round dot, or a short gradient
+ * pill when the preset carries a second accent.
  *
  * There is no Save button: selection is the commit. The attribute and
  * localStorage are written synchronously by the hook, so the whole app re-tints
@@ -42,12 +44,16 @@ export function ThemePresetForm({
             return (
               <label
                 key={p.id}
+                data-selected={selected ? "true" : undefined}
                 className={cn(
                   "ease-keystone flex cursor-pointer flex-col gap-1.5 rounded-sm border p-1.5 transition-colors",
                   "has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-2",
                   "pointer-coarse:min-h-11",
+                  // Selected = bright hairline + a brand ring around it + the
+                  // check by the label. The border alone (26% white on a
+                  // near-black card) was a guess, not a state.
                   selected
-                    ? "border-border-bright"
+                    ? "border-border-bright ring-primary ring-1"
                     : "border-border hover:border-border-hover",
                 )}
               >
@@ -67,35 +73,45 @@ export function ThemePresetForm({
                   aria-hidden
                   className="flex h-7 overflow-hidden rounded-sm"
                 >
-                  <span
-                    className="flex flex-1 items-center justify-center"
-                    style={{ background: p.swatch.light.chrome }}
-                  >
-                    <span
-                      data-swatch-accent="light"
-                      className="size-2.5 rounded-full"
-                      style={{ background: swatchAccentFill(p.swatch.light) }}
-                    />
-                  </span>
-                  <span
-                    className="flex flex-1 items-center justify-center"
-                    style={{ background: p.swatch.dark.chrome }}
-                  >
-                    <span
-                      data-swatch-accent="dark"
-                      className="size-2.5 rounded-full"
-                      style={{ background: swatchAccentFill(p.swatch.dark) }}
-                    />
-                  </span>
+                  {(["light", "dark"] as const).map((mode) => {
+                    const swatch = p.swatch[mode];
+                    // A 10px dot cannot show two stops — a second accent
+                    // stretches it into a 20×10 pill so the gradient reads.
+                    const pill = swatch.accent2 !== undefined;
+                    return (
+                      <span
+                        key={mode}
+                        className="flex flex-1 items-center justify-center"
+                        style={{ background: swatch.chrome }}
+                      >
+                        <span
+                          data-swatch-accent={mode}
+                          data-swatch-shape={pill ? "pill" : "dot"}
+                          className={cn(
+                            "rounded-full",
+                            pill ? "h-2.5 w-5" : "size-2.5",
+                          )}
+                          style={{ background: swatchAccentFill(swatch) }}
+                        />
+                      </span>
+                    );
+                  })}
                 </span>
                 <span
                   className={cn(
-                    "text-center text-xs",
+                    "flex items-center justify-center gap-1 text-xs",
                     selected
                       ? "text-foreground font-medium"
                       : "text-muted-foreground",
                   )}
                 >
+                  {selected ? (
+                    <Check
+                      aria-hidden
+                      data-selected-check=""
+                      className="text-primary size-3 shrink-0"
+                    />
+                  ) : null}
                   {p.label}
                 </span>
               </label>

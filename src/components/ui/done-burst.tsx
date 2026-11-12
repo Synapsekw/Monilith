@@ -28,7 +28,7 @@ export const PILL_POP_CLASS = "animate-pill-pop";
 export const STATUS_PILL_ATTR = "data-status-pill";
 
 const MAX_PARTICLES = 12;
-const BURST_MS = 500;
+const BURST_MS = 680;
 const EASE_KEYSTONE = "cubic-bezier(0.16, 1, 0.3, 1)";
 /** The two accents plus two status colours — semantic tokens only. */
 const BURST_COLORS = [
@@ -42,6 +42,16 @@ const BURST_COLORS = [
 export function applyCelebrateDone(enabled: boolean): void {
   if (typeof document === "undefined") return;
   document.documentElement.setAttribute(CELEBRATE_ATTR, enabled ? "on" : "off");
+}
+
+/**
+ * Back to "unstamped" — the state before any account's value arrived, which
+ * {@link isCelebrationEnabled} reads as off. Called at sign-out so the
+ * preference does not outlive the session on a shared browser.
+ */
+export function forgetCelebrateDone(): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.removeAttribute(CELEBRATE_ATTR);
 }
 
 /**
@@ -69,8 +79,9 @@ function canCelebrate(): boolean {
 
 /**
  * Play the done burst from the centre of `el`: at most 12 squares (7px, radius
- * 2px) flung outwards over 500ms with the Web Animations API, each removed
- * when its animation ends. A no-op when the celebration is off, under
+ * 2px) flung 28–64px outwards with the Web Animations API — opaque for the
+ * throw, fading over the last third of 680ms — each removed when its
+ * animation ends. A no-op when the celebration is off, under
  * `prefers-reduced-motion`, or where `element.animate` does not exist.
  *
  * The squares are `position: fixed` children of `<body>`, not of the cell: the
@@ -109,24 +120,49 @@ export function fireDoneBurst(
     s.zIndex = "60";
     document.body.appendChild(square);
 
-    // Evenly fanned, with a deterministic wobble in angle and reach so the
-    // ring does not read as a clock face.
+    // Evenly fanned, with a deterministic wobble in angle so the ring does not
+    // read as a clock face; the throw (28–64px), the tumble and the start
+    // are randomised per square so no two bursts are the same shape.
     const angle = (i / count) * Math.PI * 2 + (i % 3) * 0.21;
-    const reach = 24 + (i % 4) * 6;
-    const dx = Math.round(Math.cos(angle) * reach);
-    const dy = Math.round(Math.sin(angle) * reach);
-    const spin = (i % 2 === 0 ? 1 : -1) * 120;
-    const centre = "translate(-50%, -50%)";
+    const reach = 28 + Math.random() * 36;
+    const dx = Math.cos(angle) * reach;
+    const dy = Math.sin(angle) * reach;
+    const spin = (i % 2 === 0 ? 1 : -1) * (40 + Math.random() * 50);
+    // One function list for every keyframe, so each function interpolates on
+    // its own: anchor on the centre, drift straight down, throw, tumble, grow.
+    const pose = (throwN: number, drift: number, turn: number, scale: number) =>
+      `translate(-50%, -50%) translate(0px, ${drift}px) ` +
+      `translate(${(dx * throwN).toFixed(1)}px, ${(dy * throwN).toFixed(1)}px) ` +
+      `rotate(${(spin * turn).toFixed(1)}deg) scale(${scale})`;
 
+    // The timing function is LINEAR and the easing lives on the keyframes:
+    // offsets are fractions of eased progress, so easing the whole run (as
+    // the first version did) put "65%" about 60ms in and faded the squares
+    // out before they had moved. Here they are fully opaque for the whole
+    // throw — most of it inside the first 150ms, on the keystone
+    // curve — and only then fade, sinking a little, over the last 35%.
     const animation = square.animate(
       [
-        { transform: `${centre} scale(0.4)`, opacity: "1" },
         {
-          transform: `${centre} translate(${dx}px, ${dy}px) rotate(${spin}deg) scale(1)`,
-          opacity: "0",
+          offset: 0,
+          transform: pose(0, 0, 0, 0.4),
+          opacity: "1",
+          easing: EASE_KEYSTONE,
         },
+        {
+          offset: 0.65,
+          transform: pose(0.94, 3, 0.8, 1),
+          opacity: "1",
+          easing: "ease-in",
+        },
+        { offset: 1, transform: pose(1, 10, 1, 0.7), opacity: "0" },
       ],
-      { duration: BURST_MS, easing: EASE_KEYSTONE, fill: "forwards" },
+      {
+        duration: BURST_MS,
+        delay: Math.round(Math.random() * 40),
+        easing: "linear",
+        fill: "both",
+      },
     );
     const remove = () => square.remove();
     animation.onfinish = remove;

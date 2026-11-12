@@ -1,34 +1,33 @@
 "use client";
 
-import { type ThemeReachId } from "@/lib/theme/presets";
+import { THEME_REACH_IDS, type ThemeReachId } from "@/lib/theme/presets";
 import { useThemeReach } from "@/lib/theme/use-theme-reach";
 import { cn } from "@/lib/utils";
 
 const ERROR_ID = "theme-reach-error";
 
-/** Ordered least to most colour, so arrow-down always means "more". The ids are
- *  typed against `ThemeReachId`, so a renamed id fails the build here. */
-const OPTIONS: ReadonlyArray<{
-  id: ThemeReachId;
-  label: string;
-  description: string;
-}> = [
+/** The copy for every reach. A `Record` keyed by `ThemeReachId`, so an id
+ *  added to (or renamed in) the registry does not compile until it has a label
+ *  and a description here. */
+const REACH_COPY: Record<ThemeReachId, { label: string; description: string }> =
   {
-    id: "subtle",
-    label: "Subtle",
-    description: "Colour stays in the frame around your work.",
-  },
-  {
-    id: "tinted",
-    label: "Tinted",
-    description: "Your theme lightly tints surfaces, hover and charts.",
-  },
-  {
-    id: "vivid",
-    label: "Vivid",
-    description: "Stronger tint, plus a glow behind page headers.",
-  },
-];
+    subtle: {
+      label: "Subtle",
+      description: "Colour stays in the frame around your work.",
+    },
+    tinted: {
+      label: "Tinted",
+      description: "Your theme lightly tints surfaces, hover and charts.",
+    },
+    vivid: {
+      label: "Vivid",
+      description: "Stronger tint, plus a glow behind page headers.",
+    },
+  };
+
+/** The registry's order IS the display order: least to most colour, so
+ *  arrow-down always means "more". */
+const OPTIONS = THEME_REACH_IDS.map((id) => ({ id, ...REACH_COPY[id] }));
 
 /**
  * The theme-reach picker: how far the chosen preset's colour travels into the
@@ -69,7 +68,7 @@ export function ThemeReachForm({
                   "has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-2",
                   "pointer-coarse:min-h-11",
                   selected
-                    ? "border-border-bright bg-surface-muted"
+                    ? "border-border-bright bg-surface-muted ring-primary ring-1"
                     : "border-border hover:border-border-hover",
                 )}
               >

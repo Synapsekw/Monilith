@@ -108,6 +108,28 @@ describe("BoardHeader", () => {
     expect(renameBoard).toHaveBeenCalledWith("Q2 roadmap");
   });
 
+  // The Input base carries `md:text-sm`; a bare `text-xl` does not displace
+  // it, so the rename field used to drop to 14px on desktop while the title it
+  // replaces is 20px.
+  it("rename input keeps the 20px bold title scale on desktop", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sprint backlog" }),
+    );
+    const input = screen.getByRole("textbox", { name: /board name/i });
+    expect(input).toHaveClass("text-xl", "md:text-xl", "font-bold", "h-7");
+    expect(input).not.toHaveClass("md:text-sm");
+    expect(input).not.toHaveClass("text-base");
+  });
+
   it("owner: shows the Share affordance, no View only badge, and a rename control", () => {
     renderHeader(
       <BoardHeader

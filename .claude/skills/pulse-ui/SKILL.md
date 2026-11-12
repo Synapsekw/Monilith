@@ -88,15 +88,22 @@ A third axis next to mode and preset: `<html data-theme-reach="subtle|vivid">`, 
 `tinted` (the default). Registry and helpers live in `src/lib/theme/presets.ts`
 (`THEME_REACH_IDS`, `applyThemeReach`); the user control is Settings → Preferences → Theme
 reach. Reach mixes `--brand` into the content card, raised surfaces and hover as a DERIVED
-layer in `globals.css` (`--reach-content`, `--reach-surface`, `--reach-hover`, `--reach-glow`),
+layer in `globals.css` (`--reach-content`, `--reach-surface`, `--reach-hover`,
+`--reach-selected`, `--reach-glow`),
 so component code never reads it — keep using `bg-content-surface`, `bg-surface`, `bg-card`,
 `hover:bg-accent` and every level works for free.
 
 - `subtle` is the pre-reach look: every derived token resolves to its seed.
 - Never paint a surface with a raw seed in an arbitrary value (`bg-[var(--card)]`,
   `[background:…var(--surface)]`) — that bypasses reach. Use the utility or `var(--color-card)`.
-- `--chart-1..5` and `--chart-cat-1..2` follow the brand at `tinted`/`vivid` and fall back to
-  the old greys/hues at `subtle`. Status-coloured series keep status colours.
+- `--chart-1..5` and `--chart-cat-1..6` follow the brand at `tinted`/`vivid` and fall back to
+  the old greys/hues at `subtle`. `--chart-cat-1` is the brand; `--chart-cat-2..6` are 60°
+  rotations of the brand's hue (`oklch(from var(--brand) L C calc(h + N))`, fixed in-gamut L/C,
+  behind `@supports`), so the six are distinct in every preset. Status-coloured series keep
+  status colours.
+- `--reach-selected` (12%) strengthens `bg-state-selected` so a selected row always out-lifts
+  a hovered one (≥ 1.5×). Dark `vivid` is content 8% / surface 7% — the two must climb
+  together or cards sink into the page.
 - Reach values are pinned by `globals.contrast.test.ts` (text AA on every surface, and the
   light chrome/card separation floor). Light mode's content tint is deliberately weaker than
   dark's. Change a value only with that test green for every preset × mode × reach.

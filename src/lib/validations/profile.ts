@@ -73,17 +73,13 @@ export type UpdateProfileThemePresetInput = z.infer<
 >;
 
 /**
- * Theme reach ids at the boundary. `THEME_REACH_IDS` is the single source of
- * truth, exactly as `THEME_PRESET_IDS` is for presets.
- */
-export const THEME_REACH_VALUES = THEME_REACH_IDS;
-
-/**
  * Per-user theme reach (how far the accent tints the surfaces). Like the preset,
- * the DB column is free text, so this enum IS the boundary.
+ * the DB column is free text, so this enum IS the boundary. `THEME_REACH_IDS`
+ * is the single source of truth for the id list, exactly as `THEME_PRESET_IDS`
+ * is for presets — import it from `@/lib/theme/presets`, never re-alias it.
  */
 export const updateProfileThemeReachSchema = z.object({
-  themeReach: z.enum(THEME_REACH_VALUES),
+  themeReach: z.enum(THEME_REACH_IDS),
 });
 export type UpdateProfileThemeReachInput = z.infer<
   typeof updateProfileThemeReachSchema

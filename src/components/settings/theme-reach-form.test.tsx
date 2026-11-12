@@ -1,7 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { THEME_REACH_ATTR, THEME_REACH_STORAGE_KEY } from "@/lib/theme/presets";
+import {
+  THEME_REACH_ATTR,
+  THEME_REACH_IDS,
+  THEME_REACH_STORAGE_KEY,
+} from "@/lib/theme/presets";
 import { ThemeReachForm } from "./theme-reach-form";
 
 const updateProfileThemeReach = vi.fn();
@@ -43,6 +47,15 @@ describe("ThemeReachForm", () => {
     );
     expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByRole("radio", { name: "Tinted" })).toBeChecked();
+  });
+
+  // The options are derived from the registry, in registry order (least to
+  // most colour) — never a second hand-kept list.
+  it("renders exactly one radio per registry id, in registry order", () => {
+    render(<ThemeReachForm currentReach="tinted" />);
+    expect(
+      screen.getAllByRole("radio").map((r) => (r as HTMLInputElement).value),
+    ).toEqual([...THEME_REACH_IDS]);
   });
 
   it("stamps the attribute and storage on selection and persists it", async () => {
