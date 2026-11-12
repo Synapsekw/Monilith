@@ -88,7 +88,7 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
         <header className="flex h-14 shrink-0 items-center justify-end gap-2 px-4">
           <ThemeToggle />
         </header>
-        <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
+        <main className="content-glow bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
           <Suspense fallback={null}>{children}</Suspense>
         </main>
       </div>

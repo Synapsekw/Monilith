@@ -41,7 +41,7 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
 
   if (state.success === "reset-email-sent") {
     return (
-      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
         <CardHeader className="items-center text-center">
           <CheckCircle2 className="text-primary mb-1 size-8" />
           <CardTitle>Check your email</CardTitle>
@@ -55,7 +55,7 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
   }
 
   return (
-    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
       <CardHeader>
         <Kicker>RESET</Kicker>
         <CardTitle>Reset your password</CardTitle>

@@ -33,13 +33,33 @@
   --shadow-glow-primary: var(--glow-primary);
   --ease-keystone: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Wash & inset-card surfaces */
-  --color-content-surface: var(--content-surface);
+  /* Wash & inset-card surfaces.
+     Reach-derived: this alias and the nine marked "reach" below mix a share of
+     --brand into their seed (see "Theme reach" after the .dark block). Because
+     this block is `@theme inline`, the color-mix is written into each utility
+     and resolves on the ELEMENT, from the inherited seeds and --reach-*
+     tokens — so a nested scope that re-seeds (the print root) re-derives too.
+     The mixes are `in srgb` so globals.contrast.test.ts can reproduce them.
+     The SEED is written first on purpose: Tailwind emits the first colour of a
+     color-mix as the fallback for engines without it, and that fallback must
+     be the untinted surface, never a solid --brand fill.
+     Arbitrary values that need one of these surfaces read the emitted theme
+     variable (`var(--color-card)`), not the raw seed (`var(--card)`). */
+  --color-content-surface: color-mix(
+    in srgb,
+    var(--content-surface),
+    var(--brand) var(--reach-content)
+  );
   --color-content-edge: var(--content-edge);
   --shadow-content-lift: var(--content-lift);
 
-  /* Alpha-on-parent interaction states */
-  --color-state-hover: var(--state-hover);
+  /* Alpha-on-parent interaction states (hover is reach-derived; its seed is
+     translucent, so the mix stays translucent and simply leans to the brand) */
+  --color-state-hover: color-mix(
+    in srgb,
+    var(--state-hover),
+    var(--brand) var(--reach-hover)
+  );
   --color-state-active: var(--state-active);
   --color-state-selected: var(--state-selected);
   --color-chrome-fill: var(--chrome-fill);
@@ -57,10 +77,22 @@
   --text-cell: 0.8125rem; /* 13px — board table data cells */
   --text-item: 0.84375rem; /* 13.5px — board table item + group names */
 
-  /* Surfaces (brief's semantic names) */
-  --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-surface-sunken: var(--surface-sunken);
+  /* Surfaces (brief's semantic names) — reach */
+  --color-surface: color-mix(
+    in srgb,
+    var(--surface),
+    var(--brand) var(--reach-surface)
+  );
+  --color-surface-muted: color-mix(
+    in srgb,
+    var(--surface-muted),
+    var(--brand) var(--reach-surface)
+  );
+  --color-surface-sunken: color-mix(
+    in srgb,
+    var(--surface-sunken),
+    var(--brand) var(--reach-surface)
+  );
 
   /* Status palette */
   --color-status-gray: var(--status-gray);
@@ -102,17 +134,38 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
+  /* accent, muted, secondary, popover, card — reach */
+  --color-accent: color-mix(
+    in srgb,
+    var(--accent),
+    var(--brand) var(--reach-surface)
+  );
   --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
+  --color-muted: color-mix(
+    in srgb,
+    var(--muted),
+    var(--brand) var(--reach-surface)
+  );
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
+  --color-secondary: color-mix(
+    in srgb,
+    var(--secondary),
+    var(--brand) var(--reach-surface)
+  );
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
+  --color-popover: color-mix(
+    in srgb,
+    var(--popover),
+    var(--brand) var(--reach-surface)
+  );
   --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --color-card: color-mix(
+    in srgb,
+    var(--card),
+    var(--brand) var(--reach-surface)
+  );
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -267,6 +320,18 @@
      white haze on the near-black card, an ink haze on the paper one. Not a
      seed token: preset blocks must not redeclare it. */
   --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
+
+  /* Theme reach — Tinted, the default (no attribute on <html>). How much of
+     --brand is mixed into the content card / the raised surfaces / the hover
+     fill, plus the header glow's opacity. NOT seed tokens: a preset block
+     must never redeclare them. Three are mode-invariant and declared only
+     here; --reach-content alone is per-mode (.dark carries its own value),
+     because in light mode tinting the card darkens it towards the chrome —
+     see the "Theme reach" comment after the .dark block. */
+  --reach-content: 2.5%;
+  --reach-surface: 4%;
+  --reach-hover: 8%;
+  --reach-glow: 0;
 
   --state-hover: rgb(0 0 0 / 4%);
   --state-active: rgb(0 0 0 / 7%);
@@ -479,6 +544,73 @@
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
   --elevation-drag: 0 12px 32px -12px rgb(0 0 0 / 70%);
+
+  /* Theme reach, dark Tinted. The one per-mode reach token: a near-black card
+     can take twice the brand the paper one can before it meets the chrome. */
+  --reach-content: 5%;
+}
+
+/* ---------------------------------------------------------------------------
+   Theme reach — how far the preset's colour travels into the app. A third axis
+   beside mode and preset, stamped on <html> as [data-theme-reach]. It is a
+   DERIVED layer: the four --reach-* tokens feed the color-mix() aliases in the
+   @theme block at the top of this file, so every preset and both modes follow
+   with no per-preset CSS. Registry: src/lib/theme/presets.ts.
+
+     token             mixes --brand into                         subtle tinted vivid
+     --reach-content   the content card (bg-content-surface)
+                         light                                       0%    2.5%  2.5%
+                         dark                                        0%     5%    9%
+     --reach-surface   surface, surface-muted, surface-sunken,       0%     4%    5%
+                       card, popover, muted, accent, secondary
+     --reach-hover     the hover fill (bg-state-hover)               0%     8%    8%
+     --reach-glow      opacity of the content-card header glow       0      0     1
+
+   Where each value lives (all on <html>, so the cascade does the matrix):
+     light tinted   the base light block      dark tinted   the base dark block
+     light vivid    the vivid block           dark vivid    the dark-vivid block
+     subtle         the subtle block, for both modes
+   Tinted is the default and has no block of its own on purpose. Subtle zeroes
+   everything: color-mix(in srgb, seed, X 0%) is the seed, so it is the
+   pre-reach look exactly. ORDER IS LOAD-BEARING: the subtle and vivid blocks
+   tie the base light and dark blocks on specificity (one class or attribute
+   each) and win only by coming after both; the dark-vivid block out-ranks the
+   vivid block by carrying two.
+
+   The numbers are bound by tests, not by taste. globals.contrast.test.ts
+   re-runs every check below for every preset x mode x reach.
+
+   1. Light --reach-content is capped at 2.5% (the spec started at 5% / 9%).
+      Mixing brand into a white card darkens it towards the chrome, and the
+      bloomed header band must stay >= 1.15:1 against the card. 2.5% is the
+      highest 0.5% step that holds in all six light presets (floor 1.152,
+      forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
+      equals light tinted here and differs by surface and glow only. Dark has
+      no such floor and keeps the spec's 5% / 9%.
+   2. Vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8% (both modes).
+      A hover fill is alpha-on-parent, so muted text on a hovered row inside a
+      raised surface sits on two doses of brand. At 7% / 13% that measured
+      4.12-4.40:1 on light --surface-muted in all six presets (and 4.11 on
+      dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
+      tinted's is 4.58. Raising either again needs a darker light
+      --muted-foreground in the preset seeds first.
+   --------------------------------------------------------------------------- */
+[data-theme-reach="subtle"] {
+  --reach-content: 0%;
+  --reach-surface: 0%;
+  --reach-hover: 0%;
+  --reach-glow: 0;
+}
+
+[data-theme-reach="vivid"] {
+  --reach-content: 2.5%;
+  --reach-surface: 5%;
+  --reach-hover: 8%;
+  --reach-glow: 1;
+}
+
+.dark[data-theme-reach="vivid"] {
+  --reach-content: 9%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -912,6 +1044,41 @@
     background-image: var(--app-bloom), var(--app-wash);
     background-attachment: fixed;
   }
+  /* Reach header glow — the content card's one decorative layer (the <main> in
+     app-shell.tsx and ask/layout.tsx). Two brand blooms along the card's top
+     edge, gated by --reach-glow: 0 at subtle/tinted, 1 at vivid.
+     Deliberately an IN-FLOW block, not a positioned one: an in-flow box's
+     background paints before every sibling's text and before any positioned
+     descendant, so the glow sits behind the page content with no z-index and
+     without turning the card into a stacking context (which would re-order
+     the sticky headers inside it against the seam laid over it). The negative
+     margin hands its height back, so layout is unchanged; `flex: none` keeps
+     that true where the card is a flex column (/ask).
+     The second bloom reaches zero at 97% of the width (76% + 0.7 x 30%): the
+     box stops at the card's reserved scrollbar gutter, and a bloom still lit
+     there would end in a hard vertical edge 10px inside the card.
+     Peaks are 10% and 8%: globals.contrast.test.ts stacks BOTH on the vivid
+     card and still requires AA for muted text (floor 4.65, light graphite). */
+  .content-glow::before {
+    content: "";
+    display: block;
+    flex: none;
+    height: 14rem;
+    margin-bottom: -14rem;
+    pointer-events: none;
+    opacity: var(--reach-glow);
+    background-image:
+      radial-gradient(
+        60% 100% at 14% 0%,
+        color-mix(in srgb, transparent, var(--brand) 10%) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        30% 100% at 76% 0%,
+        color-mix(in srgb, transparent, var(--brand-2, var(--brand)) 8%) 0%,
+        transparent 70%
+      );
+  }
   /* Keystone signature: interactive cards lift + hairline brightens on hover. */
   .card-lift {
     transition:
@@ -1106,6 +1273,10 @@
   :where(body:has([data-print-root])) * {
     visibility: hidden;
   }
+  /* The reach header glow is screen decoration — never ink. */
+  .content-glow::before {
+    display: none !important;
+  }
   [data-print-root],
   [data-print-root] * {
     visibility: visible;
@@ -1151,6 +1322,12 @@
     --card: #ffffff;
     --brand: #5a6ed5;
     --primary: var(--brand);
+    /* Reach off: the surface aliases mix --brand into the seeds above, and
+       paper must stay white whatever reach the screen is on. */
+    --reach-content: 0%;
+    --reach-surface: 0%;
+    --reach-hover: 0%;
+    --reach-glow: 0;
 
     /* Positioned (not `inset: 0`) so the root can grow PAST one page height:
        `inset: 0` pinned bottom to the viewport, clipping a multi-page Overview
