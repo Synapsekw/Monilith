@@ -1,7 +1,7 @@
 "use client";
 
 import { clampDragWidth, NAME_COL_MAX } from "@/lib/boards/name-column-width";
-import { useRafCallback } from "@/lib/hooks/use-raf-callback";
+import { useRafThrottle } from "@/lib/hooks/use-raf-callback";
 
 const NAME_DRAG_MIN = 80; // manual drag floor (matches ColumnHeader MIN)
 
@@ -30,7 +30,7 @@ export function NameResizeHandle({
 }) {
   // Coalesce per-pixel live-width updates to one state update per frame so the
   // drag stays smooth; the persist-on-release path (onResizeEnd) is unchanged.
-  const throttledResize = useRafCallback(onResize);
+  const [throttledResize, cancelThrottledResize] = useRafThrottle(onResize);
 
   function onPointerDown(e: React.PointerEvent) {
     e.preventDefault();
@@ -48,6 +48,9 @@ export function NameResizeHandle({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      // Drop a still-pending live frame: it would land after onResizeEnd and
+      // re-pin the live width the release handler just cleared.
+      cancelThrottledResize();
       onResizeEnd(last);
     };
     window.addEventListener("pointermove", move);

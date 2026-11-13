@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import type { CacheColumn } from "@/lib/boards/cache";
 import { COLUMN_KIND_META } from "@/lib/boards/column-kinds";
 import { clampDragWidth } from "@/lib/boards/name-column-width";
+import { useRafThrottle } from "@/lib/hooks/use-raf-callback";
 import { cn } from "@/lib/utils";
 
 const MIN = 80;
@@ -75,6 +76,10 @@ export function ColumnHeader({
   const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState(column.name);
 
+  // Coalesce per-pixel live-width updates to one per frame (every group and
+  // visible row re-renders on each one) — same hook as NameResizeHandle.
+  const [throttledResize, cancelThrottledResize] = useRafThrottle(onResize);
+
   function commitRename() {
     const v = draft.trim();
     if (v && v !== column.name) onRename(v);
@@ -86,13 +91,19 @@ export function ColumnHeader({
     const startX = e.clientX;
     const startW = width;
     let last = width;
+    let moved = false;
     const move = (ev: PointerEvent) => {
       last = clampDragWidth(startW + (ev.clientX - startX), MIN, MAX);
-      onResize(last); // live
+      moved = true;
+      throttledResize(last); // live, at most once per animation frame
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      // The last move may still be waiting on its frame: drop it and apply the
+      // final width synchronously so the release never lands on a stale one.
+      cancelThrottledResize();
+      if (moved) onResize(last);
       onResizeEnd(last); // persist the final width
     };
     window.addEventListener("pointermove", move);
