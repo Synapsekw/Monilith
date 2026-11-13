@@ -200,6 +200,7 @@ export type Database = {
           created_at: string;
           folder_id: string | null;
           id: string;
+          mono_id: string | null;
           org_id: string;
           run_id: string | null;
           summarized_upto: string | null;
@@ -216,6 +217,7 @@ export type Database = {
           created_at?: string;
           folder_id?: string | null;
           id?: string;
+          mono_id?: string | null;
           org_id: string;
           run_id?: string | null;
           summarized_upto?: string | null;
@@ -232,6 +234,7 @@ export type Database = {
           created_at?: string;
           folder_id?: string | null;
           id?: string;
+          mono_id?: string | null;
           org_id?: string;
           run_id?: string | null;
           summarized_upto?: string | null;
@@ -263,6 +266,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "folders";
             referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_mono_id_fkey";
+            columns: ["mono_id"];
+            isOneToOne: false;
+            referencedRelation: "monos";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_mono_id_fkey";
+            columns: ["mono_id"];
+            isOneToOne: false;
+            referencedRelation: "org_monos";
+            referencedColumns: ["user_id"];
           },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";

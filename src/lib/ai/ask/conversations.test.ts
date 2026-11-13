@@ -17,18 +17,21 @@ import {
 beforeEach(() => from.mockReset());
 
 describe("listChats / listBriefings", () => {
-  it("lists only threads with no run, bounded and newest-first", async () => {
+  it("lists only threads with no run and no Mono, bounded and newest-first", async () => {
     const limit = vi
       .fn()
       .mockResolvedValue({ data: [{ id: "c1" }], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const is = vi.fn().mockReturnValue({ order });
+    const isMono = vi.fn().mockReturnValue({ order });
+    const is = vi.fn().mockReturnValue({ is: isMono });
     const eq = vi.fn().mockReturnValue({ is });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
     await listChats("user-1");
     expect(eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(is).toHaveBeenCalledWith("run_id", null);
+    // Mono threads live in the My Mono tab, not the /ask rail.
+    expect(isMono).toHaveBeenCalledWith("mono_id", null);
     expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
     expect(limit).toHaveBeenCalledWith(50);
   });

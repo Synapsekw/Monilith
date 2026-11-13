@@ -23,7 +23,8 @@ const MESSAGES_LIMIT = 200;
  *  partial indexes added with `ai_messages.agent_id`. */
 export const RAIL_LIMIT = 50;
 
-/** The user's own chats — threads no agent run wrote. */
+/** The user's own chats — threads no agent run wrote. Mono threads live in
+ *  the My Mono tab, not the /ask rail. */
 export async function listChats(userId: string): Promise<ConversationRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -31,6 +32,7 @@ export async function listChats(userId: string): Promise<ConversationRow[]> {
     .select("id, title, updated_at")
     .eq("user_id", userId)
     .is("run_id", null)
+    .is("mono_id", null)
     .order("updated_at", { ascending: false })
     .limit(RAIL_LIMIT);
   if (error) throw new Error(`listChats: ${error.message}`);
