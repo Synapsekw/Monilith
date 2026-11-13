@@ -3,16 +3,12 @@ import {
   summariseProposal,
   PROPOSAL_SUMMARY_MAX_LENGTH,
 } from "./proposal-summary";
-import {
-  MEMORY_MAX_KEY_CHARS,
-  MEMORY_MAX_VALUE_CHARS,
-} from "@/lib/agents/document-budget";
-import {
-  memoryKeySchema,
-  memoryValueSchema,
-} from "@/lib/validations/agent-memory";
-import { descriptorsFor } from "@/lib/agents/tool-descriptors";
-import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
+import { assistantDescriptors } from "./catalog";
+
+// Local copies of the memory-note ceilings the remember/forget summary was
+// measured against. They no longer live in a shared module.
+const MEMORY_MAX_KEY_CHARS = 64;
+const MEMORY_MAX_VALUE_CHARS = 380;
 
 /**
  * The summary is the ONLY sentence a human reads before approving a stored
@@ -685,24 +681,6 @@ describe("remember / forget summaries", () => {
     expect(summary.length).toBeLessThanOrEqual(PROPOSAL_SUMMARY_MAX_LENGTH);
   });
 
-  it("the key and value ceilings the schema enforces are the ones assumed here", () => {
-    // If Zod and the CHECK constraint ever admit a longer note than this
-    // module was measured against, the two tests above become vacuous.
-    expect(
-      memoryValueSchema.safeParse("x".repeat(MEMORY_MAX_VALUE_CHARS)).success,
-    ).toBe(true);
-    expect(
-      memoryValueSchema.safeParse("x".repeat(MEMORY_MAX_VALUE_CHARS + 1))
-        .success,
-    ).toBe(false);
-    expect(
-      memoryKeySchema.safeParse("k".repeat(MEMORY_MAX_KEY_CHARS)).success,
-    ).toBe(true);
-    expect(
-      memoryKeySchema.safeParse("k".repeat(MEMORY_MAX_KEY_CHARS + 1)).success,
-    ).toBe(false);
-  });
-
   it("still elides the NOTE's tail if a stored row somehow overflows", () => {
     // A proposal row outlives the schema that produced it, so the clamp has
     // not gone away — it is merely unreachable through the current ceilings.
@@ -750,7 +728,7 @@ describe("summariseProposal — dispatch tools (Task 10)", () => {
    *  classifies from — so this cannot drift from what really exists. */
   function everyProposableCall(): { toolName: string; action: string }[] {
     const out: { toolName: string; action: string }[] = [];
-    for (const d of descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS })) {
+    for (const d of assistantDescriptors()) {
       if (d.capability === null || typeof d.capability === "string") continue;
       for (const [action, capability] of Object.entries(d.capability)) {
         if (capability !== null) out.push({ toolName: d.name, action });

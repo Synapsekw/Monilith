@@ -10,15 +10,9 @@
  */
 
 import { MEMORY_FRAMING } from "./document-inject";
+import { estimateTokens } from "@/lib/ai/estimate-tokens";
 
-/**
- * ~4 characters per token. Crude, provider-independent, and deliberately the
- * ONLY estimator in the codebase — this replaces the inline expression that
- * lived at board-snapshot.ts:171.
- */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
+export { estimateTokens };
 
 /** Below this, a document library is not worth offering at all. */
 export const MIN_USEFUL_BUDGET = 4_000;
