@@ -229,4 +229,37 @@ describe("UpdatesTab", () => {
     expect(reveal.className).toContain("opacity-0");
     expect(reveal.className).toContain("group-hover:opacity-100");
   });
+  it("renders an update by a Mono with its face, Agent chip and owner", () => {
+    const monoCache: UpdatesCache = {
+      updates: [{ ...cache.updates[0]!, author_id: "m1" }],
+    };
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          itemId="item-1"
+          cache={monoCache}
+          members={[
+            ...members,
+            {
+              userId: "m1",
+              fullName: "Nova",
+              mono: {
+                color: "#7395ff",
+                ownerId: "u1",
+                ownerName: "Ada Owner",
+                directable: true,
+              },
+            },
+          ]}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Ada's Mono")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nova, Ada's Mono" }),
+    ).toBeInTheDocument();
+  });
 });

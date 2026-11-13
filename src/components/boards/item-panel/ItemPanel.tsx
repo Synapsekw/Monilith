@@ -29,6 +29,7 @@ import {
   formatCreatedAt,
 } from "@/components/boards/cells/created";
 import { MetaChip } from "@/components/ui/meta-chip";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 // Lazy-load the AI assist panel (and its action/SDK imports) only when the
 // fields tab is first opened — keeps opening the item panel / switching to
@@ -79,7 +80,10 @@ function ItemPanelInner({
   columns: readonly Column[];
   // Superset of activity's Member: the created-by row also renders the avatar
   // (optional so activity consumers passing bare {userId, fullName} still fit).
-  members: readonly (Member & { avatarUrl?: string | null })[];
+  members: readonly (Member & {
+    avatarUrl?: string | null;
+    mono?: MonoMemberMeta;
+  })[];
   createdBy: string | null;
   createdAt: string | null;
   onClose: () => void;

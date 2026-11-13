@@ -20,6 +20,7 @@ import {
 } from "@/lib/collaboration/attachments-format";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { createAttachmentCore } from "./attachment-core";
+import { keepOwnMonoMentions } from "@/lib/collaboration/mentions";
 import type { Json } from "@/types/database.types";
 
 /** What posting an update returns: the new update's id. */
@@ -54,6 +55,20 @@ export async function addUpdate(input: {
     .maybeSingle();
   if (itemErr || !item) return fail("Item not found.");
 
+  // Owner-only Mono mentions. Read only when the update names a Mono.
+  let mentions = parsed.data.mentions;
+  if (mentions.some((m) => m.kind === "mono")) {
+    const { data: own } = await supabase
+      .from("monos")
+      .select("user_id")
+      .eq("owner_id", user.id)
+      .eq("org_id", item.org_id);
+    mentions = keepOwnMonoMentions(
+      mentions,
+      (own ?? []).map((r) => r.user_id),
+    );
+  }
+
   const { data, error } = await supabase
     .from("item_updates")
     .insert({
@@ -61,7 +76,7 @@ export async function addUpdate(input: {
       board_id: item.board_id,
       item_id: parsed.data.itemId,
       author_id: user.id,
-      body: { text: parsed.data.text, mentions: parsed.data.mentions } as Json,
+      body: { text: parsed.data.text, mentions } as Json,
       body_text: parsed.data.text,
     })
     .select("id")
@@ -72,11 +87,7 @@ export async function addUpdate(input: {
   // Humans only: a non-user target has no `profiles` row, so a notification
   // row for one would be undeliverable.
   const recipients = [
-    ...new Set(
-      parsed.data.mentions
-        .filter((m) => m.kind === "user")
-        .map((m) => m.userId),
-    ),
+    ...new Set(mentions.filter((m) => m.kind === "user").map((m) => m.userId)),
   ].filter((id) => id !== user.id);
   if (recipients.length > 0) {
     const { error: notifErr } = await supabase.from("notifications").insert(

@@ -9,14 +9,15 @@ import {
   type MentionTarget,
 } from "@/lib/collaboration/mentions";
 import type { MentionTargetInput } from "@/lib/validations/collaboration-actions";
+import { MonoIdentity } from "@/components/mono/MonoChip";
 
 /** The tagged id a chosen target contributes to the submitted mention list. */
 function targetId(target: MentionTarget): MentionTargetInput {
-  return { kind: "user", userId: target.userId };
+  return { kind: target.kind, userId: target.userId };
 }
 
 function targetKey(target: MentionTarget): string {
-  return `user:${target.userId}`;
+  return `${target.kind}:${target.userId}`;
 }
 
 export function MentionTextarea({
@@ -101,13 +102,23 @@ export function MentionTextarea({
             <li key={targetKey(t)}>
               <button
                 type="button"
-                className="hover:bg-state-hover flex w-full items-baseline justify-between gap-2 px-3 py-1.5 text-left text-sm"
+                className="hover:bg-state-hover flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   choose(t);
                 }}
               >
-                <span className="truncate">{mentionLabel(t)}</span>
+                {t.kind === "mono" ? (
+                  <MonoIdentity
+                    name={t.name}
+                    color={t.color}
+                    ownerName={t.ownerName}
+                    size={18}
+                    showOwner={false}
+                  />
+                ) : (
+                  <span className="truncate">{mentionLabel(t)}</span>
+                )}
               </button>
             </li>
           ))}

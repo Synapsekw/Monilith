@@ -4,7 +4,6 @@ import { BoardViews } from "@/components/boards/BoardViews";
 import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner";
 import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { BOARD_ENTRY_COOKIE } from "@/lib/boards/last-board";
 import { resolveSelectedView } from "@/lib/boards/views";
@@ -13,6 +12,8 @@ import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
 import { getLatestBoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { loadBoardRoster } from "@/lib/monos/board-roster";
+import { withMonoMembers } from "@/lib/monos/members";
 
 export default async function BoardPage({
   params,
@@ -36,7 +37,7 @@ export default async function BoardPage({
     viewPrefs,
     lastSeenAt,
     latestRun,
-    activeOrgMembers,
+    activeRoster,
   ] = await Promise.all([
     getBoardPayload(boardId),
     supabase
@@ -66,13 +67,11 @@ export default async function BoardPage({
     // board from another org (shared across orgs) falls back to the read that
     // was always there. `resolveActiveOrg` is membership-verified, so this
     // never reads a roster the caller could not already see; a failure here
-    // must not fail the page, hence the catch → fallback.
+    // must not fail the page, hence the catch → fallback. The roster also
+    // carries the org's Monos (cached, same tag) and the viewer's own Mono (a
+    // point read), all in parallel inside this same wave — no new wave.
     resolveActiveOrg()
-      .then(async (org) =>
-        org
-          ? { orgId: org.id, members: await listOrgMembersCached(org.id) }
-          : null,
-      )
+      .then((org) => (org ? loadBoardRoster(supabase, org.id) : null))
       .catch(() => null),
   ]);
   // Opening the app (`/`) lands here straight from the proxy on the strength
@@ -100,15 +99,21 @@ export default async function BoardPage({
   );
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
-  const members =
-    activeOrgMembers?.orgId === payload.board.org_id
-      ? activeOrgMembers.members
-      : await listOrgMembersCached(payload.board.org_id);
+  const roster =
+    activeRoster?.orgId === payload.board.org_id
+      ? activeRoster
+      : await loadBoardRoster(supabase, payload.board.org_id);
+  const members = roster.members;
+  // People plus the org's Monos, so cells, pickers and authors resolve a Mono
+  // id from the payload already in hand.
+  const boardMembers = withMonoMembers(members, roster.monos, roster.myMono);
+  const monoIds = new Set(roster.monos.map((m) => m.userId));
 
-  const grants = (grantRows ?? []).map((g) => ({
-    userId: g.user_id,
-    access: g.access_level,
-  }));
+  // A Mono's board row is its owner's business (Plan 2A D14): the share
+  // dialog lists people.
+  const grants = (grantRows ?? [])
+    .filter((g) => !monoIds.has(g.user_id))
+    .map((g) => ({ userId: g.user_id, access: g.access_level }));
   const access = deriveBoardAccess(payload.board, grants, user.id);
 
   return (
@@ -124,7 +129,7 @@ export default async function BoardPage({
         )}
         <BoardViews
           payload={payload}
-          members={members}
+          members={boardMembers}
           initialViewId={selectedViewId}
           currentUserId={user.id}
           access={access ?? "viewer"}

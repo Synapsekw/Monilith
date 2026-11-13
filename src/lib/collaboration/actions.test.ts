@@ -117,6 +117,58 @@ describe("addUpdate", () => {
     const res = await addUpdate({ itemId: ITEM, text: "hello" });
     expect(res).toEqual({ ok: false, error: "Item not found." });
   });
+
+  it("drops a mention of someone else's Mono and notifies no Mono", async () => {
+    const MONO_MINE = "33333333-3333-4333-8333-333333333333";
+    const MONO_THEIRS = "44444444-4444-4444-8444-444444444444";
+    const updInsert = vi.fn().mockReturnValue({
+      select: () => ({
+        single: async () => ({ data: { id: UPD }, error: null }),
+      }),
+    });
+    const notifInsert = vi.fn(async () => ({ error: null }));
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "monos")
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: async () => ({ data: [{ user_id: MONO_MINE }], error: null }),
+            }),
+          }),
+        } as never;
+      if (table === "item_updates") return { insert: updInsert } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+    await addUpdate({
+      itemId: ITEM,
+      text: "@Nova @Pip",
+      mentions: [
+        { kind: "mono", userId: MONO_MINE },
+        { kind: "mono", userId: MONO_THEIRS },
+      ],
+    });
+    expect(updInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          text: "@Nova @Pip",
+          mentions: [{ kind: "mono", userId: MONO_MINE }],
+        },
+      }),
+    );
+    expect(notifInsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("deleteUpdate", () => {
