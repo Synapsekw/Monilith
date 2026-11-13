@@ -166,6 +166,10 @@ Parallel batches: (R, F0), then (A, Fb, Fi), then Q, then (D, Ff, Fd, Fm), then 
 
 Facts recorded for sub-projects 0 and 5: signup is open today and no approval step exists; all 9 orgs with AI settings are on `per_user` mode with a credit limit of 0; managed mode exists but serves Anthropic only (`src/lib/ai/gateway.ts`).
 
+> **Superseded 2026-11-13:** sub-projects 3 and 4 are replaced by
+> `docs/superpowers/specs/2026-11-13-personal-monos-design.md` (one owner-directed Mono per person;
+> no saved-agent builder).
+
 ## Resolved during planning (2026-11-13)
 
 - **Attribution.** No mechanism exists for catalog writes. Dropped from this spec; see "Attribution" above.
