@@ -49,6 +49,80 @@ describe("board focus", () => {
   });
 });
 
+describe("board focus bounds", () => {
+  const ITEMS_HEADER = "ITEMS (most recently updated first";
+
+  function huge(): BoardPayload {
+    const p = payload(40);
+    (p as unknown as { columns: unknown[] }).columns = Array.from(
+      { length: 60 },
+      (_, c) => ({
+        id: `c-${c}`,
+        name: `Column ${c}`,
+        kind: "status",
+        settings: {
+          options: Array.from({ length: 12 }, (_, o) => ({
+            id: `o-${c}-${o}`,
+            label: `Option label ${"long".repeat(10)} ${o}`,
+            color: "gray",
+          })),
+        },
+      }),
+    );
+    return p;
+  }
+  const manyMembers = Array.from({ length: 100 }, (_, i) => ({
+    userId: `u-${i}`,
+    fullName: `Member ${i}`,
+  })) as never;
+
+  it("keeps the ITEMS header and whole lines when the head is huge", () => {
+    const text = buildBoardFocus({ payload: huge(), members: manyMembers });
+    expect(text.length).toBeLessThanOrEqual(FOCUS_MAX_CHARS);
+    expect(text).toContain(ITEMS_HEADER);
+    const lines = text.split("\n");
+    expect(lines.some((l) => l.startsWith("- i-"))).toBe(true);
+    const last = lines[lines.length - 1];
+    expect(
+      /^- i-\d+ \| Item \d+ \| group g-1 \| no values$/.test(last) ||
+        /^… \d+ more items not shown; call list_items$/.test(last),
+    ).toBe(true);
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(300);
+  });
+
+  it("marks capped groups, columns and members with the omitted count", () => {
+    const p = payload(1);
+    (p as unknown as { groups: unknown[] }).groups = Array.from(
+      { length: 35 },
+      (_, i) => ({ id: `g-${i}`, name: `Group ${i}` }),
+    );
+    (p as unknown as { columns: unknown[] }).columns = Array.from(
+      { length: 33 },
+      (_, i) => ({
+        id: `c-${i}`,
+        name: `Col ${i}`,
+        kind: "text",
+        settings: null,
+      }),
+    );
+    const text = buildBoardFocus({ payload: p, members: manyMembers });
+    const more = text.split("\n").filter((l) => /^… \d+ more$/.test(l));
+    expect(more).toEqual(["… 5 more", "… 3 more", "… 60 more"]);
+  });
+
+  it("ends a budget-cut roster with the exact omitted count", () => {
+    const big = payload(50);
+    for (const it of big.items) (it as { name: string }).name = "x".repeat(500);
+    const text = buildBoardFocus({ payload: big, members });
+    const shown = text.split("\n").filter((l) => l.startsWith("- i-")).length;
+    expect(shown).toBeLessThan(50);
+    const lines = text.split("\n");
+    expect(lines[lines.length - 1]).toBe(
+      `… ${50 - shown} more items not shown; call list_items`,
+    );
+  });
+});
+
 describe("renderFocusBlock", () => {
   it("wraps snapshot text in the FOCUS delimiters", () => {
     const block = renderFocusBlock("hello");
