@@ -2,7 +2,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
-import type { AgentCapability } from "@/lib/mcp/tools/capabilities";
 import {
   DEFAULT_ASSISTANT_NAME,
   resolveAssistantName,
@@ -26,14 +25,6 @@ export type OrgAiSettings = {
   defaultModelId: string | null;
   maxAgentsPerUser: number;
   maxAgentRunsPerUserPerDay: number;
-  /**
-   * The org-wide CEILING on what a personal agent may be granted — the admin
-   * half of a two-key gate. An agent's effective permission is its own
-   * `user_agents.capabilities` INTERSECT this list INTERSECT the owner's RLS,
-   * so lowering the ceiling clamps every agent in the org at once without
-   * editing any of them. Mirrors `org_ai_settings.agent_capability_ceiling`.
-   */
-  agentCapabilityCeiling: AgentCapability[];
   /**
    * What THIS org calls the built-in platform assistant — the name every
    * render site shows instead of a hardcoded product string. Display only: the
@@ -64,47 +55,8 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = Object.freeze({
   defaultModelId: null,
   maxAgentsPerUser: 3,
   maxAgentRunsPerUserPerDay: 3,
-  // Deliberately the FULL vocabulary, matching the column default: the inner
-  // gate (`user_agents.capabilities`, default '{}') is already closed, so a
-  // closed ceiling too would ship the feature invisible and demand an admin
-  // round-trip before anyone's first agent could act. A row-less org is
-  // `mode: "off"` anyway — no agent runs there regardless — but this constant
-  // and the column default must not disagree, or an org would silently lose
-  // capabilities the moment its first settings row was written.
-  //
-  // Spec 3 note: the list is now stated LITERALLY rather than as
-  // `[...AGENT_CAPABILITIES]`, because the two stopped being the same thing.
-  // `agent.delegate` joined the vocabulary but deliberately did NOT join the
-  // column default, and existing rows are deliberately NOT backfilled with it:
-  // delegation ships installable-but-inert, switched on by an admin ticking it
-  // in the org ceiling. Deriving this constant from the vocabulary would have
-  // handed it to every row-less org silently, which is the drift this comment
-  // exists to prevent — in the other direction.
-  agentCapabilityCeiling: [
-    "board.write",
-    "files.write",
-    "automation.create",
-    "time.log",
-    "memory.write",
-  ] satisfies AgentCapability[],
   assistantName: DEFAULT_ASSISTANT_NAME,
 });
-
-/**
- * The freeze above is SHALLOW, and the one field that matters is an array.
- *
- * `readOrgAiSettings` returns `DEFAULT_ORG_AI_SETTINGS` BY IDENTITY for every
- * org with no `org_ai_settings` row, so a single in-place `push`/`sort`/
- * `splice` on the ceiling anywhere in the process rewrites the ADMIN half of
- * the agent permission gate for every such org, for the lifetime of the server
- * — widening what personal agents may do, silently and globally. Callers
- * already copy defensively (`route.ts`'s "never mutate it in place" note,
- * `.filter` there, the spread in `agent-tools.rls.integration.test.ts`); those
- * stay, and this is what makes them enforceable instead of conventional. Under
- * ESM's strict mode a violation now throws at the mutation rather than
- * corrupting the singleton.
- */
-Object.freeze(DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling);
 
 /**
  * The org default model an UNPINNED call will REALLY run on — or null.
@@ -157,7 +109,7 @@ export async function readOrgAiSettings(
   const { data, error } = await client
     .from("org_ai_settings")
     .select(
-      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, agent_capability_ceiling, assistant_name",
+      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, assistant_name",
     )
     .eq("org_id", orgId)
     .maybeSingle();
@@ -173,13 +125,6 @@ export async function readOrgAiSettings(
     defaultModelId: data.default_model_id,
     maxAgentsPerUser: data.max_agents_per_user,
     maxAgentRunsPerUserPerDay: data.max_agent_runs_per_user_per_day,
-    // The column is NOT NULL with a default, so the coalesce is unreachable
-    // through any supported path — and it clamps CLOSED rather than open on
-    // purpose: an unreadable ceiling is not a reason to hand an agent the
-    // whole vocabulary. The cast narrows `text[]` to the vocabulary, which
-    // `org_ai_settings_ceiling_known` is what actually enforces.
-    agentCapabilityCeiling:
-      (data.agent_capability_ceiling as AgentCapability[] | null) ?? [],
     // Resolved, never raw. The column is NOT NULL with a default and a
     // 1..40 check, so a blank is unreachable through any supported path — but
     // a row read before the column existed, or through an older select list,

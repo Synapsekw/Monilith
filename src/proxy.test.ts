@@ -385,7 +385,12 @@ describe("pg_cron endpoints are exempt from the cookie gate", () => {
     return [...found].sort();
   }
 
-  const endpoints = cronEndpointsFromMigrations();
+  // Retired with the old personal agents: their migrations still name the
+  // routes, but the handlers are gone and the prefixes are no longer public.
+  const RETIRED = new Set(["/api/ai/personal-agent", "/api/ai/autopilot"]);
+  const endpoints = cronEndpointsFromMigrations().filter(
+    (path) => !RETIRED.has(path),
+  );
 
   it("finds the cron endpoints in the migrations (guards the regex itself)", () => {
     // If this ever reads empty the loop below would pass vacuously.
@@ -403,6 +408,20 @@ describe("pg_cron endpoints are exempt from the cookie gate", () => {
       const res = await proxy(req(path));
       expect(res.status).not.toBe(307);
       expect(res.headers.get("location")).toBeNull();
+    },
+  );
+});
+
+describe("retired agent routes", () => {
+  it.each(["/api/ai/personal-agent", "/api/ai/autopilot"])(
+    "%s is no longer public",
+    async (path) => {
+      getClaims.mockResolvedValue({
+        data: null,
+        error: { message: "no session" },
+      });
+      const res = await proxy(req(path));
+      expect(res.status).toBe(307);
     },
   );
 });

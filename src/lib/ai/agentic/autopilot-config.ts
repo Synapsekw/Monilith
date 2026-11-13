@@ -2,7 +2,7 @@ import * as z from "zod";
 
 /**
  * Client-safe shared config for the F14 Autopilot agent: the task vocabulary,
- * cadences, and the Zod schemas the `AutopilotCard` and its server actions
+ * cadences, and the Zod schemas the Autopilot settings UI and its server actions
  * validate against. Kept free of `server-only` (unlike `autopilot.ts` /
  * `board-agents-db.ts`) so the client card can import the constants + types.
  */
@@ -25,7 +25,7 @@ export const boardAgentConfigSchema = z.object({
 });
 export type BoardAgentConfig = z.infer<typeof boardAgentConfigSchema>;
 
-/** Full settings payload the AutopilotCard saves (validated at the boundary). */
+/** Full settings payload the Autopilot settings UI saves (validated at the boundary). */
 export const boardAgentSettingsSchema = z.object({
   enabled: z.boolean(),
   cadence: z.enum(AUTOPILOT_CADENCES),

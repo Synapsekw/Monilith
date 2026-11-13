@@ -15,7 +15,6 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { AiKeyList } from "@/components/settings/AiKeyList";
 import { ProviderVerificationList } from "@/components/settings/ProviderVerificationBadge";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
-import { OrgAgentCeiling } from "@/components/settings/OrgAgentCeiling";
 import { UsageBreakdown } from "@/components/settings/UsageBreakdown";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 
@@ -130,17 +129,6 @@ export default async function AiSettingsPage() {
         >
           <div className="pt-4">
             <UsageBreakdown summary={usage} />
-          </div>
-        </SettingsSection>
-      )}
-
-      {isAdmin && orgAi.ok && (
-        <SettingsSection
-          title="Agent capabilities"
-          description="The most any personal agent in this organization may ever be granted."
-        >
-          <div className="pt-4">
-            <OrgAgentCeiling initial={orgAi.data.agentCapabilityCeiling} />
           </div>
         </SettingsSection>
       )}

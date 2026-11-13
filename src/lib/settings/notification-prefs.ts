@@ -13,7 +13,6 @@ export type NotificationChannel =
 export const CONTROLLABLE_IN_APP_KINDS = [
   "mention",
   "assigned",
-  "agent_reply",
   "health_digest",
 ] as const;
 
@@ -34,10 +33,6 @@ export const IN_APP_KIND_LABELS: Record<
   assigned: {
     label: "Assignments",
     description: "When you're assigned to an item",
-  },
-  agent_reply: {
-    label: "Agent replies",
-    description: "When an agent you summoned answers on an item",
   },
   health_digest: {
     label: "Weekly digest",

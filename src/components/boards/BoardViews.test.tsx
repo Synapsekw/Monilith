@@ -23,7 +23,7 @@ vi.mock("@/lib/boards/intelligence/visit-actions", () => ({
 
 // `useBoardSnapshot` (offline persistence) calls `useQueryClient()`, so
 // `BoardViews` now needs a provider above it — mirrors the wrapper pattern in
-// AutopilotCard.test.tsx / use-board-realtime.test.tsx. A fresh QueryClient
+// use-board-realtime.test.tsx. A fresh QueryClient
 // per render keeps each test's cache isolated (no state leaking across
 // cases, no order-dependent passes).
 function wrap(ui: ReactNode) {
