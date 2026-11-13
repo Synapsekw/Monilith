@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { subscribeMonoClock } from "./mono-clock";
-import { monoPalette } from "./mono-palette";
+import { DEFAULT_MONO_COLOR, isMonoColor, monoPalette } from "./mono-palette";
 import { drawMono, type MonoMood } from "./mono-renderer";
 
 const SMALL = 40;
@@ -22,7 +22,11 @@ export function MonoAvatar({
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const palette = useMemo(() => monoPalette(color), [color]);
+  // An invalid colour must never take a page down: render the default Mono.
+  const palette = useMemo(
+    () => monoPalette(isMonoColor(color) ? color : DEFAULT_MONO_COLOR),
+    [color],
+  );
   const height = Math.round(size * 1.06);
 
   useEffect(() => {
@@ -44,17 +48,22 @@ export function MonoAvatar({
     };
     render();
 
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduced =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const animate =
       !reduced && (size >= SMALL || ALWAYS_ANIMATE.includes(mood));
     if (!animate) return;
 
-    const io = new IntersectionObserver(([e]) => {
-      visible = e.isIntersecting;
-    });
-    io.observe(canvas);
+    // Without IntersectionObserver (old WebViews, tests) the avatar simply
+    // counts as visible.
+    const io =
+      typeof IntersectionObserver === "function"
+        ? new IntersectionObserver(([e]) => {
+            visible = e.isIntersecting;
+          })
+        : null;
+    io?.observe(canvas);
     const unsubscribe = subscribeMonoClock((dt) => {
       if (!visible) return;
       t += dt;
@@ -69,7 +78,7 @@ export function MonoAvatar({
     });
     return () => {
       unsubscribe();
-      io.disconnect();
+      io?.disconnect();
     };
   }, [mood, palette, size, height]);
 

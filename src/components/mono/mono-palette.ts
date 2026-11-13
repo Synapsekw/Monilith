@@ -20,6 +20,13 @@ export const MONO_PRESET_COLORS = [
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+export const DEFAULT_MONO_COLOR = "#7395ff";
+
+/** True for `#rrggbb` (either case): the only colour shape a Mono stores. */
+export function isMonoColor(hex: string): boolean {
+  return HEX.test(hex);
+}
+
 function toRgb(hex: string): [number, number, number] {
   if (!HEX.test(hex)) throw new Error(`Invalid Mono colour: ${hex}`);
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [
