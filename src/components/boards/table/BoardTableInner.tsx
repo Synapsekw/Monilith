@@ -52,6 +52,7 @@ import {
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { type EditorMember } from "@/components/boards/cells/editors";
+import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
@@ -91,11 +92,6 @@ import {
 /** Shared empty lists, so a group with no visible rows keeps stable props. */
 const NO_ITEMS: Item[] = [];
 const NO_IDS: string[] = [];
-// Default-parameter empty arrays MUST be module constants: `members = []` in
-// the signature allocates a fresh array on every render, which changes the
-// memoized `controls` bundle's identity and re-renders every visible cell.
-const NO_MEMBERS: EditorMember[] = [];
-const NO_GRANTS: HeaderGrant[] = [];
 
 // Lazy-load the Smart Fill dialog (and its AI action imports) only when a
 // text column's header menu opens it — matches the AskPulseHost pattern.

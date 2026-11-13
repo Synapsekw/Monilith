@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { memo, useState, useTransition, useMemo } from "react";
 import { toast } from "sonner";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 
@@ -21,6 +21,7 @@ import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import {
   CalendarControls,
   type CalendarMode,
@@ -83,12 +84,18 @@ function openItemPanel(itemId: string) {
   window.history.pushState({}, "", url);
 }
 
-export function CalendarBoard({
+// Memoized for the same reason as BoardTable / KanbanBoard: it re-renders on
+// real cache changes via its own useBoardCache subscription, and every prop
+// BoardViews passes is referentially stable, so it can skip the parent
+// re-renders driven by presence heartbeats.
+export const CalendarBoard = memo(CalendarBoardInner);
+
+function CalendarBoardInner({
   payload,
   selectedViewId,
-  members = [],
+  members = NO_MEMBERS,
   access = "owner",
-  grants = [],
+  grants = NO_GRANTS,
   currentUserId = "",
 }: {
   payload: BoardPayload;

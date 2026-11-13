@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -47,6 +48,7 @@ import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Kicker } from "@/components/ui/kicker";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import {
   ItemQuickEdit,
   type QuickEditTarget,
@@ -77,12 +79,18 @@ import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-export function GanttBoard({
+// Memoized for the same reason as BoardTable / KanbanBoard: it re-renders on
+// real cache changes via its own useBoardCache subscription, and every prop
+// BoardViews passes is referentially stable, so it can skip the parent
+// re-renders driven by presence heartbeats.
+export const GanttBoard = memo(GanttBoardInner);
+
+function GanttBoardInner({
   payload,
   selectedViewId,
-  members = [],
+  members = NO_MEMBERS,
   access = "owner",
-  grants = [],
+  grants = NO_GRANTS,
   currentUserId = "",
 }: {
   payload: BoardPayload;

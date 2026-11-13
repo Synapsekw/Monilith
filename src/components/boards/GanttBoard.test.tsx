@@ -41,6 +41,23 @@ beforeAll(() => {
   });
 });
 
+// Probe: the `members` / `grants` arrays GanttBoard hands its header on each
+// render (identity matters — they feed memoized children).
+const { headerLists } = vi.hoisted(() => ({
+  headerLists: [] as { members: unknown; grants: unknown }[],
+}));
+vi.mock("@/components/boards/BoardHeader", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/boards/BoardHeader")>();
+  return {
+    ...actual,
+    BoardHeader: (props: Parameters<typeof actual.BoardHeader>[0]) => {
+      headerLists.push({ members: props.members, grants: props.grants });
+      return <actual.BoardHeader {...props} />;
+    },
+  };
+});
+
 const setCell = vi.fn();
 const addItem = vi.fn();
 const clearCellValue = vi.fn();
@@ -159,6 +176,20 @@ beforeEach(() => {
 });
 
 describe("GanttBoard", () => {
+  it("keeps the default members/grants lists referentially stable across renders", () => {
+    const qc = new QueryClient();
+    headerLists.length = 0;
+    render(
+      <QueryClientProvider client={qc}>
+        <GanttBoard payload={payloadFixture()} selectedViewId={VIEW_ID} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    expect(headerLists.length).toBeGreaterThan(1);
+    expect(new Set(headerLists.map((h) => h.members)).size).toBe(1);
+    expect(new Set(headerLists.map((h) => h.grants)).size).toBe(1);
+  });
+
   it("renders the board name in the header", () => {
     renderGantt();
     expect(screen.getByText("My Board")).toBeInTheDocument();
