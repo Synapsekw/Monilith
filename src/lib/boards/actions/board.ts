@@ -12,6 +12,7 @@ import {
   archiveBoardSchema,
   restoreBoardSchema,
   purgeBoardSchema,
+  leaveBoardSchema,
   renameBoardSchema,
   reorderBoardSchema,
 } from "@/lib/validations/board-actions";
@@ -24,6 +25,7 @@ import { invalidateMyBoards } from "@/lib/boards/actions/internal";
 import { boardsTag } from "@/lib/cache/tags";
 import {
   archiveBoardCore,
+  leaveBoardCore,
   createBoardCore,
   duplicateBoardCore,
   renameBoardCore,
@@ -231,6 +233,24 @@ export async function archiveBoard(input: {
   );
   if (result.ok) await invalidateMyBoards();
   return result;
+}
+
+/**
+ * Leave a board that someone else shared with me — removes it from my sidebar
+ * and drops my access; the board itself and everyone else's access are
+ * untouched. The owner cannot leave (they delete instead).
+ */
+export async function leaveBoard(input: {
+  boardId: string;
+}): Promise<ActionResult> {
+  const parsed = leaveBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const userId = (await getUser())?.id;
+  if (!userId) return fail("Board not found.");
+
+  return leaveBoardCore(await createClient(), userId, parsed.data);
 }
 
 /** Restore an archived board (clears the flag). Owner-only (mirrors archive). */

@@ -11,11 +11,13 @@ beforeEach(() => {
 
 import {
   archiveBoardCore,
+  leaveBoardCore,
   createBoardCore,
   duplicateBoardCore,
   renameBoardCore,
   restoreBoardCore,
 } from "./board";
+import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
 
 const OWNER = "owner-1";
 const OTHER = "other-1";
@@ -34,6 +36,8 @@ function fakeClient(opts: {
   updateError?: { message: string } | null;
   rpc?: { data: unknown; error: { message: string } | null };
   memberIds?: string[];
+  leaveRows?: { board_id: string }[];
+  leaveError?: { message: string } | null;
 }) {
   const updateEq = vi.fn().mockResolvedValue({
     error: opts.updateError ?? null,
@@ -42,6 +46,21 @@ function fakeClient(opts: {
   const rpc = vi
     .fn()
     .mockResolvedValue(opts.rpc ?? { data: { id: "dup-1" }, error: null });
+
+  const leaveCalls: [string, string][] = [];
+  const del = vi.fn(() => ({
+    eq: (c1: string, v1: string) => ({
+      eq: (c2: string, v2: string) => ({
+        select: async () => {
+          leaveCalls.push([`${c1}=${v1}`, `${c2}=${v2}`]);
+          return {
+            data: opts.leaveError ? null : (opts.leaveRows ?? []),
+            error: opts.leaveError ?? null,
+          };
+        },
+      }),
+    }),
+  }));
 
   const client = {
     rpc,
@@ -93,12 +112,13 @@ function fakeClient(opts: {
             }
             throw new Error(`unexpected board_members.select(${cols})`);
           },
+          delete: del,
         };
       }
       throw new Error(`unexpected table ${table}`);
     },
   };
-  return { client: client as never, update, updateEq, rpc };
+  return { client: client as never, update, updateEq, rpc, del, leaveCalls };
 }
 
 describe("archiveBoardCore", () => {
@@ -225,5 +245,56 @@ describe("renameBoardCore", () => {
     const r = await renameBoardCore(client, { boardId: BOARD_ID, name: "New" });
     expect(r).toEqual({ ok: false, error: "rls" });
     expect(updateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe("leaveBoardCore", () => {
+  const MEMBER = "member-1";
+
+  it("refuses a board that does not exist, touching nothing", async () => {
+    const { client, del } = fakeClient({ createdBy: null });
+    const r = await leaveBoardCore(client, MEMBER, { boardId: BOARD_ID });
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("refuses the owner — an owner deletes, never leaves", async () => {
+    const { client, del } = fakeClient({ createdBy: MEMBER });
+    const r = await leaveBoardCore(client, MEMBER, { boardId: BOARD_ID });
+    expect(r).toEqual({
+      ok: false,
+      error: "You own this board. Delete it instead of leaving.",
+    });
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it("removes only the caller's own grant and refreshes both sidebars", async () => {
+    const { client, leaveCalls } = fakeClient({
+      createdBy: OWNER,
+      leaveRows: [{ board_id: BOARD_ID }],
+    });
+    const r = await leaveBoardCore(client, MEMBER, { boardId: BOARD_ID });
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(leaveCalls).toEqual([[`board_id=${BOARD_ID}`, `user_id=${MEMBER}`]]);
+    // The leaver's "Shared with me" list, and the owner's list (its shared
+    // marker counts grants).
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag(MEMBER));
+    expect(updateTag).toHaveBeenCalledWith(boardsTag(OWNER));
+  });
+
+  it("treats a grant that was not there as not found — no lying success", async () => {
+    const { client } = fakeClient({ createdBy: OWNER, leaveRows: [] });
+    const r = await leaveBoardCore(client, MEMBER, { boardId: BOARD_ID });
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a database error", async () => {
+    const { client } = fakeClient({
+      createdBy: OWNER,
+      leaveError: { message: "boom" },
+    });
+    const r = await leaveBoardCore(client, MEMBER, { boardId: BOARD_ID });
+    expect(r).toEqual({ ok: false, error: "boom" });
   });
 });

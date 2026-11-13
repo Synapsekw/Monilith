@@ -228,4 +228,58 @@ describe.skipIf(!integrationTargetReady())("RLS: board-level sharing", () => {
       p_user_id: grantee.id,
     });
   });
+
+  it("a member can leave: delete their OWN grant, and only that", async () => {
+    await owner.anon.rpc("share_board", {
+      p_board_id: owner.boardId,
+      p_user_id: grantee.id,
+      p_access: "editor",
+    });
+    await owner.anon.rpc("share_board", {
+      p_board_id: owner.boardId,
+      p_user_id: outsider.id,
+      p_access: "viewer",
+    });
+
+    // Cannot remove someone else's grant — RLS filters it to 0 rows.
+    const { data: notMine } = await grantee.anon
+      .from("board_members")
+      .delete()
+      .eq("board_id", owner.boardId)
+      .eq("user_id", outsider.id)
+      .select("user_id");
+    expect(notMine, "member removing another member").toEqual([]);
+
+    // Can remove their own.
+    const { data: mine, error } = await grantee.anon
+      .from("board_members")
+      .delete()
+      .eq("board_id", owner.boardId)
+      .eq("user_id", grantee.id)
+      .select("user_id");
+    expect(error).toBeNull();
+    expect(mine).toEqual([{ user_id: grantee.id }]);
+
+    // The leaver lost access; the board and the other member are untouched.
+    const { data: gone } = await grantee.anon
+      .from("boards")
+      .select("id")
+      .eq("id", owner.boardId);
+    expect(gone).toEqual([]);
+    const { data: others } = await admin
+      .from("board_members")
+      .select("user_id")
+      .eq("board_id", owner.boardId);
+    expect(others).toEqual([{ user_id: outsider.id }]);
+    const { data: board } = await owner.anon
+      .from("boards")
+      .select("id")
+      .eq("id", owner.boardId);
+    expect(board).toHaveLength(1);
+
+    await owner.anon.rpc("unshare_board", {
+      p_board_id: owner.boardId,
+      p_user_id: outsider.id,
+    });
+  });
 });
