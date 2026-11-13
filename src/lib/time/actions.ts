@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
@@ -45,10 +44,20 @@ export async function upsertTimeAllocation(
   });
   if (!res.ok) return res;
 
-  // NO revalidatePath("/time"): the card reconciles the written seconds into a
-  // durable local overlay and coalesces one trailing router.refresh() per edit
-  // burst. /workload is server-derived and has no such overlay, so keep it.
-  revalidatePath("/workload");
+  // NO revalidation at all — not of /time, and not of /workload either.
+  //
+  // /time: the card reconciles the written seconds into a durable local overlay
+  // and coalesces one trailing router.refresh() per edit burst.
+  //
+  // /workload: the old `revalidatePath("/workload")` here defeated the line
+  // above. ANY path revalidation makes the action's own response re-render the
+  // CURRENT route (Next 16 server-actions guide), so every cell edit on /time
+  // re-rendered /time server-side — and, because actions dispatch one at a time,
+  // a burst of edits queued behind those renders. It bought nothing: /workload
+  // has no `use cache` reads (nothing to expire) and is a dynamic route the
+  // client re-fetches on every navigation. The one thing it did cover — a
+  // back/forward restore of an already-visited /workload — is covered by the
+  // card's trailing router.refresh(), which invalidates the client BFCache.
   return res;
 }
 
@@ -88,8 +97,8 @@ export async function deleteTimeAllocation(
   const { error } = await query;
   if (error) return fail(error.message);
 
-  // See upsertTimeAllocation: the card owns /time reconciliation via its overlay
-  // + coalesced refresh; keep the /workload revalidate only.
-  revalidatePath("/workload");
+  // See upsertTimeAllocation: no revalidation. The card owns /time
+  // reconciliation via its overlay + coalesced refresh, and /workload is an
+  // uncached dynamic route that re-reads on navigation.
   return { ok: true, data: null };
 }

@@ -17,7 +17,13 @@ import { AddRowPicker, type PickedRow } from "./AddRowPicker";
 
 const DAY = 86_400_000;
 /** Trailing-debounce window: one router.refresh() this long after the last cell
- * edit in a burst reconciles /time (timer merges, server totals) once. */
+ * edit in a burst reconciles /time (timer merges, server totals) once.
+ *
+ * This is the ONLY server reconciliation path: the cell actions deliberately
+ * revalidate nothing (see `src/lib/time/actions.ts`), so their responses carry
+ * no re-rendered route. It also invalidates the client BFCache, which is what
+ * keeps a back/forward restore of /workload from showing pre-edit actuals. Do
+ * not remove it without giving the actions a revalidation back. */
 const REFRESH_DEBOUNCE_MS = 2000;
 const editKey = (rowKey: string, day: string) => `${rowKey}::${day}`;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
