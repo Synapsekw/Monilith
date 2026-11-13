@@ -6,6 +6,7 @@ import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
 import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
+import { BatchConfirmCard } from "@/components/ai/assistant/BatchConfirmCard";
 import { StreamDropNotice, type DropState } from "./StreamDropNotice";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import {
@@ -139,6 +140,8 @@ export function MessageList({
   status,
   onApprove,
   onCancel,
+  onApplyBatch,
+  onDismissBatch,
   busyMessageId,
   dropState = "none",
   onRetryDrop,
@@ -153,6 +156,10 @@ export function MessageList({
   status: string | null;
   onApprove: (messageId: string) => void;
   onCancel: (messageId: string) => void;
+  /** Apply the ticked rows of the staged batch on this message. */
+  onApplyBatch: (messageId: string, selectedIds: string[]) => void;
+  /** Dismiss the staged batch on this message; nothing is changed. */
+  onDismissBatch: (messageId: string) => void;
   busyMessageId?: string | null;
   dropState?: DropState;
   onRetryDrop?: () => void;
@@ -263,6 +270,7 @@ export function MessageList({
 
         {messages.map((m) => {
           const actions = m.trace?.proposedActions ?? [];
+          const stagedCalls = m.trace?.stagedCalls ?? [];
           // NOT named `status` — that is the streaming status-line prop.
           // A viewer sees WHAT was proposed and that it is still open, but no
           // Approve/Cancel: the write is the owner's to make (and RLS would
@@ -312,6 +320,23 @@ export function MessageList({
                       onCancel={() => onCancel(m.id)}
                     />
                   ))}
+                </div>
+              ) : null}
+              {stagedCalls.length > 0 && proposalStatus ? (
+                // Same gutter as the legacy cards. Keyed by the message so the
+                // card's tick state (initialised once from `calls`) belongs to
+                // this turn and survives re-renders of the list.
+                <div className="pl-10">
+                  <BatchConfirmCard
+                    key={m.id}
+                    calls={stagedCalls}
+                    state={
+                      busyMessageId === m.id ? "running" : proposalStatus.state
+                    }
+                    resultNote={proposalStatus.note}
+                    onApply={(ids) => onApplyBatch(m.id, ids)}
+                    onDismiss={() => onDismissBatch(m.id)}
+                  />
                 </div>
               ) : null}
             </div>

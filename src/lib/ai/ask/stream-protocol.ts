@@ -10,7 +10,14 @@
 // could ever emit such an event. Execution is a Server Action
 // (`applyAskProposal`) returning `ActionResult`, which is also where AGENTS.md
 // puts every mutation.
+//
+// Since the unified assistant runtime (2026-11) POST /api/ask no longer emits
+// the `proposal` event: a turn that lines up changes emits `staged` instead,
+// applied by `applyBatch`. The `proposal` type is kept so clients and tests
+// that still handle it keep compiling, and so old proposal rows keep their
+// shared vocabulary.
 import type { ValidatedAction } from "@/lib/ai/write/schema";
+import type { StagedCall } from "@/lib/assistant/staged";
 
 /** Persisted + rendered when a proposal turn produced no lead-in text of its
  *  own. Shared so the engine, the DB row and the optimistic client bubble all
@@ -34,6 +41,9 @@ export type AskStreamEvent =
   /** The turn ended at a confirm card. Emitted before persistence so the client
    *  can stash the actions; it binds them to the real message id at `done`. */
   | { type: "proposal"; actions: ValidatedAction[] }
+  /** The turn lined up changes. Emitted before persistence; the client binds
+   *  the calls to the real message id at `done`. */
+  | { type: "staged"; calls: StagedCall[] }
   | {
       type: "done";
       conversationId: string;
