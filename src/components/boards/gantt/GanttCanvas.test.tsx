@@ -102,4 +102,33 @@ describe("GanttCanvas", () => {
     expect(onStubTap).toHaveBeenCalledWith(stub);
     expect(el).toHaveTextContent(/Late/);
   });
+
+  it("draws an arrow between two scheduled linked bars", () => {
+    const { container } = render(<GanttCanvas {...props()} />);
+    const arrows = container.querySelectorAll("svg path[marker-end]");
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0]).toHaveClass("stroke-muted-foreground");
+  });
+
+  it("draws a late link in the destructive stroke", () => {
+    const { container } = render(
+      <GanttCanvas {...props({ violations: new Set(["d1"]) })} />,
+    );
+    const arrows = container.querySelectorAll("svg path[marker-end]");
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0]).toHaveClass("stroke-destructive");
+  });
+
+  it("draws no arrow when one end is unscheduled", () => {
+    const { container } = render(
+      <GanttCanvas
+        {...props({
+          dependencies: [
+            { id: "d2", predecessor_id: "sec-b1", successor_id: "i2" },
+          ],
+        })}
+      />,
+    );
+    expect(container.querySelectorAll("svg path[marker-end]")).toHaveLength(0);
+  });
 });

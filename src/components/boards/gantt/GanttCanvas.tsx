@@ -193,15 +193,7 @@ export function GanttCanvas({
           const succIdx = rowIndexMap.get(dep.successor_id);
           const predRow = rows[predIdx ?? -1];
           const succRow = rows[succIdx ?? -1];
-          if (
-            predIdx === undefined ||
-            succIdx === undefined ||
-            (!predRow?.startCol !== undefined &&
-              predRow.spanCols !== undefined &&
-              succRow.startCol !== undefined)
-          ) {
-            return null;
-          }
+          if (predIdx === undefined || succIdx === undefined) return null;
           if (predRow?.startCol === undefined || predRow.spanCols === undefined)
             return null;
           if (succRow?.startCol === undefined) return null;
