@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-12 22:24",
+  "updated": "2026-11-13 12:32",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "26195e93",
+        "value": "13e53bee",
         "tone": "ok",
-        "note": "Visual refresh merged (a25d1249) plus changelog announcement; pushed. Task worktree and branch removed."
+        "note": "Performance batch 1 merged (26dc4feb) plus a CI test fix and the changelog announcement; pushed. Task worktrees and branches removed."
       },
       {
         "name": "main",
-        "value": "581449a3",
+        "value": "3e0ee963",
         "tone": "warn",
-        "note": "Still PR #137. Visual-refresh promotion PR prepared; owner merges manually."
+        "note": "PR #147: functions moved to Tokyo. Batch 1 is in PR #149; owner merges manually."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY on PR #137. Visual refresh not live until the promotion PR is merged."
+        "note": "Vercel READY in hnd1 on PR #147. Board median 2.7 s to about 0.3 s. Batch 1 not live until PR #149 is merged."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "10,993 passing, 1 skipped. Contrast matrix covers every preset, mode and reach level.",
+        "note": "11,113 passing, 1 skipped. Two lazy-calendar tests timed out on CI after the merge and were fixed.",
         "label": "test"
       },
       {
@@ -182,19 +182,34 @@
         "name": "ledger",
         "value": "177/177",
         "tone": "ok",
-        "note": "177 committed files / 177 live DEV ledger rows. One additive migration: two profiles columns.",
+        "note": "177 committed files / 177 live DEV ledger rows. No migrations in the performance batch.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Merge the visual-refresh promotion and walk it",
-      "why": "Nine tasks merged to develop with all gates green, but nobody has seen it in a signed-in browser: a component harness stood in because no test account exists on live data. Everyone lands on Tinted on next load. The eight-step walkthrough is in the 2026-11-12 session note.",
+      "title": "Merge PR #149 and walk performance batch 1",
+      "why": "35 commits of speed and smoothness fixes are on develop with CI green. Only the settings shell, the app-open redirect and the Share dialog were checked in a browser; Gantt and column resize, the date-picker skeleton and the darker alert-dialog scrim rest on tests. The twelve steps are in the 2026-11-13 session note.",
       "tags": [
         "owner",
         "verify",
         "critical"
+      ]
+    },
+    {
+      "title": "Check login, one AI action and one PDF export on production",
+      "why": "PR #147 shipped five Dependabot bumps nobody described, two of them major versions (Anthropic SDK 1.x, hookform resolvers 6). CI passed and there are no runtime errors, but those three paths have not been exercised since.",
+      "tags": [
+        "owner",
+        "verify"
+      ]
+    },
+    {
+      "title": "Performance batch 2: the structural fixes",
+      "why": "AI actions run as Server Actions and block every other write while they think; a bulk edit of 100 items is about 300 sequential round-trips; one cell edit re-renders every group header; the sidebar loads through a four-step chain; revisiting a board refetches and then shows the old cache.",
+      "tags": [
+        "perf"
       ]
     },
     {
@@ -232,8 +247,8 @@
       ]
     },
     {
-      "title": "The parked perf pass on the folder RPCs",
-      "why": "folder_gallery is O(folders × boards × items) per gallery load (5 folders on DEV today), folder_rollup computes the readable-board set twice, burn rows are unbounded on the stage axis, and the Needs-attention panel and the burn chart ignore the board filter because folder_burn carries no board_id. Parked with rulings in the ledger, not forgotten.",
+      "title": "Performance batch 3: folder RPCs and database housekeeping",
+      "why": "With the network gone the folder rollups are the slowest server work left: 80 to 180 ms each and the folder page computes the same per-item flags three or four times. Also a GIN index for My Work assignees, pruning 87 MB of cron history, adding item_dependencies to the realtime publication, and checking the hosted max-rows setting (largest board is 859 cells against a possible 1,000 clamp).",
       "tags": [
         "perf",
         "db"
@@ -296,6 +311,11 @@
   ],
   "risks": [
     {
+      "sev": "amber",
+      "title": "A promotion can ship more than its description",
+      "text": "The promote command measures its delta from the last heal commit, so anything merged to develop before that heal is invisible to it. PR #147 was described as one config line and also shipped five dependency bumps. The CI watcher has two matching blind spots and reported green for the wrong run twice in one day. Compare trees, not commit ranges, until both are repaired (gotcha-109)."
+    },
+    {
       "sev": "red",
       "title": "A live data migration nobody has looked at in the UI",
       "text": "The private-folder copy-forward ran on the DEV database that serves production: 5 folders became shared, 18 boards were placed, 0 of 2 dashboards were backfilled. Every workspace member now sees folders one person made for themselves — the spec accepted that. As of PR #130 this is LIVE and still unwalked. The old tables are still there, so it is repairable until the drop migration lands; the walkthrough is what decides."
@@ -313,7 +333,7 @@
     {
       "sev": "amber",
       "title": "A docblock said the shell prerendered; the build artifact said 0 bytes",
-      "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. The same shape still holds for settings/* and admin/*."
+      "text": "Every authenticated route shipped with an empty static shell from 2026-07-17 to 2026-09-09 because one awaited cookies() call sat above every Suspense boundary in the app layout. The build stayed green (instant = false opts the route out of the blocking-route check) and the layout comment asserted the opposite. Nothing in CI reads .next/server/app/*.html sizes; the new source-level test guards the one file, not the class. Settings was fixed in performance batch 1 (shells went from 0 bytes to about 20 KB); admin/* is still dynamic by decision."
     },
     {
       "sev": "amber",
@@ -406,16 +426,22 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/assistant-runtime",
+      "head": "e2a77db2",
+      "note": "parallel"
+    }
+  ],
   "session": {
-    "id": "2026-11-12-2224-visual-refresh-theme-reach",
-    "when": "2026-11-12 22:24",
-    "title": "Visual refresh: themes reach the content",
+    "id": "2026-11-13-1232-performance-audit-region-and-quick-wins",
+    "when": "2026-11-13 12:32",
+    "title": "Performance audit, Tokyo region, quick wins",
     "bullets": [
-      "Theme reach (Subtle / Tinted / Vivid) tints content, hover and charts; Tinted is the default.",
-      "Aurora, Sunset and Nebula gradient presets; chart colours follow the theme.",
-      "Mono empty states, 20px titles, done burst in the board table.",
-      "Whole-branch review and a 36-shot browser pass fixed 10 defects before merge."
+      "Five-part audit: the database was fast, the distance to it was not.",
+      "Functions moved to Tokyo beside the live database; board median 2.7 s to about 0.3 s.",
+      "Batch 1 on develop: settings shell, fewer round-trips and re-renders, zod 127 to 32 KB gz, lazy dialogs.",
+      "Whole-branch review fixed three defects before merge; PR #149 awaits the owner."
     ]
   }
 }
