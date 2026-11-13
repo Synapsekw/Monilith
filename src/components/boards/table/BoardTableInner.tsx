@@ -497,6 +497,17 @@ export function BoardTableInner({
     [columns, liveWidths, nameWidth],
   );
 
+  // Board Total scope — stable so SummaryRow's `perColumn` memo survives
+  // renders that don't change the item tree (resize, scroll, dialogs).
+  const boardSummaryItemIds = useMemo(
+    () =>
+      withSubitems(
+        topLevel.map((it) => it.id),
+        childrenByParent,
+      ),
+    [topLevel, childrenByParent],
+  );
+
   // Viewers see footer values read-only; editors can pick the aggregation.
   const canEdit = access !== "viewer";
   // Snapshot now once at mount for time-tracking footer totals — a bare Date.now()
@@ -890,10 +901,7 @@ export function BoardTableInner({
               testId="board-summary-footer"
               label="Board Total"
               columns={columns}
-              itemIds={withSubitems(
-                topLevel.map((it) => it.id),
-                childrenByParent,
-              )}
+              itemIds={boardSummaryItemIds}
               cellMap={cellMap}
               cache={cache}
               template={template}
