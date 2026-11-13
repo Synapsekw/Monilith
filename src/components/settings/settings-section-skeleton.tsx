@@ -1,15 +1,18 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * Instant fallback for a settings section.
+ * Instant fallback for a settings section, used by every section's own
+ * `loading.tsx` (`src/app/(app)/settings/<section>/loading.tsx`).
  *
- * The layout (header + nav) renders immediately and is NOT part of this
- * fallback — only the content column suspends, so switching sections never
- * blanks the navigation out from under the pointer. Mirrors the SettingRow
- * geometry (label left, 280px control right) so the swap to real content
- * doesn't shift the page. Static Server Component — no data fetch.
+ * The boundary lives in each SECTION, not in `settings/`: a `loading.tsx` wraps
+ * its own segment, so one at `settings/` would hide the settings header and nav
+ * on the way in and never re-suspend between sections — `/settings/a` →
+ * `/settings/b` then blocked on the server (gotcha-110). Per section, the
+ * layout (header + nav) stays on screen and only the content column suspends.
+ * Mirrors the SettingRow geometry (label left, 280px control right) so the
+ * swap to real content doesn't shift the page. Static Server Component — no data fetch.
  */
-export default function SettingsLoading() {
+export function SettingsSectionSkeleton() {
   return (
     <div role="status" aria-busy="true" aria-label="Loading settings">
       <div className="border-border border-b pb-3">
