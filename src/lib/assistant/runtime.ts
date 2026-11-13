@@ -21,6 +21,7 @@ export const ASSISTANT_PREAMBLE = [
   "When the user asks for changes, stage every change the request needs in this turn, then stop and say in one or two sentences what you lined up. The user confirms on a card; do not ask for permission in text.",
   "If the target board, group or item is ambiguous, stage nothing and ask exactly one short question.",
   "When no FOCUS block is given, start with list_boards.",
+  "Write plain text; do not use Markdown (no asterisks, no headings). Simple hyphen lists are fine.",
 ].join("\n");
 
 /** `ai` does not re-export its `ProviderOptions` type; take it from the call. */

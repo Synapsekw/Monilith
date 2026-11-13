@@ -201,6 +201,12 @@ describe("runAssistantLoop", () => {
     expect(ASSISTANT_PREAMBLE).toMatch(/trust it over your own earlier/);
   });
 
+  it("asks for plain text, not Markdown", () => {
+    expect(ASSISTANT_PREAMBLE).toMatch(/Write plain text/);
+    expect(ASSISTANT_PREAMBLE).toMatch(/do not use Markdown/);
+    expect(ASSISTANT_PREAMBLE).toMatch(/no asterisks, no headings/);
+  });
+
   it("tells the model that staged does not mean done", () => {
     expect(ASSISTANT_PREAMBLE).toContain('{"staged": true}');
     expect(ASSISTANT_PREAMBLE).toMatch(/NOT happened/);

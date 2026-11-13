@@ -103,6 +103,36 @@ describe("BatchConfirmCard", () => {
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeDisabled();
   });
 
+  it("says the changes are waiting while idle or running", () => {
+    setup();
+    expect(screen.getByText("3 changes waiting")).toBeInTheDocument();
+  });
+
+  it("drops 'waiting' from the kicker once the card is resolved", () => {
+    for (const state of ["done", "error"] as const) {
+      const { unmount } = render(
+        <BatchConfirmCard
+          calls={calls}
+          state={state}
+          resultNote="Applied."
+          onApply={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.getByText("3 changes")).toBeInTheDocument();
+      expect(screen.queryByText(/waiting/)).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("marks a destructive row as opt-in, not as irreversible", () => {
+    setup();
+    const row = screen.getByLabelText(/Archive Old brief/);
+    expect(row).not.toBeChecked();
+    expect(screen.getByText("(tick to include)")).toBeInTheDocument();
+    expect(screen.queryByText(/cannot be undone/)).not.toBeInTheDocument();
+  });
+
   it("shows the result note and no buttons once resolved", () => {
     setup("done", "Applied.");
     expect(screen.getByText("Applied.")).toBeInTheDocument();

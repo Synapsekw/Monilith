@@ -93,7 +93,8 @@ export function BatchConfirmCard({
       className="bg-surface hover:border-border-hover rounded-lg border p-3 text-sm transition-colors"
     >
       <Kicker>
-        {calls.length} {calls.length === 1 ? "change" : "changes"} waiting
+        {calls.length} {calls.length === 1 ? "change" : "changes"}
+        {resolved ? "" : " waiting"}
       </Kicker>
       <ul className="mt-2 flex flex-col gap-0.5">
         {calls.map((call) => {
@@ -118,7 +119,7 @@ export function BatchConfirmCard({
                   {call.summary}
                   {call.destructive ? (
                     <span className="text-muted-foreground ml-1.5 text-xs">
-                      {" (cannot be undone here)"}
+                      {" (tick to include)"}
                     </span>
                   ) : null}
                 </span>
