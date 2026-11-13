@@ -1,5 +1,5 @@
 import { parseColumnOptions } from "@/lib/boards/column-options";
-import { estimateTokens } from "@/lib/agents/document-budget";
+import { estimateTokens } from "@/lib/ai/estimate-tokens";
 
 type RawColumn = { id: string; name: string; kind: string; settings: unknown };
 type RawGroup = { id: string; name: string };

@@ -1,4 +1,4 @@
-import { estimateTokens } from "@/lib/agents/document-budget";
+import { estimateTokens } from "@/lib/ai/estimate-tokens";
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import { describeActivityLine } from "@/lib/ai/summarize/summarize";
 import {

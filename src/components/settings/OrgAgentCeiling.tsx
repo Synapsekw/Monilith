@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import {
   AGENT_CAPABILITIES,
   type AgentCapability,
-} from "@/lib/agents/capabilities";
+} from "@/lib/mcp/tools/capabilities";
 import { CAPABILITY_COPY } from "@/lib/agents/capability-copy";
 import { setAgentCapabilityCeiling } from "@/lib/ai/settings-actions";
 import { Label } from "@/components/ui/label";

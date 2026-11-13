@@ -7,8 +7,8 @@ import type {
   ToolDescriptor,
   ToolInvokeContext,
 } from "@/lib/mcp/tools/descriptor";
-import { resolveTargetBoardId } from "@/lib/agents/board-scope-guard";
-import { summariseProposal } from "@/lib/agents/proposal-summary";
+import { resolveTargetBoardId } from "./target-board";
+import { summariseProposal } from "./proposal-summary";
 import { assistantDescriptors, effectOf } from "./catalog";
 import { takesOrgId } from "./org-pin";
 import { unsupportedReason } from "./unsupported";

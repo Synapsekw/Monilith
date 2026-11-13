@@ -26,7 +26,7 @@ import { makeDelegateDescriptors, listDelegateRoster } from "./delegate-tool";
 import type { ProposedCall } from "./grant-gate";
 import type { AgentCapability } from "./capabilities";
 import { insertProposals } from "./proposals-db";
-import { summariseProposal } from "./proposal-summary";
+import { summariseProposal } from "@/lib/assistant/proposal-summary";
 import { PersonalAiKeyMissingError, ByoKeyMissingError } from "@/lib/ai/errors";
 
 /**

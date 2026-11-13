@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
-import type { AgentCapability } from "@/lib/agents/capabilities";
+import type { AgentCapability } from "@/lib/mcp/tools/capabilities";
 import {
   DEFAULT_ASSISTANT_NAME,
   resolveAssistantName,

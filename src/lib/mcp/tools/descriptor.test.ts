@@ -7,7 +7,7 @@ import {
   scopeFor,
   type ToolDescriptor,
 } from "./descriptor";
-import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
+import { AGENT_CAPABILITIES } from "./capabilities";
 
 describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {

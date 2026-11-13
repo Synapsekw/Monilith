@@ -22,7 +22,7 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 import { readOrgBillingStatus } from "@/lib/billing/status";
 import { entitlesAi } from "@/lib/billing/entitling";
 import { capabilitySchema } from "@/lib/agents/agent-config";
-import type { AgentCapability } from "@/lib/agents/capabilities";
+import type { AgentCapability } from "@/lib/mcp/tools/capabilities";
 import { assistantNameSchema } from "@/lib/org/assistant-name";
 
 const NOT_ADMIN = "Only organization admins can change AI settings.";

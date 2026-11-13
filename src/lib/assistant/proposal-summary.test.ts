@@ -6,13 +6,13 @@ import {
 import {
   MEMORY_MAX_KEY_CHARS,
   MEMORY_MAX_VALUE_CHARS,
-} from "./document-budget";
+} from "@/lib/agents/document-budget";
 import {
   memoryKeySchema,
   memoryValueSchema,
 } from "@/lib/validations/agent-memory";
-import { descriptorsFor } from "./tool-descriptors";
-import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
+import { descriptorsFor } from "@/lib/agents/tool-descriptors";
+import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
 
 /**
  * The summary is the ONLY sentence a human reads before approving a stored

@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { GetClient, ToolResult } from "./shared";
-import type { AgentCapability } from "@/lib/agents/capabilities";
+import type { AgentCapability } from "./capabilities";
 
 /**
  * The single definition of a tool, consumed by BOTH transports: the MCP server
@@ -51,7 +51,7 @@ export type ToolDescriptor = {
    *  the MCP server SDK rejects. */
   inputSchema: Record<string, z.ZodType>;
   /** `null` means an always-on read. The vocabulary lives in
-   *  `@/lib/agents/capabilities` — one declaration, imported by both the
+   *  `./capabilities` — one declaration, imported by both the
    *  descriptor layer and the agent editor.
    *  A scalar for a single-purpose tool; a per-action map for a
    *  grouped-dispatch tool, keyed by the `action` input value. */
