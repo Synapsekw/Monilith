@@ -80,11 +80,25 @@ export function TimeCard({
   const setEdit = (rowKey: string, day: string, secs: number) =>
     setLocalEdits((prev) => new Map(prev).set(editKey(rowKey, day), secs));
 
-  // Trailing-debounced single refresh per edit burst; cleared on unmount.
+  // Trailing-debounced single refresh per edit burst. The cell actions
+  // invalidate nothing themselves, so this refresh is the only thing that
+  // retires the pre-edit payload from the client back/forward cache: leaving
+  // within the debounce window must FLUSH it, not drop it, or Back restores
+  // this page (and a visited /workload) with the old numbers.
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read through a ref so the unmount cleanup below runs exactly once, on
+  // unmount, whatever the router object's identity does between renders.
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
   useEffect(
     () => () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+        routerRef.current.refresh();
+      }
     },
     [],
   );

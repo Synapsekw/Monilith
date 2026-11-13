@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { requireUser } from "@/lib/auth/session";
 import { listMyConnections } from "@/lib/mcp/oauth/connections";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { CopyField } from "@/components/settings/mcp/copy-field";
@@ -26,6 +27,10 @@ async function getOrigin(): Promise<string> {
 }
 
 export default async function McpSettingsPage() {
+  // The settings layout is a static shell and no longer gates its pages, so
+  // this page enforces the session + forced-password-change gate itself before
+  // listing the caller's connections.
+  await requireUser();
   const [connections, origin] = await Promise.all([
     listMyConnections(),
     getOrigin(),
