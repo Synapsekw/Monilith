@@ -43,6 +43,7 @@ describe.skipIf(!integrationTargetReady())("RLS tenant isolation", () => {
 
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PASSWORD,
         email_confirm: true,

@@ -45,12 +45,14 @@ test.describe("@mention notifications", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const a = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,
       user_metadata: { full_name: "Alice Actor" },
     });
     const b = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailB,
       password: PASSWORD,
       email_confirm: true,

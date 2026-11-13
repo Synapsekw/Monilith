@@ -35,6 +35,7 @@ describe.skipIf(!integrationTargetReady())(
     async function provision(label: string): Promise<Tenant> {
       const email = `mcp-column-${label}-${randomUUID()}@example.com`;
       const { data: created } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PASSWORD,
         email_confirm: true,

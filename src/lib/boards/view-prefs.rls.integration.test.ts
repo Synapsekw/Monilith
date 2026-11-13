@@ -46,6 +46,7 @@ describe.skipIf(!integrationTargetReady())("RLS: board_view_prefs", () => {
   async function makeUser(label: string) {
     const email = `viewprefs-${label}-${randomUUID()}@example.com`;
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

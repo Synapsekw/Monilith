@@ -178,6 +178,15 @@ every run, which reads as coverage that does not exist. They are not deleted and
 untouched: create `.env.test` (below) and `pnpm test:integration` runs them exactly as before.
 Tiers 2 and 3 are what actually gate the security boundary now.
 
+### New accounts need approval
+
+Every new account starts `pending` and cannot hold an organisation membership until a platform admin
+approves it. Tests and seeds that create a user through the admin API and then give it a membership
+must create it as pre-approved: pass `app_metadata: { pre_approved: true }` to
+`auth.admin.createUser`. A person signing up cannot set `app_metadata`, so this is only reachable
+through the admin API. A migration that seeds an `auth.users` row which must hold a membership has to
+insert an approved `account_approvals` row for it as well.
+
 ### Tenant-isolation fixtures (`pnpm test:fixtures`)
 
 **Tier 2 is the AUTHENTICATED half of the boundary that the conformance probes cover for `anon`:**

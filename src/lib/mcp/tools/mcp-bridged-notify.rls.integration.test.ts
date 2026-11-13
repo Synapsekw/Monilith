@@ -31,6 +31,7 @@ describe.skipIf(!integrationTargetReady())(
     }> {
       const email = `mcp-notify-${randomUUID()}@example.com`;
       const { data: created } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PASSWORD,
         email_confirm: true,

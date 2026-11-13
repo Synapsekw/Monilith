@@ -96,6 +96,7 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
     // ── userA (owner of orgA) ────────────────────────────────────────────
     const emailA = `assignperson-a-${randomUUID()}@example.com`;
     const { data: createdA, error: errA } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,
@@ -210,6 +211,7 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
     // ── memberB — a second user, member of orgA ───────────────────────────
     const emailB = `assignperson-b-${randomUUID()}@example.com`;
     const { data: createdB, error: errB } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailB,
       password: PASSWORD,
       email_confirm: true,
@@ -228,6 +230,7 @@ describe.skipIf(!integrationTargetReady())("engine: assign_person", () => {
     // ── outsider — belongs to a different org, not orgA ───────────────────
     const emailC = `assignperson-outsider-${randomUUID()}@example.com`;
     const { data: createdC, error: errC } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailC,
       password: PASSWORD,
       email_confirm: true,

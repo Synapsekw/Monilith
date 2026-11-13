@@ -37,6 +37,7 @@ describe.skipIf(!integrationTargetReady())(
       const email = `rls-boards-${randomUUID()}@example.com`;
       const { data: created, error: createErr } =
         await admin.auth.admin.createUser({
+          app_metadata: { pre_approved: true },
           email,
           password: PASSWORD,
           email_confirm: true,
@@ -241,6 +242,7 @@ describe.skipIf(!integrationTargetReady())(
       // Add a plain 'member' of org A, then try to delete A's board.
       const memberEmail = `rls-member-${randomUUID()}@example.com`;
       const { data: created } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: memberEmail,
         password: PASSWORD,
         email_confirm: true,

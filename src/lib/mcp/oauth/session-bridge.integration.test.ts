@@ -35,6 +35,7 @@ describe.skipIf(!integrationTargetReady())(
       });
       const email = `mcp-bridge-${randomUUID()}@example.com`;
       const { data, error } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: "Test-Password-123!",
         email_confirm: true,

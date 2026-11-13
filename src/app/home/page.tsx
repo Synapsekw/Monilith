@@ -9,6 +9,7 @@ import {
   enforcePasswordChange,
   loginRedirectPath,
 } from "@/lib/auth/session";
+import { enforceApproval } from "@/lib/auth/approval";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
@@ -29,6 +30,9 @@ export async function HomeDispatch() {
   if (!user) redirect(await loginRedirectPath());
 
   enforcePasswordChange(user);
+  // An account not yet approved by a platform admin waits on /pending-approval
+  // before any org or board read.
+  await enforceApproval(user);
 
   // Fast path: the proxy stamps the last board the user visited. One bounded
   // RLS-scoped PK probe replaces the 3-list dispatch for a returning user. A

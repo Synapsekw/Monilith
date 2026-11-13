@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { loginPath, NEXT_PATH_HEADER } from "@/lib/auth/next-path";
+import { enforceApproval } from "@/lib/auth/approval";
 import type { Tables } from "@/types/database.types";
 
 export type Organization = Tables<"organizations">;
@@ -82,12 +83,18 @@ export async function loginRedirectPath(): Promise<string> {
   return loginPath(store.get(NEXT_PATH_HEADER));
 }
 
-/** Returns the authenticated user, redirecting to /login when absent. */
+/**
+ * Returns the authenticated user, redirecting to /login when absent, to
+ * /change-password when flagged, and to /pending-approval when the account is
+ * not approved by a platform admin (in that order). A failed approval read
+ * throws — it never lets the account through.
+ */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getUser();
   // redirect() throws — keep it outside any try/catch.
   if (!user) redirect(await loginRedirectPath());
   enforcePasswordChange(user);
+  await enforceApproval(user);
   return user;
 }
 

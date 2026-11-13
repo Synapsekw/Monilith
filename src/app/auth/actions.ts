@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getServerEnv } from "@/lib/env.server";
 import { safeNextPath } from "@/lib/auth/next-path";
+import {
+  PENDING_APPROVAL_PATH,
+  readAccountApproval,
+} from "@/lib/auth/approval";
 import { LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
 import {
   signInSchema,
@@ -62,6 +66,27 @@ function nextFrom(formData: FormData): string {
   return safeNextPath(typeof raw === "string" ? raw : null);
 }
 
+/**
+ * Where a freshly signed-in account should land: the waiting screen when the
+ * account is not approved (read live), otherwise `next`. Going straight there
+ * avoids the gate's redirect inside the streaming app shell, which can leave an
+ * empty content column on a soft navigation. A failed status read must NOT
+ * block a sign-in: fall through to `next` and let the gate on that page decide.
+ */
+async function postAuthDestination(
+  userId: string | undefined,
+  next: string,
+): Promise<string> {
+  if (!userId) return next;
+  try {
+    return (await readAccountApproval(userId)) === "approved"
+      ? next
+      : PENDING_APPROVAL_PATH;
+  } catch {
+    return next;
+  }
+}
+
 export async function signIn(
   _prevState: AuthState,
   formData: FormData,
@@ -82,7 +107,7 @@ export async function signIn(
   if (!gate.allowed) return throttleResult("signIn", gate.retryAfterSeconds);
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   });
@@ -91,8 +116,8 @@ export async function signIn(
     return { error: error.message };
   }
 
-  // redirect() throws — must be called outside the try/catch above.
-  redirect(nextFrom(formData));
+  // redirect() throws — must be called outside any try/catch.
+  redirect(await postAuthDestination(data?.user?.id, nextFrom(formData)));
 }
 
 export async function signUp(
@@ -150,7 +175,7 @@ export async function signUp(
 
   // When email confirmation is disabled, Supabase returns an active session.
   if (data.session) {
-    redirect(next);
+    redirect(await postAuthDestination(data.user?.id, next));
   }
 
   return { success: "check-email" };

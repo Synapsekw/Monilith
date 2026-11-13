@@ -46,11 +46,13 @@ describe.skipIf(!integrationTargetReady())(
         auth: { autoRefreshToken: false, persistSession: false },
       });
       const a = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-org-a-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,
       });
       const b = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-org-b-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,
@@ -100,11 +102,13 @@ describe.skipIf(!integrationTargetReady())(
         auth: { autoRefreshToken: false, persistSession: false },
       });
       const a = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-scope-a-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,
       });
       const b = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-scope-b-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,

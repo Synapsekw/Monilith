@@ -60,6 +60,7 @@ test.describe("Settings: timezone persists", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const u = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,
@@ -154,6 +155,7 @@ test.describe("Automations 5b-2: date_reached → set_option via UI builder", ()
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const u = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

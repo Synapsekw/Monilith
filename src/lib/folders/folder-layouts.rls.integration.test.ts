@@ -34,6 +34,7 @@ describe.skipIf(!integrationTargetReady())("RLS: folder layouts", () => {
   async function provisionUser(label: string) {
     const email = `fl-${label}-${randomUUID()}@example.com`;
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

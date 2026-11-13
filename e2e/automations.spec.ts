@@ -60,12 +60,14 @@ test.describe("Automations: create → fire → notify", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const a = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,
       user_metadata: { full_name: "Alice Actor" },
     });
     const b = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailB,
       password: PASSWORD,
       email_confirm: true,
@@ -239,6 +241,7 @@ test.describe("Automations 5b-1: item_created → set_option", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const u = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,
@@ -407,12 +410,14 @@ test.describe("Automations 5b-1: person_assigned → notify", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const a = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,
       user_metadata: { full_name: "Alice Assigner" },
     });
     const b = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailB,
       password: PASSWORD,
       email_confirm: true,

@@ -128,12 +128,42 @@ export async function platformAuditFeed(
   return (data as PlatformAuditRow[] | null) ?? [];
 }
 
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+
 export type PlatformUser = {
   id: string;
   email: string | null;
   bannedUntil: string | null;
   orgNames: string[];
+  approvalStatus: ApprovalStatus;
+  createdAt: string;
 };
+
+type PlatformUserRpcRow = {
+  id: string;
+  email: string | null;
+  banned_until: string | null;
+  org_names: string[] | null;
+  approval_status: string;
+  created_at: string;
+};
+
+/** The RPC already coalesces a missing approval row to 'pending'; anything not
+ *  explicitly approved or rejected is shown as needing a decision. */
+function toApprovalStatus(s: string): ApprovalStatus {
+  return s === "approved" || s === "rejected" ? s : "pending";
+}
+
+function shapeUser(u: PlatformUserRpcRow): PlatformUser {
+  return {
+    id: u.id,
+    email: u.email,
+    bannedUntil: u.banned_until,
+    orgNames: u.org_names ?? [],
+    approvalStatus: toApprovalStatus(u.approval_status),
+    createdAt: u.created_at,
+  };
+}
 
 /** Filtered user search via the SECURITY DEFINER RPC (no in-memory cap). */
 /**
@@ -161,10 +191,38 @@ export async function searchUsers(
     p_exclude_email_patterns: kind === "people" ? patterns : undefined,
     p_only_email_patterns: kind === "system" ? patterns : undefined,
   });
-  return (data ?? []).map((u) => ({
-    id: u.id,
-    email: u.email,
-    bannedUntil: u.banned_until,
-    orgNames: u.org_names ?? [],
-  }));
+  return (data ?? []).map(shapeUser);
+}
+
+/**
+ * Accounts waiting for a platform admin's decision, newest first, bounded.
+ * Deliberately passes NO email-pattern filter: a pending fixture-looking
+ * address still needs a decision, so it must appear here.
+ */
+export async function listPendingAccounts(limit = 50): Promise<PlatformUser[]> {
+  if (!(await isPlatformAdmin())) return [];
+  // Authed client — the RPC gates on is_platform_admin() via auth.uid().
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("platform_search_users", {
+    p_query: "",
+    p_limit: limit,
+    p_offset: 0,
+    p_only_status: "pending",
+  });
+  return (data ?? []).map(shapeUser);
+}
+
+/**
+ * How many accounts are waiting, for the admin overview. `account_approvals`
+ * is service-role only, so this reads with the service client — which bypasses
+ * RLS, hence the platform-admin check first (a page can render in parallel
+ * with its layout's guard, so it cannot rely on the layout alone).
+ */
+export async function countPendingAccounts(): Promise<number> {
+  if (!(await isPlatformAdmin())) return 0;
+  const { count } = await createServiceClient()
+    .from("account_approvals")
+    .select("user_id", { count: "exact", head: true })
+    .eq("status", "pending");
+  return count ?? 0;
 }

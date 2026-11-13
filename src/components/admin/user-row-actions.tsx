@@ -10,7 +10,9 @@ import {
   resetUserPasswordAction,
   setUserPasswordAction,
   deleteUserAction,
+  approveUserAction,
 } from "@/lib/platform/search-action";
+import type { ApprovalStatus } from "@/lib/platform/queries";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,16 +33,19 @@ import { useFieldStatus } from "@/components/ui/field-status";
 import { showMutationSuccess } from "@/lib/ui/mutation-toast";
 import type { ActionResult } from "@/lib/actions/result";
 
-/** Per-user actions for the admin Users page: reset email, set temp password,
- * suspend/reactivate, hard delete. Refreshes the route on success. */
+/** Per-user actions for the admin Users page: approve (when not approved),
+ * reset email, set temp password, suspend/reactivate, hard delete. Refreshes
+ * the route on success. */
 export function UserRowActions({
   userId,
   email,
   banned,
+  approvalStatus = "approved",
 }: {
   userId: string;
   email: string;
   banned: boolean;
+  approvalStatus?: ApprovalStatus;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -100,6 +105,17 @@ export function UserRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {approvalStatus !== "approved" && (
+            <>
+              {/* The row's status cell flips on refresh — that is the feedback. */}
+              <DropdownMenuItem
+                onSelect={() => runFromMenu(() => approveUserAction(userId))}
+              >
+                Approve
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem
             onSelect={() =>
               runFromMenu(

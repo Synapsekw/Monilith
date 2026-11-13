@@ -212,6 +212,7 @@ describe.skipIf(!resolution.ok)(
       const bobEmail = `agentmem-comember-${tag}@example.com`;
       const { data: created, error: createErr } =
         await admin.auth.admin.createUser({
+          app_metadata: { pre_approved: true },
           email: bobEmail,
           password: "Test-Password-123!",
           email_confirm: true,
