@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 12:54",
+  "updated": "2026-11-13 15:38",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "06ada786",
+        "value": "d5bd9718",
         "tone": "ok",
-        "note": "Performance batch 1, then the unified assistant runtime (Plan A, ab70a5b5), merged and pushed. Two changelog commits are local only. The assistant runtime is not in PR #149."
+        "note": "Performance batch 1, the unified assistant runtime and signup approval, all merged and pushed. Only the performance batch is in PR #149."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "11,159 passing, 1 skipped, on the assistant-runtime merge.",
+        "note": "11,429 passing, 1 skipped, on the signup-approval merge.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "177/177",
+        "value": "178/178",
         "tone": "ok",
-        "note": "177 committed files / 177 live DEV ledger rows. No migrations in either batch on develop.",
+        "note": "178 committed files / 178 live DEV ledger rows. Signup approval added one migration.",
         "label": "ledger"
       }
     ]
@@ -198,20 +198,21 @@
       ]
     },
     {
+      "title": "Promote signup approval and the assistant runtime",
+      "why": "The database already refuses a membership to an unapproved account, so a new signup on production gets the old provisioning error until the waiting screen ships. Both features are on develop behind PR #149. A live run passed for approve, reject and an existing account.",
+      "tags": [
+        "owner",
+        "critical",
+        "auth"
+      ]
+    },
+    {
       "title": "Finish checking the assistant before promoting it",
       "why": "The chat in the dock and on Ask now acts across the whole tool catalog behind one confirm card. A live run passed on the default model. Still unchecked: a non-Anthropic model, an old thread with an open proposal, the step limit, and a person in two organisations.",
       "tags": [
         "owner",
         "verify",
         "ai"
-      ]
-    },
-    {
-      "title": "Add signup approval",
-      "why": "Signup is open and nothing gates a new account. The owner wants every new account approved by a platform admin, and it must land before any platform-paid AI key is switched on.",
-      "tags": [
-        "ai",
-        "security"
       ]
     },
     {
@@ -327,6 +328,11 @@
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "Signup approval is half live",
+      "text": "The membership rule is in the live database; the waiting screen and the admin approve and reject buttons are only on develop. Existing accounts are unaffected. A new signup today cannot get in and sees a rough error. Closes on promotion."
+    },
     {
       "sev": "amber",
       "title": "Goals and portfolios can land in the wrong organisation",
@@ -450,14 +456,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-11-13-1254-unified-assistant-runtime-plan-a",
-    "when": "2026-11-13 12:54",
-    "title": "Unified assistant runtime, Plan A",
+    "id": "2026-11-13-1538-signup-approval",
+    "when": "2026-11-13 15:38",
+    "title": "Signup approval",
     "bullets": [
-      "Live data showed the agents were unused: one owner, every run failing since September.",
-      "Ask and the board dock now run one loop over the whole tool catalog, on any provider.",
-      "Every change is staged and applied only from one confirm card that names the item and value.",
-      "A live run in the browser found five defects no review had seen; fixed and re-tested."
+      "Every new account now waits for a platform admin; all 22 existing accounts were approved by the migration.",
+      "The database refuses a membership to an unapproved account, covering the app, the API and MCP in one rule.",
+      "Waiting screen, plus Approve and Reject on the admin users page with audit entries.",
+      "Whole-branch review found no lockout or bypass; a live run with two throwaway accounts passed."
     ]
   }
 }
