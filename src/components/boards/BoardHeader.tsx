@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Eye,
@@ -16,11 +17,7 @@ import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
 import { IntelligenceStrip } from "@/components/boards/IntelligenceStrip";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
-import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
-import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
-import { BoardTrashDialog } from "@/components/boards/trash/BoardTrashDialog";
 import { ExportMenu } from "@/components/boards/ExportMenu";
-import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,6 +40,82 @@ import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import type { Draft } from "@/components/boards/automations/recipes";
 
+// The four on-demand dialogs are code-split: each chunk is fetched the first
+// time its dialog is opened (or a moment earlier — see the `prefetch*` helpers),
+// so none of them (nor their Server Action / TanStack imports) sit in the board
+// route's first-load JS. Same pattern as AiBoardWizard in NewBoardDialog.tsx.
+// No `loading` fallback: a dialog has no in-flow footprint, so there is nothing
+// to reserve space for.
+//
+// Each loader is memoised so the intent-prefetch and the `dynamic` render share
+// ONE in-flight `import()` instead of racing two.
+function once<T>(load: () => Promise<T>): () => Promise<T> {
+  let pending: Promise<T> | undefined;
+  return () =>
+    (pending ??= load().catch((error: unknown) => {
+      // Let a later open retry after a failed (e.g. offline) prefetch.
+      pending = undefined;
+      throw error;
+    }));
+}
+
+const loadAutomationsDialog = once(() =>
+  import("@/components/boards/automations/AutomationsDialog").then(
+    (m) => m.AutomationsDialog,
+  ),
+);
+const loadShareDialog = once(() =>
+  import("@/components/boards/ShareBoardDialog").then(
+    (m) => m.ShareBoardDialog,
+  ),
+);
+const loadTrashDialog = once(() =>
+  import("@/components/boards/trash/BoardTrashDialog").then(
+    (m) => m.BoardTrashDialog,
+  ),
+);
+const loadImportWizard = once(() =>
+  import("@/components/boards/import/ImportWizard").then((m) => m.ImportWizard),
+);
+
+const AutomationsDialog = dynamic(loadAutomationsDialog, { ssr: false });
+const ShareBoardDialog = dynamic(loadShareDialog, { ssr: false });
+const BoardTrashDialog = dynamic(loadTrashDialog, { ssr: false });
+const ImportWizard = dynamic(loadImportWizard, { ssr: false });
+
+// Warm a dialog chunk on intent (hover/focus of its trigger, or the overflow
+// menu opening) so the first open is rarely gated on the network. A failed
+// prefetch is swallowed here; the real open retries through `dynamic`.
+const ignore = () => {};
+function prefetchShareDialog() {
+  loadShareDialog().catch(ignore);
+}
+function prefetchMenuDialogs() {
+  loadAutomationsDialog().catch(ignore);
+  loadImportWizard().catch(ignore);
+  loadTrashDialog().catch(ignore);
+}
+
+/**
+ * True from the first render where `open` is true, forever after. Gates the
+ * mount of a lazy dialog: nothing is rendered (and no chunk requested) until
+ * the first open, but the dialog then STAYS mounted with its real `open` prop —
+ * exactly as before it was lazy — so Radix can play the close animation and the
+ * dialog keeps its internal state (loaded rules, wizard step) across reopen.
+ */
+function useEverOpened(open: boolean): boolean {
+  const [everOpened, setEverOpened] = useState(open);
+  // Adjusting state during render (not in an effect) is the documented React
+  // pattern for deriving sticky state from a prop — no extra commit.
+  if (open && !everOpened) setEverOpened(true);
+  return open || everOpened;
+}
+
+// Stable empty defaults. A `= []` default parameter allocates a fresh array on
+// every render, which defeats memoisation downstream (`importBoardColumns`,
+// the toolbar, the dialogs).
+const EMPTY = Object.freeze([]) as unknown as never[];
+
 export type HeaderMember = {
   userId: string;
   fullName: string | null;
@@ -60,11 +133,11 @@ export function BoardHeader({
   boardName,
   views,
   selectedViewId,
-  columns = [],
-  members = [],
-  groups = [],
+  columns = EMPTY,
+  members = EMPTY,
+  groups = EMPTY,
   access = "owner",
-  grants = [],
+  grants = EMPTY,
   currentUserId = "",
   filterable = false,
 }: {
@@ -94,6 +167,10 @@ export function BoardHeader({
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [seedDraft, setSeedDraft] = useState<Draft | undefined>();
+  const automationsMounted = useEverOpened(automationsOpen);
+  const shareMounted = useEverOpened(shareOpen);
+  const importMounted = useEverOpened(importOpen);
+  const trashMounted = useEverOpened(trashOpen);
 
   // Board Intelligence (spec §2.3): "Always do this" hands the header a
   // prefilled automation draft, opening straight into the builder.
@@ -240,12 +317,18 @@ export function BoardHeader({
               variant="ghost"
               size="sm"
               aria-label="Share board"
+              onPointerEnter={prefetchShareDialog}
+              onFocus={prefetchShareDialog}
               onClick={() => setShareOpen(true)}
             >
               <UserPlus className="size-3.5" /> Share
             </Button>
           ) : null}
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(next) => {
+              if (next) prefetchMenuDialogs();
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
@@ -278,29 +361,33 @@ export function BoardHeader({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <AutomationsDialog
-          boardId={boardId}
-          columns={columns}
-          members={members}
-          groups={groups}
-          open={automationsOpen}
-          onOpenChange={(next) => {
-            setAutomationsOpen(next);
-            if (!next) setSeedDraft(undefined);
-          }}
-          seedDraft={seedDraft}
-        />
-        <ImportWizard
-          destination={{
-            type: "existing",
-            boardId,
-            boardColumns: importBoardColumns,
-            groups,
-          }}
-          open={importOpen}
-          onOpenChange={setImportOpen}
-        />
-        {isOwner ? (
+        {automationsMounted ? (
+          <AutomationsDialog
+            boardId={boardId}
+            columns={columns}
+            members={members}
+            groups={groups}
+            open={automationsOpen}
+            onOpenChange={(next) => {
+              setAutomationsOpen(next);
+              if (!next) setSeedDraft(undefined);
+            }}
+            seedDraft={seedDraft}
+          />
+        ) : null}
+        {importMounted ? (
+          <ImportWizard
+            destination={{
+              type: "existing",
+              boardId,
+              boardColumns: importBoardColumns,
+              groups,
+            }}
+            open={importOpen}
+            onOpenChange={setImportOpen}
+          />
+        ) : null}
+        {isOwner && shareMounted ? (
           <ShareBoardDialog
             boardId={boardId}
             members={members}
@@ -309,7 +396,7 @@ export function BoardHeader({
             onOpenChange={setShareOpen}
           />
         ) : null}
-        {!isViewer ? (
+        {!isViewer && trashMounted ? (
           <BoardTrashDialog
             boardId={boardId}
             open={trashOpen}
