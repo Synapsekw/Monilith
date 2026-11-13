@@ -7,6 +7,10 @@ import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 import { MonoAvatar } from "@/components/mono/MonoAvatar";
+import {
+  DEFAULT_MONO_COLOR,
+  isMonoColor,
+} from "@/components/mono/mono-palette";
 import { monoAccessibleLabel } from "@/lib/monos/labels";
 import type { MonoMemberMeta } from "@/lib/monos/types";
 import {
@@ -17,6 +21,9 @@ import {
 
 /** 24px — the largest disc that still breathes inside a 36px board row. */
 const AVATAR_PX = 24;
+
+/** The pebble is drawn this much larger than the disc and cropped by it. */
+const MONO_FACE_SCALE = 1.4;
 
 export function memberInitials(name: string): string {
   return name
@@ -67,16 +74,34 @@ export function MemberAvatar({
   mono?: MonoMemberMeta;
   className?: string;
 }) {
-  // A Mono keeps its pebble body everywhere; people keep round avatars.
-  if (mono)
+  // A Mono is drawn like a person: the same round disc, with its face as the
+  // "profile picture" — tinted by its colour, the pebble scaled up and centred
+  // so it reads at 24px, cropped by the circle.
+  if (mono) {
+    const face = Math.round(AVATAR_PX * MONO_FACE_SCALE);
     return (
-      <MonoAvatar
-        color={mono.color}
-        size={AVATAR_PX}
-        label={monoAccessibleLabel(name, mono.ownerName)}
-        className={cn("shrink-0", className)}
-      />
+      <span
+        data-slot="member-avatar"
+        data-mono=""
+        className={cn(
+          "relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full",
+          className,
+        )}
+        style={{
+          background: `color-mix(in oklab, ${isMonoColor(mono.color) ? mono.color : DEFAULT_MONO_COLOR} 28%, var(--color-surface))`,
+        }}
+      >
+        <MonoAvatar
+          color={mono.color}
+          size={face}
+          label={monoAccessibleLabel(name, mono.ownerName)}
+          className="absolute"
+          // The pebble sits low in its box; nudge it up so the face centres.
+          style={{ left: "50%", top: "50%", translate: "-50% -46%" }}
+        />
+      </span>
     );
+  }
   return (
     <span
       data-slot="member-avatar"

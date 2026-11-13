@@ -195,11 +195,9 @@ export function PeopleCell({
           avatarUrl={a.avatarUrl}
           mono={a.mono}
           // The ring in the cell's own surface colour keeps the overlapped
-          // edges legible; hairlines would read as borders here. A Mono's
-          // pebble is not a disc, so it overlaps without the (square) ring.
-          className={
-            a.mono ? "-ml-2 first:ml-0" : "ring-surface -ml-2 ring-2 first:ml-0"
-          }
+          // edges legible; hairlines would read as borders here. Monos are
+          // round like people, so they take the same ring.
+          className="ring-surface -ml-2 ring-2 first:ml-0"
         />
       ))}
       {overflow > 0 ? (
