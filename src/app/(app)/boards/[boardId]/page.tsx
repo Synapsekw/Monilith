@@ -4,6 +4,7 @@ import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner"
 import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
@@ -34,6 +35,7 @@ export default async function BoardPage({
     viewPrefs,
     lastSeenAt,
     latestRun,
+    activeOrgMembers,
   ] = await Promise.all([
     getBoardPayload(boardId),
     supabase
@@ -63,6 +65,22 @@ export default async function BoardPage({
     // the dock badge and the strip's "updated" meta are true on first paint,
     // and the tab's first open costs no read.
     getLatestBoardIntelligenceRun(supabase, boardId, user.id),
+    // The member roster is keyed on the board's org, which is only known once
+    // the payload lands — so it used to be a wave of its own after this one.
+    // Almost every board lives in the ACTIVE org, and that is resolvable now
+    // (request-memoised, the shell resolves it too), so the roster for it is
+    // read speculatively here and used below only when the org matches. A
+    // board from another org (shared across orgs) falls back to the read that
+    // was always there. `resolveActiveOrg` is membership-verified, so this
+    // never reads a roster the caller could not already see; a failure here
+    // must not fail the page, hence the catch → fallback.
+    resolveActiveOrg()
+      .then(async (org) =>
+        org
+          ? { orgId: org.id, members: await listOrgMembersCached(org.id) }
+          : null,
+      )
+      .catch(() => null),
   ]);
   if (!payload) notFound();
 
@@ -76,7 +94,10 @@ export default async function BoardPage({
   );
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
-  const members = await listOrgMembersCached(payload.board.org_id);
+  const members =
+    activeOrgMembers?.orgId === payload.board.org_id
+      ? activeOrgMembers.members
+      : await listOrgMembersCached(payload.board.org_id);
 
   const grants = (grantRows ?? []).map((g) => ({
     userId: g.user_id,
