@@ -30,21 +30,21 @@ describe("MentionTextarea", () => {
     expect(mentions).toEqual([{ kind: "user", userId: "u2" }]);
   });
 
-  it("completes an agent by handle and emits a tagged target", async () => {
+  it("completes a person mid-token on mount and emits a tagged target", async () => {
     const onChange = vi.fn();
     render(
       <MentionTextarea
-        value="ping @op"
+        value="ping @Al"
         mentions={[]}
-        targets={[
-          { kind: "agent", agentId: "a1", handle: "ops", name: "Ops Chaser" },
-        ]}
+        targets={targets}
         onChange={onChange}
       />,
     );
-    await userEvent.click(await screen.findByRole("button", { name: /ops/i }));
-    expect(onChange).toHaveBeenCalledWith("ping @ops ", [
-      { kind: "agent", agentId: "a1" },
+    await userEvent.click(
+      await screen.findByRole("button", { name: /alan turing/i }),
+    );
+    expect(onChange).toHaveBeenCalledWith("ping @Alan Turing ", [
+      { kind: "user", userId: "u2" },
     ]);
   });
 

@@ -12,26 +12,11 @@ import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { DockTab } from "@/stores/board-intelligence";
 import { cn } from "@/lib/utils";
 import { DockThreadList } from "./DockThreadList";
-import {
-  DockTiles,
-  dockTileId,
-  knownAgentId,
-  type DockAgent,
-  type DockPresence,
-  type DockTile,
-} from "./DockTiles";
+import { DockTiles, dockTileId, type DockTile } from "./DockTiles";
 import { IntelligenceTab } from "./intelligence/IntelligenceTab";
 import type { QaPair } from "./intelligence/use-intelligence-ask";
 
 export type DockBodyProps = {
-  agents: DockAgent[];
-  agentNames: Record<string, string>;
-  /** The chat persona on screen — the open thread's (when its agent is still
-   *  on the roster), else the one queued for the next thread. `null` is Ask.
-   *  Drives the active tile, the title kicker and the chat panel's label. */
-  tileAgentId: string | null;
-  /** Live presence by agent id — `running` while that persona's turn streams. */
-  presence: Readonly<Record<string, DockPresence>>;
   onSelectTile: (tile: DockTile) => void;
   onNew: () => void;
   /** Omitted inside the Sheet, which brings its own close affordance. */
@@ -42,7 +27,6 @@ export type DockBodyProps = {
   onRetry?: () => void;
   loading: boolean;
   boardThreads: BoardThreadRow[];
-  agentThreads: BoardThreadRow[];
   activeId: string | null;
   /** The open thread's row, for the title row. `null` for a new thread. */
   activeThread: BoardThreadRow | null;
@@ -54,13 +38,10 @@ export type DockBodyProps = {
   readOnly: boolean;
   boardId: string;
   messages: UIMessage[];
-  agentId: string | null;
   /** Identity of the CHAT INSTANCE, not of the conversation — see `chatKey`. */
   chatKey: string;
   onStarted: (conversationId: string) => void;
   onTurnComplete: () => void;
-  /** A turn opened / settled in the mounted chat — the presence dot's source. */
-  onBusyChange: (busy: boolean) => void;
   /** Which section is showing. Chat and Intelligence never render at once. */
   tab: DockTab;
   /** Unresolved suggestions, on the Intelligence tile. */
@@ -101,14 +82,10 @@ const RISE =
  *
  * Only the open section is MOUNTED. That is what keeps switching tiles free:
  * the chat's thread fetch is guarded by the dock's `loaded` ref, so coming back
- * to a persona re-renders a list it already has, and opening Intelligence
- * renders a run the store already holds.
+ * to Ask re-renders a list it already has, and opening Intelligence renders a
+ * run the store already holds.
  */
 export function DockBody({
-  agents,
-  agentNames,
-  tileAgentId,
-  presence,
   onSelectTile,
   onNew,
   onClose,
@@ -116,7 +93,6 @@ export function DockBody({
   onRetry,
   loading,
   boardThreads,
-  agentThreads,
   activeId,
   activeThread,
   currentUserId,
@@ -127,11 +103,9 @@ export function DockBody({
   readOnly,
   boardId,
   messages,
-  agentId,
   chatKey,
   onStarted,
   onTurnComplete,
-  onBusyChange,
   tab,
   badge,
   canApply,
@@ -143,20 +117,8 @@ export function DockBody({
   // Component state, not persisted (spec §6): the ledger opens on demand and
   // folds again when a thread is picked, so the transcript is what you see.
   const [threadsOpen, setThreadsOpen] = useState(false);
-  const threadCount = boardThreads.length + agentThreads.length;
-  // A queued persona whose agent has since left the roster resolves to Ask —
-  // through `knownAgentId`, the SAME call `DockTiles` makes about its own
-  // `agentId` prop, so the two can never disagree. Without it, `chatTile`
-  // (and the `aria-labelledby` it feeds the panel) could point at a
-  // `dock-tab-agent-<staleId>` that DockTiles never renders, because it
-  // collapses that same stale id to the Ask tile.
-  const resolvedTileAgentId = knownAgentId(tileAgentId, agents);
-  const personaName = resolvedTileAgentId
-    ? (agentNames[resolvedTileAgentId] ?? "Agent")
-    : "Ask";
-  const chatTile: DockTile = resolvedTileAgentId
-    ? { kind: "agent", agentId: resolvedTileAgentId }
-    : { kind: "ask" };
+  const threadCount = boardThreads.length;
+  const chatTile: DockTile = { kind: "ask" };
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -169,7 +131,7 @@ export function DockBody({
           "delay-[120ms]",
         )}
       >
-        {/* A roster too wide for the band SCROLLS here rather than pushing New
+        {/* A tile row too wide for the band SCROLLS here rather than pushing New
             / Close off the edge — `DockTiles` itself never shrinks its tiles,
             so the overflow has to be absorbed by this wrapper, not by it.
             `h-full` (not the implicit, content-sized height a centred flex
@@ -185,14 +147,7 @@ export function DockBody({
             height, rather than depending on a fixed pixel offset that only
             happened to fit one specific tile size. */}
         <div className="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto">
-          <DockTiles
-            agents={agents}
-            tab={tab}
-            agentId={tileAgentId}
-            badge={badge}
-            presence={presence}
-            onSelect={onSelectTile}
-          />
+          <DockTiles tab={tab} badge={badge} onSelect={onSelectTile} />
         </div>
         {tab === "chat" && (
           <Button
@@ -247,7 +202,7 @@ export function DockBody({
           aria-labelledby={dockTileId(chatTile)}
           className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          {/* Title row: the thread as a heading, the persona as a kicker. */}
+          {/* Title row: the thread as a heading, who answers as a kicker. */}
           <div
             className={cn(
               "flex items-baseline gap-2 px-3.5 pt-2",
@@ -265,7 +220,7 @@ export function DockBody({
               </Kicker>
             ) : null}
             <Kicker size="xs" className="max-w-[40%] shrink-0 truncate">
-              {personaName}
+              Ask
             </Kicker>
           </div>
 
@@ -323,10 +278,8 @@ export function DockBody({
             ) : (
               <DockThreadList
                 boardThreads={boardThreads}
-                agentThreads={agentThreads}
                 activeId={activeId}
                 currentUserId={currentUserId}
-                agentNames={agentNames}
                 sharingId={sharingId}
                 onSelect={(id) => {
                   setThreadsOpen(false);
@@ -361,29 +314,13 @@ export function DockBody({
                 // snapshotted at mount with no re-sync, the user's question and
                 // the streaming answer would be gone for good. The instance id
                 // changes only where a reset is actually wanted: selecting a
-                // thread, or starting a new one (on any persona).
+                // thread, or starting a new one.
                 key={chatKey}
                 conversationId={activeId}
                 initialMessages={messages}
                 boardId={boardId}
-                agentId={agentId ?? undefined}
                 onStarted={onStarted}
                 onTurnComplete={onTurnComplete}
-                onBusyChange={onBusyChange}
-                // Who answered, for the transcript's kicker and its
-                // brand-tinted turn tile. Without it every persona's answers
-                // were stamped "Monolith" while the band, the title kicker
-                // and the pulsing dot all named the agent.
-                //
-                // Deliberately NOT `agents`: that prop is the @handle roster,
-                // and the dock addresses a persona by TAPPING ITS TILE. The
-                // board page reads `user_agents` as `id, name` — no handle to
-                // offer — and turning on composer mentions here would let a
-                // message go to an agent other than the one the band says is
-                // answering, and rewrite the empty state to offer handles
-                // that do not exist. Attribution is what was broken; only
-                // attribution is wired.
-                agentNames={agentNames}
                 // A thread someone else shared: AskChat reads it out and says
                 // the same sentence in place of the composer. This used to
                 // replace the whole chat with that sentence, so a shared

@@ -4,10 +4,9 @@ import type { Database } from "@/types/database.types";
 
 /**
  * `board_id` is carried even though `listBoardThreads` already filters on it:
- * the two groups share one row component, and without it the list cannot tell a
- * docked thread from a boardless briefing — so it would offer the share toggle
- * on a thread the shared-read policy can never match (its first conjunct is
- * `board_id is not null`).
+ * the row component offers the share toggle only on a thread with a board,
+ * because the shared-read policy can never match one without (its first
+ * conjunct is `board_id is not null`).
  */
 export type BoardThreadRow = Pick<
   Database["public"]["Tables"]["ai_conversations"]["Row"],
@@ -27,8 +26,6 @@ const COLUMNS =
  *  dock can show without scrolling; the cap exists so the read stays constant
  *  as a board ages. */
 export const BOARD_THREADS_LIMIT = 50;
-/** The dock shows only the most recent agent threads; the full set lives on /ask. */
-export const AGENT_THREADS_LIMIT = 5;
 
 /**
  * Threads on one board: the caller's own, plus any shared to the board by
@@ -52,26 +49,5 @@ export async function listBoardThreads(
     .order("updated_at", { ascending: false })
     .limit(BOARD_THREADS_LIMIT);
   if (error) throw new Error(`listBoardThreads: ${error.message}`);
-  return data ?? [];
-}
-
-/**
- * The owner's cross-board agent threads — where a scheduled briefing lands. A
- * briefing reads every board its owner can see, so it has no single board and
- * `board_id` is null by construction.
- */
-export async function listAgentThreads(
-  userId: string,
-): Promise<BoardThreadRow[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("ai_conversations")
-    .select(COLUMNS)
-    .eq("user_id", userId)
-    .is("board_id", null)
-    .not("agent_id", "is", null)
-    .order("updated_at", { ascending: false })
-    .limit(AGENT_THREADS_LIMIT);
-  if (error) throw new Error(`listAgentThreads: ${error.message}`);
   return data ?? [];
 }

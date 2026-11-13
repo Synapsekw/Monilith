@@ -12,30 +12,14 @@ import {
 import { cn } from "@/lib/utils";
 import type { DockTab } from "@/stores/board-intelligence";
 
-/** One of the owner's agents, as the board page reads them (`user_agents`). */
-export type DockAgent = { id: string; name: string };
-
-/** Live state of an agent, for the presence dot. Phase 1: `running` only
- *  while that persona's chat turn is streaming (spec §2). */
-export type DockPresence = "idle" | "running";
-
 /** What a tile stands for. Everything the reader can consult is one of these. */
-export type DockTile =
-  | { kind: "intelligence" }
-  | { kind: "ask" }
-  | { kind: "agent"; agentId: string };
+export type DockTile = { kind: "intelligence" } | { kind: "ask" };
 
 export type DockTilesProps = {
-  agents: DockAgent[];
   /** Which section is open (persisted, `use-dock-state`). */
   tab: DockTab;
-  /** The chat persona on screen — the open thread's, or the one queued for
-   *  the next thread. `null` is plain Ask. Ignored while `tab` is
-   *  intelligence, which is the active tile regardless. */
-  agentId: string | null;
   /** Unresolved Intelligence suggestions. 0 hides the chip. */
   badge: number;
-  presence?: Readonly<Record<string, DockPresence>>;
   /** `vertical` is the mini rail: Up/Down move, the edge bar sits on the
    *  right edge (the left rail's bar sits on its left — mirrored twins). */
   orientation?: "horizontal" | "vertical";
@@ -46,16 +30,11 @@ export type DockTilesProps = {
    *  the tiles with NO panel mounted, and `aria-controls` pointing at a node
    *  that is not there is a dangling reference. */
   panelMounted?: boolean;
-  /** The collapsed mini rail: only Intelligence and ONE chat tile. Agents are
-   *  picked in the open dock, so the rail no longer grows a tile per agent.
-   *  The chat tile stands for whichever persona is on screen — it is selected
-   *  whenever `tab` is chat, says that persona's name, and carries the
-   *  presence dot when ANY agent is running. */
-  compact?: boolean;
   onSelect: (tile: DockTile) => void;
 };
 
-const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
+/** The two tiles, in order: the same on the band and on the mini rail. */
+const TILES: readonly DockTile[] = [{ kind: "intelligence" }, { kind: "ask" }];
 
 /** The band's id namespace — the one a mounted panel's `aria-labelledby`
  *  points into. The mini rail renders the SAME tiles in a second,
@@ -79,70 +58,33 @@ export function dockTileId(
       return `${prefix}-intelligence`;
     case "ask":
       return `${prefix}-ask`;
-    case "agent":
-      return `${prefix}-agent-${tile.agentId}`;
   }
 }
 
-/**
- * The ONE rule for "is this persona still someone we can show?".
- *
- * A persona id can outlive its agent — dock state persists it, a thread row
- * keeps it after the owner deletes the agent — and every surface that renders
- * it has to collapse that case to plain Ask. Three files used to answer it
- * three different ways (`agentNames[id]` by truthiness, `id in agentNames`,
- * `agents.some(...)`), which agreed only because agent names are validated
- * non-empty. They ask this instead.
- */
-export function knownAgentId(
-  agentId: string | null | undefined,
-  agents: readonly DockAgent[],
-): string | null {
-  if (!agentId) return null;
-  return agents.some((a) => a.id === agentId) ? agentId : null;
-}
-
 /** Only the OPEN section is mounted (DockBody), so only the selected tile has
- *  a panel to point at; the chat panel is one panel however many personas. */
+ *  a panel to point at. */
 function panelIdFor(tile: DockTile): string {
   return tile.kind === "intelligence"
     ? "dock-panel-intelligence"
     : "dock-panel-chat";
 }
 
-function isActive(
-  tile: DockTile,
-  tab: DockTab,
-  agentId: string | null,
-  compact = false,
-) {
-  if (tab === "intelligence") return tile.kind === "intelligence";
-  if (compact) return tile.kind === "ask";
-  if (tile.kind === "intelligence") return false;
-  return tile.kind === "ask" ? agentId === null : tile.agentId === agentId;
+function isActive(tile: DockTile, tab: DockTab) {
+  return tab === "intelligence"
+    ? tile.kind === "intelligence"
+    : tile.kind === "ask";
 }
 
-/** The accessible name — and the tooltip. Presence and the badge are said in
- *  words here so neither is colour-only (spec §8). */
-function labelFor(
-  tile: DockTile,
-  agents: DockAgent[],
-  badge: number,
-  presence: Readonly<Record<string, DockPresence>>,
-): string {
-  if (tile.kind === "intelligence") {
-    if (badge <= 0) return "Intelligence";
-    return `Intelligence · ${badge} suggestion${badge === 1 ? "" : "s"}`;
-  }
+/** The accessible name — and the tooltip. The badge is said in words here so
+ *  it is not colour-only (spec §8). */
+function labelFor(tile: DockTile, badge: number): string {
   if (tile.kind === "ask") return "Ask";
-  const name = agents.find((a) => a.id === tile.agentId)?.name ?? "Agent";
-  return presence[tile.agentId] === "running" ? `${name} · running` : name;
+  if (badge <= 0) return "Intelligence";
+  return `Intelligence · ${badge} suggestion${badge === 1 ? "" : "s"}`;
 }
 
-/** The 26px face inside the 32px tab. Intelligence and Ask are marks on the
- *  chrome fill; an agent is its initial on a brand tint — the same tile the
- *  transcript uses for that agent's turns (MessageList, `atmosphere`). */
-function TileFace({ tile, agents }: { tile: DockTile; agents: DockAgent[] }) {
+/** The 26px face inside the 32px tab: a mark on the chrome fill. */
+function TileFace({ tile }: { tile: DockTile }) {
   if (tile.kind === "intelligence") {
     return (
       <span className="bg-chrome-fill text-brand flex size-6.5 items-center justify-center rounded-sm border">
@@ -150,25 +92,15 @@ function TileFace({ tile, agents }: { tile: DockTile; agents: DockAgent[] }) {
       </span>
     );
   }
-  if (tile.kind === "ask") {
-    return (
-      <span className="bg-chrome-fill text-foreground flex size-6.5 items-center justify-center rounded-sm border">
-        <MonolithMark className="size-3.5" />
-      </span>
-    );
-  }
-  const name = agents.find((a) => a.id === tile.agentId)?.name ?? "?";
   return (
-    <span className="bg-primary/15 text-primary text-2xs flex size-6.5 items-center justify-center rounded-sm font-bold uppercase">
-      {name.slice(0, 1)}
+    <span className="bg-chrome-fill text-foreground flex size-6.5 items-center justify-center rounded-sm border">
+      <MonolithMark className="size-3.5" />
     </span>
   );
 }
 
 /**
- * The dock's one tab row: Intelligence, Ask, and each of the owner's agents
- * (spec §2). Replaces the pill tabs (`DockTabs`) and the native persona select
- * (`AgentSwitcher`): agents are the hero, so they ARE the tabs.
+ * The dock's one tab row: Intelligence and Ask (spec §2).
  *
  * Icon-only tiles, 32px, hairline that brightens on hover; the active one gets
  * a `border-border` hairline and the sidebar's 3px edge bar — under the tile
@@ -183,35 +115,17 @@ function TileFace({ tile, agents }: { tile: DockTile; agents: DockAgent[] }) {
  * the deliberate act — see `move`.
  */
 export function DockTiles({
-  agents,
   tab,
-  agentId,
   badge,
-  presence = EMPTY_PRESENCE,
   orientation = "horizontal",
   idPrefix = DOCK_TILE_ID_PREFIX,
   panelMounted = true,
-  compact = false,
   onSelect,
 }: DockTilesProps) {
   const vertical = orientation === "vertical";
-  const tiles: DockTile[] = compact
-    ? [{ kind: "intelligence" }, { kind: "ask" }]
-    : [
-        { kind: "intelligence" },
-        { kind: "ask" },
-        ...agents.map((a) => ({ kind: "agent" as const, agentId: a.id })),
-      ];
+  const tiles = TILES;
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  // An agentId that names no roster entry (e.g. dock state persisted an id
-  // whose agent was since deleted) reads as plain Ask, never as index 0 —
-  // that would light up Intelligence while `tab` is still "chat". Resolved
-  // once here so `activeIndex` and every tile's `aria-selected` agree.
-  const resolvedAgentId = knownAgentId(agentId, agents);
-  const activeIndex = tiles.findIndex((t) =>
-    isActive(t, tab, resolvedAgentId, compact),
-  );
-  const anyRunning = Object.values(presence).some((p) => p === "running");
+  const activeIndex = tiles.findIndex((t) => isActive(t, tab));
 
   /**
    * MANUAL activation (ARIA APG): an arrow MOVES FOCUS ONLY — Enter, Space or
@@ -219,11 +133,8 @@ export function DockTiles({
    * `onClick`.
    *
    * Automatic activation (select-on-arrow) is only correct when activating is
-   * free. Here it is not: selecting a different persona starts a NEW THREAD —
-   * it closes the open one, discards the composer's draft and strips
-   * `?thread=` — and arrowing onto Intelligence can kick off a metered model
-   * call. One glance along the roster must not cost the reader their
-   * conversation.
+   * free. Here it is not: arrowing onto Intelligence can kick off a metered
+   * model call.
    */
   const move = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const focused = refs.current.findIndex(
@@ -263,21 +174,7 @@ export function DockTiles({
       >
         {tiles.map((tile, i) => {
           const selected = i === activeIndex;
-          // Compact chat tile: named for the persona on screen, and lit
-          // when any agent is mid-turn (their own tiles are not on the rail).
-          const compactChat = compact && tile.kind === "ask";
-          const persona: DockTile =
-            compactChat && resolvedAgentId
-              ? { kind: "agent", agentId: resolvedAgentId }
-              : tile;
-          const baseLabel = labelFor(persona, agents, badge, presence);
-          const running = compactChat
-            ? anyRunning
-            : tile.kind === "agent" && presence[tile.agentId] === "running";
-          const label =
-            compactChat && running && !baseLabel.endsWith("· running")
-              ? `${baseLabel} · running`
-              : baseLabel;
+          const label = labelFor(tile, badge);
           return (
             <Tooltip key={dockTileId(tile, idPrefix)}>
               <TooltipTrigger asChild>
@@ -345,7 +242,7 @@ export function DockTiles({
                         : "after:inset-x-2 after:bottom-0 after:h-[3px] after:rounded-t-full"),
                   )}
                 >
-                  {/* The visible face, badge and presence dot — AND the
+                  {/* The visible face and badge — AND the
                       hairline, hover brighten and focus ring — live in this
                       FIXED 32/44px box regardless of orientation, centred
                       inside whatever the outer button's own box is (a fixed
@@ -362,7 +259,7 @@ export function DockTiles({
                       selected && "border-border",
                     )}
                   >
-                    <TileFace tile={persona} agents={agents} />
+                    <TileFace tile={tile} />
                     {tile.kind === "intelligence" && badge > 0 ? (
                       <span
                         aria-hidden="true"
@@ -371,17 +268,6 @@ export function DockTiles({
                       >
                         {badge}
                       </span>
-                    ) : null}
-                    {running ? (
-                      // A 2px `border-border` hairline separates the dot from
-                      // the tile — not a wash-coloured ring, the wash is a
-                      // gradient (spec §7). The pulse is a box-shadow:
-                      // nothing scales.
-                      <span
-                        aria-hidden="true"
-                        data-dock-presence
-                        className="bg-primary border-border animate-pulse-ring absolute right-0.5 bottom-0.5 size-[9px] rounded-full border-2"
-                      />
                     ) : null}
                   </span>
                 </button>

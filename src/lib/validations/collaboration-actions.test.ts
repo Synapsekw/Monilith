@@ -45,11 +45,8 @@ describe("mentions + notifications validation", () => {
     expect(
       addUpdateSchema.safeParse({
         itemId: ITEM,
-        text: "hi @Ada @ops",
-        mentions: [
-          { kind: "user", userId: USER },
-          { kind: "agent", agentId: AGENT },
-        ],
+        text: "hi @Ada",
+        mentions: [{ kind: "user", userId: USER }],
       }).success,
     ).toBe(true);
   });
@@ -106,10 +103,11 @@ describe("mentions + notifications validation", () => {
   });
   it("parses a single target through mentionTargetSchema", () => {
     expect(
-      mentionTargetSchema.safeParse({ kind: "agent", agentId: AGENT }).success,
+      mentionTargetSchema.safeParse({ kind: "user", userId: USER }).success,
     ).toBe(true);
+    // Mentions are people only: a former agent target is rejected.
     expect(
-      mentionTargetSchema.safeParse({ kind: "agent", userId: AGENT }).success,
+      mentionTargetSchema.safeParse({ kind: "agent", agentId: AGENT }).success,
     ).toBe(false);
   });
   it("validates mark-read", () => {

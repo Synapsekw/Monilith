@@ -12,15 +12,11 @@ import type { MentionTargetInput } from "@/lib/validations/collaboration-actions
 
 /** The tagged id a chosen target contributes to the submitted mention list. */
 function targetId(target: MentionTarget): MentionTargetInput {
-  return target.kind === "agent"
-    ? { kind: "agent", agentId: target.agentId }
-    : { kind: "user", userId: target.userId };
+  return { kind: "user", userId: target.userId };
 }
 
 function targetKey(target: MentionTarget): string {
-  return target.kind === "agent"
-    ? `agent:${target.agentId}`
-    : `user:${target.userId}`;
+  return `user:${target.userId}`;
 }
 
 export function MentionTextarea({
@@ -31,7 +27,7 @@ export function MentionTextarea({
 }: {
   value: string;
   mentions: MentionTargetInput[];
-  /** People AND the author's own agents — filtering is pure client state, so a
+  /** The people who can be mentioned — filtering is pure client state, so a
    *  keystroke costs zero server round-trips. */
   targets: readonly MentionTarget[];
   onChange: (text: string, mentions: MentionTargetInput[]) => void;
@@ -112,11 +108,6 @@ export function MentionTextarea({
                 }}
               >
                 <span className="truncate">{mentionLabel(t)}</span>
-                {t.kind === "agent" && (
-                  <span className="text-muted-foreground shrink-0 text-xs">
-                    {t.name}
-                  </span>
-                )}
               </button>
             </li>
           ))}

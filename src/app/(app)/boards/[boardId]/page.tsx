@@ -33,7 +33,6 @@ export default async function BoardPage({
   const [
     payload,
     { data: grantRows },
-    { data: agentRows },
     viewPrefs,
     lastSeenAt,
     latestRun,
@@ -44,14 +43,6 @@ export default async function BoardPage({
       .from("board_members")
       .select("user_id, access_level")
       .eq("board_id", boardId),
-    // Owner-scoped by RLS and capped by max_agents_per_user (default 3) —
-    // this is a roster of names for the dock's switcher, NOT thread data.
-    // Threads stay unfetched until the dock is opened.
-    supabase
-      .from("user_agents")
-      .select("id, name")
-      .eq("owner_id", user.id)
-      .order("name"),
     // The caller's saved arrangement for this board. A point read on the
     // (user_id, board_id) primary key, issued in parallel with work that is
     // already slower, so it costs no measurable added latency. Resolving it
@@ -142,13 +133,12 @@ export default async function BoardPage({
           lastSeenAt={lastSeenAt}
         />
       </div>
-      {/* Rendered here (it needs the page's roster, access and latest run) but
+      {/* Rendered here (it needs the page's access and latest run) but
           NOT laid out here: on the wide surface it portals its <aside> into the
           shell's `#app-dock-slot`, beside the content card. This flex row only
           ever holds the board column. */}
       <BoardDock
         boardId={boardId}
-        agents={agentRows ?? []}
         currentUserId={user.id}
         access={access ?? "viewer"}
         initialRun={latestRun}

@@ -1,22 +1,9 @@
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  getMessages,
-  getConversationRunId,
-  getConversationHeader,
-  listOwnerAgentTargets,
-  listAgentNamesByIds,
-  listPendingProposalsForRun,
-  withResolvedTargets,
-} = vi.hoisted(() => ({
+const { getMessages, getConversationHeader } = vi.hoisted(() => ({
   getMessages: vi.fn(),
-  getConversationRunId: vi.fn(),
   getConversationHeader: vi.fn(),
-  listOwnerAgentTargets: vi.fn(),
-  listAgentNamesByIds: vi.fn(),
-  listPendingProposalsForRun: vi.fn(),
-  withResolvedTargets: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,24 +16,8 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/lib/ai/ask/conversations", () => ({
   getMessages: (id: string) => getMessages(id),
-  getConversationRunId: (id: string) => getConversationRunId(id),
   getConversationHeader: (id: string) => getConversationHeader(id),
   toThreadMessages: (rows: unknown[]) => rows,
-}));
-vi.mock("@/lib/ai/ask/owner-agents", () => ({
-  listAgentNamesByIds: (ids: string[]) => listAgentNamesByIds(ids),
-  listOwnerAgentTargets: (id: string) => listOwnerAgentTargets(id),
-}));
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ client: true }),
-}));
-vi.mock("@/lib/agents/proposals-db", () => ({
-  listPendingProposalsForRun: (c: unknown, runId: string) =>
-    listPendingProposalsForRun(c, runId),
-}));
-vi.mock("@/lib/agents/proposal-targets", () => ({
-  withResolvedTargets: (c: unknown, list: unknown[]) =>
-    withResolvedTargets(c, list),
 }));
 vi.mock("@/components/ai/ask/AskChat", () => ({ AskChat: () => null }));
 
@@ -59,67 +30,40 @@ const propsOf = (el: unknown) =>
 beforeEach(() => {
   vi.clearAllMocks();
   getMessages.mockResolvedValue([{ id: "m1", agent_id: "a1" }]);
-  getConversationRunId.mockResolvedValue("run1");
   getConversationHeader.mockResolvedValue({
     ownerId: "u1",
-    agentId: null,
+    agentId: "a1",
     title: "T",
   });
-  listOwnerAgentTargets.mockResolvedValue([]);
-  listAgentNamesByIds.mockResolvedValue({ a1: "Scout" });
-  listPendingProposalsForRun.mockResolvedValue([{ id: "p1" }]);
-  withResolvedTargets.mockImplementation(async (_c, list) => list);
 });
 
-describe("AskConversationPage — second read wave", () => {
-  it("starts the proposals read while the agent-names read is still pending", async () => {
-    let releaseNames: (v: Record<string, string>) => void = () => {};
-    listAgentNamesByIds.mockReturnValue(
-      new Promise((resolve) => {
-        releaseNames = resolve;
-      }),
-    );
-
-    const pending = AskConversationPage({ params });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    // A serial page never asks for proposals until the names have answered.
-    expect(listAgentNamesByIds).toHaveBeenCalledWith(["a1"]);
-    expect(listPendingProposalsForRun).toHaveBeenCalledTimes(1);
-    expect(withResolvedTargets).toHaveBeenCalledTimes(1);
-
-    releaseNames({ a1: "Scout" });
-    const props = propsOf(await pending);
-    expect(props.agentNames).toEqual({ a1: "Scout" });
-    expect(props.agentProposals).toEqual([{ id: "p1" }]);
-  });
-
-  it("issues no proposal read for a thread with no run", async () => {
-    getConversationRunId.mockResolvedValue(null);
-
+describe("AskConversationPage", () => {
+  it("renders the thread with its title and no agent props", async () => {
     const props = propsOf(await AskConversationPage({ params }));
-
-    expect(listPendingProposalsForRun).not.toHaveBeenCalled();
-    expect(props.agentProposals).toEqual([]);
+    expect(props.conversationId).toBe("c1");
+    expect(props.initialMessages).toEqual([{ id: "m1", agent_id: "a1" }]);
+    expect(props.title).toBe("T");
+    expect(props.readOnly).toBe(false);
+    // Old briefing threads still render their messages, but the page no
+    // longer reads proposals or agent personas for them.
+    expect(props).not.toHaveProperty("agentProposals");
+    expect(props).not.toHaveProperty("agents");
+    expect(props).not.toHaveProperty("agentNames");
+    expect(props).not.toHaveProperty("initialAgentId");
   });
 
-  it("degrades a failed proposal read to none instead of failing the page", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    listPendingProposalsForRun.mockRejectedValue(new Error("boom"));
-
+  it("is read-only for someone who does not own the thread", async () => {
+    getConversationHeader.mockResolvedValue({
+      ownerId: "someone-else",
+      agentId: null,
+      title: "T",
+    });
     const props = propsOf(await AskConversationPage({ params }));
-
-    expect(props.agentProposals).toEqual([]);
-    expect(props.agentNames).toEqual({ a1: "Scout" });
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+    expect(props.readOnly).toBe(true);
   });
 
-  it("still 404s an empty thread before the second wave", async () => {
+  it("404s an empty thread", async () => {
     getMessages.mockResolvedValue([]);
-
     await expect(AskConversationPage({ params })).rejects.toThrow("NOT_FOUND");
-    expect(listAgentNamesByIds).not.toHaveBeenCalled();
-    expect(listPendingProposalsForRun).not.toHaveBeenCalled();
   });
 });

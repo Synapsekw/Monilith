@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   addUpdate,
   editUpdate,
@@ -77,19 +76,7 @@ export function useUpdateMutations(
         c?.optimisticId && prev ? removeUpdate(prev, c.optimisticId) : prev,
       );
     },
-    onSuccess: (data) => {
-      // A summons that was refused — rate-limited, on cooldown, over the org's
-      // daily cap, switched off, or not the author's agent — must SAY so. The
-      // comment posted either way; without this the person is left waiting for
-      // an answer that is never coming. No refetch is involved: this is the
-      // action's own return value (working agreement #5).
-      if (data.reason) toast.error(data.reason);
-      else if (data.agentRun === "started")
-        toast.success(
-          data.agentHandle
-            ? `@${data.agentHandle} is working on it…`
-            : "Working on it…",
-        );
+    onSuccess: () => {
       // Refetch the authoritative lists rather than hand-reconciling the
       // optimistic temp against the Realtime INSERT echo — the echo can arrive
       // before this callback and prepend a second real-id row that the id-swap
