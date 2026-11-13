@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 12:32",
+  "updated": "2026-11-13 12:54",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "13e53bee",
+        "value": "06ada786",
         "tone": "ok",
-        "note": "Performance batch 1 merged (26dc4feb) plus a CI test fix and the changelog announcement; pushed. Task worktrees and branches removed."
+        "note": "Performance batch 1, then the unified assistant runtime (Plan A, ab70a5b5), merged and pushed. Two changelog commits are local only. The assistant runtime is not in PR #149."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "11,113 passing, 1 skipped. Two lazy-calendar tests timed out on CI after the merge and were fixed.",
+        "note": "11,159 passing, 1 skipped, on the assistant-runtime merge.",
         "label": "test"
       },
       {
@@ -182,7 +182,7 @@
         "name": "ledger",
         "value": "177/177",
         "tone": "ok",
-        "note": "177 committed files / 177 live DEV ledger rows. No migrations in the performance batch.",
+        "note": "177 committed files / 177 live DEV ledger rows. No migrations in either batch on develop.",
         "label": "ledger"
       }
     ]
@@ -195,6 +195,23 @@
         "owner",
         "verify",
         "critical"
+      ]
+    },
+    {
+      "title": "Finish checking the assistant before promoting it",
+      "why": "The chat in the dock and on Ask now acts across the whole tool catalog behind one confirm card. A live run passed on the default model. Still unchecked: a non-Anthropic model, an old thread with an open proposal, the step limit, and a person in two organisations.",
+      "tags": [
+        "owner",
+        "verify",
+        "ai"
+      ]
+    },
+    {
+      "title": "Add signup approval",
+      "why": "Signup is open and nothing gates a new account. The owner wants every new account approved by a platform admin, and it must land before any platform-paid AI key is switched on.",
+      "tags": [
+        "ai",
+        "security"
       ]
     },
     {
@@ -312,6 +329,11 @@
   "risks": [
     {
       "sev": "amber",
+      "title": "Goals and portfolios can land in the wrong organisation",
+      "text": "create_goal and create_portfolio choose an organisation with limit 1 and ignore the one requested. The assistant refuses these creates for now; the Goals and Portfolios pages may be affected for people in more than one organisation. Needs a migration."
+    },
+    {
+      "sev": "amber",
       "title": "A promotion can ship more than its description",
       "text": "The promote command measures its delta from the last heal commit, so anything merged to develop before that heal is invisible to it. PR #147 was described as one config line and also shipped five dependency bumps. The CI watcher has two matching blind spots and reported green for the wrong run twice in one day. Compare trees, not commit ranges, until both are repaired (gotcha-109)."
     },
@@ -426,22 +448,16 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/assistant-runtime",
-      "head": "e2a77db2",
-      "note": "parallel"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-11-13-1232-performance-audit-region-and-quick-wins",
-    "when": "2026-11-13 12:32",
-    "title": "Performance audit, Tokyo region, quick wins",
+    "id": "2026-11-13-1254-unified-assistant-runtime-plan-a",
+    "when": "2026-11-13 12:54",
+    "title": "Unified assistant runtime, Plan A",
     "bullets": [
-      "Five-part audit: the database was fast, the distance to it was not.",
-      "Functions moved to Tokyo beside the live database; board median 2.7 s to about 0.3 s.",
-      "Batch 1 on develop: settings shell, fewer round-trips and re-renders, zod 127 to 32 KB gz, lazy dialogs.",
-      "Whole-branch review fixed three defects before merge; PR #149 awaits the owner."
+      "Live data showed the agents were unused: one owner, every run failing since September.",
+      "Ask and the board dock now run one loop over the whole tool catalog, on any provider.",
+      "Every change is staged and applied only from one confirm card that names the item and value.",
+      "A live run in the browser found five defects no review had seen; fixed and re-tested."
     ]
   }
 }
