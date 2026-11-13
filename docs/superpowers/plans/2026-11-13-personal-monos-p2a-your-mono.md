@@ -841,6 +841,7 @@ git commit -m "feat(mono): a mono's board access follows its owner"
 - Produces:
   - A `cell_values` write on a `people` column that **adds** a Mono raises `42501` unless `auth.uid()` is that Mono's owner (so a Mono never adds a Mono, and a service-role write with no user cannot add one), raises `P0001` when the Mono is asleep, and otherwise puts the Mono on the board. Removing a Mono is always allowed.
   - Any `notifications` insert whose recipient is an agent profile is silently dropped.
+  - Any `boards` insert whose `created_by` is an agent profile raises `42501` (a Mono never creates boards; owner decision 2026-11-13). The Mono chat must surface this as a normal tool error.
 
 - [ ] **Step 1: Mint the migration and write it**
 
@@ -909,6 +910,22 @@ revoke execute on function public.tg_notifications_skip_agents() from public, an
 create trigger notifications_skip_agents
   before insert on public.notifications
   for each row execute function public.tg_notifications_skip_agents();
+
+-- Owner decision (2026-11-13): a Mono never creates boards. A board it created
+-- would be invisible to its owner until shared. Enforced at the table, so the
+-- confirm card, MCP and any future path are all covered.
+create or replace function public.tg_boards_no_agent_creator()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from public.profiles p where p.id = new.created_by and p.is_agent) then
+    raise exception 'A Mono cannot create boards' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.tg_boards_no_agent_creator() from public, anon, authenticated;
+create trigger boards_no_agent_creator
+  before insert on public.boards
+  for each row execute function public.tg_boards_no_agent_creator();
 ```
 
 - [ ] **Step 2: Check it in a rolled-back transaction on DEV**
@@ -987,6 +1004,17 @@ insert into public.notifications (org_id, recipient_id, actor_id, kind, board_id
   ('00000000-0000-4000-8000-0000000002a0','00000000-0000-4000-8000-0000000002a3','00000000-0000-4000-8000-0000000002a1','assigned','00000000-0000-4000-8000-0000000002b2','00000000-0000-4000-8000-0000000002b5'),
   ('00000000-0000-4000-8000-0000000002a0','00000000-0000-4000-8000-0000000002a2','00000000-0000-4000-8000-0000000002a1','assigned','00000000-0000-4000-8000-0000000002b2','00000000-0000-4000-8000-0000000002b5');
 reset role;
+-- Nova cannot create a board (as itself).
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000002a3","role":"authenticated"}', true);
+set local role authenticated;
+do $d$ begin
+  begin
+    insert into public.boards (org_id, workspace_id, name, created_by)
+    values ('00000000-0000-4000-8000-0000000002a0','00000000-0000-4000-8000-0000000002b0','Mono board','00000000-0000-4000-8000-0000000002a3');
+    perform set_config('p2a.mono_creates_board', 'created', true);
+  exception when others then perform set_config('p2a.mono_creates_board', sqlstate, true); end;
+end $d$;
+reset role;
 select set_config('p2a.notifications', (select count(*) filter (where recipient_id = '00000000-0000-4000-8000-0000000002a3')::text || '/' || count(*) filter (where recipient_id = '00000000-0000-4000-8000-0000000002a2')::text from public.notifications where org_id = '00000000-0000-4000-8000-0000000002a0'), true);
 
 select k, current_setting('p2a.' || k, true) as got, want,
@@ -994,7 +1022,7 @@ select k, current_setting('p2a.' || k, true) as got, want,
   from (values
     ('asleep','P0001'), ('owner_assigns','editor'), ('not_your_mono','42501'),
     ('mate_assigns','42501'), ('mate_removes','{"userIds": ["00000000-0000-4000-8000-0000000002a1"]}'),
-    ('mono_assigns_mono','42501'), ('notifications','0/1')
+    ('mono_assigns_mono','42501'), ('notifications','0/1'), ('mono_creates_board','42501')
   ) v(k, want);
 rollback;
 ```
@@ -4802,7 +4830,7 @@ Expected limits in 2A (say so): the Mono does nothing on its own; being assigned
 - **Managed / org-BYO orgs** hide the personal key form in Settings → AI, so a Mono there cannot wake in 2A. No such org exists on DEV today (9 `per_user`, 3 `off`).
 - **Billing:** personal-key spend is recorded in `ai_usage` against the owner; in a managed org `ai_credits_used_this_month` may count it toward the org's credit ceiling.
 - **`getMessages` oldest-first 200 cap** is an existing defect for any long thread; D4 sidesteps it with "New chat", it is not fixed here.
-- **A Mono could create a board** through a confirmed `create_board` call; that board's creator would be the Mono, invisible to its owner until shared. Not blocked in 2A; candidate rule for 2B's `auto` classification.
+- **A Mono could create a board** through a confirmed `create_board` call. Blocked in 2A by `boards_no_agent_creator` (Task 3), owner decision 2026-11-13.
 - **Board "shared" indicator** in the sidebar counts any `board_members` row, so a board with only the owner's Mono on it reads as shared.
 - **Platform admin user search** (`platform_search_users`) still lists Mono bot users.
 - **Automations** cannot target a Mono (the automation member list is people-only); an automation that wrote a Mono into a People cell would fail on the trigger.
