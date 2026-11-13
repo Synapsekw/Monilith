@@ -5,6 +5,20 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
+    kind: "new",
+    title: "Leave a shared board",
+    description:
+      "Boards someone shared with you now have a Leave board option in the sidebar menu. It removes the board from your sidebar and ends your access, without changing it for anyone else, and the owner can invite you again.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Easier-to-find panel toggles",
+    description:
+      "The controls that fold the sidebar and the assistant dock are now small handles that are always visible on the edge of the page, instead of arrows that only appeared on hover.",
+  },
+  {
+    date: "2026-11-13",
     kind: "improved",
     title: "Tidier collapsed sidebar and dock",
     description:
