@@ -138,6 +138,7 @@ type ToolsArgs = {
   client: unknown;
   orgId: string;
   stage: (c: unknown) => boolean;
+  describe?: (tool: string, input: Record<string, unknown>) => string | null;
 };
 const buildAssistantTools = vi.fn<(a: ToolsArgs) => Record<string, never>>();
 vi.mock("@/lib/assistant/tools", () => ({
@@ -1203,6 +1204,44 @@ describe("POST /api/ask · rolling summary", () => {
     expect(updateSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ summarized_upto: expect.anything() }),
     );
+  });
+});
+
+// A3: card labels come from the board the route already loaded for FOCUS.
+describe("POST /api/ask · staged labels from real board data", () => {
+  const BOARD_ID = "board-1";
+  const ITEM = "i0000000-0000-4000-8000-000000000001";
+
+  it("passes a describe function built from the focus payload on a board thread", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    getBoardPayload.mockResolvedValue({
+      board: { id: BOARD_ID, name: "Roadmap", org_id: "org1" },
+      groups: [],
+      columns: [],
+      items: [{ id: ITEM, name: "Press kit", group_id: "g", parent_id: null }],
+      cellValues: [],
+      dependencies: [],
+    });
+    await readEvents();
+    const describe = buildAssistantTools.mock.calls[0]![0].describe;
+    expect(describe).toBeTypeOf("function");
+    expect(describe!("manage_item", { action: "archive", itemId: ITEM })).toBe(
+      'Archive the item "Press kit"',
+    );
+    // No extra read: the payload was loaded once, for the focus block.
+    expect(getBoardPayload).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes no describe function on a thread with no board", async () => {
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].describe).toBeUndefined();
+  });
+
+  it("passes no describe function when the board is not readable", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    mockBoardPayload(null);
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].describe).toBeUndefined();
   });
 });
 

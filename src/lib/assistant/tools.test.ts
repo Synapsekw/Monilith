@@ -173,6 +173,61 @@ describe("buildAssistantTools", () => {
   });
 });
 
+describe("buildAssistantTools · staged labels", () => {
+  const write = () =>
+    descriptor({ name: "update_item", capability: "board.write" });
+
+  it("labels a staged call with describe when it returns a string", async () => {
+    const staged: StagedCall[] = [];
+    const describe = vi.fn(() => 'Press kit: set Status to "Done"');
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: (c) => (staged.push(c), true),
+      descriptors: [write()],
+      describe,
+    });
+    const out = await executeAgentTool(tools, "update_item", { id: "i-1" });
+    // It describes the exact input that is stored.
+    expect(describe).toHaveBeenCalledWith("update_item", { id: "i-1" });
+    expect(staged[0]!.summary).toBe('Press kit: set Status to "Done"');
+    expect(out).toMatchObject({ summary: 'Press kit: set Status to "Done"' });
+  });
+
+  it("falls back to the generic summary when describe returns null or throws", async () => {
+    const staged: StagedCall[] = [];
+    const generic = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: (c) => (staged.push(c), true),
+      descriptors: [write()],
+    });
+    await executeAgentTool(generic, "update_item", { id: "i-1" });
+    for (const describe of [
+      vi.fn(() => null),
+      vi.fn(() => {
+        throw new Error("boom");
+      }),
+    ]) {
+      const tools = buildAssistantTools({
+        ctx,
+        client,
+        orgId: ORG,
+        stage: (c) => (staged.push(c), true),
+        descriptors: [write()],
+        describe,
+      });
+      await executeAgentTool(tools, "update_item", { id: "i-1" });
+      expect(describe).toHaveBeenCalledTimes(1);
+    }
+    expect(staged).toHaveLength(3);
+    expect(staged[1]!.summary).toBe(staged[0]!.summary);
+    expect(staged[2]!.summary).toBe(staged[0]!.summary);
+  });
+});
+
 describe("buildAssistantTools · staged call validation", () => {
   it("gives every staged call its own id, even when the provider repeats one", async () => {
     const write = descriptor({

@@ -30,6 +30,11 @@ import { MAX_STAGED_CALLS, type StagedCall } from "@/lib/assistant/staged";
 import { renderFocusBlock } from "@/lib/assistant/focus/types";
 import { buildBoardFocus } from "@/lib/assistant/focus/board";
 import {
+  buildDescribeContext,
+  describeCall,
+  type DescribeContext,
+} from "@/lib/assistant/describe";
+import {
   summarizeThread,
   titleThread,
 } from "@/lib/assistant/thread-housekeeping";
@@ -254,6 +259,9 @@ export async function POST(req: Request) {
       // is what the user is looking at. The read is RLS-scoped; a board that
       // reads back null, belongs to another org, or fails to read at all
       // degrades to no focus rather than failing the turn.
+      // The same payload and members also label staged changes on the card
+      // (A3): no extra query, and only for the board the user is looking at.
+      let describeCtx: DescribeContext | null = null;
       if (wantsFocus) {
         let focusText: string | null = null;
         if (focusBoardId) {
@@ -261,10 +269,12 @@ export async function POST(req: Request) {
             const payload = await getBoardPayload(focusBoardId);
             if (payload && payload.board.org_id === org.id) {
               focusText = buildBoardFocus({ payload, members });
+              describeCtx = buildDescribeContext(payload, members);
             }
           } catch (e) {
             console.error("[ask] board focus read failed:", e);
             focusText = null;
+            describeCtx = null;
           }
         }
         system = `${system}\n\n${renderFocusBlock(focusText)}`;
@@ -378,6 +388,11 @@ export async function POST(req: Request) {
               staged.push(call);
               return true;
             },
+            // Labels from real board data for the exact pinned input; a
+            // non-board thread keeps the generic summaries.
+            describe: describeCtx
+              ? (tool, input) => describeCall(tool, input, describeCtx)
+              : undefined,
           });
 
           const beforeLoop = usage;

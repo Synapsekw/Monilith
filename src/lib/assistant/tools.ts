@@ -61,6 +61,11 @@ export function buildAssistantTools(args: {
   stage: (call: StagedCall) => boolean;
   /** Test seam. Defaults to the real catalog. */
   descriptors?: readonly ToolDescriptor[];
+  /**
+   * A card label for a staged call, built on the server from real board data
+   * (see `describe.ts`), or null to use the generic summary. Never model text.
+   */
+  describe?: (tool: string, input: Record<string, unknown>) => string | null;
 }): ToolSet {
   const descriptors = args.descriptors ?? assistantDescriptors();
   return Object.fromEntries(
@@ -95,6 +100,14 @@ export function buildAssistantTools(args: {
             // costs the board refresh after Apply.
             boardId = null;
           }
+          // The label describes the SAME pinned input that is stored below and
+          // later applied. A describer that fails costs only the nicer label.
+          let summary: string | null = null;
+          try {
+            summary = args.describe?.(d.name, input) ?? null;
+          } catch {
+            summary = null;
+          }
           // The provider's tool call id is not used: an empty, over-long or
           // repeated one would make the stored trace fail to parse on reload,
           // or make two rows tick together. Validated here so what is stored
@@ -103,7 +116,7 @@ export function buildAssistantTools(args: {
             id: crypto.randomUUID(),
             tool: d.name,
             input,
-            summary: summariseProposal(d.name, input),
+            summary: summary ?? summariseProposal(d.name, input),
             destructive: effect === "destructive",
             boardId,
           } satisfies StagedCall);
