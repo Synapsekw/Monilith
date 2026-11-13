@@ -14,6 +14,8 @@ import {
   type AskToolTrace,
 } from "@/lib/ai/ask/tool-trace";
 import type { ChatSurface } from "./surface";
+import type { ChatSpeaker } from "./speaker";
+import { AgentChip, monoNameColor } from "@/components/mono/MonoChip";
 
 /** What every assistant turn is called: the org assistant answers them all. */
 const PLAIN_ASSISTANT_NAME = "Monolith";
@@ -49,12 +51,14 @@ function Bubble({
   content,
   agentName,
   surface = "card",
+  speaker,
 }: {
   role: UIMessage["role"];
   content: string;
   /** Assistant turns only — who answered. Ignored for user turns. */
   agentName?: string;
   surface?: ChatSurface;
+  speaker?: ChatSpeaker;
 }) {
   if (role === "user") {
     return (
@@ -81,10 +85,30 @@ function Bubble({
             : "bg-chrome-fill text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm border"
         }
       >
-        <AskAiMark className="size-3.5" />
+        {speaker ? (
+          <span aria-hidden="true">{speaker.mark}</span>
+        ) : (
+          <AskAiMark className="size-3.5" />
+        )}
       </span>
       <div className="min-w-0 flex-1 pt-0.5">
-        {agentName ? <Kicker className="mb-1 block">{agentName}</Kicker> : null}
+        {speaker ? (
+          <div className="mb-1 flex min-w-0 items-center gap-1.5">
+            <Kicker
+              className="truncate"
+              style={
+                speaker.tint
+                  ? { color: monoNameColor(speaker.tint) }
+                  : undefined
+              }
+            >
+              {speaker.name}
+            </Kicker>
+            <AgentChip />
+          </div>
+        ) : agentName ? (
+          <Kicker className="mb-1 block">{agentName}</Kicker>
+        ) : null}
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {content}
         </div>
@@ -115,6 +139,7 @@ export function MessageList({
   onRetryDrop,
   readOnly = false,
   surface = "card",
+  speaker,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -135,6 +160,8 @@ export function MessageList({
   /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
    *  Purely presentational — see `surface.ts`. */
   surface?: ChatSurface;
+  /** Who answers, when not the org assistant. Absent = today's look. */
+  speaker?: ChatSpeaker;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -179,11 +206,17 @@ export function MessageList({
           // empty states, not a panel on someone else's page.
           <div className="mt-8 flex flex-col items-center gap-3 text-center">
             <span className="bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm">
-              <AskAiMark className="size-5" />
+              {speaker ? (
+                <span aria-hidden="true">{speaker.mark}</span>
+              ) : (
+                <AskAiMark className="size-5" />
+              )}
             </span>
-            <Kicker>Ask</Kicker>
+            <Kicker>{speaker ? `Chat with ${speaker.name}` : "Ask"}</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
-              {emptyMessage}
+              {speaker
+                ? `Only you can chat with ${speaker.name}. Ask about your boards, or have it take something on.`
+                : emptyMessage}
             </p>
           </div>
         ) : null}
@@ -217,6 +250,7 @@ export function MessageList({
                   m.role === "assistant" ? PLAIN_ASSISTANT_NAME : undefined
                 }
                 surface={surface}
+                speaker={speaker}
               />
               {actions.length > 0 && proposalStatus ? (
                 // Indented to the assistant gutter (size-7 mark + gap-3), so the
@@ -268,7 +302,9 @@ export function MessageList({
             freshest status — so the status is NOT also drawn below. With no
             status yet, `ThinkingIndicator` falls back to its own generic
             label. */}
-        {streamingText === "" ? <ThinkingIndicator label={status} /> : null}
+        {streamingText === "" ? (
+          <ThinkingIndicator label={status} mark={speaker?.mark} />
+        ) : null}
 
         {streamingText ? (
           <Bubble
@@ -276,6 +312,7 @@ export function MessageList({
             content={streamingText}
             agentName={PLAIN_ASSISTANT_NAME}
             surface={surface}
+            speaker={speaker}
           />
         ) : null}
 

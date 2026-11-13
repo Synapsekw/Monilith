@@ -24,6 +24,7 @@ export function Composer({
   onRetry,
   onSubmit,
   surface = "card",
+  speakerName,
 }: {
   disabled: boolean;
   /** The parent's last SEND failure (the `createConversation`/
@@ -43,6 +44,8 @@ export function Composer({
    *  the form itself is the one raised surface on the wash, and it rises into
    *  place on mount. See `surface.ts`. */
   surface?: ChatSurface;
+  /** Set when the chat is with a Mono rather than the org assistant. */
+  speakerName?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
@@ -82,7 +85,9 @@ export function Composer({
             rows={1}
             value={value}
             disabled={disabled}
-            placeholder="Ask about your boards…"
+            placeholder={
+              speakerName ? `Message ${speakerName}…` : "Ask about your boards…"
+            }
             aria-label="Your question"
             className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-1.5 py-1.5 shadow-none focus-visible:border-0 focus-visible:ring-0"
             onChange={(e) => setValue(e.target.value)}

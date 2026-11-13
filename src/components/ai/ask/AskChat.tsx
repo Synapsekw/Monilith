@@ -23,6 +23,7 @@ import { ThreadHeader } from "./ThreadHeader";
 import type { DropState } from "./StreamDropNotice";
 import { Composer } from "./Composer";
 import type { ChatSurface } from "./surface";
+import type { ChatSpeaker } from "./speaker";
 
 /**
  * Client controller for a single chat surface.
@@ -79,6 +80,7 @@ export function AskChat({
   onTurnStart,
   onTurnEnd,
   onMessagesChange,
+  speaker,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
@@ -122,6 +124,8 @@ export function AskChat({
   /** Mirrors the transcript to a parent that outlives this component (the
    *  My Mono tab's store), so remounting it costs no read. */
   onMessagesChange?: (messages: UIMessage[]) => void;
+  /** Who is answering, when not the org assistant (the My Mono tab). */
+  speaker?: ChatSpeaker;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -407,6 +411,7 @@ export function AskChat({
         }}
         readOnly={readOnly}
         surface={surface}
+        speaker={speaker}
       />
       {/* Never stranded: the composer is dead only while a turn or a recovery
           check is genuinely in flight — but for ALL of a turn, `turnBusy`
@@ -433,6 +438,7 @@ export function AskChat({
           onRetry={retryLastSend}
           onSubmit={onSubmit}
           surface={surface}
+          speakerName={speaker?.name}
         />
       )}
     </div>

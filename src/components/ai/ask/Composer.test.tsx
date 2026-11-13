@@ -130,3 +130,12 @@ describe("Composer — surface", () => {
     ).not.toContain("delay-");
   });
 });
+
+describe("Composer speaker", () => {
+  it("addresses the speaker in the placeholder", () => {
+    render(
+      <Composer disabled={false} onSubmit={() => {}} speakerName="Nova" />,
+    );
+    expect(screen.getByPlaceholderText("Message Nova…")).toBeInTheDocument();
+  });
+});

@@ -135,16 +135,23 @@ export function MonoTab({
       else setBoardError(res.error);
     });
 
+  const mood = railMood({
+    brain: mono.brain,
+    busy,
+    justCreated: created !== null,
+  });
+  const speaker = {
+    name: mono.name,
+    tint: mono.color,
+    mark: <MonoAvatar color={mono.color} mood={mood} size={22} label="" />,
+  };
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-3 px-3.5 pt-3 pb-2">
         <MonoAvatar
           color={mono.color}
-          mood={railMood({
-            brain: mono.brain,
-            busy,
-            justCreated: created !== null,
-          })}
+          mood={mood}
           size={56}
           label={monoAccessibleLabel(mono.name, ownerName)}
         />
@@ -254,6 +261,7 @@ export function MonoTab({
             // "thinking" for good.
             onTurnEnd={() => setBusy(false)}
             onMessagesChange={syncMessages}
+            speaker={speaker}
           />
         </div>
       )}

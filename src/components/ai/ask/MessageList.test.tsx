@@ -446,3 +446,46 @@ describe("MessageList — surface", () => {
     expect(container.querySelector("svg[data-mood]")).toBeNull();
   });
 });
+
+describe("MessageList speaker identity", () => {
+  const speaker = {
+    name: "Nova",
+    tint: "#7395ff",
+    mark: <i data-testid="speaker-mark" />,
+  };
+  const turn: UIMessage = { id: "a1", role: "assistant", content: "Hi." };
+
+  it("names the speaker with its mark on assistant turns, not Monolith", () => {
+    renderList([turn], { speaker, surface: "atmosphere" });
+    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByTestId("speaker-mark")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith")).toBeNull();
+  });
+
+  it("uses the speaker on the streaming bubble and thinking indicator", () => {
+    const { unmount } = renderList([], {
+      speaker,
+      streamingText: "Working",
+    });
+    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith")).toBeNull();
+    unmount();
+    renderList([], { speaker, streamingText: "" });
+    expect(screen.getByTestId("speaker-mark")).toBeInTheDocument();
+  });
+
+  it("dock empty state invites a chat with the speaker", () => {
+    renderList([], { speaker, surface: "atmosphere" });
+    expect(screen.getByText("Chat with Nova")).toBeInTheDocument();
+    expect(screen.getByText(/Only you can chat with Nova/)).toBeInTheDocument();
+    expect(screen.queryByText("Ask")).toBeNull();
+  });
+
+  it("without a speaker the org assistant look is unchanged", () => {
+    renderList([turn], { surface: "atmosphere" });
+    expect(screen.getByText("Monolith")).toBeInTheDocument();
+    expect(screen.queryByText("Agent")).toBeNull();
+    expect(screen.queryByTestId("speaker-mark")).toBeNull();
+  });
+});
