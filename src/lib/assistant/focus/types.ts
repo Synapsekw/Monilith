@@ -1,6 +1,3 @@
-/** What the user is looking at. Plan B adds item, folder, dashboard, my-work. */
-export type FocusRef = { kind: "none" } | { kind: "board"; id: string };
-
 /** Upper bound on a snapshot, about 1,500 tokens. */
 export const FOCUS_MAX_CHARS = 6000;
 export const FOCUS_MAX_ITEMS = 50;

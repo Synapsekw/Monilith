@@ -1329,9 +1329,10 @@ describe("AskChat — staged batches", () => {
       messageId: "m-1",
     });
     expect(applyBatch).not.toHaveBeenCalled();
+    // The outcome turn AND the resolved card's note now use the same words.
     expect(
-      await screen.findByText("Dismissed — nothing was changed."),
-    ).toBeInTheDocument();
+      await screen.findAllByText("Dismissed — nothing was changed."),
+    ).toHaveLength(2);
   });
 
   it("surfaces a failed apply and leaves the card open", async () => {

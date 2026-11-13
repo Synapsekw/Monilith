@@ -48,6 +48,10 @@ export function parseToolTrace(value: unknown): AskToolTrace | null {
   return parsed.success ? parsed.data : null;
 }
 
+const CANCELLED = "Cancelled — nothing was changed.";
+/** Matches the outcome turn `dismissBatch` stores. */
+const DISMISSED = "Dismissed — nothing was changed.";
+
 /** Subset of ActionConfirmCard's ConfirmState that a persisted proposal can be
  *  in. "running" is transient client state, so it is not derivable from rows. */
 export type ProposalState = "idle" | "done" | "error";
@@ -75,10 +79,10 @@ export function resolveProposalStates(
     const t = m.trace;
     if (!t?.resolvesProposal) continue;
     if (t.outcome === "cancelled") {
-      resolved.set(t.resolvesProposal, {
-        state: "done",
-        note: "Cancelled — nothing was changed.",
-      });
+      // The note is chosen below, by which kind of message this resolves: a
+      // legacy proposal was "Cancelled", a staged batch is "Dismissed" (the
+      // same words its outcome turn stores).
+      resolved.set(t.resolvesProposal, { state: "done", note: CANCELLED });
       continue;
     }
     const errors = [
@@ -99,7 +103,13 @@ export function resolveProposalStates(
   for (const m of messages) {
     if (!m.trace?.proposedActions?.length && !m.trace?.stagedCalls?.length)
       continue;
-    out.set(m.id, resolved.get(m.id) ?? { state: "idle" });
+    const status = resolved.get(m.id) ?? { state: "idle" };
+    out.set(
+      m.id,
+      status.note === CANCELLED && m.trace.stagedCalls?.length
+        ? { ...status, note: DISMISSED }
+        : status,
+    );
   }
   return out;
 }

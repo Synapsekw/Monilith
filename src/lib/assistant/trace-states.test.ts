@@ -40,6 +40,16 @@ describe("tool trace with staged calls", () => {
     ]);
     expect(states.get(P)).toEqual({ state: "error", note: "Item not found." });
   });
+  it("says Dismissed for a dismissed staged batch, matching the outcome turn", () => {
+    const states = resolveProposalStates([
+      { id: P, trace: { stagedCalls: [staged] } },
+      { id: "o", trace: { resolvesProposal: P, outcome: "cancelled" } },
+    ]);
+    expect(states.get(P)).toEqual({
+      state: "done",
+      note: "Dismissed — nothing was changed.",
+    });
+  });
   it("reports a fully applied batch as done", () => {
     const states = resolveProposalStates([
       { id: P, trace: { stagedCalls: [staged] } },

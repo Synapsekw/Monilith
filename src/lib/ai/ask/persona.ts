@@ -1,5 +1,6 @@
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 
+// Unused since the unified assistant runtime (2026-11); removal tracked in sub-project 4.
 /**
  * Tell the model which board the user is looking at.
  *
