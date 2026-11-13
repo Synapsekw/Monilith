@@ -76,6 +76,7 @@ export async function resolveAiAdapter(
   orgId: string,
   userId: string,
   provider?: string,
+  opts: { personal?: boolean } = {},
 ): Promise<ResolvedAi> {
   const svc = createServiceClient();
   const settings = await readOrgAiSettings(svc, orgId);
@@ -83,6 +84,27 @@ export async function resolveAiAdapter(
     settings.defaultProvider === resolvedProvider
       ? settings.defaultModelId
       : null;
+
+  // A Mono's key brain (Personal Monos spec §2): the OWNER's own credential,
+  // whatever the org's mode, because the person chose to power their Mono
+  // themselves. An org that turned AI off still gets none. TRUST: same as the
+  // per_user branch below; callers pass the session user's own id.
+  if (opts.personal) {
+    if (settings.mode === "off") throw new AiDisabledError();
+    const wanted = provider ?? "anthropic";
+    const { adapter, apiKey, baseUrl } = await resolveUserAdapterById(
+      asTrustedUserId(userId),
+      wanted,
+    );
+    return {
+      adapter,
+      apiKey,
+      baseUrl,
+      mode: "per_user",
+      provider: wanted,
+      orgDefaultModelId: defaultModelIdFor(wanted),
+    };
+  }
 
   switch (settings.mode) {
     case "off":
@@ -202,6 +224,12 @@ export async function runAi<T>(
     feature: string;
     /** Resolve THIS provider's key (an agent pin), not the mode's default. */
     provider?: string;
+    /**
+     * Whose key pays. `"org"` (default) follows the org's ai_mode. `"personal"`
+     * always spends `userId`'s own stored key for `provider` (a Mono's key
+     * brain); `userId` must be the session user's own id.
+     */
+    credential?: "org" | "personal";
     /** A pinned CATALOG key. Unavailable pins fall back and set `substituted`. */
     requestedModel?: string | null;
     /**
@@ -249,6 +277,7 @@ export async function runAi<T>(
     args.orgId,
     args.userId,
     args.provider,
+    { personal: args.credential === "personal" },
   );
   const svc = createServiceClient();
   const model = await resolveModel({

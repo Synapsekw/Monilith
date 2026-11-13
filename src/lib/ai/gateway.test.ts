@@ -423,6 +423,42 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
   });
 });
 
+describe("resolveAiAdapter — personal credential (a Mono's key brain)", () => {
+  it("uses the person's own key even when the org is managed", async () => {
+    settingsRow("managed");
+    userKeys({ anthropic: "sk-mine" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID, "anthropic", {
+      personal: true,
+    });
+    expect(r).toMatchObject({
+      mode: "per_user",
+      provider: "anthropic",
+      apiKey: "sk-mine",
+    });
+    expect(resolveUserAdapterById).toHaveBeenCalledWith(USER_ID, "anthropic");
+  });
+
+  it("still refuses when the org turned AI off", async () => {
+    settingsRow("off");
+    userKeys({ anthropic: "sk-mine" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(
+      resolveAiAdapter(ORG_ID, USER_ID, "anthropic", { personal: true }),
+    ).rejects.toMatchObject({ name: "AiDisabledError" });
+    expect(resolveUserAdapterById).not.toHaveBeenCalled();
+  });
+
+  it("reports a missing personal key as the person's own configuration gap", async () => {
+    settingsRow("org_byo", { byo_provider: "anthropic" });
+    userKeys({});
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(
+      resolveAiAdapter(ORG_ID, USER_ID, "openai", { personal: true }),
+    ).rejects.toMatchObject({ name: "PersonalAiKeyMissingError" });
+  });
+});
+
 describe("runAi", () => {
   beforeEach(() => {
     settingsRow("per_user");
