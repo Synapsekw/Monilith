@@ -237,7 +237,7 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                     src="/landing/assembly/agent-dock-blue.jpg"
                     width="1625"
                     height="912"
-                    alt="Monolith agent dock alongside the board"
+                    alt="Monolith assistant panel alongside the board"
                     loading="lazy"
                     decoding="async"
                   />

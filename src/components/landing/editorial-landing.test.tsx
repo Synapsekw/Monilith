@@ -156,7 +156,9 @@ describe("EditorialLanding", () => {
       screen.getByRole("img", { name: /interface: organize the work/i }),
     ).toBeVisible();
 
-    await user.click(within(tabs).getByRole("tab", { name: /agent dock/i }));
+    await user.click(
+      within(tabs).getByRole("tab", { name: /assistant panel/i }),
+    );
     expect(boardTab).toHaveAttribute("aria-selected", "false");
     expect(screen.getByText("Bring AI alongside")).toBeVisible();
     expect(

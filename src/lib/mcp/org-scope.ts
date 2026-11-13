@@ -61,6 +61,7 @@ export async function listOrgMemberProfiles(
     .select("user_id")
     .eq("org_id", orgId)
     .is("deactivated_at", null)
+    .neq("role", "agent")
     .limit(ORG_MEMBER_PROFILES_LIMIT);
   if (membersErr)
     throw new Error(`Failed to load org members: ${membersErr.message}`);

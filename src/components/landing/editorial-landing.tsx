@@ -401,7 +401,7 @@ function WorkFeatures() {
             <div className={`${styles.featureCapture} ${styles.dockCrop}`}>
               <Image
                 src={agentDockShot}
-                alt="Monolith agent dock beside a board, with workspace questions and a prompt field"
+                alt="Monolith assistant panel beside a board, with workspace questions and a prompt field"
                 sizes="(max-width: 580px) 228vw, 1300px"
                 quality={85}
               />
@@ -410,8 +410,8 @@ function WorkFeatures() {
               <Bot size={22} aria-hidden="true" />
               <h3>Ask from where you work.</h3>
               <p>
-                The agent dock sits beside the board. Ask what’s overdue, who’s
-                overloaded or what shipped this week.
+                The assistant panel sits beside the board. Ask what’s overdue,
+                who’s overloaded or what shipped this week.
               </p>
             </div>
           </article>

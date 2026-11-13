@@ -1,5 +1,6 @@
 "use client";
 
+import { peopleOnly } from "@/lib/monos/people";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -341,7 +342,7 @@ export function BoardHeader({
           <AutomationsDialog
             boardId={boardId}
             columns={columns}
-            members={members}
+            members={peopleOnly(members)}
             groups={groups}
             open={automationsOpen}
             onOpenChange={(next) => {
@@ -366,7 +367,7 @@ export function BoardHeader({
         {isOwner && shareMounted ? (
           <ShareBoardDialog
             boardId={boardId}
-            members={members}
+            members={peopleOnly(members)}
             grants={grants}
             open={shareOpen}
             onOpenChange={setShareOpen}

@@ -69,6 +69,7 @@ export async function listAllOrgs(
   const { data } = await createServiceClient()
     .from("organizations")
     .select("id, name, slug, created_at, org_members(count)")
+    .neq("org_members.role", "agent")
     .order("created_at", { ascending: false })
     .range(from, from + pageSize - 1);
   return (data ?? []).map((r) => shapeOrg(r as Parameters<typeof shapeOrg>[0]));
@@ -87,6 +88,7 @@ export async function listOrgsPage(
     .select("id, name, slug, created_at, org_members(count)", {
       count: "exact",
     })
+    .neq("org_members.role", "agent")
     .order("created_at", { ascending: false })
     .range(from, from + pageSize - 1);
   const trimmed = query.trim();

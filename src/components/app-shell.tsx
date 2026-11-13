@@ -69,7 +69,7 @@ export function AppShell({
           <div id="card-seam-slot" />
         </div>
       </div>
-      {/* The board page's agent dock portals its <aside> in here (BoardDock.tsx),
+      {/* The board page's dock portals its <aside> in here (BoardDock.tsx),
           so the dock sits on the wash as the sidebar's twin — rail | card | dock —
           instead of inside the content card. Static and empty on purpose: no
           props, no request-time reads, so the prerendered shell is untouched
