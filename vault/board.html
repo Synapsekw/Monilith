@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 17:05",
+  "updated": "2026-11-13 21:20",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "cb14f344",
-        "tone": "ok",
-        "note": "Healed after PR #150; same tree as main. Nothing awaits promotion."
+        "value": "b05c31fa",
+        "tone": "warn",
+        "note": "Ahead of main: edge-nub panel toggles, Leave board, personal-monos P1. Awaiting a promotion PR."
       },
       {
         "name": "main",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "11,429 passing, 1 skipped, on the signup-approval merge.",
+        "note": "Green on the Leave board merge (finish-task gates).",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "178/178",
+        "value": "180/180",
         "tone": "ok",
-        "note": "178 committed files / 178 live DEV ledger rows. Signup approval added one migration.",
+        "note": "180 committed files / 180 live DEV ledger rows, in sync. Leave board added one policy-only migration.",
         "label": "ledger"
       }
     ]
@@ -440,16 +440,32 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/monos-p2a",
+      "head": "d216431a",
+      "note": "monos"
+    },
+    {
+      "branch": "task/monos-p2a-t3",
+      "head": "6518f631",
+      "note": "monos"
+    },
+    {
+      "branch": "task/monos-p2a-t6",
+      "head": "d216431a",
+      "note": "monos"
+    }
+  ],
   "session": {
-    "id": "2026-11-13-1538-signup-approval",
-    "when": "2026-11-13 15:38",
-    "title": "Signup approval",
+    "id": "2026-11-13-2120-edge-nubs-and-leave-board",
+    "when": "2026-11-13 21:20",
+    "title": "Edge-nub panel toggles and Leave board",
     "bullets": [
-      "Every new account now waits for a platform admin; all 22 existing accounts were approved by the migration.",
-      "The database refuses a membership to an unapproved account, covering the app, the API and MCP in one rule.",
-      "Waiting screen, plus Approve and Reject on the admin users page with audit entries.",
-      "Whole-branch review found no lockout or bypass; a live run with two throwaway accounts passed."
+      "Sidebar and dock fold controls are now always-visible pills on the card edge, not hover-only chevrons.",
+      "Members of a shared board can Leave board from its sidebar menu; the owner still deletes instead.",
+      "A new policy lets a member delete only their own membership row, verified in a rolled-back transaction on DEV.",
+      "Both checked in the browser and by the owner; announced on /updates; awaiting promotion."
     ]
   }
 }
