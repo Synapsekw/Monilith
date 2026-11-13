@@ -5,6 +5,8 @@ acceptance run of `task/assistant-runtime` (2026-11-13). Nothing here blocked
 the merge into `develop`. Items marked **before promotion** should be closed or
 consciously accepted before `develop` is promoted to `main`.
 
+**Update 2026-11-13:** the assistant runtime went to production in PR #149 (merged 09:29 UTC) before the checks under "Before promotion" were run. They are now checks to run on production.
+
 ## Before promotion
 
 - Run acceptance checks 6 (a non-Anthropic model), 7 (an old thread with an

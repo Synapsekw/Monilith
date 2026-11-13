@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 15:38",
+  "updated": "2026-11-13 16:50",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "d5bd9718",
+        "value": "healed",
         "tone": "ok",
-        "note": "Performance batch 1, the unified assistant runtime and signup approval, all merged and pushed. Only the performance batch is in PR #149."
+        "note": "Healed against main after PR #149. Carries signup approval, which is PR #150. Pushed; CI green."
       },
       {
         "name": "main",
-        "value": "3e0ee963",
+        "value": "deb30166",
         "tone": "warn",
-        "note": "PR #147: functions moved to Tokyo. Batch 1 is in PR #149; owner merges manually."
+        "note": "PR #149 merged 09:29 UTC: performance batch 1 and the unified assistant runtime. PR #150 (signup approval) awaits the owner."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY in hnd1 on PR #147. Board median 2.7 s to about 0.3 s. Batch 1 not live until PR #149 is merged."
+        "note": "Performance batch 1 and the assistant runtime are live. Signup approval is not live until PR #150 is merged."
       }
     ],
     "gates": [
@@ -189,17 +189,8 @@
   },
   "next": [
     {
-      "title": "Merge PR #149 and walk performance batch 1",
-      "why": "35 commits of speed and smoothness fixes are on develop with CI green. Only the settings shell, the app-open redirect and the Share dialog were checked in a browser; Gantt and column resize, the date-picker skeleton and the darker alert-dialog scrim rest on tests. The twelve steps are in the 2026-11-13 session note.",
-      "tags": [
-        "owner",
-        "verify",
-        "critical"
-      ]
-    },
-    {
-      "title": "Promote signup approval and the assistant runtime",
-      "why": "The database already refuses a membership to an unapproved account, so a new signup on production gets the old provisioning error until the waiting screen ships. Both features are on develop behind PR #149. A live run passed for approve, reject and an existing account.",
+      "title": "Merge PR #150: signup approval",
+      "why": "The database already refuses a membership to an unapproved account, so a new signup on production gets a rough error until this ships the waiting screen and the admin approve and reject buttons. Develop CI and the PR checks are green; a live run passed.",
       "tags": [
         "owner",
         "critical",
@@ -207,8 +198,8 @@
       ]
     },
     {
-      "title": "Finish checking the assistant before promoting it",
-      "why": "The chat in the dock and on Ask now acts across the whole tool catalog behind one confirm card. A live run passed on the default model. Still unchecked: a non-Anthropic model, an old thread with an open proposal, the step limit, and a person in two organisations.",
+      "title": "Check the assistant on production",
+      "why": "The assistant runtime went live in PR #149 before four checks were run: a non-Anthropic model, an old thread with an open proposal, the step limit, and a person in two organisations. Also still owed from that PR: the performance batch walkthrough.",
       "tags": [
         "owner",
         "verify",
