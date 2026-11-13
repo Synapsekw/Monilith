@@ -72,8 +72,9 @@ export async function isOrgAdmin(
  * `next/cache`, so both transports can reach it.
  *
  * Callers: `createAutomation` (`./automation-actions.ts`, cookie client, which
- * adds the `revalidatePath` a request context allows) and the `create` branch
- * of `manageAutomationDescriptor` (`@/lib/agents/manage-automation-tool`).
+ * adds the `revalidatePath` a request context allows). The retired agent
+ * `manage_automation` tool was the second caller; the injected client and
+ * actor stay so a future non-cookie transport can reuse this unchanged.
  */
 export async function createAutomationCore(
   supabase: SupabaseClient<Database>,
@@ -130,8 +131,8 @@ export async function createAutomationCore(
  * The single implementation of "update one automation rule", beside
  * {@link createAutomationCore} for the same reason: the `updateAutomation`
  * Server Action (`./automation-actions.ts`, which adds the `revalidatePath` a
- * request context allows) and the agent-only `manage_automation` tool
- * (`@/lib/agents/manage-automation-tool`) must produce identical side effects.
+ * request context allows) and any non-cookie transport (the retired agent
+ * `manage_automation` tool was one) must produce identical side effects.
  *
  * KEEPS the `actionsContainWebhook` guard: an agent editing an existing
  * automation to ADD a webhook action is exactly the case that guard exists

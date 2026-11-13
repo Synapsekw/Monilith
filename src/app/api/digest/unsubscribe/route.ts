@@ -14,8 +14,8 @@ const page = (msg: string) => `<!doctype html>
  * required (industry norm), can only ever set an opt-out to true, idempotent,
  * reveals no data. Invalid signature → 400, no side effect.
  *
- * `kind=briefing` (set by `sendBriefingEmail` in `src/lib/agents/send.ts`)
- * flips the DAILY personal-agent preference, `email_briefing_opt_out` — every
+ * `kind=briefing` (set by the since-retired personal-agent briefing email;
+ * links already sent keep working) flips `email_briefing_opt_out` — every
  * other value, including an ABSENT `kind` (every digest email sent before
  * this parameter existed, and every digest email since — `runWeeklyDigest`
  * never sends one), keeps flipping the WEEKLY org-digest preference,

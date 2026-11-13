@@ -24,7 +24,6 @@ const FEATURE_TIERS = Object.freeze(
     ask_pulse: "standard",
     conversational_action: "standard",
     automation_ai_step: "standard",
-    autopilot_run: "standard",
     // Structured generation — moderate difficulty.
     dashboard_gen: "standard",
     board_gen: "standard",
@@ -33,7 +32,6 @@ const FEATURE_TIERS = Object.freeze(
     report_narrative: "standard",
     digest_narrative: "standard",
     thread_summary: "standard",
-    personal_agent_run: "standard",
     board_intelligence: "standard",
     // Short classification / rewrite — high volume, low difficulty.
     item_assist: "cheap",

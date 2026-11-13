@@ -773,7 +773,7 @@ describe("AskChat — a viewer of someone else's shared thread", () => {
 
 // The dock renders this component on the wash (spec §3). /ask passes no
 // surface and changes not at all.
-describe("AskChat — surface and busy signal", () => {
+describe("AskChat — surface", () => {
   it("defaults to the /ask card: composer strip, muted user bubble, bordered read-only notice", () => {
     render(
       <AskChat conversationId="c1" initialMessages={[USER_ROW]} readOnly />,
@@ -814,37 +814,6 @@ describe("AskChat — surface and busy signal", () => {
     const note = screen.getByText(/only its owner can reply/i);
     expect(note.className).toBe("text-muted-foreground px-3.5 py-3 text-sm");
   });
-
-  it("reports the turn busy from submit until it settles — including a failed send", async () => {
-    const onBusyChange = vi.fn();
-    const open = holdCreateConversation();
-    render(
-      <AskChat
-        conversationId={null}
-        initialMessages={[]}
-        onBusyChange={onBusyChange}
-      />,
-    );
-    ask();
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true));
-    expect(onBusyChange).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      open();
-    });
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
-    expect(onBusyChange).toHaveBeenCalledTimes(2);
-
-    // A refused send is still a settled turn. The thread exists now ("c1"),
-    // so the second send goes through appendUserMessage, not createConversation.
-    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: false,
-      error: "Couldn't reach the server.",
-    });
-    onBusyChange.mockClear();
-    ask("again");
-    await screen.findByRole("alert");
-    expect(onBusyChange.mock.calls.map((c) => c[0])).toEqual([true, false]);
-  });
 });
 
 describe("AskChat — staged batches", () => {
@@ -875,7 +844,6 @@ describe("AskChat — staged batches", () => {
           stagedResults: [{ id: "a", ok: true }],
         },
         touchedBoardIds: ["b-1"],
-        agentId: null,
       },
     });
     render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);
@@ -905,7 +873,6 @@ describe("AskChat — staged batches", () => {
         content: "Dismissed — nothing was changed.",
         trace: { resolvesProposal: "m-1", outcome: "cancelled" },
         touchedBoardIds: [],
-        agentId: null,
       },
     });
     render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);

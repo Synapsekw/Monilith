@@ -1,21 +1,12 @@
 /**
- * HALF ONE of the end-to-end board-build acceptance test. Its sibling is
- * `board-build-scope.test.ts`, which asserts that a board-scoped agent is
- * refused when it tries to create a board.
+ * The end-to-end board-build acceptance test. (Its former sibling, the
+ * board-scoped agent refusal test, was retired with the old agent system.)
  *
- * The pair is split ON PURPOSE, by what each half needs to run:
- *
- *   - This half is genuinely DB-backed. It needs a PROVISIONED test project
- *     (`.env.test` + `PULSE_TEST_DB=1`; DEV and PROD are both deny-listed in
- *     `integration-env.ts` so the destructive teardown can never touch real
- *     user data), so it SKIPS on a normal checkout and its `.integration`
- *     filename correctly keeps it out of `pnpm test`. Run it with
- *     `pnpm test:integration`.
- *   - The sibling needs NO database — its refusal happens in the
- *     `buildAgentTools` wrapper before any query — so it lives in a plain
- *     `.test.ts` and runs in the DEFAULT gate.
- *
- * Same acceptance test, two files, because a skipped assertion guards nothing.
+ * Genuinely DB-backed: it needs a PROVISIONED test project (`.env.test` +
+ * `PULSE_TEST_DB=1`; DEV and PROD are both deny-listed in `integration-env.ts`
+ * so the destructive teardown can never touch real user data), so it SKIPS on
+ * a normal checkout and its `.integration` filename correctly keeps it out of
+ * `pnpm test`. Run it with `pnpm test:integration`.
  */
 import { randomUUID } from "node:crypto";
 import {

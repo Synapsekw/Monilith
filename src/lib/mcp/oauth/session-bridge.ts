@@ -50,8 +50,8 @@ const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60_000;
  *
  * surfacing as a bare HTTP 500 from POST /api/oauth/token — i.e. a user who had
  * connected one MCP client could never connect a second, and a user with a
- * personal agent (src/lib/agents/owner-client.ts mints through this same
- * function) could not connect an MCP client at all.
+ * personal agent (the since-retired agent owner client minted through this
+ * same function) could not connect an MCP client at all.
  *
  * Two clients must NOT share one bridge anyway: each holds its own GoTrue
  * session, and collapsing them onto one Vault row would make each client's

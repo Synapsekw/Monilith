@@ -153,9 +153,9 @@ function resolvedFrom(row: ModelRow, substituted: boolean) {
  *     flagging a stale org default would banner every agent in the org at once.
  *   - This function is capability-BLIND. It never consults `supportsTools` or
  *     `contextLength`, so an org default that cannot call tools is honoured here
- *     and refused LOUDLY downstream — `ModelNotToolCapableError` in
- *     `app/api/ai/personal-agent/route.ts`, with `AgentEditor` warning at pick
- *     time. Loud beats silently substituting a model the admin did not choose.
+ *     and must be refused LOUDLY downstream by whichever tool-calling feature
+ *     uses it. Loud beats silently substituting a model the admin did not
+ *     choose.
  *     Turning rung 3 into a real capability constraint — a feature declares what
  *     it needs, the resolver takes the cheapest satisfying model and prefers the
  *     org default AMONG the satisfiers — is the open redesign. `ai_models` today

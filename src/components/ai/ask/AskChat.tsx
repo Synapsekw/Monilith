@@ -75,7 +75,6 @@ export function AskChat({
   onStarted,
   onTurnComplete,
   surface = "card",
-  onBusyChange,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
@@ -107,10 +106,6 @@ export function AskChat({
   /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
    *  Threaded to `MessageList` and `Composer`; see `surface.ts`. */
   surface?: ChatSurface;
-  /** `true` the moment a turn is accepted (before the first Server Action),
-   *  `false` when it settles on ANY path — done, error, refused send, drop
-   *  recovery. The dock reads it for the assistant's presence dot. */
-  onBusyChange?: (busy: boolean) => void;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -188,7 +183,6 @@ export function AskChat({
     if (turnInFlight.current) return;
     turnInFlight.current = true;
     setTurnBusy(true);
-    onBusyChange?.(true);
     try {
       let convId = activeId;
       setDropState("none");
@@ -286,11 +280,9 @@ export function AskChat({
       if (outcome === "dropped") await recoverAfterDrop(convId);
     } finally {
       // Released on every path — a stuck flag would strand the composer, which
-      // is the failure mode this guard exists to avoid, not to create. The
-      // surface hears the same release, so a presence dot can never stick.
+      // is the failure mode this guard exists to avoid, not to create.
       turnInFlight.current = false;
       setTurnBusy(false);
-      onBusyChange?.(false);
     }
   }
 

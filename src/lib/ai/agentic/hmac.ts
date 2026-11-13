@@ -115,13 +115,12 @@ export type VerifyFreshOptions = {
  *
  * ## Who uses this
  *
- * Callers today: `/api/ai/models/refresh` only. The other four endpoints that
+ * Callers today: `/api/ai/models/refresh` only. The other endpoints that
  * share this secret and `verifyBody` — `/api/ai/embed`,
- * `/api/ai/automation-step`, `/api/ai/autopilot`, `/api/ai/personal-agent` —
- * do NOT use it yet, because each signs a body carrying a job id or a batch
- * payload and each has its own idempotency downstream (e.g. the personal-agent
- * sweep's `(user_agent_id, fire_date, fire_hour)` key plus `claimRun`), which
- * already bounds a replay to re-triggering one already-claimed job. They can
+ * `/api/ai/automation-step` — do NOT use it yet, because each signs a body
+ * carrying a job id or a batch payload and each has its own idempotency
+ * downstream, which already bounds a replay to re-triggering one
+ * already-claimed job. They can
  * adopt this helper unchanged once their signers also emit `ts` + `nonce`;
  * see the deployment ordering note below before doing so.
  *

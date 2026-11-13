@@ -70,7 +70,7 @@ const supabase = {
           : q((eqs) =>
               eqs.id === MSG && eqs.conversation_id === state.msgConv
                 ? {
-                    data: { tool_trace: state.trace, agent_id: null },
+                    data: { tool_trace: state.trace },
                     error: null,
                   }
                 : { data: null, error: null },

@@ -133,7 +133,7 @@ export async function resolveAiAdapter(
 
     // per_user resolves the SUPPLIED userId's key (session-less, service-role
     // read) — not a cookie-bound session. This is what makes the gateway
-    // usable from cron/service-role callers (e.g. the personal-agent sweep)
+    // usable from cron/service-role callers (e.g. a scheduled sweep)
     // that have no session at all: they already know, from their own scoped
     // data, which user's spend this is, and pass that same id to runAi for
     // the ledger. Credential resolution and ledger attribution therefore
@@ -143,9 +143,9 @@ export async function resolveAiAdapter(
     // TRUST: `asTrustedUserId(userId)` is safe HERE because every caller of
     // this function is itself either (a) a Server Action/route that derived
     // `userId` from its own `requireUser()` session before ever calling
-    // runAi/resolveAiAdapter, or (b) a service-role cron handler (e.g.
-    // personal-agent's route.ts) that derived it from an HMAC-verified
-    // request's own DB row (`agent.owner_id`), never from a request
+    // runAi/resolveAiAdapter, or (b) a service-role cron handler that
+    // derived it from an HMAC-verified request's own DB row (e.g. an
+    // owner id column), never from a request
     // parameter passed straight through. This is the ONE call site allowed
     // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
