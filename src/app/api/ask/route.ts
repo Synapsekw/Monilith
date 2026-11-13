@@ -18,6 +18,8 @@ import { languageModelFor } from "@/lib/ai/providers/language-model";
 import { anthropicReasoningOptions } from "@/lib/ai/providers/anthropic-options";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import type { Member } from "@/lib/collaboration/activity";
+import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import {
   ASSISTANT_PREAMBLE,
   addUsage,
@@ -57,22 +59,35 @@ function todayIn(timezone: string): string {
   }
 }
 
-/** The stable preamble plus the per-turn lines (the date and the active org).
- *  The focus block is appended by the caller, after this, so the preamble
- *  stays cacheable. The org name is JSON-quoted: it is user-written text. */
+/** The signed-in user's display name for the prompt, or null. Sanitised to
+ *  one line; anything that looks like an email address is dropped, because an
+ *  email never goes into a prompt. */
+function promptSafeName(fullName: string | null | undefined): string | null {
+  const name = sanitizeInline(fullName ?? "").trim();
+  return name.length > 0 && !name.includes("@") ? name : null;
+}
+
+/** The stable preamble plus the per-turn lines (the date, the active org and
+ *  the signed-in user). The focus block is appended by the caller, after this,
+ *  so the preamble stays cacheable. User-written names are JSON-quoted. */
 function buildSystem(
   today: string,
   timezone: string,
   org: { id: string; name?: string | null },
+  me: { id: string; name: string | null },
 ): string {
   const orgLabel = org.name
     ? `organization ${JSON.stringify(org.name)} (id ${org.id})`
     : `organization ${org.id}`;
+  const meLabel = me.name
+    ? `${JSON.stringify(me.name)} (user id ${me.id})`
+    : `the person with user id ${me.id}`;
   return [
     ASSISTANT_PREAMBLE,
     "",
     `Today is ${today} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
     `You are working in the ${orgLabel}. Work only inside that organization; never read or change another one.`,
+    `The signed-in user is ${meLabel}. "me", "my" and "I" in the user's messages refer to that person.`,
   ].join("\n");
 }
 
@@ -133,7 +148,9 @@ export async function POST(req: Request) {
   // goes through the USER client, so RLS decides what is visible; a row that
   // reads back null degrades to plain Ask rather than failing a turn whose
   // history is still worth continuing.
-  let system = buildSystem(todayIn(timezone), timezone, org);
+  // The system text itself is composed inside the turn, after the opening
+  // status, because it names the signed-in user (a members read).
+  let folderScope: Parameters<typeof composeFolderScope>[1] = null;
 
   // Folder scope, mutually exclusive with board focus (a thread is scoped to
   // one or the other; `createConversation` never stamps both; the board's
@@ -151,16 +168,13 @@ export async function POST(req: Request) {
     } catch {
       head = null;
     }
-    system = composeFolderScope(
-      system,
-      head
-        ? {
-            id: head.folder.id,
-            name: head.folder.name,
-            boards: head.boards.map((b) => ({ id: b.id, name: b.name })),
-          }
-        : null,
-    );
+    folderScope = head
+      ? {
+          id: head.folder.id,
+          name: head.folder.name,
+          boards: head.boards.map((b) => ({ id: b.id, name: b.name })),
+        }
+      : null;
   }
 
   // A folder thread is scoped by its folder block above; every other thread
@@ -212,6 +226,29 @@ export async function POST(req: Request) {
     // engine's statuses cannot fire until a round has finished (gotcha-62).
     emit({ type: "status", text: OPENING_STATUS });
     try {
+      // MEMBERS. The org's members, from the existing cached helper (the same
+      // read the board focus below always used). Read after the opening status
+      // so it never delays the first byte. Email is dropped here: it never
+      // reaches a prompt. A failed read only costs the name in the prompt.
+      let members: Member[] = [];
+      try {
+        members = (await listOrgMembersCached(org.id)).map((m) => ({
+          userId: m.userId,
+          fullName: m.fullName,
+        }));
+      } catch (e) {
+        console.error("[ask] members read failed:", e);
+        members = [];
+      }
+      const me = members.find((m) => m.userId === user.id);
+      let system = composeFolderScope(
+        buildSystem(todayIn(timezone), timezone, org, {
+          id: user.id,
+          name: promptSafeName(me?.fullName),
+        }),
+        folderScope,
+      );
+
       // FOCUS. Read HERE, after the opening status, so a full board payload
       // never delays the turn's first byte (gotcha-62). A board thread's board
       // is what the user is looking at. The read is RLS-scoped; a board that
@@ -223,10 +260,6 @@ export async function POST(req: Request) {
           try {
             const payload = await getBoardPayload(focusBoardId);
             if (payload && payload.board.org_id === org.id) {
-              const members = (await listOrgMembersCached(org.id)).map((m) => ({
-                userId: m.userId,
-                fullName: m.fullName,
-              })); // email never reaches a prompt
               focusText = buildBoardFocus({ payload, members });
             }
           } catch (e) {

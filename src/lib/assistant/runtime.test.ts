@@ -195,6 +195,12 @@ describe("runAssistantLoop", () => {
     });
   });
 
+  it("tells the model to trust the recorded outcome of a confirmation", () => {
+    expect(ASSISTANT_PREAMBLE).toContain('"You confirmed these changes."');
+    expect(ASSISTANT_PREAMBLE).toContain('"You dismissed these changes."');
+    expect(ASSISTANT_PREAMBLE).toMatch(/trust it over your own earlier/);
+  });
+
   it("tells the model that staged does not mean done", () => {
     expect(ASSISTANT_PREAMBLE).toContain('{"staged": true}');
     expect(ASSISTANT_PREAMBLE).toMatch(/NOT happened/);

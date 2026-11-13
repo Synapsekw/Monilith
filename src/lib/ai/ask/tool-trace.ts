@@ -49,7 +49,8 @@ export function parseToolTrace(value: unknown): AskToolTrace | null {
 }
 
 const CANCELLED = "Cancelled — nothing was changed.";
-/** Matches the outcome turn `dismissBatch` stores. */
+/** The card note for a dismissed staged batch. Derived from the trace, not
+ *  from the outcome turn's content (which `dismissBatch` words for the model). */
 const DISMISSED = "Dismissed — nothing was changed.";
 
 /** Subset of ActionConfirmCard's ConfirmState that a persisted proposal can be
@@ -80,8 +81,7 @@ export function resolveProposalStates(
     if (!t?.resolvesProposal) continue;
     if (t.outcome === "cancelled") {
       // The note is chosen below, by which kind of message this resolves: a
-      // legacy proposal was "Cancelled", a staged batch is "Dismissed" (the
-      // same words its outcome turn stores).
+      // legacy proposal was "Cancelled", a staged batch is "Dismissed".
       resolved.set(t.resolvesProposal, { state: "done", note: CANCELLED });
       continue;
     }

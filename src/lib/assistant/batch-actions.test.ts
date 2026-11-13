@@ -189,10 +189,31 @@ describe("applyBatch", () => {
       { id: "a", ok: false, error: "Item not found." },
       { id: "b", ok: true },
     ]);
-    expect(state.inserted[0]!.content).toContain(
-      "Failed — Change a: Item not found.",
+    // Was `toContain("Failed — Change a: Item not found.")`: the outcome turn
+    // now opens with the record line the model is told to trust (A2).
+    expect(state.inserted[0]!.content).toBe(
+      [
+        "You confirmed these changes.",
+        "Failed: Change a (Item not found.)",
+        "Applied: Change b",
+      ].join("\n"),
     );
     expect(res.ok).toBe(true);
+  });
+
+  it("records applied and unticked rows in words the model reads as final", async () => {
+    await applyBatch({
+      conversationId: CONV,
+      messageId: MSG,
+      selectedIds: ["a"],
+    });
+    expect(state.inserted[0]!.content).toBe(
+      [
+        "You confirmed these changes.",
+        "Applied: Change a",
+        "Not applied (you left it unticked): Change b",
+      ].join("\n"),
+    );
   });
 
   it("fails a row whose stored input no longer validates, without invoking", async () => {
@@ -388,7 +409,8 @@ describe("applyBatch hardening", () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data.messageId).toMatch(/^local-/);
-      expect(res.data.content).toContain("Done — Change a");
+      // Was `toContain("Done — Change a")` (A2 outcome wording).
+      expect(res.data.content).toContain("Applied: Change a");
       expect(res.data.trace).toMatchObject({
         resolvesProposal: MSG,
         outcome: "applied",
@@ -520,5 +542,8 @@ describe("dismissBatch", () => {
       resolvesProposal: MSG,
       outcome: "cancelled",
     });
+    expect(state.inserted[0]!.content).toBe(
+      "You dismissed these changes. Nothing was changed.",
+    );
   });
 });

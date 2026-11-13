@@ -229,11 +229,20 @@ async function runCall(
   }
 }
 
+/**
+ * The outcome turn's content is what the user sees AND what the model reads on
+ * every later turn, so it says plainly what the user decided and what ran.
+ * `ASSISTANT_PREAMBLE` names these opening lines as the system's record.
+ */
+const APPLIED_OUTCOME_HEAD = "You confirmed these changes.";
+const DISMISSED_OUTCOME = "You dismissed these changes. Nothing was changed.";
+
 function outcomeLine(call: StagedCall, result: StagedResult): string {
-  if (result.skipped) return `Skipped — ${call.summary}`;
+  if (result.skipped)
+    return `Not applied (you left it unticked): ${call.summary}`;
   return result.ok
-    ? `Done — ${call.summary}`
-    : `Failed — ${call.summary}: ${result.error ?? "Failed."}`;
+    ? `Applied: ${call.summary}`
+    : `Failed: ${call.summary} (${result.error ?? "Failed."})`;
 }
 
 /**
@@ -288,7 +297,10 @@ export async function applyBatch(input: {
     return await insertAppliedOutcome(
       supabase,
       conversationId,
-      loaded.calls.map((c, i) => outcomeLine(c, results[i]!)).join("\n"),
+      [
+        APPLIED_OUTCOME_HEAD,
+        ...loaded.calls.map((c, i) => outcomeLine(c, results[i]!)),
+      ].join("\n"),
       {
         resolvesProposal: messageId,
         outcome: "applied",
@@ -328,7 +340,7 @@ export async function dismissBatch(input: {
     return await insertOutcome(
       supabase,
       conversationId,
-      "Dismissed — nothing was changed.",
+      DISMISSED_OUTCOME,
       { resolvesProposal: messageId, outcome: "cancelled" },
       [],
       loaded.agentId,

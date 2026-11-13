@@ -1321,6 +1321,30 @@ describe("POST /api/ask · pinned to the active org", () => {
     expect(system).toMatch(/only inside that organization/);
   });
 
+  it("names the signed-in user so 'me' resolves to them, without an email", async () => {
+    listOrgMembersCached.mockResolvedValue([
+      { userId: "u-other", fullName: "Ana", email: "ana@example.com" },
+      { userId: USER_ID, fullName: "Dana\nJones", email: "dana@example.com" },
+    ]);
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain(USER_ID);
+    expect(system).toContain('"Dana Jones"');
+    expect(system).toMatch(/"me", "my" and "I"/);
+    expect(system).not.toContain("@");
+  });
+
+  it("names the signed-in user by id alone when no name is available", async () => {
+    listOrgMembersCached.mockResolvedValue([
+      { userId: USER_ID, fullName: null, email: "dana@example.com" },
+    ]);
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain(`user id ${USER_ID}`);
+    expect(system).toMatch(/"me", "my" and "I"/);
+    expect(system).not.toContain("@");
+  });
+
   it("follows the org switcher, not a fixed org", async () => {
     activeOrg.current = { id: "org2", name: "Beta", timezone: null };
     await readEvents();
