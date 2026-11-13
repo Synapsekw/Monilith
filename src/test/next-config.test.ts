@@ -11,11 +11,28 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
 
 describe("next.config.ts (Task D)", () => {
-  it("barrel-optimizes radix-ui + framer-motion via experimental.optimizePackageImports", () => {
+  it("barrel-optimizes radix-ui via experimental.optimizePackageImports", () => {
     expect(source).toContain("optimizePackageImports");
-    expect(source).toMatch(
-      /optimizePackageImports:\s*\[\s*"radix-ui"\s*,\s*"framer-motion"\s*\]/,
-    );
+    expect(source).toMatch(/optimizePackageImports:\s*\[\s*"radix-ui"\s*\]/);
+  });
+
+  it("does not list packages that are no longer dependencies", () => {
+    // framer-motion (and ogl) were removed once nothing imported them; an
+    // optimizePackageImports entry for an uninstalled package is dead config.
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as {
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const installed = { ...pkg.dependencies, ...pkg.devDependencies };
+    expect(installed).not.toHaveProperty("framer-motion");
+    expect(installed).not.toHaveProperty("ogl");
+    const inside =
+      source.match(/optimizePackageImports:\s*\[([^\]]*)\]/)?.[1] ?? "";
+    for (const name of inside.matchAll(/"([^"]+)"/g)) {
+      expect(installed).toHaveProperty([name[1] as string]);
+    }
   });
 
   it("does NOT list packages that Next already optimizes by default", () => {

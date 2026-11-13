@@ -66,8 +66,9 @@ function RailRow({
         conversationId: conversation.id,
         title: next,
       });
+      // Success: renameConversation's revalidatePath re-renders the rail in
+      // the action response — no client refresh.
       if (!res.ok) setTitle(conversation.title);
-      else router.refresh();
     });
   }
 
@@ -75,10 +76,9 @@ function RailRow({
     setConfirmOpen(false);
     startTransition(async () => {
       const res = await deleteConversation({ conversationId: conversation.id });
-      if (res.ok) {
-        if (active) router.push("/ask");
-        router.refresh();
-      }
+      // deleteConversation revalidates, so the rail without this row is in the
+      // action response; only leaving a now-deleted active thread remains.
+      if (res.ok && active) router.push("/ask");
     });
   }
 

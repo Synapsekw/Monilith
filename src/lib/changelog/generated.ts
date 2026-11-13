@@ -4,6 +4,20 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "The assistant can now act on your boards",
+    description:
+      "Ask it to assign, update or add items and it lines the changes up on one card. Tick what you want, press Apply, and the board updates in place. It knows which board you are looking at and works with any connected AI provider.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Monolith is faster",
+    description:
+      "Pages load several times faster, settings open instantly, and dragging timeline bars or resizing columns is smoother.",
+  },
+  {
     date: "2026-11-12",
     kind: "new",
     title: "Themes that colour the whole app",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 
@@ -127,9 +127,29 @@ export function GanttRowItem({
   const depth = row.depth ?? 0;
 
   const barLeft = (row.startCol ?? 0) * dayW;
+  // Live resize preview: while the right edge is dragged the bar grows/shrinks
+  // from LOCAL state only (no cache patch, no server write); the single commit
+  // happens on pointerup. `baseEnd` is the end date the preview was measured
+  // against — once the row's end moves away from it (the optimistic patch
+  // landed, or a realtime edit arrived) the preview is stale and is dropped
+  // during render, so the bar never flashes back to its old width between
+  // pointerup and the cache update.
+  const [resizePreview, setResizePreview] = useState<{
+    baseEnd: string;
+    deltaDays: number;
+  } | null>(null);
+  const currentEndISO = row.endISO ?? row.startISO ?? null;
+  if (resizePreview && resizePreview.baseEnd !== currentEndISO) {
+    setResizePreview(null);
+  }
+  const previewDays =
+    resizePreview && resizePreview.baseEnd === currentEndISO
+      ? resizePreview.deltaDays
+      : 0;
+
   const barWidth = row.isMilestone
     ? BAR_H // diamond
-    : Math.max(MIN_BAR_W, (row.spanCols ?? 1) * dayW);
+    : Math.max(MIN_BAR_W, ((row.spanCols ?? 1) + previewDays) * dayW);
 
   // Keystone soft-pill treatment for an arbitrary option color: a 15% tint of
   // the hue over the surface with per-theme AA-clamped text (mirrors ColorChip /
@@ -148,33 +168,68 @@ export function GanttRowItem({
     [allRows, row.itemId],
   );
 
-  // Resize state
+  // Resize state. The refs hold the gesture origin; `resizeDeltaRef` mirrors
+  // the previewed day delta so pointerup can commit without reading state.
   const resizeStartXRef = useRef<number | null>(null);
   const resizeStartEndRef = useRef<string | null>(null);
+  const resizeDeltaRef = useRef(0);
+
+  function resetResizeGesture() {
+    resizeStartXRef.current = null;
+    resizeStartEndRef.current = null;
+    resizeDeltaRef.current = 0;
+  }
 
   function handleResizeStart(e: React.PointerEvent) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     resizeStartXRef.current = e.clientX;
-    resizeStartEndRef.current = row.endISO ?? row.startISO ?? null;
+    resizeStartEndRef.current = currentEndISO;
+    resizeDeltaRef.current = 0;
   }
 
+  /** Preview only — never writes. State changes at most once per day crossed
+   * (React bails out when the rounded delta is unchanged). */
   function handleResizeMove(e: React.PointerEvent) {
-    if (resizeStartXRef.current === null || !resizeStartEndRef.current) return;
-    const deltaDays = Math.round((e.clientX - resizeStartXRef.current) / dayW);
-    if (deltaDays === 0) return;
-    // Compute new end from original end + delta
-    const origEndMs = parseISO(resizeStartEndRef.current);
-    const newEndISO = formatISO(origEndMs + deltaDays * 86_400_000);
-    const range = { start: row.startISO ?? "", end: row.endISO ?? "" };
-    if (newEndISO >= range.start) {
-      handleBarResized(row.itemId, newEndISO, range);
+    const origEnd = resizeStartEndRef.current;
+    if (resizeStartXRef.current === null || !origEnd) return;
+    // The end moved under the gesture (realtime edit): the origin is stale.
+    if (origEnd !== currentEndISO) {
+      resetResizeGesture();
+      return;
     }
+    const rawDays = Math.round((e.clientX - resizeStartXRef.current) / dayW);
+    // The end can't cross before the start.
+    const minDays = row.startISO
+      ? Math.round((parseISO(row.startISO) - parseISO(origEnd)) / 86_400_000)
+      : 0;
+    const deltaDays = Math.max(rawDays, minDays);
+    if (deltaDays === resizeDeltaRef.current) return;
+    resizeDeltaRef.current = deltaDays;
+    setResizePreview({ baseEnd: origEnd, deltaDays });
   }
 
+  /** Commit exactly once on release; nothing when the date didn't change. The
+   * preview is left in place and retires itself when the row's end updates. */
   function handleResizeEnd() {
-    resizeStartXRef.current = null;
-    resizeStartEndRef.current = null;
+    const origEnd = resizeStartEndRef.current;
+    const deltaDays = resizeDeltaRef.current;
+    const active = resizeStartXRef.current !== null && origEnd !== null;
+    resetResizeGesture();
+    if (!active || !origEnd) return;
+    if (deltaDays === 0 || origEnd !== currentEndISO) {
+      setResizePreview(null);
+      return;
+    }
+    const newEndISO = formatISO(parseISO(origEnd) + deltaDays * 86_400_000);
+    const range = { start: row.startISO ?? "", end: row.endISO ?? "" };
+    handleBarResized(row.itemId, newEndISO, range);
+  }
+
+  /** Interrupted gesture (pointercancel) — drop the preview, write nothing. */
+  function handleResizeCancel() {
+    resetResizeGesture();
+    setResizePreview(null);
   }
 
   /** Tap/Enter/Space on the bar body or milestone → quick-edit peek. dnd-kit
@@ -412,6 +467,7 @@ export function GanttRowItem({
                 onPointerMove={handleResizeMove}
                 onPointerUp={handleResizeEnd}
                 onPointerLeave={handleResizeEnd}
+                onPointerCancel={handleResizeCancel}
                 className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-sm pointer-coarse:w-11"
                 aria-label={`Resize ${row.name}`}
               />

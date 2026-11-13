@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ArrowDownUp,
   ArrowDown,
@@ -25,12 +26,32 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { FilterBuilder } from "@/components/dashboards/FilterBuilder";
 import type { HeaderMember } from "@/components/boards/BoardHeader";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { ColumnOption } from "@/lib/validations/boards";
 import type { SortField } from "@/lib/boards/board-filter";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+
+// The condition builder only ever renders inside the (closed-by-default) Filter
+// popover, so it is code-split: its chunk — FilterBuilder + the operator
+// metadata — is fetched when the popover first opens instead of riding in the
+// board route's first-load JS. The fallback reserves the builder's empty-state
+// row so the popover does not jump when the chunk lands.
+const FilterBuilder = dynamic(
+  () =>
+    import("@/components/dashboards/FilterBuilder").then(
+      (m) => m.FilterBuilder,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        data-testid="filter-builder-skeleton"
+        className="bg-muted/40 h-9 animate-pulse rounded-md"
+      />
+    ),
+  },
+);
 
 // The generic condition builder only offers real operators for these kinds
 // (people + status are handled by the dedicated quick-filters above it).

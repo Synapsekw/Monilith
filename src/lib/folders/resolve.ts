@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import type { Database } from "@/types/database.types";

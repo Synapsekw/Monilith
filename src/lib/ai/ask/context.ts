@@ -4,6 +4,7 @@ import type { MessageRow } from "./conversations";
 
 export const KEEP_RECENT = 10; // verbatim turns; older fold into the rolling summary
 
+// Unused since the unified assistant runtime (2026-11); removal tracked in sub-project 4.
 /** Map DB message rows to Anthropic message params in order. */
 export function buildAskMessages(rows: MessageRow[]): Anthropic.MessageParam[] {
   return rows.map((r) => ({
@@ -44,6 +45,7 @@ function textOf(content: Anthropic.ContentBlock[]): string {
     .join("\n");
 }
 
+// Unused since the unified assistant runtime (2026-11); removal tracked in sub-project 4.
 // Impure — summarize folded turns into an updated rolling summary. Model call injected for tests.
 export async function summarize(
   client: Pick<Anthropic["messages"], "create">,
@@ -83,6 +85,7 @@ export async function summarize(
   };
 }
 
+// Unused since the unified assistant runtime (2026-11); removal tracked in sub-project 4.
 // Impure — a 3–6 word title for a fresh conversation from its first question.
 export async function generateTitle(
   client: Pick<Anthropic["messages"], "create">,

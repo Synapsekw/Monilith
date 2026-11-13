@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AiDashboardWizard } from "./AiDashboardWizard";
 import {
@@ -114,8 +114,12 @@ describe("AiDashboardWizard", () => {
     await user.click(screen.getByRole("button", { name: /next/i }));
     await user.click(await screen.findByRole("button", { name: /generate/i }));
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ folderId: "folder-1" }),
+    // Generate awaits the draft before it creates the dashboard, so the create
+    // call lands after the click resolves — wait for it instead of racing it.
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ folderId: "folder-1" }),
+      ),
     );
   });
 

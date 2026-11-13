@@ -32,8 +32,12 @@ const WIDGET_DIALOG_COLUMNS_LIMIT = 2000;
  * The board/column options exist only to feed the Add-widget dialog inside a
  * `DashboardCanvasLazy`, and the attach picker's dropdown. With no dashboard
  * on the folder and nothing unfiled to attach there is no canvas and no
- * picker, so the two workspace-wide reads are skipped entirely; attaching or
- * creating one re-renders this page (`router.refresh()`), which runs them.
+ * picker, so the two workspace-wide reads are skipped entirely. Attaching one
+ * re-renders this page inside the Server Action's own response
+ * (`attachDashboardToFolder` → `updateTag`; the folder components no longer
+ * call `router.refresh()`), which runs them. Creating one navigates away to
+ * the new dashboard, and `createDashboard`'s `updateTag` has expired the
+ * dashboards cache by the time this page is rendered again.
  */
 async function WidgetsStrip({
   folderId,

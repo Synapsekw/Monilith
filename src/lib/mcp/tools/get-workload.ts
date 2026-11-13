@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { getWorkloadSummaryCore } from "@/lib/workload/queries";
 import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import { validateRange } from "./range";

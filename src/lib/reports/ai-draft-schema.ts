@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 export const REPORT_NARRATIVE_JSON_SCHEMA = {
   type: "object",

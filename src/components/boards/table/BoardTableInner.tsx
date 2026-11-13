@@ -52,6 +52,7 @@ import {
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { type EditorMember } from "@/components/boards/cells/editors";
+import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
@@ -91,11 +92,6 @@ import {
 /** Shared empty lists, so a group with no visible rows keeps stable props. */
 const NO_ITEMS: Item[] = [];
 const NO_IDS: string[] = [];
-// Default-parameter empty arrays MUST be module constants: `members = []` in
-// the signature allocates a fresh array on every render, which changes the
-// memoized `controls` bundle's identity and re-renders every visible cell.
-const NO_MEMBERS: EditorMember[] = [];
-const NO_GRANTS: HeaderGrant[] = [];
 
 // Lazy-load the Smart Fill dialog (and its AI action imports) only when a
 // text column's header menu opens it — matches the AskPulseHost pattern.
@@ -497,6 +493,17 @@ export function BoardTableInner({
     [columns, liveWidths, nameWidth],
   );
 
+  // Board Total scope — stable so SummaryRow's `perColumn` memo survives
+  // renders that don't change the item tree (resize, scroll, dialogs).
+  const boardSummaryItemIds = useMemo(
+    () =>
+      withSubitems(
+        topLevel.map((it) => it.id),
+        childrenByParent,
+      ),
+    [topLevel, childrenByParent],
+  );
+
   // Viewers see footer values read-only; editors can pick the aggregation.
   const canEdit = access !== "viewer";
   // Snapshot now once at mount for time-tracking footer totals — a bare Date.now()
@@ -890,10 +897,7 @@ export function BoardTableInner({
               testId="board-summary-footer"
               label="Board Total"
               columns={columns}
-              itemIds={withSubitems(
-                topLevel.map((it) => it.id),
-                childrenByParent,
-              )}
+              itemIds={boardSummaryItemIds}
               cellMap={cellMap}
               cache={cache}
               template={template}

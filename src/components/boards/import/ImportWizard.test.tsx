@@ -128,6 +128,10 @@ describe("ImportWizard", () => {
     );
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/boards/b1"));
+    // push only: commitImport expired the importer's boards tag, so the action
+    // response re-rendered the sidebar; a refresh after the push rendered the
+    // destination board a second time.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("shows a preview error on step 1", async () => {

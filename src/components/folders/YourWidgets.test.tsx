@@ -1,10 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useEffect, useState, type ComponentType } from "react";
 
+// Shared spy (read lazily by the mock) so a stray router.refresh() is observable.
+const routerRefresh = vi.fn();
 let searchParamsValue = new URLSearchParams();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ refresh: routerRefresh, push: vi.fn() }),
   useSearchParams: () => searchParamsValue,
 }));
 vi.mock("@/components/dashboards/DashboardCanvasLazy", () => ({
@@ -110,6 +112,12 @@ describe("YourWidgets", () => {
       dashboardId: "d9",
       folderId: "f1",
     });
+    // attachDashboardToFolder's updateTag re-renders the route in the action
+    // response; the component must not stack a client refresh on it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
   it("opens the AI wizard on mount when the URL carries ?ai=1", async () => {
     searchParamsValue = new URLSearchParams("ai=1");

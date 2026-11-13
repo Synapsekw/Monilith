@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
 import { deleteReport } from "@/lib/reports/actions";
@@ -27,7 +26,8 @@ import {
 /**
  * Overflow menu for a single report row: a ghost icon trigger that reveals on
  * row hover, with a destructive Delete item guarded by an AlertDialog. On a
- * successful `deleteReport`, `router.refresh()` re-runs the RSC list so the row
+ * successful `deleteReport` the action's own revalidation re-renders the RSC
+ * list (in the action response — no client `router.refresh()`) so the row
  * disappears; failures surface inline in the dialog (which stays open).
  *
  * A report is identified by its id alone — it may be bound to several boards
@@ -41,7 +41,6 @@ export function ReportRowActions({
   reportId: string;
   reportName: string;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +54,6 @@ export function ReportRowActions({
         return;
       }
       setDeleteOpen(false);
-      router.refresh();
     });
   }
 

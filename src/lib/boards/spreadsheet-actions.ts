@@ -40,6 +40,7 @@ import {
   commitImportSchema,
 } from "@/lib/validations/board-spreadsheet";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { invalidateMyBoards } from "@/lib/boards/actions/internal";
 
 /** Characters forbidden in file names across Windows/Linux/macOS. */
 const FORBIDDEN_FILENAME_RE = /[<>:"/\\|?*\x00-\x1f]/g;
@@ -515,6 +516,15 @@ export async function commitImport(input: {
   );
   if (!result.ok) return fail(result.error);
 
-  revalidatePath("/", "layout");
+  // A new board changes exactly one cached read: the importer's own board list
+  // (`boards:user:<me>` — the sidebar, the command palette and the readable-
+  // boards picker are all tagged with it). Same invalidation as createBoard.
+  //
+  // This used to be `revalidatePath("/", "layout")`, which expires the ROOT
+  // layout's implicit tag — and every `use cache` entry in the app is read
+  // under that tag, so one import made every cached read miss for every user
+  // on their next request. The new board has no members, no folder placement
+  // and no dashboards yet, so no other tag in `src/lib/cache/tags.ts` moves.
+  await invalidateMyBoards();
   return { ok: true, data: { boardId: result.boardId } };
 }

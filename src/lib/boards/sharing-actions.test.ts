@@ -6,14 +6,22 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc }),
 }));
 const updateTag = vi.fn();
+const revalidatePath = vi.fn();
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: (...a: unknown[]) => revalidatePath(...a),
   updateTag: (tag: string) => updateTag(tag),
+}));
+// The owner's own `boards:user:<me>` list (it carries the `shared_out` marker).
+const invalidateMyBoards = vi.fn();
+vi.mock("@/lib/boards/actions/internal", () => ({
+  invalidateMyBoards: () => invalidateMyBoards(),
 }));
 
 beforeEach(() => {
   rpc.mockReset();
   updateTag.mockReset();
+  revalidatePath.mockReset();
+  invalidateMyBoards.mockReset();
 });
 
 describe("shareBoard", () => {
@@ -50,10 +58,26 @@ describe("shareBoard", () => {
       p_user_id: input.userId,
       p_access: "editor",
     });
-    // The grantee's shared-boards list is what changed.
+    // The grantee's shared-boards list is what changed…
     expect(updateTag).toHaveBeenCalledWith(
       `shared-boards:user:${input.userId}`,
     );
+    // …plus the owner's own list (its `shared_out` marker).
+    expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
+    // Tags only: a `/boards` layout revalidation expires every cached read on
+    // every board route, for every user.
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("invalidates nothing when the RPC refuses", async () => {
+    rpc.mockResolvedValue({ error: { message: "not the board owner" } });
+    await shareBoard({
+      boardId: crypto.randomUUID(),
+      userId: crypto.randomUUID(),
+      access: "viewer",
+    });
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(invalidateMyBoards).not.toHaveBeenCalled();
   });
 
   it("maps a permission error to friendly copy", async () => {
@@ -83,5 +107,7 @@ describe("unshareBoard", () => {
     expect(updateTag).toHaveBeenCalledWith(
       `shared-boards:user:${input.userId}`,
     );
+    expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

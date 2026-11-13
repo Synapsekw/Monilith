@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import {
@@ -37,7 +36,6 @@ export function AddBoardDialog({
   portfolioId: string;
   boards: { id: string; name: string }[];
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [boardId, setBoardId] = useState<string>("");
   const [columns, setColumns] = useState<StatusColumn[]>([]);
@@ -110,8 +108,9 @@ export function AddBoardDialog({
         setError(res.error);
         return;
       }
+      // addBoardToPortfolio revalidates the portfolio path, so the new row
+      // arrives with the action response — no client refresh.
       onOpenChange(false);
-      router.refresh();
     });
   }
 

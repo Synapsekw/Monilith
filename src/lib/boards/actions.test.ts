@@ -519,7 +519,17 @@ describe("reorderBoard", () => {
     expect(res).toEqual({ ok: true, data: undefined });
     expect(update).toHaveBeenCalledWith({ position: 3.5 });
     expect(eq1).toHaveBeenCalledWith("id", BOARD);
-    expect(eq2).toHaveBeenCalledWith("created_by", USER);
+    // The owner filter is the SESSION user (locally verified claims)…
+    expect(eq2).toHaveBeenCalledWith("created_by", "owner-1");
+    // …a drag-reorder never pays a Supabase Auth network round-trip for it.
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session, without writing", async () => {
+    sessionGetUser.mockResolvedValue(null);
+    const res = await reorderBoard({ boardId: BOARD, position: 3.5 });
+    expect(res).toEqual({ ok: false, error: "Not authenticated." });
+    expect(from).not.toHaveBeenCalled();
   });
 
   it("does NOT revalidate the layout on success (would reload the shell)", async () => {
@@ -1035,6 +1045,15 @@ describe("board mutation invalidation (boards tag)", () => {
       if (t === "boards")
         return {
           update: () => ({ eq: async () => ({ error: null }) }),
+          // The owner point read renameBoard issues alongside the update.
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { created_by: "owner-1" },
+                error: null,
+              }),
+            }),
+          }),
         } as never;
       if (t === "board_members")
         return {
@@ -1054,6 +1073,15 @@ describe("board mutation invalidation (boards tag)", () => {
       if (t === "boards")
         return {
           update: () => ({ eq: async () => ({ error: null }) }),
+          // The owner point read renameBoard issues alongside the update.
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { created_by: "owner-1" },
+                error: null,
+              }),
+            }),
+          }),
         } as never;
       if (t === "board_members")
         return {

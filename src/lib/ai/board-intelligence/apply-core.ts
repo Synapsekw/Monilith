@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { z } from "zod";
+import * as z from "zod";
 import type { BoardEffect } from "@/lib/ai/write/effects";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { cellValueSchema, type ColumnKind } from "@/lib/validations/boards";

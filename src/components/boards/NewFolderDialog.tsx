@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { FolderPlus } from "lucide-react";
 
 import { createFolder } from "@/lib/folders/actions";
@@ -29,7 +28,6 @@ import {
  * the trigger is disabled rather than the submit failing at the action.
  */
 export function NewFolderDialog({ workspaceId }: { workspaceId?: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,14 +45,15 @@ export function NewFolderDialog({ workspaceId }: { workspaceId?: string }) {
       }
       setName("");
       setOpen(false);
-      // An empty folder now DOES render in the nav, so the refresh below is
-      // itself visible confirmation. The toast points at the next step: the
-      // folder's command center is where it gets built out.
+      // An empty folder now DOES render in the nav — createFolder's
+      // updateTag(foldersTag) re-renders it inside the action response, which is
+      // itself visible confirmation (no client router.refresh()). The toast
+      // points at the next step: the folder's command center is where it gets
+      // built out.
       showMutationSuccess(
         `Folder “${trimmed}” created`,
         "Open it from the sidebar to build its command center.",
       );
-      router.refresh();
     });
   }
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/session";
 import {
   addUpdateSchema,
   editUpdateSchema,
@@ -58,9 +59,13 @@ export async function addUpdate(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Actor from the session helper (`getClaims()`: a local JWKS verify), not
+  // `supabase.auth.getUser()` (a network round-trip to Supabase Auth per
+  // comment). Only the id is used below, and the verified claims carry it. The
+  // trade is the usual one for a locally verified token: a session revoked
+  // server-side stays usable until its access token expires — which RLS (it
+  // checks the same token) already allowed for the insert itself.
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   // org_id/board_id are denormalized — derive them from the item (RLS-scoped).
@@ -236,9 +241,7 @@ export async function markNotificationRead(input: {
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
   const { error } = await supabase
     .from("notifications")
@@ -265,9 +268,7 @@ export async function createAttachment(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   // Guards + insert live in the core so the MCP path produces identical side

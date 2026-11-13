@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { z } from "zod";
+import * as z from "zod";
 
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
@@ -52,7 +52,14 @@ export default async function DashboardPage({
   // at creation time and still pushes to `/dashboards/{id}?review=1`, so the
   // Keep/Regenerate/Discard banner must render on the legacy canvas instead
   // of being redirected away before the user ever sees it.
-  if (payload.dashboard.folder_id) {
+  //
+  // With `reviewRequested` the redirect can never fire
+  // (`dashboardRedirectTarget` returns null), so the folder probe would be a
+  // round-trip whose answer is ignored — it is skipped outright. Otherwise the
+  // probe stays AHEAD of the source-board reads below rather than beside them:
+  // a folder-attached dashboard almost always redirects, and running them
+  // together would issue two reads on every such visit only to discard them.
+  if (payload.dashboard.folder_id && !reviewRequested) {
     const { data: folder } = await supabase
       .from("folders")
       .select("id")

@@ -1,15 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fakeResolvedModel } from "@/test/adapter-fakes";
 
-// The Anthropic SDK refuses to construct in a "browser-like" (jsdom) env. The
-// engine (askPulseStream) and title/summarize helpers are already mocked, so the
-// client's methods are never called — a stub constructor is all the route needs.
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: class {
-    messages = {};
-  },
-}));
-
 // `after` throws outside a Next request scope, so a direct POST() call in a unit
 // test can never run the real one. Capturing the tasks is also the assertion
 // that the turn is handed to the platform's keep-alive (gotcha-62).
@@ -22,14 +13,17 @@ vi.mock("next/server", async (importActual) => {
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
 }));
+const { activeOrg } = vi.hoisted(() => ({
+  activeOrg: {
+    current: { id: "org1", name: "Acme", timezone: null } as {
+      id: string;
+      name: string;
+      timezone: string | null;
+    },
+  },
+}));
 vi.mock("@/lib/org/active", () => ({
-  resolveActiveOrg: vi.fn(async () => ({ id: "org1" })),
-}));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
-}));
-vi.mock("@/lib/workspaces/active", () => ({
-  getActiveWorkspaceId: vi.fn(async () => "ws1"),
+  resolveActiveOrg: vi.fn(async () => activeOrg.current),
 }));
 vi.mock("@/lib/ai/entitlement", () => ({
   requireAiEntitlement: vi.fn(async () => undefined),
@@ -37,64 +31,129 @@ vi.mock("@/lib/ai/entitlement", () => ({
 // Mirrors the real chokepoint: usage is recorded AFTER fn resolves, so
 // `meteredSpy` standing in for `record_ai_usage` is the billing assertion.
 const { meteredSpy } = vi.hoisted(() => ({ meteredSpy: vi.fn() }));
+const supportsToolsRef = vi.hoisted(() => ({ value: true }));
+const adapterKindRef = vi.hoisted(() => ({
+  value: "anthropic" as "anthropic" | "openai",
+}));
+const requestModelRef = vi.hoisted(() => ({
+  value: "claude-sonnet-5-20260101",
+}));
+const reportUsageSpy = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: vi.fn(
     async (
       _a: unknown,
-      fn: (r: {
-        apiKey: string;
-        provider: string;
-        model: ReturnType<typeof fakeResolvedModel>;
-      }) => Promise<{ result: unknown; usage: unknown }>,
+      fn: (
+        r: {
+          adapter: { kind: "anthropic" | "openai" };
+          apiKey: string;
+          baseUrl: null;
+          provider: string;
+          model: ReturnType<typeof fakeResolvedModel> & {
+            supportsTools: boolean;
+          };
+        },
+        reportUsage: (u: unknown) => void,
+      ) => Promise<{ result: unknown; usage: unknown }>,
     ) => {
-      const r = await fn({
-        apiKey: "k",
-        provider: "anthropic",
-        model: fakeResolvedModel(),
-      });
+      const r = await fn(
+        {
+          adapter: { kind: adapterKindRef.value },
+          apiKey: "k",
+          baseUrl: null,
+          provider: "anthropic",
+          model: {
+            ...fakeResolvedModel({ requestModel: requestModelRef.value }),
+            supportsTools: supportsToolsRef.value,
+          },
+        },
+        reportUsageSpy,
+      );
       meteredSpy(r.usage);
       return r.result;
     },
   ),
 }));
-// Explicit return type so `mockImplementationOnce` can widen the arrays (a bare
-// `[]` in the default impl would infer `never[]` and reject the proposal case).
-type StreamResult = {
-  answer: string;
-  boardsConsulted: string[];
-  proposedActions: unknown[];
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-  };
+
+type LoopUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 };
-const askPulseStreamMock = vi.fn(
-  async ({
-    emit,
-  }: {
-    emit: (e: { type: string; text: string }) => void;
-    system: string;
-  }): Promise<StreamResult> => {
-    emit({ type: "token", text: "Hi" });
-    return {
-      answer: "Hi",
-      boardsConsulted: [],
-      proposedActions: [],
-      usage: { inputTokens: 1, outputTokens: 1 },
-    };
+type LoopArgs = {
+  emit: (e: { type: "token" | "status"; text: string }) => void;
+  system: string;
+  messages: { role: string; content: string }[];
+  onUsage?: (u: LoopUsage) => void;
+  providerOptions?: Record<string, Record<string, unknown>>;
+};
+type LoopResult = {
+  text: string;
+  usage: LoopUsage;
+  steps: number;
+  toolsUsed: string[];
+  hitStepCap: boolean;
+  wroteText: boolean;
+};
+const loopResult = (over: Partial<LoopResult> = {}): LoopResult => ({
+  text: "Answer.",
+  usage: {
+    inputTokens: 5,
+    outputTokens: 5,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
   },
-);
-vi.mock("@/lib/ai/ask/ask-stream", () => ({
-  askPulseStream: (a: unknown) =>
-    askPulseStreamMock(
-      a as {
-        emit: (e: { type: string; text: string }) => void;
-        system: string;
-      },
-    ),
+  steps: 1,
+  toolsUsed: [],
+  hitStepCap: false,
+  wroteText: true,
+  ...over,
+});
+const runAssistantLoop = vi.fn<(a: LoopArgs) => Promise<LoopResult>>();
+vi.mock("@/lib/assistant/runtime", async (importActual) => ({
+  ...(await importActual<typeof import("@/lib/assistant/runtime")>()),
+  runAssistantLoop: (a: LoopArgs) => runAssistantLoop(a),
 }));
+const { languageModelFor } = vi.hoisted(() => ({
+  languageModelFor: vi.fn(() => ({ fake: "model" })),
+}));
+vi.mock("@/lib/ai/providers/language-model", () => ({ languageModelFor }));
+const { summarizeThread, titleThread } = vi.hoisted(() => ({
+  summarizeThread: vi.fn(async () => ({
+    summary: "S",
+    usage: { inputTokens: 1, outputTokens: 1 },
+  })),
+  titleThread: vi.fn(async () => ({
+    title: "Overdue items",
+    usage: { inputTokens: 1, outputTokens: 1 },
+  })),
+}));
+vi.mock("@/lib/assistant/thread-housekeeping", () => ({
+  summarizeThread,
+  titleThread,
+}));
+type ToolsArgs = {
+  ctx: { getClient: () => Promise<unknown>; actorId: string };
+  client: unknown;
+  orgId: string;
+  stage: (c: unknown) => boolean;
+  describe?: (tool: string, input: Record<string, unknown>) => string | null;
+};
+const buildAssistantTools = vi.fn<(a: ToolsArgs) => Record<string, never>>();
+vi.mock("@/lib/assistant/tools", () => ({
+  buildAssistantTools: (a: ToolsArgs) => buildAssistantTools(a),
+}));
+const { getBoardPayload, listOrgMembersCached } = vi.hoisted(() => ({
+  getBoardPayload: vi.fn<(id: string) => Promise<unknown>>(async () => null),
+  listOrgMembersCached: vi.fn(
+    async (): Promise<
+      { userId: string; fullName: string | null; email: string }[]
+    > => [],
+  ),
+}));
+vi.mock("@/lib/boards/queries", () => ({ getBoardPayload }));
+vi.mock("@/lib/org/queries-cached", () => ({ listOrgMembersCached }));
 vi.mock("@/lib/profile/queries-cached", () => ({
   getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
 }));
@@ -134,16 +193,6 @@ vi.mock("@/lib/ai/ask/conversations", async (importActual) => {
   return {
     ...actual,
     getMessages: vi.fn(async () => getMessagesRows()),
-  };
-});
-vi.mock("@/lib/ai/ask/context", async (importActual) => {
-  const actual = await importActual<typeof import("@/lib/ai/ask/context")>();
-  return {
-    ...actual,
-    generateTitle: vi.fn(async () => ({
-      title: "Overdue items",
-      usage: { inputTokens: 1, outputTokens: 1 },
-    })),
   };
 });
 
@@ -186,10 +235,6 @@ let agentRow: { data: AgentRowData | null; error: unknown } = {
   data: null,
   error: null,
 };
-let boardRow: { data: { id: string; name: string } | null; error: unknown } = {
-  data: null,
-  error: null,
-};
 const agentEqCalls: [string, unknown][] = [];
 
 /** Overrides the conversation row `ai_conversations` reads back for the next
@@ -224,10 +269,24 @@ function mockAgentRow(
       }
     : { data: null, error: null };
 }
-/** Overrides the `boards` row the route reads back for `board_id`. Pass
- *  `null` to simulate an RLS-invisible or dangling board id. */
-function mockBoardRow(row: { id: string; name: string } | null) {
-  boardRow = { data: row, error: null };
+/** The RLS-scoped payload `getBoardPayload` returns for `board_id`. Pass
+ *  `null` to simulate an RLS-invisible or dangling board. Only the fields
+ *  `buildBoardFocus` reads are filled; the rest are empty collections. */
+function mockBoardPayload(
+  board: { id: string; name: string; org_id?: string } | null,
+) {
+  getBoardPayload.mockResolvedValue(
+    board
+      ? {
+          board: { org_id: "org1", ...board },
+          groups: [],
+          columns: [],
+          items: [],
+          cellValues: [],
+          dependencies: [],
+        }
+      : null,
+  );
 }
 
 type FolderRowData = {
@@ -280,77 +339,81 @@ function mockFolderMissing() {
   folderBoardsRows = { data: [], error: null };
 }
 
-// Table-routed, because the route now reads three different tables through the
-// same client: ai_conversations (owner gate + persona/board ids), boards and
-// user_agents (persona/board lookups, via maybeSingle so a missing row is not
-// an error), and ai_messages (the assistant insert).
+// Table-routed, because the route reads several tables through the same
+// client: ai_conversations (owner gate + persona/board ids), user_agents
+// (persona lookup, via maybeSingle so a missing row is not an error), the
+// folder tables, and ai_messages (the assistant insert). The board focus goes
+// through `getBoardPayload`, mocked above, never this client.
+//
+// ONE client object for the whole file, so a test can prove the tool builder
+// got exactly the client the route created.
+const { theClient } = vi.hoisted(() => ({
+  theClient: { current: null as unknown },
+}));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    from: (table: string) => {
-      if (table === "ai_conversations") {
-        return {
-          select: () => ({
-            eq: () => ({ single: vi.fn(async () => conversationRow) }),
-          }),
-          update: updateSpy,
-        };
-      }
-      if (table === "ai_messages") {
-        return { insert: insertSpy };
-      }
-      if (table === "boards") {
-        return {
-          select: () => ({
-            eq: () => ({ maybeSingle: vi.fn(async () => boardRow) }),
-          }),
-        };
-      }
-      if (table === "folders") {
-        return {
-          select: () => ({
-            eq: () => ({ maybeSingle: vi.fn(async () => folderRow) }),
-          }),
-        };
-      }
-      if (table === "folder_boards") {
-        return {
-          select: () => ({
-            eq: () => ({
-              is: () => ({
-                order: () => ({
-                  limit: vi.fn(async () => folderBoardsRows),
-                }),
+  createClient: vi.fn(async () => theClient.current),
+}));
+theClient.current = {
+  from: (table: string) => {
+    if (table === "ai_conversations") {
+      return {
+        select: () => ({
+          eq: () => ({ single: vi.fn(async () => conversationRow) }),
+        }),
+        update: updateSpy,
+      };
+    }
+    if (table === "ai_messages") {
+      return { insert: insertSpy };
+    }
+    if (table === "folders") {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: vi.fn(async () => folderRow) }),
+        }),
+      };
+    }
+    if (table === "folder_boards") {
+      return {
+        select: () => ({
+          eq: () => ({
+            is: () => ({
+              order: () => ({
+                limit: vi.fn(async () => folderBoardsRows),
               }),
             }),
           }),
-        };
-      }
-      if (table === "user_agents") {
-        return {
-          select: () => ({
-            // Records the filter chain: the persona read is scoped to an
-            // ENABLED agent, and a test has to be able to see that.
-            eq: (col: string, val: unknown) => {
-              agentEqCalls.push([col, val]);
-              return {
-                eq: (col2: string, val2: unknown) => {
-                  agentEqCalls.push([col2, val2]);
-                  return { maybeSingle: vi.fn(async () => agentRow) };
-                },
-                maybeSingle: vi.fn(async () => agentRow),
-              };
-            },
-          }),
-        };
-      }
-      throw new Error(`unmocked table in test double: ${table}`);
-    },
-  })),
-}));
+        }),
+      };
+    }
+    if (table === "user_agents") {
+      return {
+        select: () => ({
+          // Records the filter chain: the persona read is scoped to an
+          // ENABLED agent, and a test has to be able to see that.
+          eq: (col: string, val: unknown) => {
+            agentEqCalls.push([col, val]);
+            return {
+              eq: (col2: string, val2: unknown) => {
+                agentEqCalls.push([col2, val2]);
+                return { maybeSingle: vi.fn(async () => agentRow) };
+              },
+              maybeSingle: vi.fn(async () => agentRow),
+            };
+          },
+        }),
+      };
+    }
+    throw new Error(`unmocked table in test double: ${table}`);
+  },
+};
 
 import { POST } from "./route";
 import { runAi } from "@/lib/ai/gateway";
-import { OPENING_STATUS } from "@/lib/ai/ask/stream-protocol";
+import {
+  OPENING_STATUS,
+  PROPOSAL_FALLBACK_ANSWER,
+} from "@/lib/ai/ask/stream-protocol";
 
 const CONV_ID = "11111111-1111-4111-8111-111111111111";
 // `agentId` (or any other extra key) is accepted here so a test can prove the
@@ -362,16 +425,53 @@ const request = (body: Record<string, unknown>) =>
   });
 const makeReq = () => request({ conversationId: CONV_ID });
 
+async function readEvents() {
+  const res = await POST(makeReq());
+  return (await res.text())
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l) as { type: string; [k: string]: unknown });
+}
+
+const stagedCall = (id: string) => ({
+  id,
+  tool: "update_item",
+  input: { itemId: "i-1" },
+  summary: "Update an item.",
+  destructive: false,
+  boardId: null,
+});
+
+/** Make the tool builder stage these calls the moment it is built — what a
+ *  turn that lined up changes looks like from the route's side. */
+function stageOnBuild(...ids: string[]) {
+  buildAssistantTools.mockImplementation((args) => {
+    for (const id of ids) args.stage(stagedCall(id));
+    return {};
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   afterTasks.length = 0;
   conversationRow = { data: defaultConversationRow(), error: null };
   agentRow = { data: null, error: null };
-  boardRow = { data: null, error: null };
+  mockBoardPayload(null);
+  listOrgMembersCached.mockResolvedValue([]);
   mockFolderMissing();
   agentEqCalls.length = 0;
   single.mockResolvedValue({ data: { id: "a1" }, error: null });
   setMessagesRows(defaultMessagesRows());
+  supportsToolsRef.value = true;
+  adapterKindRef.value = "anthropic";
+  requestModelRef.value = "claude-sonnet-5-20260101";
+  activeOrg.current = { id: "org1", name: "Acme", timezone: null };
+  // Emits one token so the streaming tests still see a token on the wire.
+  runAssistantLoop.mockImplementation(async (a) => {
+    a.emit({ type: "token", text: "Answer." });
+    return loopResult();
+  });
+  buildAssistantTools.mockReturnValue({});
 });
 
 describe("POST /api/ask", () => {
@@ -411,7 +511,7 @@ describe("POST /api/ask", () => {
     await (await POST(makeReq())).text();
   };
 
-  it("persists boardsConsulted with no proposals on a read-only turn", async () => {
+  it("persists an empty trace (no staged calls) on a read-only turn", async () => {
     await post();
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -421,50 +521,167 @@ describe("POST /api/ask", () => {
     );
   });
 
-  it("persists proposedActions into tool_trace on a proposal turn", async () => {
-    const action = {
-      kind: "create_item",
-      boardId: "b1",
-      groupId: "g1",
-      name: "Ship v2",
-      summary: 'Create task "Ship v2" in Backlog',
-      warnings: [],
-    };
-    askPulseStreamMock.mockImplementationOnce(async ({ emit }) => {
-      emit({ type: "token", text: "I'll create that — " });
-      return {
-        answer: "I'll create that — ",
-        boardsConsulted: ["b1"],
-        proposedActions: [action],
-        usage: { inputTokens: 1, outputTokens: 1 },
-      };
+  // Replaces "persists proposedActions into tool_trace on a proposal turn":
+  // the unified runtime stages calls instead of proposing ValidatedActions.
+  it("stores staged calls on the assistant message and emits a staged event", async () => {
+    stageOnBuild("c1");
+    const events = await readEvents();
+    expect(events).toContainEqual({
+      type: "staged",
+      calls: [stagedCall("c1")],
     });
-    await post();
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        tool_trace: { boardsConsulted: ["b1"], proposedActions: [action] },
+        role: "assistant",
+        tool_trace: { boardsConsulted: [], stagedCalls: [stagedCall("c1")] },
       }),
     );
+    // Emitted before `done`, so the client can bind it to the real message id.
+    expect(events.findIndex((e) => e.type === "staged")).toBeLessThan(
+      events.findIndex((e) => e.type === "done"),
+    );
+  });
+
+  it("emits no staged event for a turn that staged nothing", async () => {
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "staged")).toBe(false);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ tool_trace: { boardsConsulted: [] } }),
+    );
+  });
+
+  it("refuses to stage beyond the cap", async () => {
+    let accepted = 0;
+    buildAssistantTools.mockImplementation((args) => {
+      for (let i = 0; i < 60; i++)
+        if (args.stage(stagedCall(`c${i}`))) accepted++;
+      return {};
+    });
+    const events = await readEvents();
+    expect(accepted).toBe(50);
+    const staged = events.find((e) => e.type === "staged");
+    expect(staged?.calls).toHaveLength(50);
+  });
+
+  it("tells the model no page is in focus for a thread with no board", async () => {
+    await readEvents();
+    const args = runAssistantLoop.mock.calls[0]![0];
+    expect(args.system).toContain("No page is in focus");
+    expect(getBoardPayload).not.toHaveBeenCalled();
+  });
+
+  // SECURITY: reads run, and staged writes are later applied, under the
+  // signed-in user's own cookie-bound client, so RLS is the boundary.
+  it("hands the tool builder the signed-in user's own client and id", async () => {
+    await readEvents();
+    const args = buildAssistantTools.mock.calls[0]![0];
+    expect(args.ctx.actorId).toBe(USER_ID);
+    expect(args.client).toBe(theClient.current);
+    await expect(args.ctx.getClient()).resolves.toBe(theClient.current);
+  });
+
+  it("rejects a model that cannot use tools, without running the loop", async () => {
+    supportsToolsRef.value = false;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const events = await readEvents();
+    const error = events.find((e) => e.type === "error");
+    expect(error?.message).toMatch(/can't use tools/);
+    expect(error?.message).toContain("Settings");
+    expect(events.some((e) => e.type === "done")).toBe(false);
+    expect(runAssistantLoop).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("runs the loop on the model runAi resolved, by its wire id", async () => {
+    await readEvents();
+    expect(languageModelFor).toHaveBeenCalledWith({
+      kind: "anthropic",
+      apiKey: "k",
+      baseUrl: null,
+      model: "claude-sonnet-5-20260101",
+    });
+    expect(runAssistantLoop.mock.calls[0]![0]).toMatchObject({
+      model: { fake: "model" },
+      messages: [{ role: "user", content: "hi" }],
+    });
+  });
+
+  it("reports running usage from the loop, on top of what the turn spent first", async () => {
+    // A thread long enough to fold, so the summary really spent tokens first.
+    setMessagesRows(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `turn ${i}`,
+        tool_trace: null,
+        created_at: `t${String(i).padStart(2, "0")}`,
+        agent_id: null,
+      })),
+    );
+    summarizeThread.mockResolvedValueOnce({
+      summary: "S",
+      usage: { inputTokens: 7, outputTokens: 3 },
+    });
+    runAssistantLoop.mockImplementationOnce(async (a) => {
+      a.onUsage?.({
+        inputTokens: 10,
+        outputTokens: 2,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      });
+      return loopResult();
+    });
+    await readEvents();
+    expect(summarizeThread).toHaveBeenCalledTimes(1);
+    expect(reportUsageSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inputTokens: 17, outputTokens: 5 }),
+    );
+  });
+
+  it("meters the summary spend even when the loop dies on its first step", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setMessagesRows(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `turn ${i}`,
+        tool_trace: null,
+        created_at: `t${String(i).padStart(2, "0")}`,
+        agent_id: null,
+      })),
+    );
+    summarizeThread.mockResolvedValueOnce({
+      summary: "S",
+      usage: { inputTokens: 7, outputTokens: 3 },
+    });
+    runAssistantLoop.mockImplementationOnce(async () => {
+      throw new Error("provider down");
+    });
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "error")).toBe(true);
+    expect(reportUsageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 7, outputTokens: 3 }),
+    );
+    spy.mockRestore();
   });
 
   // Once caching engages, Anthropic's input_tokens is the UNCACHED remainder
   // only — a 26k-token turn reports ~2k input_tokens + ~24k
   // cache_read_input_tokens. Dropping the cache fields on the way to the
   // ledger would under-bill the org by the entire cached prefix.
-  it("forwards cacheReadTokens/cacheWriteTokens from askPulseStream to the metering call", async () => {
-    askPulseStreamMock.mockImplementationOnce(async ({ emit }) => {
+  it("forwards cacheReadTokens/cacheWriteTokens from the loop to the metering call", async () => {
+    runAssistantLoop.mockImplementationOnce(async ({ emit }) => {
       emit({ type: "token", text: "Hi" });
-      return {
-        answer: "Hi",
-        boardsConsulted: [],
-        proposedActions: [],
+      return loopResult({
+        text: "Hi",
         usage: {
           inputTokens: 2_000,
           outputTokens: 50,
           cacheReadTokens: 24_000,
           cacheWriteTokens: 1_500,
         },
-      };
+      });
     });
     await post();
     expect(meteredSpy).toHaveBeenCalledWith(
@@ -493,25 +710,23 @@ describe("POST /api/ask · client disconnect", () => {
   /** Drive a turn until the engine is mid-flight, then sever the body. Returns
    *  `release`, which lets the now client-less turn run to completion. */
   async function severMidTurn(
-    result: Partial<StreamResult> = {},
+    result: Partial<LoopResult> = {},
   ): Promise<() => void> {
     let release!: () => void;
     const held = new Promise<void>((r) => (release = r));
     let entered!: () => void;
     const enteredEngine = new Promise<void>((r) => (entered = r));
 
-    askPulseStreamMock.mockImplementationOnce(async ({ emit }) => {
+    runAssistantLoop.mockImplementationOnce(async ({ emit }) => {
       entered();
       await held;
       // The first write after the client is gone — this is what used to throw.
       emit({ type: "token", text: "Hi" });
-      return {
-        answer: "Hi",
-        boardsConsulted: [],
-        proposedActions: [],
+      return loopResult({
+        text: "Hi",
         usage: { inputTokens: 3, outputTokens: 5 },
         ...result,
-      };
+      });
     });
 
     const res = await POST(makeReq());
@@ -542,24 +757,19 @@ describe("POST /api/ask · client disconnect", () => {
     );
   });
 
-  it("persists a proposal turn's confirm card after a disconnect", async () => {
-    const action = {
-      kind: "create_item",
-      boardId: "b1",
-      groupId: "g1",
-      name: "Ship v2",
-      summary: 'Create task "Ship v2" in Backlog',
-      warnings: [],
-    };
-    const release = await severMidTurn({
-      boardsConsulted: ["b1"],
-      proposedActions: [action],
-    });
+  // Was "persists a proposal turn's confirm card after a disconnect": the
+  // confirm card is now the staged batch.
+  it("persists a staged turn's confirm card after a disconnect", async () => {
+    stageOnBuild("c1");
+    const release = await severMidTurn();
     release();
     await vi.waitFor(() =>
       expect(insertSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          tool_trace: { boardsConsulted: ["b1"], proposedActions: [action] },
+          tool_trace: {
+            boardsConsulted: [],
+            stagedCalls: [stagedCall("c1")],
+          },
         }),
       ),
     );
@@ -611,21 +821,62 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     // The persona is composed INSIDE the runAi callback now (Task 6), so
     // draining the body is still what synchronizes the test with the turn.
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).toContain('personal agent "Morning Brief"');
     expect(system).toContain("Focus on blockers.");
   });
 
-  it("composes the board scope into the system prompt for a board thread", async () => {
-    // This wiring (route.ts, the `if (conv.data.board_id)` branch) had zero
-    // coverage before: no test set `boardRow` or asserted on the composed
-    // system prompt, so the branch could be deleted and every test here would
-    // still pass.
+  it("composes the board focus into the system prompt for a board thread", async () => {
+    // The `if (conv.data.board_id)` branch: the board the thread belongs to is
+    // what the user is looking at, so it rides the prompt as a FOCUS block.
     mockConversationRow({ board_id: BOARD_ID, agent_id: null });
-    mockBoardRow({ id: BOARD_ID, name: "Roadmap" });
+    mockBoardPayload({ id: BOARD_ID, name: "Roadmap" });
+    listOrgMembersCached.mockResolvedValue([
+      { userId: "u-ana", fullName: "Ana", email: "ana@example.com" },
+    ]);
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(getBoardPayload).toHaveBeenCalledWith(BOARD_ID);
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain("=== FOCUS");
     expect(system).toContain(BOARD_ID);
+    expect(system).toContain("Roadmap");
+    expect(system).toContain("u-ana | Ana");
+    // Email never reaches a prompt.
+    expect(system).not.toContain("ana@example.com");
+  });
+
+  it("degrades to no focus when the board is not readable", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    mockBoardPayload(null);
+    await (await POST(makeReq())).text();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain("No page is in focus");
+    expect(system).not.toContain("=== FOCUS");
+  });
+
+  it("gives no focus for a board that belongs to another org", async () => {
+    // A cross-org share can make a board RLS-readable; it is still not this
+    // org's turn to describe it.
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    mockBoardPayload({ id: BOARD_ID, name: "Roadmap", org_id: "org2" });
+    await (await POST(makeReq())).text();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).not.toContain("Roadmap");
+    expect(system).toContain("No page is in focus");
+  });
+
+  it("keeps the board focus under an agent persona", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: AGENT_ID });
+    mockAgentRow({
+      id: AGENT_ID,
+      name: "Morning Brief",
+      instructions: "Focus on blockers.",
+    });
+    mockBoardPayload({ id: BOARD_ID, name: "Roadmap" });
+    await (await POST(makeReq())).text();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain('personal agent "Morning Brief"');
+    expect(system).toContain("=== FOCUS");
     expect(system).toContain("Roadmap");
   });
 
@@ -641,10 +892,12 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
       { id: "b2", name: "Mobile" },
     ]);
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).toContain('folder "');
     expect(system).toContain("Backend");
     expect(system).toContain("Mobile");
+    // A folder thread is scoped by its folder block, not a FOCUS line.
+    expect(system).not.toContain("No page is in focus");
   });
 
   it("degrades to plain Ask when the folder is no longer readable", async () => {
@@ -656,7 +909,7 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     });
     mockFolderMissing();
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).not.toContain('folder "');
   });
 
@@ -666,9 +919,9 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
       folder_id: "folder-1",
       agent_id: null,
     });
-    mockBoardRow({ id: BOARD_ID, name: "Roadmap" });
+    mockBoardPayload({ id: BOARD_ID, name: "Roadmap" });
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).toContain("Roadmap");
     expect(system).not.toContain('folder "');
   });
@@ -693,7 +946,7 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     mockConversationRow({ board_id: null, agent_id: AGENT_ID });
     mockAgentRow(null);
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).not.toContain("personal agent");
   });
 });
@@ -737,7 +990,7 @@ describe("POST /api/ask · answers as the agent the turn addressed", () => {
     await (
       await POST(request({ conversationId: CONV_ID, agentId: "a-attacker" }))
     ).text();
-    const capturedSystem = askPulseStreamMock.mock.calls[0][0].system as string;
+    const capturedSystem = runAssistantLoop.mock.calls[0]![0].system;
     expect(capturedSystem).toContain('personal agent "Finance"');
     expect(capturedSystem).not.toContain("a-attacker");
   });
@@ -769,7 +1022,7 @@ describe("POST /api/ask · answers as the agent the turn addressed", () => {
     // agent_id null — this is the "ordinary chat" baseline this suite starts
     // from in `beforeEach`.
     await (await POST(request({ conversationId: CONV_ID }))).text();
-    const capturedSystem = askPulseStreamMock.mock.calls[0][0].system as string;
+    const capturedSystem = runAssistantLoop.mock.calls[0]![0].system;
     expect(capturedSystem).not.toContain("personal agent");
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ role: "assistant", agent_id: null }),
@@ -803,7 +1056,7 @@ describe("POST /api/ask · the conversation's agent is authoritative", () => {
       instructions: "Track overdue invoices.",
     });
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).toContain('personal agent "Finance"');
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ role: "assistant", agent_id: "a-fin" }),
@@ -843,7 +1096,7 @@ describe("POST /api/ask · the conversation's agent is authoritative", () => {
     mockConversationRow({ agent_id: null });
     mockAgentRow({ id: "a-ops", name: "Ops", instructions: "Watch delivery." });
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).not.toContain("personal agent");
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ role: "assistant", agent_id: null }),
@@ -871,7 +1124,7 @@ describe("POST /api/ask · a disabled agent does not answer", () => {
     mockConversationRow({ agent_id: "agent-1" });
     mockAgentRow(null);
     await (await POST(makeReq())).text();
-    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).not.toContain("personal agent");
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ role: "assistant", agent_id: null }),
@@ -891,5 +1144,322 @@ describe("POST /api/ask · a lost answer is not a completed turn", () => {
     expect(text).not.toContain('"type":"done"');
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+// Rolling-summary compaction. `summarizeThread` hands back the PRIOR summary
+// when the model returns nothing, so "non-empty" alone does not mean "new":
+// advancing `summarized_upto` on an unchanged summary drops the folded turns
+// for good.
+describe("POST /api/ask · rolling summary", () => {
+  /** 12 rows: the 2 oldest fold, the newest 10 stay verbatim. */
+  const longThread = () =>
+    setMessagesRows(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `turn ${i}`,
+        tool_trace: null,
+        created_at: `t${String(i).padStart(2, "0")}`,
+        agent_id: null,
+      })),
+    );
+
+  it("folds older turns, advances the cursor, and sends only recent turns", async () => {
+    longThread();
+    summarizeThread.mockResolvedValueOnce({
+      summary: "New summary",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    await readEvents();
+    expect(updateSpy).toHaveBeenCalledWith({
+      summary: "New summary",
+      summarized_upto: "t01",
+    });
+    const args = runAssistantLoop.mock.calls[0]![0];
+    expect(args.messages).toHaveLength(10);
+    expect(args.system).toContain("New summary");
+  });
+
+  it("does not advance the cursor when the summary came back unchanged", async () => {
+    longThread();
+    mockConversationRow({ summary: "Old summary" });
+    summarizeThread.mockResolvedValueOnce({
+      summary: "Old summary",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    await readEvents();
+    expect(updateSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ summarized_upto: expect.anything() }),
+    );
+  });
+
+  it("does not advance the cursor on an empty summary", async () => {
+    longThread();
+    summarizeThread.mockResolvedValueOnce({
+      summary: "",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    await readEvents();
+    expect(updateSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ summarized_upto: expect.anything() }),
+    );
+  });
+});
+
+// A3: card labels come from the board the route already loaded for FOCUS.
+describe("POST /api/ask · staged labels from real board data", () => {
+  const BOARD_ID = "board-1";
+  const ITEM = "i0000000-0000-4000-8000-000000000001";
+
+  it("passes a describe function built from the focus payload on a board thread", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    getBoardPayload.mockResolvedValue({
+      board: { id: BOARD_ID, name: "Roadmap", org_id: "org1" },
+      groups: [],
+      columns: [],
+      items: [{ id: ITEM, name: "Press kit", group_id: "g", parent_id: null }],
+      cellValues: [],
+      dependencies: [],
+    });
+    await readEvents();
+    const describe = buildAssistantTools.mock.calls[0]![0].describe;
+    expect(describe).toBeTypeOf("function");
+    expect(describe!("manage_item", { action: "archive", itemId: ITEM })).toBe(
+      'Archive the item "Press kit"',
+    );
+    // No extra read: the payload was loaded once, for the focus block.
+    expect(getBoardPayload).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes no describe function on a thread with no board", async () => {
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].describe).toBeUndefined();
+  });
+
+  it("passes no describe function when the board is not readable", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    mockBoardPayload(null);
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].describe).toBeUndefined();
+  });
+});
+
+// gotcha-62: the opening status is the turn's first byte. A full board
+// payload read must never sit in front of it.
+describe("POST /api/ask · board focus is read inside the turn", () => {
+  const BOARD_ID = "board-1";
+
+  it("emits the opening status before the board read starts", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    // Call order across the wire and the read: every encoded event, and the
+    // moment the payload read begins.
+    const order: string[] = [];
+    const realEncode = TextEncoder.prototype.encode;
+    const encodeSpy = vi
+      .spyOn(TextEncoder.prototype, "encode")
+      .mockImplementation(function (this: TextEncoder, input?: string) {
+        const type = /"type":"(\w+)"/.exec(input ?? "")?.[1];
+        if (type) order.push(`emit:${type}`);
+        return realEncode.call(this, input);
+      });
+    let releasePayload!: () => void;
+    const held = new Promise<void>((r) => (releasePayload = r));
+    getBoardPayload.mockImplementation(async () => {
+      order.push("payload read started");
+      await held;
+      return null;
+    });
+    try {
+      // POST returns while the board read is still held: the read is not in
+      // front of the response.
+      const res = await POST(makeReq());
+      const reader = res.body!.getReader();
+      const first = await reader.read();
+      expect(JSON.parse(new TextDecoder().decode(first.value).trim())).toEqual({
+        type: "status",
+        text: OPENING_STATUS,
+      });
+      await vi.waitFor(() => expect(order).toContain("payload read started"));
+      expect(order.indexOf("emit:status")).toBe(0);
+      expect(order.indexOf("emit:status")).toBeLessThan(
+        order.indexOf("payload read started"),
+      );
+      expect(runAssistantLoop).not.toHaveBeenCalled();
+      releasePayload();
+      while (!(await reader.read()).done) {
+        /* drain */
+      }
+      expect(runAssistantLoop).toHaveBeenCalledTimes(1);
+    } finally {
+      encodeSpy.mockRestore();
+    }
+  });
+
+  it("degrades to no focus, and still completes, when the board read throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    getBoardPayload.mockRejectedValue(new Error("transport down"));
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "done")).toBe(true);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain("No page is in focus");
+    spy.mockRestore();
+  });
+});
+
+describe("POST /api/ask · fallback text on a staged turn", () => {
+  it("stores the live fallback line when a staged turn wrote no text", async () => {
+    stageOnBuild("c1");
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({
+        text: "I finished without writing an answer. I did not complete any lookups.",
+        wroteText: false,
+      }),
+    );
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: PROPOSAL_FALLBACK_ANSWER }),
+    );
+  });
+
+  it("keeps the runtime fallback for a turn that staged nothing", async () => {
+    const fallback =
+      "I finished without writing an answer. I did not complete any lookups.";
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({ text: fallback, wroteText: false }),
+    );
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: fallback }),
+    );
+  });
+
+  it("keeps the model's own text on a staged turn that wrote some", async () => {
+    stageOnBuild("c1");
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Answer." }),
+    );
+  });
+});
+
+// F1: the catalog was built for a user-level MCP connection. Here every
+// org-scoped call is pinned to the org the user is working in.
+describe("POST /api/ask · pinned to the active org", () => {
+  it("hands the tool builder the active org", async () => {
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].orgId).toBe("org1");
+  });
+
+  it("names the active org in the turn's system text", async () => {
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toMatch(/organization "Acme" \(id org1\)/);
+    expect(system).toMatch(/only inside that organization/);
+  });
+
+  it("names the signed-in user so 'me' resolves to them, without an email", async () => {
+    listOrgMembersCached.mockResolvedValue([
+      { userId: "u-other", fullName: "Ana", email: "ana@example.com" },
+      { userId: USER_ID, fullName: "Dana\nJones", email: "dana@example.com" },
+    ]);
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain(USER_ID);
+    expect(system).toContain('"Dana Jones"');
+    expect(system).toMatch(/"me", "my" and "I"/);
+    expect(system).not.toContain("@");
+  });
+
+  it("names the signed-in user by id alone when no name is available", async () => {
+    listOrgMembersCached.mockResolvedValue([
+      { userId: USER_ID, fullName: null, email: "dana@example.com" },
+    ]);
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain(`user id ${USER_ID}`);
+    expect(system).toMatch(/"me", "my" and "I"/);
+    expect(system).not.toContain("@");
+  });
+
+  it("follows the org switcher, not a fixed org", async () => {
+    activeOrg.current = { id: "org2", name: "Beta", timezone: null };
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].orgId).toBe("org2");
+    expect(runAssistantLoop.mock.calls[0]![0].system).toContain("org2");
+  });
+});
+
+// F3: a turn whose model wrote no text used to show an empty bubble live and
+// the fallback line only after a reload.
+describe("POST /api/ask · a turn with no text streams its stored answer", () => {
+  const tokens = (events: { type: string; text?: unknown }[]) =>
+    events
+      .filter((e) => e.type === "token")
+      .map((e) => e.text)
+      .join("");
+
+  it("streams the staged fallback before done", async () => {
+    stageOnBuild("c1");
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({
+        text: "I finished without writing an answer.",
+        wroteText: false,
+      }),
+    );
+    const events = await readEvents();
+    expect(tokens(events)).toBe(PROPOSAL_FALLBACK_ANSWER);
+    const tokenAt = events.findIndex((e) => e.type === "token");
+    expect(tokenAt).toBeGreaterThan(-1);
+    expect(tokenAt).toBeLessThan(events.findIndex((e) => e.type === "done"));
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: PROPOSAL_FALLBACK_ANSWER }),
+    );
+  });
+
+  it("streams the step-cap fallback that it stores", async () => {
+    const capped =
+      "I reached my 12-step limit before I could finish. I used: list_items. Ask me to continue.";
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({ text: capped, wroteText: false, hitStepCap: true }),
+    );
+    const events = await readEvents();
+    expect(tokens(events)).toBe(capped);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: capped }),
+    );
+  });
+
+  it("adds nothing to a turn whose model wrote its own text", async () => {
+    const events = await readEvents();
+    expect(tokens(events)).toBe("Answer.");
+  });
+});
+
+// F4: the old loop sent an explicit thinking shape; the AI SDK sends none
+// unless asked, so the route maps the repo's own request shape onto the
+// Anthropic provider options.
+describe("POST /api/ask · reasoning options", () => {
+  it("sends the model's thinking shape and effort on the anthropic adapter", async () => {
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toEqual({
+      anthropic: { thinking: { type: "adaptive" }, effort: "high" },
+    });
+  });
+
+  it("sends the budgeted thinking form, and no effort, for Haiku", async () => {
+    requestModelRef.value = "claude-haiku-4-5-20251001";
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 1024 } },
+    });
+  });
+
+  it("sends no provider options on another adapter", async () => {
+    adapterKindRef.value = "openai";
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toBeUndefined();
   });
 });

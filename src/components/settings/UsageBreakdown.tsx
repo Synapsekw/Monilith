@@ -1,36 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  AXIS_PROPS,
-  GRID_STROKE,
-} from "@/components/dashboards/widgets/chart-theme";
+import { LazyUsageTrendChart } from "@/components/settings/LazyUsageTrendChart";
 import { cn } from "@/lib/utils";
 import type { UsageSummary } from "@/lib/ai/usage-summary";
 
 type Range = "month" | "6months";
-
-const CHART_CONFIG: ChartConfig = {
-  credits: { label: "Credits", color: "var(--primary)" },
-};
-
-const monthLabel = (m: string) =>
-  new Date(m).toLocaleDateString(undefined, { month: "short" });
-const monthLabelLong = (m: string) =>
-  new Date(m).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
 /**
  * Per-feature spend breakdown + 6-month credits trend, fed the
  * server-preloaded `UsageSummary` (see `getUsageSummary`). The range toggle is
  * pure client state over data already loaded for both ranges — 0 new server
  * round-trips per AGENTS.md working agreement #5.
+ *
+ * The text (credits, per-feature list) stays in this statically imported
+ * module so it is server-rendered; only the recharts trend is deferred, behind
+ * a same-size skeleton (see `LazyUsageTrendChart`).
  */
 export function UsageBreakdown({ summary }: { summary: UsageSummary }) {
   const [range, setRange] = useState<Range>("6months");
@@ -110,32 +95,7 @@ export function UsageBreakdown({ summary }: { summary: UsageSummary }) {
           </span>
         </div>
       ) : (
-        <ChartContainer config={CHART_CONFIG} className="h-40 w-full">
-          <LineChart data={months}>
-            <CartesianGrid
-              stroke={GRID_STROKE}
-              strokeDasharray="3 3"
-              vertical={false}
-            />
-            <XAxis dataKey="month" {...AXIS_PROPS} tickFormatter={monthLabel} />
-            <YAxis {...AXIS_PROPS} width={32} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => monthLabelLong(String(value))}
-                />
-              }
-            />
-            <Line
-              type="monotone"
-              dataKey="credits"
-              stroke="var(--color-credits)"
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-          </LineChart>
-        </ChartContainer>
+        <LazyUsageTrendChart months={months} />
       )}
     </div>
   );

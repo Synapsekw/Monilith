@@ -33,7 +33,12 @@ describe("ReportRowActions", () => {
     await waitFor(() =>
       expect(deleteReport).toHaveBeenCalledWith({ reportId: "r1" }),
     );
-    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    // deleteReport revalidates /reports (and each bound board's report pages),
+    // so the list without this row is in the action response — no refresh.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("keeps the dialog open and shows the reason when the delete fails", async () => {

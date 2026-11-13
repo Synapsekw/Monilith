@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { upsertTimeAllocationCore } from "@/lib/time/allocation-core";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";

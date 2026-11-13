@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /** True when `tz` is an IANA timezone the runtime recognizes. */
 export function isValidTimeZone(tz: string): boolean {

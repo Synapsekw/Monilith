@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { resolveWidgetSlot } from "@/lib/dashboards/widget-slot-core";
 import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";

@@ -65,12 +65,13 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "8mb",
     },
     // Barrel-optimize single-package deps whose named imports would otherwise
-    // drag their whole barrel into a chunk: `radix-ui` (shadcn primitives) +
-    // `framer-motion` (landing hero animation). Only list packages NOT already
-    // optimized by default — `lucide-react` / `recharts` are default-optimized,
-    // and `cmdk` / `react-day-picker` are single-component (no heavy barrel), so
-    // they gain nothing here (see optimizePackageImports.md).
-    optimizePackageImports: ["radix-ui", "framer-motion"],
+    // drag their whole barrel into a chunk: `radix-ui` (shadcn primitives).
+    // Only list packages NOT already optimized by default — `lucide-react` /
+    // `recharts` are default-optimized, and `cmdk` / `react-day-picker` are
+    // single-component (no heavy barrel), so they gain nothing here (see
+    // optimizePackageImports.md). `framer-motion` used to be listed for the old
+    // landing hero; nothing imports it any more, so the dependency was removed.
+    optimizePackageImports: ["radix-ui"],
   },
   // `/settings` has no content of its own — the first Account section is home.
   // This MUST live at the routing layer, not as a `redirect()` inside

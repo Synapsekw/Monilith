@@ -90,6 +90,18 @@ const applyEffects = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/boards/use-ai-effects", () => ({
   useApplyBoardEffects: () => applyEffects,
 }));
+// The unified runtime's batch actions and board resync. Mocked so the
+// assertions need no Server Action and no QueryClientProvider.
+const applyBatch = vi.fn();
+const dismissBatch = vi.fn();
+vi.mock("@/lib/assistant/batch-actions", () => ({
+  applyBatch: (a: unknown) => applyBatch(a),
+  dismissBatch: (a: unknown) => dismissBatch(a),
+}));
+const resync = vi.fn();
+vi.mock("@/lib/boards/use-resync-boards", () => ({
+  useResyncBoards: () => resync,
+}));
 // The briefing thread renders the run's queued approvals. Their decide path is
 // its own Server Action, mocked here so this file stays about the chat.
 const decideProposal = vi.fn(async () => ({
@@ -1246,5 +1258,121 @@ describe("AskChat — surface and busy signal", () => {
     ask("again");
     await screen.findByRole("alert");
     expect(onBusyChange.mock.calls.map((c) => c[0])).toEqual([true, false]);
+  });
+});
+
+describe("AskChat — staged batches", () => {
+  const STAGED_CALL = {
+    id: "a",
+    tool: "update_item",
+    input: {},
+    summary: "Assign Marko to Demo video",
+    destructive: false,
+    boardId: "33333333-3333-4333-8333-333333333333",
+  };
+  const STAGED_ROW = {
+    id: "m-1",
+    role: "assistant" as const,
+    content: "Lined up one change.",
+    trace: { stagedCalls: [STAGED_CALL] },
+  };
+
+  it("applies a staged batch, appends the outcome and resyncs touched boards", async () => {
+    applyBatch.mockResolvedValue({
+      ok: true,
+      data: {
+        messageId: "out-1",
+        content: "Done — Assign Marko to Demo video",
+        trace: {
+          resolvesProposal: "m-1",
+          outcome: "applied",
+          stagedResults: [{ id: "a", ok: true }],
+        },
+        touchedBoardIds: ["b-1"],
+        agentId: null,
+      },
+    });
+    render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apply 1 change/ }),
+    );
+    expect(applyBatch).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      messageId: "m-1",
+      selectedIds: ["a"],
+    });
+    expect(
+      await screen.findByText("Done — Assign Marko to Demo video"),
+    ).toBeInTheDocument();
+    expect(resync).toHaveBeenCalledWith(["b-1"]);
+    // The outcome turn resolves the card: no second Apply.
+    expect(screen.queryByRole("button", { name: /Apply/ })).toBeNull();
+    // Never a navigation or an RSC refresh for a board update.
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a staged batch without applying anything", async () => {
+    dismissBatch.mockResolvedValue({
+      ok: true,
+      data: {
+        messageId: "out-2",
+        content: "Dismissed — nothing was changed.",
+        trace: { resolvesProposal: "m-1", outcome: "cancelled" },
+        touchedBoardIds: [],
+        agentId: null,
+      },
+    });
+    render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);
+    await userEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(dismissBatch).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      messageId: "m-1",
+    });
+    expect(applyBatch).not.toHaveBeenCalled();
+    // The outcome turn AND the resolved card's note now use the same words.
+    expect(
+      await screen.findAllByText("Dismissed — nothing was changed."),
+    ).toHaveLength(2);
+  });
+
+  it("surfaces a failed apply and leaves the card open", async () => {
+    applyBatch.mockResolvedValue({ ok: false, error: "Not your thread." });
+    render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apply 1 change/ }),
+    );
+    expect(await screen.findByText("Not your thread.")).toBeInTheDocument();
+    expect(resync).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /Apply 1 change/ }),
+    ).toBeEnabled();
+  });
+
+  it("binds a live staged event to the persisted message id", async () => {
+    send.mockImplementation(
+      async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
+        onEvent({ type: "token", text: "Lined up one change." });
+        onEvent({ type: "staged", calls: [STAGED_CALL] });
+        onEvent({
+          type: "done",
+          conversationId: "c1",
+          assistantMessageId: "a1",
+          boardsConsulted: [],
+        });
+        return "ok";
+      },
+    );
+    applyBatch.mockResolvedValue({ ok: false, error: "x" });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask("assign Marko to the demo video");
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Apply 1 change/ }),
+    );
+    // The conversation minted mid-turn and the REAL message id, not a temp id.
+    expect(applyBatch).toHaveBeenCalledWith({
+      conversationId: "c1",
+      messageId: "a1",
+      selectedIds: ["a"],
+    });
   });
 });

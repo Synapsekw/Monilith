@@ -1418,10 +1418,12 @@
   }
   /* The app surface. Scoped to the AppShell root rather than `body` on
      purpose: the landing route has its own page-wide wash and must not
-     inherit this one. Bloom is listed first so it composites above the ramp. */
+     inherit this one. Bloom is listed first so it composites above the ramp.
+     No `background-attachment: fixed`: the root is a viewport-filling
+     `h-svh overflow-hidden` box that never scrolls, so `fixed` painted the
+     same pixels while costing a viewport-attached background layer. */
   .app-wash {
     background-image: var(--app-bloom), var(--app-wash);
-    background-attachment: fixed;
   }
   /* Reach header glow — the content card's one decorative layer (the <main> in
      app-shell.tsx and ask/layout.tsx). Two brand blooms along the card's top

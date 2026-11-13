@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { Database } from "@/types/database.types";
 
 export type NotificationKind = Database["public"]["Enums"]["notification_kind"];

@@ -2,11 +2,16 @@
 // stream protocol's consumers, and the proposal Server Actions. Shapes the
 // `ai_messages.tool_trace` jsonb column, which is untyped at the DB level — so
 // everything read out of it goes through Zod before it is trusted.
-import { z } from "zod";
+import * as z from "zod";
 import {
   validatedActionSchema,
   executionResultSchema,
 } from "@/lib/ai/write/schema";
+import {
+  MAX_STAGED_CALLS,
+  stagedCallSchema,
+  stagedResultSchema,
+} from "@/lib/assistant/staged";
 
 /** Hard cap on proposals stored (and later executed) for one turn. Mirrors the
  *  `.max(10)` in `executeActions` so the two surfaces cannot diverge. */
@@ -29,6 +34,8 @@ export const askToolTraceSchema = z.object({
   resolvesProposal: z.string().uuid().optional(),
   outcome: z.enum(["applied", "cancelled"]).optional(),
   results: z.array(executionResultSchema).optional(),
+  stagedCalls: z.array(stagedCallSchema).max(MAX_STAGED_CALLS).optional(),
+  stagedResults: z.array(stagedResultSchema).optional(),
 });
 export type AskToolTrace = z.infer<typeof askToolTraceSchema>;
 
@@ -40,6 +47,11 @@ export function parseToolTrace(value: unknown): AskToolTrace | null {
   const parsed = askToolTraceSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
+
+const CANCELLED = "Cancelled — nothing was changed.";
+/** The card note for a dismissed staged batch. Derived from the trace, not
+ *  from the outcome turn's content (which `dismissBatch` words for the model). */
+const DISMISSED = "Dismissed — nothing was changed.";
 
 /** Subset of ActionConfirmCard's ConfirmState that a persisted proposal can be
  *  in. "running" is transient client state, so it is not derivable from rows. */
@@ -68,13 +80,17 @@ export function resolveProposalStates(
     const t = m.trace;
     if (!t?.resolvesProposal) continue;
     if (t.outcome === "cancelled") {
-      resolved.set(t.resolvesProposal, {
-        state: "done",
-        note: "Cancelled — nothing was changed.",
-      });
+      // The note is chosen below, by which kind of message this resolves: a
+      // legacy proposal was "Cancelled", a staged batch is "Dismissed".
+      resolved.set(t.resolvesProposal, { state: "done", note: CANCELLED });
       continue;
     }
-    const errors = (t.results ?? []).flatMap((r) => (r.ok ? [] : [r.error]));
+    const errors = [
+      ...(t.results ?? []).flatMap((r) => (r.ok ? [] : [r.error])),
+      ...(t.stagedResults ?? []).flatMap((r) =>
+        r.ok || r.skipped ? [] : [r.error ?? "Failed."],
+      ),
+    ];
     resolved.set(
       t.resolvesProposal,
       errors.length
@@ -85,8 +101,15 @@ export function resolveProposalStates(
 
   const out = new Map<string, ProposalStatus>();
   for (const m of messages) {
-    if (!m.trace?.proposedActions?.length) continue;
-    out.set(m.id, resolved.get(m.id) ?? { state: "idle" });
+    if (!m.trace?.proposedActions?.length && !m.trace?.stagedCalls?.length)
+      continue;
+    const status = resolved.get(m.id) ?? { state: "idle" };
+    out.set(
+      m.id,
+      status.note === CANCELLED && m.trace.stagedCalls?.length
+        ? { ...status, note: DISMISSED }
+        : status,
+    );
   }
   return out;
 }

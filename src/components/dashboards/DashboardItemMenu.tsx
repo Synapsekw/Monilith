@@ -79,8 +79,9 @@ export function DashboardItemMenu({
         setError(res.error);
         return;
       }
+      // No router.refresh(): renameDashboard's updateTag/revalidatePath already
+      // put the re-rendered route in the action response.
       setRenameOpen(false);
-      router.refresh();
     });
   }
 
@@ -97,7 +98,8 @@ export function DashboardItemMenu({
         );
         return;
       }
-      router.refresh();
+      // Success needs no client refresh — duplicateDashboard invalidates the
+      // `dashboards:org` tag, so the sidebar re-renders in its response.
     });
   }
 
@@ -110,8 +112,9 @@ export function DashboardItemMenu({
         return;
       }
       setDeleteOpen(false);
+      // deleteDashboard re-renders the route in its own response; only the
+      // navigation away from a now-deleted active dashboard is left to do.
       if (isActive) router.push("/dashboards");
-      else router.refresh();
     });
   }
 

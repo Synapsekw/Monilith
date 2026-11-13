@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * A handle is the TYPEABLE name of an agent. Free of `server-only`: the mention

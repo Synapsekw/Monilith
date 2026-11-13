@@ -81,8 +81,10 @@ export function BoardItemMenu({
         setError(res.error);
         return;
       }
+      // No router.refresh(): renameBoard expires `boards:user:<me>` (updateTag),
+      // so its own response already carries the re-rendered route. A client
+      // refresh here was a second full render of the same tree.
       setRenameOpen(false);
-      router.refresh();
     });
   }
 
@@ -99,7 +101,8 @@ export function BoardItemMenu({
         );
         return;
       }
-      router.refresh();
+      // Success needs no client refresh: duplicateBoard's updateTag re-renders
+      // the route (and the sidebar list) inside the action response.
     });
   }
 
@@ -124,11 +127,11 @@ export function BoardItemMenu({
             );
             return;
           }
-          router.refresh();
         });
       });
+      // archiveBoard / restoreBoard both expire the boards tag, so the sidebar
+      // re-renders in the action response — only the navigation is left to do.
       if (isActive) router.push("/boards");
-      else router.refresh();
     });
   }
 

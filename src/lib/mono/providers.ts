@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { MonoEnvironment } from "./config";

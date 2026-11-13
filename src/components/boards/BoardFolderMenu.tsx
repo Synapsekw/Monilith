@@ -60,8 +60,9 @@ export function BoardFolderMenu({
         setError(res.error);
         return;
       }
+      // renameFolder's updateTag(foldersTag) already re-rendered the route in
+      // the action response — no client refresh.
       setRenameOpen(false);
-      router.refresh();
     });
   }
 
@@ -79,7 +80,11 @@ export function BoardFolderMenu({
         return;
       }
       setDeleteOpen(false);
-      router.refresh();
+      // A real delete expires the folders tag, so the action response already
+      // carries the re-rendered sidebar. The "already gone" arm returns BEFORE
+      // any updateTag — there the client refresh is the only thing that drops
+      // the ghost row, so it stays, for that arm alone.
+      if (!res.ok) router.refresh();
     });
   }
 

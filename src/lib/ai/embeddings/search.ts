@@ -1,6 +1,6 @@
 "use server";
 
-import { z } from "zod";
+import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
@@ -22,8 +22,7 @@ export type SemanticSearchResult = {
  *  embedded yet (the async sweep hasn't reached it), which the UI surfaces as a
  *  distinct "indexing…" affordance rather than a misleading "no matches". */
 export type FindSimilarResult =
-  | { status: "ok"; items: SemanticSearchResult[] }
-  | { status: "not_indexed" };
+  { status: "ok"; items: SemanticSearchResult[] } | { status: "not_indexed" };
 
 /** Bounded hot-path read: match_items itself clamps ≤ 50 (spec §6); 20 keeps the
  *  Ask-tool payload and the panel list tight. */

@@ -55,6 +55,7 @@ import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
@@ -131,10 +132,10 @@ export const KanbanBoard = memo(KanbanBoardInner);
 function KanbanBoardInner({
   payload,
   selectedViewId,
-  members = [],
+  members = NO_MEMBERS,
   currentUserId = "",
   access = "owner",
-  grants = [],
+  grants = NO_GRANTS,
 }: {
   payload: BoardPayload;
   // Org member directory, threaded down to each card's read-only People

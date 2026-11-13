@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 import { hoursToSecs } from "@/lib/time/hours";
 

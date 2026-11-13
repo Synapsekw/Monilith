@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { GetClient } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 

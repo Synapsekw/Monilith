@@ -6,7 +6,7 @@ import {
   createHmac,
   randomBytes,
 } from "node:crypto";
-import { z } from "zod";
+import * as z from "zod";
 import { recordSchema } from "./schemas";
 
 export type MonoRecord = z.infer<typeof recordSchema>;

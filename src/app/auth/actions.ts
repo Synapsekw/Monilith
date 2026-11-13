@@ -1,11 +1,12 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getServerEnv } from "@/lib/env.server";
 import { safeNextPath } from "@/lib/auth/next-path";
+import { LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
 import {
   signInSchema,
   signUpSchema,
@@ -237,9 +238,19 @@ export async function changeOwnPassword(
   redirect("/");
 }
 
+/**
+ * The last-board cookie names a board the NEXT person to sign in on this
+ * browser may not be able to read. The proxy sends an authenticated `/`
+ * straight to it, so it must not outlive the session that stamped it.
+ */
+async function forgetLastBoard(): Promise<void> {
+  (await cookies()).delete(LAST_BOARD_COOKIE);
+}
+
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  await forgetLastBoard();
   redirect("/login");
 }
 
@@ -253,5 +264,6 @@ export async function signOut(): Promise<void> {
 export async function signOutEverywhere(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut({ scope: "global" });
+  await forgetLastBoard();
   redirect("/login");
 }

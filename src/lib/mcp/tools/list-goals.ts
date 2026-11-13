@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { getGoalsTreeCore, GOALS_LIMIT } from "@/lib/goals/queries";
 import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import type { GoalNode, RowOwner } from "@/lib/goals/types";

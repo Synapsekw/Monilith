@@ -186,4 +186,87 @@ describe("upsertCellCore", () => {
     expect(res.ok).toBe(false);
     expect(badValue.upsert).not.toHaveBeenCalled();
   });
+
+  it("issues the column and item guard reads together, not one after the other", async () => {
+    // The two guards are independent, so the item read must already be in
+    // flight while the column read is still pending. A serial implementation
+    // never asks for `items` until `columns` has answered.
+    const ctx = makeClient({ kind: "text" });
+    const base = ctx.client as {
+      from: (table: string) => {
+        select: () => {
+          eq: () => unknown;
+          maybeSingle: () => Promise<unknown>;
+        };
+      };
+    };
+    const asked: string[] = [];
+    let releaseColumn: () => void = () => {};
+    const columnGate = new Promise<void>((resolve) => {
+      releaseColumn = resolve;
+    });
+    const client = {
+      from: (table: string) => {
+        asked.push(table);
+        const real = base.from(table);
+        if (table !== "columns") return real;
+        return {
+          ...real,
+          select: () => {
+            const chain = {
+              eq: () => chain,
+              maybeSingle: async () => {
+                await columnGate;
+                return {
+                  data: { org_id: "org", board_id: "board", kind: "text" },
+                  error: null,
+                };
+              },
+            };
+            return chain;
+          },
+        };
+      },
+    };
+
+    const pending = upsertCellCore(
+      client as never,
+      { itemId: ITEM, columnId: COL, value: { text: "hi" } },
+      ACTOR,
+    );
+    // Let every already-issued read settle; the column read is still gated.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(asked).toEqual(["columns", "items"]);
+    expect(ctx.upsert).not.toHaveBeenCalled();
+
+    releaseColumn();
+    expect((await pending).ok).toBe(true);
+    expect(ctx.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a missing column ahead of a missing item", async () => {
+    const ctx = makeClient({ kind: "text", columnMissing: true });
+    const base = ctx.client as { from: (table: string) => unknown };
+    const client = {
+      from: (table: string) =>
+        table === "items"
+          ? {
+              select: () => {
+                const chain = {
+                  eq: () => chain,
+                  maybeSingle: async () => ({ data: null, error: null }),
+                };
+                return chain;
+              },
+            }
+          : base.from(table),
+    };
+    expect(
+      await upsertCellCore(
+        client as never,
+        { itemId: ITEM, columnId: COL, value: { text: "x" } },
+        ACTOR,
+      ),
+    ).toEqual({ ok: false, error: "Column not found." });
+  });
 });

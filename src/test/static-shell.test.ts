@@ -27,11 +27,42 @@ import { describe, expect, it } from "vitest";
  * in `pnpm test` long before anyone thinks to run that.
  */
 
-/** Server files rendered above every Suspense boundary of the `(app)` group. */
+/**
+ * Server files rendered above every Suspense boundary of the `(app)` group —
+ * plus the settings layout, which sits above every boundary of the
+ * `settings/*` routes (its `loading.tsx` wraps the layout's children, not the
+ * layout). That one shipped async for months: it awaited the user, the active
+ * org and the admin flag in its body, so every settings page had an empty
+ * shell and a first byte 6-15x slower than the rest of the app.
+ */
 const SHELL_FILES = [
   "src/app/(app)/layout.tsx",
   "src/components/shell/authenticated-shell.tsx",
+  "src/app/(app)/settings/layout.tsx",
 ];
+
+/**
+ * Per-request reads that are not Next runtime APIs themselves but reach one
+ * (cookies / headers) or the database. Awaiting one in a shell file has the
+ * same effect as awaiting `cookies()` directly; a sync component cannot, but
+ * naming them makes the failure message say what went wrong.
+ */
+const REQUEST_READS = [
+  "requireUser",
+  "getUser",
+  "resolveActiveOrg",
+  "getActiveOrgId",
+  "isOrgAdmin",
+  "isOrgAdminCached",
+  "createClient",
+];
+
+/** Which per-request reads this source awaits, if any. */
+function awaitedRequestReads(source: string): string[] {
+  return REQUEST_READS.filter((fn) =>
+    new RegExp(`await\\s+${fn}\\s*\\(`).test(source),
+  );
+}
 
 /**
  * Next.js runtime APIs that return a promise. Awaiting any of them opts the
@@ -88,6 +119,16 @@ describe("the (app) static-shell detectors", () => {
     ).toBe(true);
   });
 
+  it("catches an awaited per-request read", () => {
+    expect(awaitedRequestReads("const user = await requireUser();")).toEqual([
+      "requireUser",
+    ]);
+    expect(
+      awaitedRequestReads("const org = await resolveActiveOrg();"),
+    ).toEqual(["resolveActiveOrg"]);
+    expect(awaitedRequestReads("getUser().then((u) => u?.id);")).toEqual([]);
+  });
+
   it("does not flag synchronous components or local async helpers", () => {
     expect(declaresAsyncComponent("export function Foo() {}")).toBe(false);
     expect(declaresAsyncComponent("export const Foo = () => {};")).toBe(false);
@@ -105,10 +146,36 @@ describe("(app) static shell", () => {
       expect(awaitedRuntimeApis(source)).toEqual([]);
     });
 
+    it(`${relative} awaits no per-request read`, () => {
+      expect(awaitedRequestReads(source)).toEqual([]);
+    });
+
     it(`${relative} declares no async component`, () => {
       // A non-async component cannot await anything, which is the invariant
       // above stated structurally rather than by pattern-matching.
       expect(declaresAsyncComponent(source)).toBe(false);
     });
   }
+});
+
+describe("settings static shell", () => {
+  const layout = stripComments(
+    readFileSync(
+      join(process.cwd(), "src/app/(app)/settings/layout.tsx"),
+      "utf8",
+    ),
+  );
+
+  it("streams the per-user nav behind a Suspense boundary with a fallback", () => {
+    // The async child must be INSIDE a boundary, or it blocks the shell
+    // exactly as the awaits in the layout body did.
+    expect(layout).toMatch(
+      /<Suspense\b[\s\S]*?fallback=[\s\S]*?<SettingsNavData\s*\/>\s*<\/Suspense>/,
+    );
+  });
+
+  it("does not gate or redirect in the layout body", () => {
+    expect(layout).not.toMatch(/\bredirect\s*\(/);
+    expect(layout).not.toMatch(/\bnotFound\s*\(/);
+  });
 });

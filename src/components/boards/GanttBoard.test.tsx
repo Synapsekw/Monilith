@@ -41,6 +41,23 @@ beforeAll(() => {
   });
 });
 
+// Probe: the `members` / `grants` arrays GanttBoard hands its header on each
+// render (identity matters — they feed memoized children).
+const { headerLists } = vi.hoisted(() => ({
+  headerLists: [] as { members: unknown; grants: unknown }[],
+}));
+vi.mock("@/components/boards/BoardHeader", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/boards/BoardHeader")>();
+  return {
+    ...actual,
+    BoardHeader: (props: Parameters<typeof actual.BoardHeader>[0]) => {
+      headerLists.push({ members: props.members, grants: props.grants });
+      return <actual.BoardHeader {...props} />;
+    },
+  };
+});
+
 const setCell = vi.fn();
 const addItem = vi.fn();
 const clearCellValue = vi.fn();
@@ -159,6 +176,20 @@ beforeEach(() => {
 });
 
 describe("GanttBoard", () => {
+  it("keeps the default members/grants lists referentially stable across renders", () => {
+    const qc = new QueryClient();
+    headerLists.length = 0;
+    render(
+      <QueryClientProvider client={qc}>
+        <GanttBoard payload={payloadFixture()} selectedViewId={VIEW_ID} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    expect(headerLists.length).toBeGreaterThan(1);
+    expect(new Set(headerLists.map((h) => h.members)).size).toBe(1);
+    expect(new Set(headerLists.map((h) => h.grants)).size).toBe(1);
+  });
+
   it("renders the board name in the header", () => {
     renderGantt();
     expect(screen.getByText("My Board")).toBeInTheDocument();
@@ -535,6 +566,85 @@ describe("GanttBoard — quick-edit peek", () => {
     expect(
       screen.queryByRole("dialog", { name: /^edit /i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bar resize — live local preview, one write on release
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — bar resize commits once on release", () => {
+  beforeEach(() => setCell.mockClear());
+
+  // "Spanned" runs 2026-06-02 → 2026-06-06 (5 days) at month zoom = 10px/day.
+  function strip() {
+    return screen.getByLabelText("Resize Spanned");
+  }
+  function barWidth() {
+    return (strip().parentElement as HTMLElement).style.width;
+  }
+
+  it("previews the new width while dragging without writing", () => {
+    renderBoard(twoColPayload());
+    expect(barWidth()).toBe("50px");
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 112 });
+    fireEvent.pointerMove(strip(), { clientX: 121 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    expect(barWidth()).toBe("80px");
+    expect(setCell).not.toHaveBeenCalled();
+  });
+
+  it("fires exactly one mutation on pointerup with the final end date", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 110 });
+    fireEvent.pointerMove(strip(), { clientX: 120 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    fireEvent.pointerUp(strip(), { clientX: 130 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: END_COL,
+      value: { date: "2026-06-09" },
+    });
+    // A stray move after release is not part of the gesture.
+    fireEvent.pointerMove(strip(), { clientX: 160 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing when the drag ends on the original date", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    fireEvent.pointerMove(strip(), { clientX: 102 });
+    fireEvent.pointerUp(strip(), { clientX: 102 });
+    expect(setCell).not.toHaveBeenCalled();
+    expect(barWidth()).toBe("50px");
+  });
+
+  it("never drags the end before the start", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: -200 });
+    fireEvent.pointerUp(strip(), { clientX: -200 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: END_COL,
+      value: { date: "2026-06-02" },
+    });
+  });
+
+  it("pointercancel drops the preview and writes nothing", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    expect(barWidth()).toBe("80px");
+    fireEvent.pointerCancel(strip());
+    expect(barWidth()).toBe("50px");
+    fireEvent.pointerUp(strip(), { clientX: 130 });
+    expect(setCell).not.toHaveBeenCalled();
   });
 });
 

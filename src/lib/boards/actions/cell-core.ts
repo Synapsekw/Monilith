@@ -34,20 +34,27 @@ export async function upsertCellCore(
   input: UpsertCellCoreInput,
   actorId: string | null,
 ): Promise<ActionResult<{ cell: Tables<"cell_values"> }>> {
-  // Derive org_id/board_id + kind from the parent column (RLS-scoped read).
-  const { data: column, error: colErr } = await supabase
-    .from("columns")
-    .select("org_id, board_id, kind")
-    .eq("id", input.columnId)
-    .maybeSingle();
+  // Two independent RLS-scoped guard reads, issued together (one round-trip of
+  // latency instead of two): the parent column gives org_id/board_id + kind,
+  // the item gives the board it lives on. Neither needs the other's result to
+  // be ISSUED; the checks below still run in the original order, so a missing
+  // column is reported before a missing item.
+  const [{ data: column, error: colErr }, { data: item, error: itemErr }] =
+    await Promise.all([
+      supabase
+        .from("columns")
+        .select("org_id, board_id, kind")
+        .eq("id", input.columnId)
+        .maybeSingle(),
+      supabase
+        .from("items")
+        .select("board_id")
+        .eq("id", input.itemId)
+        .maybeSingle(),
+    ]);
   if (colErr || !column) return fail("Column not found.");
 
   // Within-org integrity guard: item must belong to the same board as the column.
-  const { data: item, error: itemErr } = await supabase
-    .from("items")
-    .select("board_id")
-    .eq("id", input.itemId)
-    .maybeSingle();
   if (itemErr || !item) return fail("Item not found.");
   if (item.board_id !== column.board_id)
     return fail("Item and column belong to different boards.");

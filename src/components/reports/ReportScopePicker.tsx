@@ -1,6 +1,5 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import type { ReportScope } from "@/lib/reports/queries";
 import { setReportScope } from "@/lib/reports/actions";
@@ -65,7 +64,6 @@ export function ReportScopePicker({
   portfolios: ScopePortfolio[];
   disabled?: boolean;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
 
   const initialMode: PickableScope = scope === "template" ? "board" : scope;
@@ -125,9 +123,9 @@ export function ReportScopePicker({
         );
         return;
       }
-      // Scope IS server data: the set of boards the page loads just changed, so
-      // this is the sanctioned RSC re-run — not an in-page toggle.
-      router.refresh();
+      // Scope IS server data: the set of boards the page loads just changed.
+      // The sanctioned RSC re-run is the one setReportScope's revalidatePath
+      // ships in the action response — a client refresh would be a second one.
     });
   }
 

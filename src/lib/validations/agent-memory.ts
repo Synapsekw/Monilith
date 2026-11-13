@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { INSTRUCTIONS_LABEL } from "@/lib/agents/document-inject";
 import {
   MEMORY_MAX_KEY_CHARS,

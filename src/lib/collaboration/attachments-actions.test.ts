@@ -19,6 +19,13 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+// The actor comes from the session helper (`getClaims()` — a LOCAL JWKS verify),
+// never from `supabase.auth.getUser()` (a network round-trip to Supabase Auth
+// on every call). `getUser` above is that network call: it stays wired into the
+// client mock only so the tests can assert it is never reached.
+const sessionGetUser = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getUser: () => sessionGetUser() }));
+
 import {
   createAttachment,
   getAttachmentDownloadUrl,
@@ -53,6 +60,7 @@ beforeEach(() => {
   createSignedUrls.mockReset();
   remove.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+  sessionGetUser.mockReset().mockResolvedValue({ id: USER });
 });
 
 describe("createAttachment", () => {
@@ -113,6 +121,22 @@ describe("createAttachment", () => {
       }),
     );
     expect(res).toEqual({ ok: true, data: { attachmentId: ATT } });
+    // `uploaded_by` above came from the locally verified session claims — the
+    // Supabase Auth network call is never made for an upload.
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session, before touching the db", async () => {
+    sessionGetUser.mockResolvedValue(null);
+    const res = await createAttachment({
+      itemId: ITEM,
+      storagePath: `${ORG}/${BOARD}/${ITEM}/abc-x.png`,
+      fileName: "x.png",
+      mimeType: "image/png",
+      sizeBytes: 10,
+    });
+    expect(res).toEqual({ ok: false, error: "Not authenticated." });
+    expect(from).not.toHaveBeenCalled();
   });
 });
 

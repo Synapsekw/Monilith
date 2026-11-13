@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { listPortfoliosCore, PORTFOLIO_LIMIT } from "@/lib/portfolios/queries";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";

@@ -1,64 +1,30 @@
-import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { resolveActiveOrg } from "@/lib/org/active";
-import { isOrgAdminCached } from "@/lib/org/guard";
+import { Suspense, type ReactNode } from "react";
 import { Kicker } from "@/components/ui/kicker";
-import {
-  SettingsNav,
-  type SettingsNavGroup,
-} from "@/components/settings/settings-nav";
+import { SettingsNav } from "@/components/settings/settings-nav";
+import { SettingsNavData } from "./settings-nav-data";
+import { settingsNavGroups } from "./settings-nav-groups";
 
 export const metadata = { title: "Settings" };
 
 /**
- * Shared settings shell. Owns the only three reads every section needs — user,
- * active org, admin flag — so each section route can fetch just its own data.
- * Visiting one section no longer pays for all of them.
+ * Shared settings shell: static header + nav chrome around the section.
  *
- * Uses isOrgAdminCached (a narrow, tagged org_members role lookup) rather than
- * isOrgAdmin(), which derives the role from the get_org_members RPC and would
- * drag that heavy query onto every settings page.
+ * NOT async, and it must stay that way. This layout renders above every
+ * Suspense boundary of the settings routes (`loading.tsx` wraps the layout's
+ * CHILDREN, not the layout), so anything awaited here leaves every
+ * `settings/*` page with an EMPTY prerendered shell and holds its first byte
+ * until the read returns. It used to await the user, the active org and the
+ * admin flag right here — two sequential round-trips before a single byte.
+ * `src/test/static-shell.test.ts` guards the shape.
+ *
+ * The one per-user part of the chrome — whether the admin-gated Members entry
+ * shows — streams in through `SettingsNavData`, which also carries the
+ * no-organization redirect. Its fallback is the same nav minus that entry, so
+ * the navigation is on screen and usable from the first paint and nothing
+ * shifts when the role lands (an admin sees one link appear). Hiding the link
+ * is cosmetic: each admin-only page enforces access itself on the server.
  */
-export default async function SettingsLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const user = await requireUser();
-  const org = await resolveActiveOrg();
-  if (!org) redirect("/onboarding");
-  const isAdmin = await isOrgAdminCached(user.id, org.id);
-
-  const groups: SettingsNavGroup[] = [
-    {
-      label: "Account",
-      items: [
-        { href: "/settings/profile", label: "Profile" },
-        { href: "/settings/preferences", label: "Preferences" },
-        { href: "/settings/notifications", label: "Notifications" },
-        { href: "/settings/agents", label: "Agent setup" },
-        { href: "/settings/security", label: "Security" },
-      ],
-    },
-    {
-      label: "Organization",
-      items: [
-        { href: "/settings/organization", label: "General" },
-        { href: "/settings/workspaces", label: "Workspaces" },
-        ...(isAdmin ? [{ href: "/settings/members", label: "Members" }] : []),
-      ],
-    },
-    {
-      label: "Integrations",
-      items: [
-        { href: "/settings/ai", label: "AI" },
-        { href: "/settings/mcp", label: "Connect via MCP" },
-        { href: "/settings/desktop", label: "Desktop app" },
-      ],
-    },
-  ];
-
+export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <div className="w-full px-6 py-10 lg:px-8">
       <div className="mb-8">
@@ -73,7 +39,11 @@ export default async function SettingsLayout({
 
       <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
         <aside className="lg:w-56 lg:shrink-0">
-          <SettingsNav groups={groups} />
+          <Suspense
+            fallback={<SettingsNav groups={settingsNavGroups(false)} />}
+          >
+            <SettingsNavData />
+          </Suspense>
         </aside>
         <main className="min-w-0 flex-1 lg:max-w-3xl">{children}</main>
       </div>

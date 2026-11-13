@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import {
   IMPORTABLE_KINDS,
   MAX_COLS,

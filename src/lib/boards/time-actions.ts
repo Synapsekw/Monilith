@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/session";
 import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
 import { zonedWallTimeToUtc } from "@/lib/datetime/timezone";
 import type { Tables } from "@/types/database.types";
@@ -98,9 +99,9 @@ export async function addManualEntry(input: {
   const meta = await itemBoard(supabase, parsed.data.itemId);
   if (!meta) return fail("Item not found.");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session helper (local JWKS verify) — only the id is needed (timezone
+  // lookup + the row's user_id), so no Supabase Auth network round-trip.
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   // Validate the column belongs to this board and is a time-tracking column.
@@ -154,9 +155,7 @@ export async function editEntry(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   // Same midday-in-user-tz anchoring as addManualEntry, so an edited day
