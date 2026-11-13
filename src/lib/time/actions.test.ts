@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// `getAuthUser` is `supabase.auth.getUser()` — a network round-trip to Supabase
+// Auth. The actions must resolve the actor from the session helper instead (a
+// local JWKS verify); it stays in the client mock only to prove it is unused.
 const getAuthUser = vi.fn();
+const sessionGetUser = vi.fn();
 const getActiveOrgId = vi.fn();
 const upsertCore = vi.fn();
 const deleteResult = vi.fn();
@@ -30,6 +34,7 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: () => getAuthUser() },
   }),
 }));
+vi.mock("@/lib/auth/session", () => ({ getUser: () => sessionGetUser() }));
 vi.mock("@/lib/org/active", () => ({
   getActiveOrgId: () => getActiveOrgId(),
 }));
@@ -62,6 +67,7 @@ beforeEach(() => {
   deleteFilters.length = 0;
   getActiveOrgId.mockResolvedValue(ORG_ID);
   getAuthUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+  sessionGetUser.mockResolvedValue({ id: USER_ID });
   upsertCore.mockResolvedValue({ ok: true, data: { durationSecs: 7200 } });
   deleteResult.mockReturnValue({ error: null });
 });
@@ -83,6 +89,8 @@ describe("upsertTimeAllocation", () => {
       }),
       { userId: USER_ID, orgId: ORG_ID },
     );
+    // Per-cell hot path: no Supabase Auth network call to learn the user id.
+    expect(getAuthUser).not.toHaveBeenCalled();
   });
 
   it("revalidates NOTHING on success — a cell edit must not re-render /time", async () => {
@@ -121,7 +129,7 @@ describe("upsertTimeAllocation", () => {
   });
 
   it("fails when unauthenticated, without writing", async () => {
-    getAuthUser.mockResolvedValue({ data: { user: null } });
+    sessionGetUser.mockResolvedValue(null);
     const res = await upsertTimeAllocation({
       workDate: "2026-06-29",
       category: "Design",
@@ -156,6 +164,7 @@ describe("deleteTimeAllocation", () => {
       ["work_date", "2026-06-29"],
       ["category", "Design"],
     ]);
+    expect(getAuthUser).not.toHaveBeenCalled();
   });
 
   it("revalidates NOTHING on success", async () => {
@@ -168,7 +177,7 @@ describe("deleteTimeAllocation", () => {
   });
 
   it("fails when unauthenticated, without deleting", async () => {
-    getAuthUser.mockResolvedValue({ data: { user: null } });
+    sessionGetUser.mockResolvedValue(null);
     const res = await deleteTimeAllocation({
       workDate: "2026-06-29",
       category: "Design",

@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
 import {
   searchAllocatableItems as searchAllocatableItemsQuery,
@@ -33,9 +34,9 @@ export async function upsertTimeAllocation(
   if (!orgId) return fail("No organization.");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session helper (local JWKS verify), not `supabase.auth.getUser()`: this
+  // runs once per cell edit and needs only the user id.
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   const res = await upsertTimeAllocationCore(supabase, parsed.data, {
@@ -80,9 +81,7 @@ export async function deleteTimeAllocation(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   let query = supabase

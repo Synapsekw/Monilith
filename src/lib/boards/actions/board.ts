@@ -129,9 +129,9 @@ export async function reorderBoard(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Session helper (local JWKS verify), not `supabase.auth.getUser()`: a
+  // drag-reorder needs only the owner id and should not pay an Auth round-trip.
+  const user = await getUser();
   if (!user) return fail("Not authenticated.");
 
   const { data, error } = await supabase
