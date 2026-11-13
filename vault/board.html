@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 16:50",
+  "updated": "2026-11-13 17:05",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "healed",
+        "value": "cb14f344",
         "tone": "ok",
-        "note": "Healed against main after PR #149. Carries signup approval, which is PR #150. Pushed; CI green."
+        "note": "Healed after PR #150; same tree as main. Nothing awaits promotion."
       },
       {
         "name": "main",
-        "value": "deb30166",
-        "tone": "warn",
-        "note": "PR #149 merged 09:29 UTC: performance batch 1 and the unified assistant runtime. PR #150 (signup approval) awaits the owner."
+        "value": "db8c0367",
+        "tone": "ok",
+        "note": "PR #150 merged 12:43 UTC: signup approval and the rail cleanup. CI green."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Performance batch 1 and the assistant runtime are live. Signup approval is not live until PR #150 is merged."
+        "note": "Vercel READY on PR #150. Signup approval, the assistant runtime and performance batch 1 are all live."
       }
     ],
     "gates": [
@@ -189,11 +189,11 @@
   },
   "next": [
     {
-      "title": "Merge PR #150: signup approval",
-      "why": "The database already refuses a membership to an unapproved account, so a new signup on production gets a rough error until this ships the waiting screen and the admin approve and reject buttons. Develop CI and the PR checks are green; a live run passed.",
+      "title": "Try signup approval on production",
+      "why": "It shipped in PR #150 after a local live run. Sign up a throwaway account on the live site, confirm the waiting screen, approve it from the admin users page, then delete it. An invited person and a password-reset link while waiting were unit-tested only.",
       "tags": [
         "owner",
-        "critical",
+        "verify",
         "auth"
       ]
     },
@@ -319,11 +319,6 @@
     }
   ],
   "risks": [
-    {
-      "sev": "amber",
-      "title": "Signup approval is half live",
-      "text": "The membership rule is in the live database; the waiting screen and the admin approve and reject buttons are only on develop. Existing accounts are unaffected. A new signup today cannot get in and sees a rough error. Closes on promotion."
-    },
     {
       "sev": "amber",
       "title": "Goals and portfolios can land in the wrong organisation",
