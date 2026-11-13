@@ -7,7 +7,11 @@ vi.mock("@/lib/mcp/oauth/session-bridge", () => ({
   clientFromAccessToken: (t: string) => fromToken(t),
 }));
 
-import { __resetMonoSessionCache, getMonoClient } from "./session";
+import {
+  __resetMonoSessionCache,
+  forgetMonoSession,
+  getMonoClient,
+} from "./session";
 
 const session = (token: string, expiresInSec: number) => ({
   access_token: token,
@@ -50,6 +54,14 @@ describe("getMonoClient", () => {
       .mockRejectedValueOnce(new Error("rate limited"))
       .mockResolvedValueOnce(session("t", 3600));
     await expect(getMonoClient("mono-1")).rejects.toThrow("rate limited");
+    await getMonoClient("mono-1");
+    expect(mint).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets a Mono so the next call mints again", async () => {
+    mint.mockResolvedValue(session("t", 3600));
+    await getMonoClient("mono-1");
+    forgetMonoSession("mono-1");
     await getMonoClient("mono-1");
     expect(mint).toHaveBeenCalledTimes(2);
   });
