@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import {
+  countPendingAccounts,
   getPlatformStats,
   listAllOrgs,
   platformAuditFeed,
@@ -11,10 +13,14 @@ import { PageHeader } from "@/components/ui/page-header";
 export const metadata = { title: "Platform admin" };
 
 export default async function AdminOverview() {
-  const [stats, orgs, audit] = await Promise.all([
+  // countPendingAccounts reads with the service client; it runs its own
+  // platform-admin check first (as every query here does), in addition to the
+  // layout's requirePlatformAdmin().
+  const [stats, orgs, audit, waiting] = await Promise.all([
     getPlatformStats(),
     listAllOrgs(0, 5),
     platformAuditFeed(8),
+    countPendingAccounts(),
   ]);
 
   return (
@@ -24,6 +30,29 @@ export default async function AdminOverview() {
         title="Platform admin"
         description="Cross-organization oversight for the whole application."
       />
+
+      {waiting > 0 && (
+        <Link
+          href="/admin/users"
+          className="bg-surface hover:border-border-hover focus-visible:ring-ring group flex items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <span
+            aria-hidden
+            className="bg-primary size-2 shrink-0 rounded-full"
+          />
+          <span className="text-foreground font-medium">
+            <span className="tabular-nums">{waiting}</span>{" "}
+            {waiting === 1 ? "account" : "accounts"} waiting for approval
+          </span>
+          <span className="text-primary ml-auto flex items-center gap-1 text-xs font-medium">
+            Review
+            <ChevronRight
+              aria-hidden
+              className="ease-keystone size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+            />
+          </span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Organizations" value={stats.orgs} />

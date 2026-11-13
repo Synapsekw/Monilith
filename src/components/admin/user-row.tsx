@@ -11,8 +11,23 @@ export const USER_ROW_GRID = "grid grid-cols-[1.6fr_2fr_0.7fr_120px] gap-3";
  * full row actions, since an admin must still be able to ban or reset a system
  * account that has been collapsed out of the way.
  */
+/** Status cell text. An undecided or rejected account says so first: that is
+ *  what decides whether the person can get in, ahead of ban state. */
+function statusLabel(user: PlatformUser, banned: boolean): string {
+  if (user.approvalStatus === "pending") return "Pending";
+  if (user.approvalStatus === "rejected") return "Not approved";
+  return banned ? "Banned" : "Active";
+}
+
 export function UserRow({ user }: { user: PlatformUser }) {
   const banned = Boolean(user.bannedUntil);
+  const label = statusLabel(user, banned);
+  const tone =
+    label === "Banned" || label === "Not approved"
+      ? "text-destructive"
+      : label === "Pending"
+        ? "text-foreground"
+        : "text-muted-foreground";
   return (
     <div
       className={`${USER_ROW_GRID} items-center border-b px-4 py-3 text-sm last:border-b-0`}
@@ -21,13 +36,12 @@ export function UserRow({ user }: { user: PlatformUser }) {
       <span className="text-muted-foreground truncate">
         {user.orgNames.length ? user.orgNames.join(" · ") : "—"}
       </span>
-      <span className={banned ? "text-destructive" : "text-muted-foreground"}>
-        {banned ? "Banned" : "Active"}
-      </span>
+      <span className={tone}>{label}</span>
       <UserRowActions
         userId={user.id}
         email={user.email ?? ""}
         banned={banned}
+        approvalStatus={user.approvalStatus}
       />
     </div>
   );

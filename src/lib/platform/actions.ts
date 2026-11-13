@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { orgAdminTag } from "@/lib/cache/tags";
 import { isPlatformAdmin } from "./guard";
+import { approvalTag } from "./approval-tag";
 import {
   platformSetOrgRoleSchema,
   platformUserTargetSchema,
@@ -123,6 +124,76 @@ export async function platformReactivateUser(
   input: unknown,
 ): Promise<ActionResult> {
   return setUserBan(input, false, "platform.user_reactivated");
+}
+
+/**
+ * Record a platform admin's decision on a new account. Order is load-bearing:
+ * validate → actor → platform-admin check → THEN the service-client write, so a
+ * non-admin causes zero writes. `account_approvals` is service-role only, hence
+ * the service client. Upsert on `user_id`: a missing row counts as pending, so
+ * deciding an account that has none must create it.
+ */
+async function setApproval(
+  input: unknown,
+  status: "approved" | "rejected",
+  action: string,
+): Promise<ActionResult> {
+  const parsed = platformUserTargetSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+  const supabase = await createClient();
+  const {
+    data: { user: actor },
+  } = await supabase.auth.getUser();
+  if (!actor) return fail("Not authenticated.");
+  if (!(await isPlatformAdmin())) return fail("Not authorized.");
+  if (status === "rejected" && actor.id === parsed.data.userId)
+    return fail("You can't reject your own account.");
+
+  const svc = createServiceClient();
+  const { error } = await svc.from("account_approvals").upsert(
+    {
+      user_id: parsed.data.userId,
+      status,
+      decided_at: new Date().toISOString(),
+      decided_by: actor.id,
+    },
+    { onConflict: "user_id" },
+  );
+  if (error)
+    return fail(
+      status === "approved"
+        ? "Could not approve that account."
+        : "Could not reject that account.",
+    );
+
+  const { data: target } = await svc.auth.admin.getUserById(parsed.data.userId);
+  await svc.from("admin_audit_log").insert({
+    org_id: null,
+    actor_id: actor.id,
+    actor_kind: "platform",
+    action,
+    target_user_id: parsed.data.userId,
+    target_email: target?.user?.email ?? null,
+    metadata: {},
+  });
+  // The account's cached status read is tagged; expire it now so the person's
+  // next request sees the decision (read-your-own-writes, Server Action only).
+  updateTag(approvalTag(parsed.data.userId));
+  revalidatePath("/admin");
+  return ok();
+}
+
+export async function platformApproveUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setApproval(input, "approved", "platform.user_approved");
+}
+
+export async function platformRejectUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setApproval(input, "rejected", "platform.user_rejected");
 }
 
 /** Auth-plane: send the target user a Supabase password-recovery email. */
