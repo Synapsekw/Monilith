@@ -26,6 +26,7 @@ import type { QaPair } from "./intelligence/use-intelligence-ask";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
 import { DockBody, type DockBodyProps } from "./DockBody";
 import { DockSeam } from "./DockSeam";
+import { useMyMonoStore } from "@/stores/my-mono";
 import { cn } from "@/lib/utils";
 import {
   DockTiles,
@@ -157,6 +158,14 @@ export function BoardDock({
   ownerName?: string | null;
 }) {
   const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
+  // Lets a People-cell write that assigns the viewer's own Mono mark it "on
+  // this board" in the rail's store (the cell guard adds it server-side).
+  const setOwnMonoId = useMyMonoStore((s) => s.setOwnMonoId);
+  const ownMonoId = myMono?.userId ?? null;
+  useEffect(() => {
+    setOwnMonoId(ownMonoId);
+    return () => setOwnMonoId(null);
+  }, [ownMonoId, setOwnMonoId]);
   const narrow = useNarrowViewport();
 
   /**

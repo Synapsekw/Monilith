@@ -233,7 +233,7 @@ export function MonoTab({
               size="icon-sm"
               aria-label="New chat with your Mono"
               className="text-muted-foreground hover:text-foreground"
-              disabled={thread.conversationId === null}
+              disabled={busy || thread.conversationId === null}
               onClick={() => newChat(mono.userId)}
             >
               <Plus className="size-4" />

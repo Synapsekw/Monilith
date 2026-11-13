@@ -45,6 +45,24 @@ interface MyMonoStoreState {
    */
   membership: Record<string, boolean>;
   setMembership: (key: string, onBoard: boolean) => void;
+  /** The viewer's own Mono on the current board page (null = none). */
+  ownMonoId: string | null;
+  setOwnMonoId: (monoId: string | null) => void;
+  /**
+   * A People-cell write succeeded. When it newly added the viewer's own Mono,
+   * the database put the Mono on the board too (the cell guard inserts its
+   * `board_members` row), so mark it here: the rail's toggle then agrees with
+   * no server round-trip.
+   */
+  notePeopleWrite: (boardId: string, prior: unknown, next: unknown) => void;
+}
+
+/** The user ids in a People cell value (`{ userIds: [...] }`), else none. */
+export function peopleIdsOf(value: unknown): string[] {
+  const ids = (value as { userIds?: unknown } | null | undefined)?.userIds;
+  return Array.isArray(ids)
+    ? ids.filter((x): x is string => typeof x === "string")
+    : [];
 }
 
 export const useMyMonoStore = create<MyMonoStoreState>()((set) => ({
@@ -52,6 +70,24 @@ export const useMyMonoStore = create<MyMonoStoreState>()((set) => ({
   membership: {},
   setMembership: (key, onBoard) =>
     set((s) => ({ membership: { ...s.membership, [key]: onBoard } })),
+  ownMonoId: null,
+  setOwnMonoId: (monoId) => set({ ownMonoId: monoId }),
+  notePeopleWrite: (boardId, prior, next) =>
+    set((s) => {
+      const id = s.ownMonoId;
+      if (
+        !id ||
+        !peopleIdsOf(next).includes(id) ||
+        peopleIdsOf(prior).includes(id)
+      )
+        return s;
+      return {
+        membership: {
+          ...s.membership,
+          [boardMembershipKey(id, boardId)]: true,
+        },
+      };
+    }),
   setThread: (monoId, patch) =>
     set((s) => ({
       threads: {

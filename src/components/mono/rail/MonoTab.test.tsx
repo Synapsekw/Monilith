@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMyMonoStore } from "@/stores/my-mono";
@@ -117,6 +117,31 @@ describe("MonoTab", () => {
     );
     await screen.findByTestId("ask-chat");
     expect(loadMyMonoThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables New chat while a turn is running", async () => {
+    render(
+      <MonoTab
+        boardId={BOARD}
+        initialMono={mono("key")}
+        initialOnBoard
+        ownerName="Ada Owner"
+      />,
+    );
+    await screen.findByTestId("ask-chat");
+    const newChat = screen.getByRole("button", {
+      name: "New chat with your Mono",
+    });
+    expect(newChat).toBeEnabled();
+    const props = () =>
+      askChatProps.mock.lastCall![0] as {
+        onTurnStart: () => void;
+        onTurnEnd: () => void;
+      };
+    act(() => props().onTurnStart());
+    expect(newChat).toBeDisabled();
+    act(() => props().onTurnEnd());
+    expect(newChat).toBeEnabled();
   });
 
   it("adds and removes the Mono on this board", async () => {

@@ -77,6 +77,7 @@ import {
 } from "./use-board-mutations";
 import { boardKey } from "./use-board-cache";
 import { upsertCellValue } from "./cache";
+import { boardMembershipKey, useMyMonoStore } from "@/stores/my-mono";
 import type {
   BoardCache,
   CacheCellValue,
@@ -208,6 +209,47 @@ describe("useBoardMutations.setCell", () => {
       const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
       expect(cache.cellValues).toHaveLength(0);
     });
+  });
+
+  it("marks the viewer's own Mono on this board after assigning it", async () => {
+    useMyMonoStore.setState({ membership: {}, ownMonoId: "m1" });
+    const qc = new QueryClient();
+    seedCache(qc);
+    upsertCell.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.setCell({
+        itemId: "i1",
+        columnId: "c1",
+        value: { userIds: ["m1"] },
+      });
+    });
+    await waitFor(() =>
+      expect(
+        useMyMonoStore.getState().membership[boardMembershipKey("m1", "b1")],
+      ).toBe(true),
+    );
+  });
+
+  it("leaves the Mono's board state alone when the assignment fails", async () => {
+    useMyMonoStore.setState({ membership: {}, ownMonoId: "m1" });
+    const qc = new QueryClient();
+    seedCache(qc);
+    upsertCell.mockResolvedValue({ ok: false, error: "nope" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+    await act(async () => {
+      result.current.setCell({
+        itemId: "i1",
+        columnId: "c1",
+        value: { userIds: ["m1"] },
+      });
+    });
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(useMyMonoStore.getState().membership).toEqual({});
   });
 });
 

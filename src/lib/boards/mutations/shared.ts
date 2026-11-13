@@ -54,7 +54,11 @@ export type SetRelationVars = {
  * cell/field/entity it touched, applied over the CURRENT cache so concurrent
  * peer changes to other entities survive the rollback.
  */
-export type Ctx = { rollback?: (cache: BoardCache) => BoardCache };
+export type Ctx = {
+  rollback?: (cache: BoardCache) => BoardCache;
+  /** A cell write's value before the change (People: detects a newly added Mono). */
+  priorValue?: unknown;
+};
 
 /**
  * Strip a removed option id from a single status/dropdown cell value. Returns
