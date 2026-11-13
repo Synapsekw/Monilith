@@ -19,6 +19,22 @@ import { withResolvedTargets } from "@/lib/agents/proposal-targets";
 import { AskChat } from "@/components/ai/ask/AskChat";
 
 /**
+ * A briefing thread's undecided proposals, with their targets resolved to
+ * names. Never rejects — a failed read is logged and reads as "none", so it can
+ * sit in a `Promise.all` without taking the page down with it.
+ */
+async function loadRunProposals(runId: string): Promise<PendingProposal[]> {
+  try {
+    const supabase = await createClient();
+    const list = await listPendingProposalsForRun(supabase, runId);
+    return await withResolvedTargets(supabase, list);
+  } catch (e: unknown) {
+    console.error(`[ask] proposal read failed for run ${runId}`, e);
+    return [];
+  }
+}
+
+/**
  * An existing conversation. First paint loads this thread's messages (bounded,
  * indexed — working agreement #5). RLS returns no rows for a non-owner, so a
  * foreign or missing id 404s. Switching threads from the rail lands here as an
@@ -62,28 +78,26 @@ export default async function AskConversationPage({
   if (rows.length === 0) notFound();
   const readOnly = header.ownerId !== user.id;
 
+  // Second wave: two branches that each depend only on the first wave, so
+  // they run together rather than one after the other.
+  //
   // Names for the agents this thread's turns were ALREADY answered by,
   // including any since disabled — `agents` above is enabled-only, so on its
   // own it would relabel a disabled agent's past answers "Monolith". One
   // bounded primary-key read over the ids this page has already loaded, and
   // only when there are any.
-  const agentNames = await listAgentNamesByIds(
-    rows.map((r) => r.agent_id).filter((id): id is string => id !== null),
-  );
-
-  let proposals: PendingProposal[] = [];
-  if (runId) {
-    const supabase = await createClient();
-    // Degrades rather than 500s: the briefing itself is the point of the page.
-    // Same projection AND the same id→name resolution the run-history surface
-    // uses, so a card says which item it would act on wherever it appears.
-    proposals = await listPendingProposalsForRun(supabase, runId)
-      .then((list) => withResolvedTargets(supabase, list))
-      .catch((e: unknown) => {
-        console.error(`[ask] proposal read failed for run ${runId}`, e);
-        return [];
-      });
-  }
+  //
+  // The proposals branch degrades rather than 500s: the briefing itself is the
+  // point of the page. Same projection AND the same id→name resolution the
+  // run-history surface uses, so a card says which item it would act on
+  // wherever it appears. It resolves to [] without any read for a thread that
+  // has no `run_id`.
+  const [agentNames, proposals] = await Promise.all([
+    listAgentNamesByIds(
+      rows.map((r) => r.agent_id).filter((id): id is string => id !== null),
+    ),
+    runId ? loadRunProposals(runId) : Promise.resolve<PendingProposal[]>([]),
+  ]);
 
   // `toThreadMessages` is shared with `recoverConversation`, so a stream that
   // dropped mid-turn recovers to exactly what this reload would have rendered —
