@@ -28,7 +28,7 @@
 
 ## Performance and data-fetching budget
 
-- First paint for an approved account: the status comes from a tagged server cache; at most one query the first time an account is seen, then none until its tag is cleared.
+- First paint for an approved account: the status comes from a tagged server cache (profile `guard`, revalidated every 300 s per server instance); at most one small query per account per instance per 300 s. An account that is not approved is always re-read live.
 - `/admin/users` first paint: one extra bounded query (pending accounts, limit 50).
 - Approve and Reject: Server Actions; they clear one cache tag and revalidate `/admin`.
 - No in-page interaction refetches server data.

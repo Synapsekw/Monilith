@@ -25,7 +25,8 @@ vi.mock("next/navigation", () => ({
 // only `.get()` is used.
 vi.mock("next/headers", () => ({ headers: async () => headerMap }));
 // The approval read (service client + `use cache`) is unit-tested in
-// approval.test.ts; drive only its status here. The real enforceApproval runs.
+// approval.test.ts; drive only its status here. This mock stands in for
+// enforceApproval: it redirects any account whose mocked status is not approved.
 vi.mock("@/lib/auth/approval", async () => {
   const { redirect: nav } = await import("next/navigation");
   return {

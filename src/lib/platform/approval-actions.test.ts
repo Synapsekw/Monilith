@@ -8,15 +8,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 type Row = Record<string, unknown>;
-const { store, writes, failUpsert, getUser, getUserById, isPlatformAdmin } =
-  vi.hoisted(() => ({
-    store: { account_approvals: [] as Row[], admin_audit_log: [] as Row[] },
-    writes: [] as { table: string; op: string; payload: unknown }[],
-    failUpsert: { on: false },
-    getUser: vi.fn(),
-    getUserById: vi.fn(),
-    isPlatformAdmin: vi.fn(),
-  }));
+const {
+  store,
+  writes,
+  reads,
+  failUpsert,
+  getUser,
+  getUserById,
+  isPlatformAdmin,
+} = vi.hoisted(() => ({
+  store: { account_approvals: [] as Row[], admin_audit_log: [] as Row[] },
+  writes: [] as { table: string; op: string; payload: unknown }[],
+  reads: [] as { table: string; filters: [string, unknown][] }[],
+  failUpsert: { on: false },
+  getUser: vi.fn(),
+  getUserById: vi.fn(),
+  isPlatformAdmin: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser } }),
@@ -35,6 +43,26 @@ vi.mock("@/lib/supabase/service", () => ({
         if (i >= 0) rows[i] = { ...rows[i], ...row };
         else rows.push({ ...row });
         return { error: null };
+      },
+      select: () => {
+        const read = {
+          table: String(table),
+          filters: [] as [string, unknown][],
+        };
+        reads.push(read);
+        const q = {
+          eq(column: string, value: unknown) {
+            read.filters.push([column, value]);
+            return q;
+          },
+          async maybeSingle() {
+            const row = store[table].find((r) =>
+              read.filters.every(([c, v]) => r[c] === v),
+            );
+            return { data: row ? { ...row } : null, error: null };
+          },
+        };
+        return q;
       },
       insert: async (row: Row) => {
         writes.push({ table, op: "insert", payload: row });
@@ -65,6 +93,7 @@ beforeEach(() => {
   ];
   store.admin_audit_log = [];
   writes.length = 0;
+  reads.length = 0;
   failUpsert.on = false;
   getUser.mockReset().mockResolvedValue({ data: { user: { id: actor } } });
   getUserById.mockReset().mockResolvedValue({
@@ -102,6 +131,7 @@ describe.each([
     const r = await action({ userId: target });
     expect(r).toEqual({ ok: false, error: "Not authorized." });
     expect(writes).toEqual([]);
+    expect(reads).toEqual([]);
     expect(getUserById).not.toHaveBeenCalled();
     expect(updateTag).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
@@ -157,6 +187,70 @@ describe.each([
     expect(store.admin_audit_log).toEqual([]);
     expect(updateTag).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("rejecting an account that is already approved", () => {
+  const message =
+    "This account is already approved. Use Deactivate to remove its access.";
+
+  it("fails with a pointer to Deactivate and changes nothing", async () => {
+    store.account_approvals = [
+      {
+        user_id: target,
+        status: "approved",
+        decided_at: "t",
+        decided_by: actor,
+      },
+    ];
+    const r = await platformRejectUser({ userId: target });
+    expect(r).toEqual({ ok: false, error: message });
+    expect(writes).toEqual([]);
+    expect(store.admin_audit_log).toEqual([]);
+    expect(rowOf(target)?.status).toBe("approved");
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("reads only the target's own row", async () => {
+    await platformRejectUser({ userId: target });
+    expect(reads).toEqual([
+      { table: "account_approvals", filters: [["user_id", target]] },
+    ]);
+  });
+
+  it("does not read before approving", async () => {
+    await platformApproveUser({ userId: target });
+    expect(reads).toEqual([]);
+  });
+
+  it("still lets an already rejected account be rejected again", async () => {
+    store.account_approvals = [
+      {
+        user_id: target,
+        status: "rejected",
+        decided_at: "t",
+        decided_by: actor,
+      },
+    ];
+    expect((await platformRejectUser({ userId: target })).ok).toBe(true);
+  });
+
+  it("still lets an account with no row be rejected", async () => {
+    store.account_approvals = [];
+    expect((await platformRejectUser({ userId: target })).ok).toBe(true);
+  });
+
+  it("can approve an account that is already approved (no guard)", async () => {
+    store.account_approvals = [
+      {
+        user_id: target,
+        status: "approved",
+        decided_at: "t",
+        decided_by: actor,
+      },
+    ];
+    expect((await platformApproveUser({ userId: target })).ok).toBe(true);
   });
 });
 

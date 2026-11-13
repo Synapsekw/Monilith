@@ -42,7 +42,8 @@ vi.mock("@/lib/auth/session", () => ({
   loginRedirectPath: async () => "/login",
 }));
 // The approval read is unit-tested in src/lib/auth/approval.test.ts; drive only
-// its status here (every existing case is an approved account).
+// its status here (every existing case is an approved account). The mock
+// stands in for enforceApproval: it redirects any non-approved mocked status.
 vi.mock("@/lib/auth/approval", () => ({
   enforceApproval: async (user: { id: string }) => {
     if ((await getAccountApproval(user.id)) !== "approved")

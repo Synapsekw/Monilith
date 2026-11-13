@@ -2,9 +2,8 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { orgAdminTag } from "@/lib/cache/tags";
+import { approvalTag, orgAdminTag } from "@/lib/cache/tags";
 import { isPlatformAdmin } from "./guard";
-import { approvalTag } from "./approval-tag";
 import {
   platformSetOrgRoleSchema,
   platformUserTargetSchema,
@@ -128,7 +127,7 @@ export async function platformReactivateUser(
 
 /**
  * Record a platform admin's decision on a new account. Order is load-bearing:
- * validate → actor → platform-admin check → THEN the service-client write, so a
+ * validate → actor → platform-admin check → (reject only) read the current status → THEN the service-client write, so a
  * non-admin causes zero writes. `account_approvals` is service-role only, hence
  * the service client. Upsert on `user_id`: a missing row counts as pending, so
  * deciding an account that has none must create it.
@@ -151,6 +150,22 @@ async function setApproval(
     return fail("You can't reject your own account.");
 
   const svc = createServiceClient();
+  if (status === "rejected") {
+    // Rejecting only stops NEW memberships (the database rule), so for an
+    // account that is already approved it would be a false promise: refuse and
+    // point at the action that really removes access. Read after the admin
+    // check so a non-admin causes no service-client read either.
+    const { data: current, error: readError } = await svc
+      .from("account_approvals")
+      .select("status")
+      .eq("user_id", parsed.data.userId)
+      .maybeSingle();
+    if (readError) return fail("Could not reject that account.");
+    if (current?.status === "approved")
+      return fail(
+        "This account is already approved. Use Deactivate to remove its access.",
+      );
+  }
   const { error } = await svc.from("account_approvals").upsert(
     {
       user_id: parsed.data.userId,
