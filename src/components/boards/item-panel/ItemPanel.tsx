@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { Kicker } from "@/components/ui/kicker";
@@ -54,7 +54,12 @@ const FindSimilar = dynamic(
 
 type Tab = "fields" | "updates" | "activity" | "files";
 
-export function ItemPanel({
+// Memoized: BoardViews re-renders on every presence sync, and every prop it
+// passes here is referentially stable (see the memos there), so the panel —
+// open or closed — skips those renders. Its own data arrives through hooks.
+export const ItemPanel = memo(ItemPanelInner);
+
+function ItemPanelInner({
   itemId,
   itemName,
   orgId,

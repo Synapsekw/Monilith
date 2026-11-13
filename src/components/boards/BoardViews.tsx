@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
@@ -140,10 +140,38 @@ export function BoardViews({
     enabled: !isOfflineRender,
   });
 
-  const presenceValue: BoardPresenceContextValue = {
-    ...presence,
-    flashTargetId: flash.flashTargetId,
-  };
+  // `presence` is a fresh object every render, so key the context value on its
+  // (individually stable) fields: consumers then re-render on a real presence
+  // or flash change, not on every BoardViews render.
+  const {
+    roster,
+    focusMap,
+    setFocus,
+    selfUserId,
+    selfFocusTargetId,
+    channelStatus,
+  } = presence;
+  const flashTargetId = flash.flashTargetId;
+  const presenceValue: BoardPresenceContextValue = useMemo(
+    () => ({
+      roster,
+      focusMap,
+      setFocus,
+      selfUserId,
+      selfFocusTargetId,
+      channelStatus,
+      flashTargetId,
+    }),
+    [
+      roster,
+      focusMap,
+      setFocus,
+      selfUserId,
+      selfFocusTargetId,
+      channelStatus,
+      flashTargetId,
+    ],
+  );
 
   // Feed the subscribable presence focus store (consumed by the per-cell
   // PresenceRing/FlashHighlight/usePresenceFocus). This is what lets a remote
@@ -175,15 +203,30 @@ export function BoardViews({
   // The detail panel opens via `?item=` (History API → no RSC refetch, same as
   // `?view=`). The open item's name/fields come from the already-loaded cache.
   const openItemId = searchParams.get("item");
-  const openItem = openItemId
-    ? (payload.items.find((i) => i.id === openItemId) ?? null)
-    : null;
+  const openItem = useMemo(
+    () =>
+      openItemId
+        ? (payload.items.find((i) => i.id === openItemId) ?? null)
+        : null,
+    [openItemId, payload.items],
+  );
 
-  function closeItem() {
+  const closeItem = useCallback(() => {
     const url = new URL(window.location.href);
     url.searchParams.delete("item");
     window.history.pushState({}, "", url);
-  }
+  }, []);
+
+  // Stable projection for the (memoized) item panel.
+  const panelMembers = useMemo(
+    () =>
+      members.map((m) => ({
+        userId: m.userId,
+        fullName: m.fullName,
+        avatarUrl: m.avatarUrl,
+      })),
+    [members],
+  );
 
   const view =
     selected?.kind === "kanban" ? (
@@ -253,11 +296,7 @@ export function BoardViews({
             boardId={payload.board.id}
             currentUserId={currentUserId}
             columns={payload.columns}
-            members={members.map((m) => ({
-              userId: m.userId,
-              fullName: m.fullName,
-              avatarUrl: m.avatarUrl,
-            }))}
+            members={panelMembers}
             createdBy={openItem?.created_by ?? null}
             createdAt={openItem?.created_at ?? null}
             onClose={closeItem}
