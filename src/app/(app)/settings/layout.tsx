@@ -10,8 +10,8 @@ export const metadata = { title: "Settings" };
  * Shared settings shell: static header + nav chrome around the section.
  *
  * NOT async, and it must stay that way. This layout renders above every
- * Suspense boundary of the settings routes (`loading.tsx` wraps the layout's
- * CHILDREN, not the layout), so anything awaited here leaves every
+ * Suspense boundary of the settings routes (each section owns its
+ * `loading.tsx`, below this layout), so anything awaited here leaves every
  * `settings/*` page with an EMPTY prerendered shell and holds its first byte
  * until the read returns. It used to await the user, the active org and the
  * admin flag right here — two sequential round-trips before a single byte.
