@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFieldStatus } from "@/components/ui/field-status";
-import { Calendar } from "@/components/ui/calendar";
+import { LazyCalendar, preloadCalendar } from "@/components/ui/lazy-calendar";
 import { cn } from "@/lib/utils";
 import {
   parseDuration,
@@ -488,6 +488,10 @@ function DatePickerButton({
         <button
           type="button"
           aria-label={ariaLabel}
+          // Warm the code-split calendar on intent so the first open is
+          // rarely gated on the network.
+          onPointerEnter={preloadCalendar}
+          onFocus={preloadCalendar}
           className={cn(
             "border-input flex h-6 w-28 items-center gap-1 rounded-md border px-1.5 text-xs pointer-coarse:h-11",
             "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
@@ -505,7 +509,7 @@ function DatePickerButton({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={4} className="w-auto p-2">
-        <Calendar
+        <LazyCalendar
           mode="single"
           autoFocus
           defaultMonth={selected}

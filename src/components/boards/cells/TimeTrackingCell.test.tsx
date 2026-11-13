@@ -163,7 +163,8 @@ describe("TimeTrackingCell date pickers (Calendar primitive)", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /date for manual entry/i }),
     );
-    expect(screen.getByRole("grid")).toBeInTheDocument();
+    // The calendar is a code-split chunk fetched on first open — await it.
+    expect(await screen.findByRole("grid")).toBeInTheDocument();
     await userEvent.click(screen.getByText("15"));
     await userEvent.click(screen.getByRole("button", { name: /add time/i }));
     expect(onAddManual).toHaveBeenCalledWith("2026-06-15", 3600);
@@ -191,7 +192,8 @@ describe("TimeTrackingCell date pickers (Calendar primitive)", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /edit entry/i }));
     await userEvent.click(screen.getByRole("button", { name: /edit date/i }));
-    expect(screen.getByRole("grid")).toBeInTheDocument();
+    // The calendar is a code-split chunk fetched on first open — await it.
+    expect(await screen.findByRole("grid")).toBeInTheDocument();
     await userEvent.click(screen.getByText("15"));
     await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(onEdit).toHaveBeenCalledWith("edit-entry", "2026-06-15", 5400);
