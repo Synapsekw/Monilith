@@ -9,8 +9,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * `vault.create_secret(p_secret, p_name, …)` (supabase/migrations/
  * 20260724133321_mcp_oauth.sql), so a secret NAME that is derived only from the
  * user id lets the FIRST bridge for a user squat it forever — the user's second
- * MCP client (and a personal agent alongside an MCP client, via
- * src/lib/agents/owner-client.ts) then 500s on mint.
+ * MCP client (and, before it was retired, a personal agent alongside an MCP
+ * client) then 500s on mint.
  *
  * The invariant these tests pin: every mint/rotate asks for a name that is
  * unique to THAT secret, while still carrying the user id as a greppable prefix.

@@ -23,37 +23,20 @@ const insertConv = vi.fn();
 const insertMsg = vi.fn();
 const updateConv = vi.fn();
 const deleteConv = vi.fn();
-const maybeSingleAgent = vi.fn();
 const maybeSingleBoard = vi.fn();
 const maybeSingleFolder = vi.fn();
 const maybeSingleConv = vi.fn();
-const agentEqCalls: [string, unknown][] = [];
+const fromCalls: string[] = [];
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     from: (t: string) => {
+      fromCalls.push(t);
       if (t === "ai_conversations")
         return {
           insert: insertConv,
           update: updateConv,
           delete: deleteConv,
           select: () => ({ eq: () => ({ maybeSingle: maybeSingleConv }) }),
-        };
-      if (t === "user_agents")
-        return {
-          select: () => ({
-            // Records the whole filter chain so a test can assert WHICH
-            // predicates the lookup ran with — `enabled` is one of them.
-            eq: (col: string, val: unknown) => {
-              agentEqCalls.push([col, val]);
-              return {
-                eq: (col2: string, val2: unknown) => {
-                  agentEqCalls.push([col2, val2]);
-                  return { maybeSingle: maybeSingleAgent };
-                },
-                maybeSingle: maybeSingleAgent,
-              };
-            },
-          }),
         };
       if (t === "boards")
         return {
@@ -78,11 +61,6 @@ vi.mock("./conversations", async (importOriginal) => ({
   getMessages: (id: string) => getMessages(id),
 }));
 
-const listOwnerAgentTargets = vi.fn();
-vi.mock("@/lib/ai/ask/owner-agents", () => ({
-  listOwnerAgentTargets: (id: string) => listOwnerAgentTargets(id),
-}));
-
 import { revalidatePath } from "next/cache";
 import {
   createConversation,
@@ -91,7 +69,6 @@ import {
   deleteConversation,
   recoverConversation,
   setThreadVisibility,
-  setConversationAgent,
 } from "./conversation-actions";
 
 beforeEach(() => {
@@ -101,14 +78,11 @@ beforeEach(() => {
   deleteConv.mockReset();
   getMessages.mockReset();
   getMessages.mockResolvedValue([]);
-  maybeSingleAgent.mockReset();
   maybeSingleBoard.mockReset();
   maybeSingleFolder.mockReset();
   maybeSingleConv.mockReset();
   maybeSingleConv.mockResolvedValue({ data: null, error: null });
-  agentEqCalls.length = 0;
-  listOwnerAgentTargets.mockReset();
-  listOwnerAgentTargets.mockResolvedValue([]);
+  fromCalls.length = 0;
   vi.mocked(revalidatePath).mockReset();
 });
 
@@ -122,16 +96,30 @@ describe("createConversation", () => {
     insertMsg.mockResolvedValue({ error: null });
 
     const res = await createConversation({ firstMessage: "what is overdue?" });
-    expect(res).toEqual({
-      ok: true,
-      data: { conversationId: "c9", agentId: null },
-    });
+    expect(res).toEqual({ ok: true, data: { conversationId: "c9" } });
     expect(insertMsg).toHaveBeenCalledWith({
       conversation_id: "c9",
       role: "user",
       content: "what is overdue?",
-      agent_id: null,
     });
+    // The org assistant answers every thread: no persona is stamped or read.
+    expect(insertConv.mock.calls[0][0]).not.toHaveProperty("agent_id");
+    expect(fromCalls).not.toContain("user_agents");
+  });
+
+  it("treats a leading @handle as plain text, never a persona", async () => {
+    insertConv.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "c9" }, error: null }),
+      }),
+    });
+    insertMsg.mockResolvedValue({ error: null });
+    const res = await createConversation({
+      firstMessage: "@ops what slipped?",
+    });
+    expect(res).toEqual({ ok: true, data: { conversationId: "c9" } });
+    expect(insertConv.mock.calls[0][0]).not.toHaveProperty("agent_id");
+    expect(fromCalls).not.toContain("user_agents");
   });
 
   it("rejects an empty message before touching the DB", async () => {
@@ -152,10 +140,14 @@ describe("appendUserMessage", () => {
       conversationId: "11111111-1111-4111-8111-111111111111",
       content: "and which is highest priority?",
     });
-    expect(res).toEqual({
-      ok: true,
-      data: { messageId: "m2", agentId: null },
+    expect(res).toEqual({ ok: true, data: { messageId: "m2" } });
+    expect(insertMsg).toHaveBeenCalledWith({
+      conversation_id: "11111111-1111-4111-8111-111111111111",
+      role: "user",
+      content: "and which is highest priority?",
     });
+    expect(fromCalls).not.toContain("user_agents");
+    expect(updateConv).not.toHaveBeenCalled();
   });
 
   it("rejects a non-uuid conversation id", async () => {
@@ -164,263 +156,6 @@ describe("appendUserMessage", () => {
       content: "hi",
     });
     expect(res.ok).toBe(false);
-  });
-});
-
-describe("appendUserMessage persona routing", () => {
-  const CONV = "11111111-1111-4111-8111-111111111111";
-  const ROSTER = [
-    { kind: "agent" as const, agentId: "a-ops", handle: "ops", name: "Ops" },
-    {
-      kind: "agent" as const,
-      agentId: "a-fin",
-      handle: "finance",
-      name: "Finance",
-    },
-  ];
-
-  beforeEach(() => {
-    listOwnerAgentTargets.mockResolvedValue(ROSTER);
-    // The thread is currently on Ops: the last user turn carries a-ops, and
-    // the conversation column agrees.
-    getMessages.mockResolvedValue([
-      {
-        id: "m0",
-        role: "user",
-        content: "@ops what shipped?",
-        agent_id: "a-ops",
-        tool_trace: null,
-        created_at: "2026-09-01T10:00:00Z",
-      },
-    ]);
-    maybeSingleConv.mockResolvedValue({
-      data: { agent_id: "a-ops" },
-      error: null,
-    });
-  });
-
-  it("stamps the addressed agent on the message and moves the thread's persona", async () => {
-    insertMsg.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "m1" }, error: null }),
-      }),
-    });
-    updateConv.mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await appendUserMessage({
-      conversationId: CONV,
-      content: "@finance what does that cost?",
-    });
-
-    expect(res).toEqual({
-      ok: true,
-      data: { messageId: "m1", agentId: "a-fin" },
-    });
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "user", agent_id: "a-fin" }),
-    );
-    expect(updateConv).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: "a-fin" }),
-    );
-  });
-
-  it("inherits the current persona when no handle leads the message", async () => {
-    insertMsg.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "m2" }, error: null }),
-      }),
-    });
-
-    const res = await appendUserMessage({
-      conversationId: CONV,
-      content: "and next week?",
-    });
-
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: "a-ops" }),
-    );
-    // No switch, so no write to the conversation row at all.
-    expect(updateConv).not.toHaveBeenCalled();
-    expect(res.ok).toBe(true);
-  });
-});
-
-describe("setConversationAgent", () => {
-  const CONV = "11111111-1111-4111-8111-111111111111";
-  const AGENT_ID = "22222222-2222-4222-8222-222222222222";
-
-  it("refuses an agent the caller does not own", async () => {
-    // ownedAgentId's RLS-scoped read returns no row.
-    maybeSingleAgent.mockResolvedValue({ data: null, error: null });
-    const res = await setConversationAgent({
-      conversationId: CONV,
-      agentId: AGENT_ID,
-    });
-    expect(res).toEqual({ ok: false, error: "Agent not found." });
-    expect(updateConv).not.toHaveBeenCalled();
-  });
-
-  /** `.update().eq().select().single()` — the shape that can tell "no row
-   *  matched" from "the write landed". */
-  const updateMatches = (data: unknown) =>
-    updateConv.mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data, error: null }),
-        }),
-      }),
-    });
-
-  // Rewritten deliberately (2026-09-07): this used to stub `.update().eq()` as
-  // the whole chain, which is what let the action report success on an update
-  // that matched nothing. It now pins the row-confirming shape.
-  it("clears the persona back to the plain assistant", async () => {
-    updateMatches({ id: CONV });
-    const res = await setConversationAgent({
-      conversationId: CONV,
-      agentId: null,
-    });
-    expect(res).toEqual({ ok: true, data: { agentId: null } });
-    expect(updateConv).toHaveBeenCalledWith({ agent_id: null });
-  });
-
-  // `ai_conversations_select_board_shared` lets any member of the board READ a
-  // shared thread, so /ask/<id> renders for a non-owner — with a chip they can
-  // click. The RLS-scoped update then matches zero rows and reports no error:
-  // the chip moved and nothing happened.
-  it("reports a real failure when the update matched no row", async () => {
-    updateMatches(null);
-    const res = await setConversationAgent({
-      conversationId: CONV,
-      agentId: null,
-    });
-    expect(res).toEqual({ ok: false, error: "Couldn't switch agent." });
-  });
-
-  // Spec §1: a persona is an ENABLED agent. Every display path resolves names
-  // against the enabled-only `listOwnerAgentTargets`, so accepting a disabled
-  // one here would put its instructions, documents and memory into every turn
-  // under a header reading "Monolith".
-  it("only accepts an ENABLED agent the caller owns", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
-    updateMatches({ id: CONV });
-    await setConversationAgent({ conversationId: CONV, agentId: AGENT_ID });
-    expect(agentEqCalls).toContainEqual(["id", AGENT_ID]);
-    expect(agentEqCalls).toContainEqual(["enabled", true]);
-  });
-});
-
-// The BLOCKING regression this suite existed without: the header switcher
-// wrote `ai_conversations.agent_id`, and the next turn ignored it — the last
-// user message's stamp outranked the column, so switching agents (or back to
-// the plain assistant) changed the chip and nothing else. These drive the two
-// actions in sequence against ONE in-memory column, because the bug lived
-// exactly in the seam between them.
-describe("switching the agent decides who answers the NEXT turn", () => {
-  const CONV = "11111111-1111-4111-8111-111111111111";
-  const FIN_ID = "22222222-2222-4222-8222-222222222222";
-  const ROSTER = [
-    { kind: "agent" as const, agentId: "a-ops", handle: "ops", name: "Ops" },
-    { kind: "agent" as const, agentId: FIN_ID, handle: "finance", name: "Fin" },
-  ];
-  let column: string | null;
-
-  beforeEach(() => {
-    column = "a-ops";
-    listOwnerAgentTargets.mockResolvedValue(ROSTER);
-    // The thread is mid-conversation with Ops: the last user turn is stamped
-    // a-ops, which is precisely what used to outrank the switch.
-    getMessages.mockResolvedValue([
-      {
-        id: "m0",
-        role: "user",
-        content: "@ops what shipped?",
-        agent_id: "a-ops",
-        tool_trace: null,
-        created_at: "2026-09-07T10:00:00Z",
-      },
-    ]);
-    maybeSingleConv.mockImplementation(async () => ({
-      data: { agent_id: column },
-      error: null,
-    }));
-    updateConv.mockImplementation((patch: { agent_id?: string | null }) => {
-      if ("agent_id" in patch) column = patch.agent_id ?? null;
-      return {
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: CONV },
-              error: null,
-            }),
-          }),
-        }),
-      };
-    });
-    insertMsg.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "m1" }, error: null }),
-      }),
-    });
-    maybeSingleAgent.mockResolvedValue({ data: { id: FIN_ID }, error: null });
-  });
-
-  it("routes the next turn to the switched-in agent, not the last turn's", async () => {
-    const switched = await setConversationAgent({
-      conversationId: CONV,
-      agentId: FIN_ID,
-    });
-    expect(switched.ok).toBe(true);
-
-    const res = await appendUserMessage({
-      conversationId: CONV,
-      content: "and next week?",
-    });
-
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "user", agent_id: FIN_ID }),
-    );
-    expect(res).toEqual({
-      ok: true,
-      data: { messageId: "m1", agentId: FIN_ID },
-    });
-  });
-
-  it("routes the next turn to the plain assistant after the persona is cleared", async () => {
-    // The escape hatch the spec requires, and the case the old precedence made
-    // impossible: the column is nulled, but a-ops is still stamped on the last
-    // question, so a message-first rule handed the thread straight back to Ops.
-    const cleared = await setConversationAgent({
-      conversationId: CONV,
-      agentId: null,
-    });
-    expect(cleared.ok).toBe(true);
-
-    const res = await appendUserMessage({
-      conversationId: CONV,
-      content: "and next week?",
-    });
-
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "user", agent_id: null }),
-    );
-    expect(res).toEqual({ ok: true, data: { messageId: "m1", agentId: null } });
-  });
-
-  it("still lets a leading handle switch the thread from the composer", async () => {
-    const res = await appendUserMessage({
-      conversationId: CONV,
-      content: "@finance what does that cost?",
-    });
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: FIN_ID }),
-    );
-    expect(updateConv).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: FIN_ID }),
-    );
-    expect(res.ok).toBe(true);
   });
 });
 
@@ -517,8 +252,6 @@ describe("deleteConversation", () => {
 
 describe("createConversation — board threads", () => {
   const BOARD_ID = "22222222-2222-4222-8222-222222222222";
-  const AGENT_ID = "33333333-3333-4333-8333-333333333333";
-  const FOREIGN_AGENT_ID = "44444444-4444-4444-8444-444444444444";
 
   const FOREIGN_BOARD_ID = "55555555-5555-4555-8555-555555555555";
 
@@ -537,28 +270,14 @@ describe("createConversation — board threads", () => {
     });
   });
 
-  it("rejects an agentId the caller does not own", async () => {
-    // user_agents is owner-scoped by RLS, so a foreign id reads back as null.
-    maybeSingleAgent.mockResolvedValue({ data: null, error: null });
-    const res = await createConversation({
-      firstMessage: "hi",
-      boardId: BOARD_ID,
-      agentId: FOREIGN_AGENT_ID,
-    });
-    expect(res).toEqual({ ok: false, error: "Agent not found." });
-    expect(insertConv).not.toHaveBeenCalled();
-  });
-
-  it("stores board_id and agent_id, and defaults visibility to private", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
+  it("stores board_id, and defaults visibility to private", async () => {
     const res = await createConversation({
       firstMessage: "what is overdue?",
       boardId: BOARD_ID,
-      agentId: AGENT_ID,
     });
     expect(res.ok).toBe(true);
     expect(insertConv).toHaveBeenCalledWith(
-      expect.objectContaining({ board_id: BOARD_ID, agent_id: AGENT_ID }),
+      expect.objectContaining({ board_id: BOARD_ID }),
     );
     // Not passed explicitly — the column default is the guarantee.
     const inserted = insertConv.mock.calls[0][0];
@@ -566,7 +285,6 @@ describe("createConversation — board threads", () => {
   });
 
   it("does not revalidate /ask for a board thread", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
     await createConversation({ firstMessage: "hi", boardId: BOARD_ID });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
@@ -601,18 +319,6 @@ describe("createConversation — board threads", () => {
       boardId: FOREIGN_BOARD_ID,
     });
     expect(missing).toEqual(foreign);
-  });
-
-  it("checks the board BEFORE the agent, and refuses on the board alone", async () => {
-    maybeSingleBoard.mockResolvedValue({ data: null, error: null });
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
-    const res = await createConversation({
-      firstMessage: "hi",
-      boardId: FOREIGN_BOARD_ID,
-      agentId: AGENT_ID,
-    });
-    expect(res.ok).toBe(false);
-    expect(insertConv).not.toHaveBeenCalled();
   });
 
   // ── the board's org IS the thread's org ──────────────────────────────────
@@ -664,60 +370,6 @@ describe("createConversation — board threads", () => {
     expect(res.ok).toBe(true);
     expect(insertConv).toHaveBeenCalledWith(
       expect.objectContaining({ org_id: "org1", board_id: BOARD_ID }),
-    );
-  });
-
-  // The spec's resolution rule is server-side and text-first: "the server
-  // re-derives the answer from the message text and the owner's roster; a
-  // client-supplied agent id is never trusted". The explicit id is the
-  // surface's DEFAULT (the dock's chosen persona, the header's pick on a
-  // not-yet-minted chat) — it must not silently overrule the user naming an
-  // agent in the very message they are sending, which is what
-  // `appendUserMessage` has always done for every later turn.
-  it("lets a handle leading the first message beat the client-supplied agent", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
-    listOwnerAgentTargets.mockResolvedValue([
-      { kind: "agent", agentId: "a-ops", handle: "ops", name: "Ops" },
-    ]);
-    const res = await createConversation({
-      firstMessage: "@ops what slipped?",
-      agentId: AGENT_ID,
-    });
-    expect(res).toEqual({
-      ok: true,
-      data: { conversationId: "c9", agentId: "a-ops" },
-    });
-    expect(insertConv).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: "a-ops" }),
-    );
-    expect(insertMsg).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: "a-ops" }),
-    );
-  });
-
-  it("keeps the client-supplied agent when the message addresses nobody", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
-    listOwnerAgentTargets.mockResolvedValue([
-      { kind: "agent", agentId: "a-ops", handle: "ops", name: "Ops" },
-    ]);
-    await createConversation({
-      firstMessage: "what slipped?",
-      agentId: AGENT_ID,
-    });
-    expect(insertConv).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: AGENT_ID }),
-    );
-  });
-
-  it("ignores a handle nobody owns and keeps the supplied agent", async () => {
-    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
-    listOwnerAgentTargets.mockResolvedValue([]);
-    await createConversation({
-      firstMessage: "@nobody what slipped?",
-      agentId: AGENT_ID,
-    });
-    expect(insertConv).toHaveBeenCalledWith(
-      expect.objectContaining({ agent_id: AGENT_ID }),
     );
   });
 

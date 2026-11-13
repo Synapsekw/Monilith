@@ -37,8 +37,8 @@ import styles from "./editorial-landing.module.css";
  * Messaging rule (from the handoff): Monolith is designed for agents from the
  * start — external tools (Claude, GPT, compatible clients) OPERATE the platform
  * through MCP with the capabilities people have, inside authorized
- * permissions. That is distinct from the built-in scheduled board agents and
- * their proposal-review flow; neither is described as the other.
+ * permissions. That is distinct from the built-in assistant and its
+ * proposal-review flow; neither is described as the other.
  *
  * Prices, credits and trial terms are read from `lib/billing/tiers` and the
  * pricing FAQ, never restated here, so the landing cannot drift from /pricing.
@@ -439,8 +439,8 @@ function WorkFeatures() {
             <Clock3 size={22} aria-hidden="true" />
             <h3>Keep a regular rhythm.</h3>
             <p>
-              Scheduled board agents check the work and propose changes for your
-              review.
+              Board Intelligence surfaces what needs attention, and the
+              assistant proposes changes for your review.
             </p>
           </div>
           <div>
@@ -488,7 +488,7 @@ const PLAN_COPY: Record<
     includes: "EVERYTHING IN CORE, PLUS",
     features: [
       "Ask AI across your workspace",
-      "Scheduled agents and briefings",
+      "Board Intelligence",
       "AI board and dashboard generation",
       "Semantic search",
       `${CREDITS_PER_SEAT} AI credits per seat, pooled`,
@@ -607,12 +607,12 @@ export const LANDING_FAQS: { q: string; a: string }[] = [
     a: "No. Core is a complete work platform without AI: boards, views, automations, dashboards, goals, portfolios, workload and time tracking. Your team can work entirely through the interface.",
   },
   {
-    q: "How are built-in agents different from external AI tools?",
-    a: "Built-in board agents work inside Monolith on a schedule and propose changes for your review. External tools connect through MCP and can operate the platform using their authorized access. Their interaction and confirmation flow depends on the tool you use.",
+    q: "How is the built-in assistant different from external AI tools?",
+    a: "The built-in assistant works inside Monolith and proposes changes for your review. External tools connect through MCP and can operate the platform using their authorized access. Their interaction and confirmation flow depends on the tool you use.",
   },
   {
     q: "Which features are available today?",
-    a: "Boards, views, automations with AI steps, dashboards, workspace AI, scheduled board agents and MCP are live. Named personal agents replying in item threads are rolling out.",
+    a: "Boards, views, automations with AI steps, dashboards, workspace AI, board Intelligence and MCP are live.",
   },
   {
     q: "How does the trial work?",

@@ -28,10 +28,7 @@ import { DockSeam } from "./DockSeam";
 import { cn } from "@/lib/utils";
 import {
   DockTiles,
-  knownAgentId,
   DOCK_RAIL_TILE_ID_PREFIX,
-  type DockAgent,
-  type DockPresence,
   type DockTile,
 } from "./DockTiles";
 import {
@@ -70,8 +67,6 @@ const MINI_IN =
 const MINI_OUT =
   "pointer-events-none -translate-x-2 opacity-0 [transition:opacity_120ms_ease,translate_160ms_ease-in]";
 
-const EMPTY_PRESENCE: Readonly<Record<string, DockPresence>> = {};
-
 /**
  * Put the open thread in the URL, MERGING into whatever is already there.
  *
@@ -107,12 +102,12 @@ type Failure =
   | null;
 
 /**
- * The board's agent dock.
+ * The board's dock: Intelligence and the org assistant's chat.
  *
  * Fetching budget (working agreement #5): renders CLOSED with zero requests, so
  * the majority of board loads that never open it pay nothing. The first open
  * issues ONE Server Action; subsequent opens reuse component state. Selecting a
- * thread reads that thread's messages. Switching persona, collapsing, resizing
+ * thread reads that thread's messages. Switching tiles, collapsing, resizing
  * and the `?thread=` deep link are all client-only. The one extra read is the
  * turn that auto-titles a brand-new thread — a bounded re-read of the list, not
  * a page refetch.
@@ -132,14 +127,12 @@ type Failure =
  */
 export function BoardDock({
   boardId,
-  agents,
   currentUserId,
   access = "viewer",
   initialRun = null,
   ruleMeta,
 }: {
   boardId: string;
-  agents: DockAgent[];
   currentUserId: string;
   /** Least privilege by default: the page passes the real thing (Task 8). */
   access?: "owner" | "editor" | "viewer";
@@ -244,32 +237,9 @@ export function BoardDock({
     [],
   );
 
-  /** The persona whose turn is streaming, for the presence dot (§2, phase 1:
-   *  only the mounted chat's turn — scheduled runs are out of scope). */
-  const [streamingPersona, setStreamingPersona] = useState<string | null>(null);
-  /** Which chat INSTANCE most recently reported itself running — see
-   *  `onBusyChange` below for why the instance, not just the persona. */
-  const runningInstance = useRef<number | null>(null);
-  /**
-   * The running chat is being thrown away ON PURPOSE — a new thread, or a
-   * different thread picked from the ledger.
-   *
-   * Its turn keeps running detached and its `finally` will fire
-   * `onBusyChange(false)` from an instance that is no longer current, which
-   * the guard in `onBusyChange` (rightly) ignores. Nothing else would ever
-   * clear the dot, so the abandoned persona pulses "· running" for the rest
-   * of the session. Whoever unmounts it turns it off here.
-   */
-  const abandonRunningTurn = useCallback(() => {
-    runningInstance.current = null;
-    setStreamingPersona(null);
-  }, []);
-
   const [boardThreads, setBoardThreads] = useState<BoardThreadRow[]>([]);
-  const [agentThreads, setAgentThreads] = useState<BoardThreadRow[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [agentId, setAgentId] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure>(null);
   const [loading, setLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -367,63 +337,43 @@ export function BoardDock({
     [setTab],
   );
 
-  const agentNames = Object.fromEntries(agents.map((a) => [a.id, a.name]));
-  const activeThread =
-    boardThreads.find((t) => t.id === activeId) ??
-    agentThreads.find((t) => t.id === activeId) ??
-    null;
-  // Mid-thread the band reports the OPEN thread's persona, not the one queued
-  // for the next new thread. Falls back to "Ask" for an agent outside this
-  // user's roster.
-  const openPersona = activeThread?.agent_id ?? null;
-  /**
-   * The persona the reader is looking at. This one value drives the active
-   * tile, the title kicker, what New starts over on, and the "does this tile
-   * differ" test in `selectTile`.
-   */
-  const currentPersona: string | null = activeThread
-    ? knownAgentId(openPersona, agents)
-    : agentId;
+  const activeThread = boardThreads.find((t) => t.id === activeId) ?? null;
 
-  const selectThread = useCallback(
-    async (id: string) => {
-      const token = ++selectToken.current;
-      abandonRunningTurn();
-      setActiveId(id);
-      setMessages([]);
-      setThreadLoading(true);
-      setFailure(null);
-      setChatInstance((n) => n + 1);
-      untitled.current = false;
-      deepLinkPending.current = false;
-      syncThreadParam(id);
-      try {
-        const res = await loadThreadMessages({ conversationId: id });
-        if (selectToken.current !== token) return;
-        setThreadLoading(false);
-        if (res.ok) setMessages(res.data.messages);
-        else
-          setFailure({
-            kind: "thread",
-            conversationId: id,
-            message: res.error,
-          });
-      } catch {
-        // A REJECTION, not an `ok: false`: a dropped connection, a 500, or a
-        // deploy that moved the action id. Without this the skeleton below
-        // stays on screen forever and the failure surfaces only as an
-        // unhandled rejection in the console.
-        if (selectToken.current !== token) return;
-        setThreadLoading(false);
+  const selectThread = useCallback(async (id: string) => {
+    const token = ++selectToken.current;
+    setActiveId(id);
+    setMessages([]);
+    setThreadLoading(true);
+    setFailure(null);
+    setChatInstance((n) => n + 1);
+    untitled.current = false;
+    deepLinkPending.current = false;
+    syncThreadParam(id);
+    try {
+      const res = await loadThreadMessages({ conversationId: id });
+      if (selectToken.current !== token) return;
+      setThreadLoading(false);
+      if (res.ok) setMessages(res.data.messages);
+      else
         setFailure({
           kind: "thread",
           conversationId: id,
-          message: "Couldn't open this thread.",
+          message: res.error,
         });
-      }
-    },
-    [abandonRunningTurn],
-  );
+    } catch {
+      // A REJECTION, not an `ok: false`: a dropped connection, a 500, or a
+      // deploy that moved the action id. Without this the skeleton below
+      // stays on screen forever and the failure surfaces only as an
+      // unhandled rejection in the console.
+      if (selectToken.current !== token) return;
+      setThreadLoading(false);
+      setFailure({
+        kind: "thread",
+        conversationId: id,
+        message: "Couldn't open this thread.",
+      });
+    }
+  }, []);
 
   /**
    * Read the thread list. The ONLY fetch path — the open click, a restored-open
@@ -432,7 +382,7 @@ export function BoardDock({
   const loadThreads = useCallback(async () => {
     setLoading(true);
     setFailure(null);
-    let data: { board: BoardThreadRow[]; agent: BoardThreadRow[] };
+    let data: { board: BoardThreadRow[] };
     try {
       const res = await loadDockThreads({ boardId });
       setLoading(false);
@@ -451,7 +401,6 @@ export function BoardDock({
       return;
     }
     setBoardThreads(data.board);
-    setAgentThreads(data.agent);
 
     // Honour a `?thread=` deep link once, and only for a thread this user can
     // actually see — the list is already RLS-scoped, so membership is simply
@@ -462,7 +411,7 @@ export function BoardDock({
     deepLinkPending.current = false;
     const wanted = new URLSearchParams(window.location.search).get("thread");
     if (!wanted) return;
-    if ([...data.board, ...data.agent].some((t) => t.id === wanted)) {
+    if (data.board.some((t) => t.id === wanted)) {
       void selectThread(wanted);
     }
   }, [boardId, selectThread]);
@@ -522,81 +471,29 @@ export function BoardDock({
     [loadThreads, run?.id, selectThread, setTab],
   );
 
-  /**
-   * Start over on `persona`: a fresh chat instance with no thread. New uses
-   * it with the persona on screen; a tile tap uses it with a different one —
-   * "tap an agent and talk" (§2), replacing the locked select.
-   */
-  const startNewAs = useCallback(
-    (persona: string | null) => {
-      selectToken.current++;
-      abandonRunningTurn();
-      setAgentId(persona);
-      setActiveId(null);
-      setMessages([]);
-      setThreadLoading(false);
-      setChatInstance((n) => n + 1);
-      untitled.current = false;
-      deepLinkPending.current = false;
-      syncThreadParam(null);
-    },
-    [abandonRunningTurn],
-  );
+  /** Start over: a fresh chat instance with no thread. */
+  const startNew = useCallback(() => {
+    selectToken.current++;
+    setActiveId(null);
+    setMessages([]);
+    setThreadLoading(false);
+    setChatInstance((n) => n + 1);
+    untitled.current = false;
+    deepLinkPending.current = false;
+    syncThreadParam(null);
+  }, []);
 
   /**
    * §2 selection semantics. Intelligence is the ask that counts as "opened
-   * this session" (same rule as the old tab). Ask/agent tiles switch to Chat
-   * and, when the persona differs from the one on screen, start a new thread
-   * on it. Same persona: a no-op, so a stray click never throws away the open
-   * thread.
+   * this session" (same rule as the old tab). Ask switches to Chat and keeps
+   * the open thread, so a stray click never throws it away.
    */
   const selectTile = useCallback(
     (tile: DockTile) => {
-      if (tile.kind === "intelligence") {
-        changeTab("intelligence");
-        return;
-      }
-      changeTab("chat");
-      const persona = tile.kind === "agent" ? tile.agentId : null;
-      if (persona !== currentPersona) startNewAs(persona);
+      changeTab(tile.kind === "intelligence" ? "intelligence" : "chat");
     },
-    [changeTab, currentPersona, startNewAs],
+    [changeTab],
   );
-
-  /**
-   * `runningInstance` (declared above, beside the state it guards) is the chat
-   * INSTANCE that most recently reported itself running — not merely "the
-   * current one" the way `currentPersona` is, because `startNewAs` unmounts
-   * the old `AskChat` (a fresh `key`) while its `onSubmit` promise keeps
-   * running detached. That old instance's `finally` still fires
-   * `onBusyChange(false)` on the SAME closure it was handed at mount, and
-   * that closure's `busy ? currentPersona : null` ternary throws the
-   * captured persona away on the false branch — it always clears to `null`,
-   * whichever persona is actually on screen by then. Comparing against the
-   * instance the callback was created for (not just the persona value) is
-   * what lets a stale `false` be ignored instead of blanking a NEWER turn's
-   * dot mid-stream. The abandoned turn's own dot is cleared where it is
-   * abandoned — `abandonRunningTurn`.
-   */
-  const onBusyChange = useCallback(
-    (busy: boolean) => {
-      if (busy) {
-        runningInstance.current = chatInstance;
-        setStreamingPersona(currentPersona);
-        return;
-      }
-      // A stale reporter — some earlier, since-unmounted instance's turn
-      // settling after the reader moved on — must not clear a newer turn's
-      // dot; only the instance that is still current may turn it off.
-      if (runningInstance.current !== chatInstance) return;
-      runningInstance.current = null;
-      setStreamingPersona(null);
-    },
-    [chatInstance, currentPersona],
-  );
-  const presence: Readonly<Record<string, DockPresence>> = streamingPersona
-    ? { [streamingPersona]: "running" }
-    : EMPTY_PRESENCE;
 
   const onStarted = useCallback((id: string) => {
     // Adopt the id WITHOUT bumping `chatInstance`: this fires mid-turn, before
@@ -638,7 +535,6 @@ export function BoardDock({
     setSharingId(thread.id);
     setFailure(null);
     setBoardThreads(apply(next));
-    setAgentThreads(apply(next));
     try {
       const res = await setThreadVisibility({
         conversationId: thread.id,
@@ -646,12 +542,10 @@ export function BoardDock({
       });
       if (!res.ok) {
         setBoardThreads(apply(thread.visibility));
-        setAgentThreads(apply(thread.visibility));
         setFailure({ kind: "share", message: res.error });
       }
     } catch {
       setBoardThreads(apply(thread.visibility));
-      setAgentThreads(apply(thread.visibility));
       setFailure({
         kind: "share",
         message: "Couldn't change who can see this thread.",
@@ -706,14 +600,9 @@ export function BoardDock({
       : null;
 
   const body: Omit<DockBodyProps, "onClose"> = {
-    agents,
-    agentNames,
-    tileAgentId: currentPersona,
-    presence,
     onSelectTile: selectTile,
     activeThread,
-    onBusyChange,
-    onNew: () => startNewAs(currentPersona),
+    onNew: startNew,
     error: failureOnThisTab?.message ?? null,
     // An optimistic share that rolled itself back has nothing to re-run — the
     // thread is already showing its true visibility again. A failed promotion
@@ -728,7 +617,6 @@ export function BoardDock({
         : undefined,
     loading,
     boardThreads,
-    agentThreads,
     activeId,
     currentUserId,
     onSelectThread: (id: string) => void selectThread(id),
@@ -738,7 +626,6 @@ export function BoardDock({
     readOnly: Boolean(activeThread && activeThread.user_id !== currentUserId),
     boardId,
     messages,
-    agentId,
     chatKey: `chat-${chatInstance}`,
     onStarted,
     onTurnComplete,
@@ -759,7 +646,7 @@ export function BoardDock({
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Open agent dock"
+            aria-label="Open assistant dock"
             className="bg-surface border-border shadow-panel border"
             // Opening is just state. The fetch hangs off `open` in an effect,
             // so the click and a dock restored open from storage take one path.
@@ -778,9 +665,9 @@ export function BoardDock({
           side="right"
           className="w-full max-w-none gap-0 p-0 [&>button]:hidden"
         >
-          <SheetTitle className="sr-only">Agent dock</SheetTitle>
+          <SheetTitle className="sr-only">Assistant dock</SheetTitle>
           <SheetDescription className="sr-only">
-            Conversations about this board, and threads from your agents.
+            Conversations about this board.
           </SheetDescription>
           <DockBody {...body} onClose={() => setOpen(false)} />
         </SheetContent>
@@ -797,7 +684,7 @@ export function BoardDock({
   const aside = createPortal(
     <aside
       ref={asideRef}
-      aria-label="Agent dock"
+      aria-label="Assistant dock"
       data-open={open}
       data-animating={animating || undefined}
       onTransitionEnd={onTransitionEnd}
@@ -840,11 +727,8 @@ export function BoardDock({
                 and each still opens the dock ON the tile it names. */}
             {/* The same tiles, vertical (§4): any tile opens the dock ON it. */}
             <DockTiles
-              agents={agents}
               tab={tab}
-              agentId={currentPersona}
               badge={unresolvedCount(run ?? null)}
-              presence={presence}
               orientation="vertical"
               // Both layers are mounted for the ~360ms of a fold, so the rail
               // mints its own ids rather than a second `dock-tab-*` set the
@@ -852,15 +736,9 @@ export function BoardDock({
               // nothing, because no panel is mounted beside it.
               idPrefix={DOCK_RAIL_TILE_ID_PREFIX}
               panelMounted={false}
-              // Two tiles only: Intelligence and the chat. Agents are picked
-              // in the open band, so the rail never grows a tile per agent.
-              compact
               onSelect={(tile) => {
-                // The compact chat tile stands for the persona already on
-                // screen — reopen it, never reset it to plain Ask (that would
-                // start a new thread and drop the open one).
-                if (tile.kind === "ask") changeTab("chat");
-                else selectTile(tile);
+                // Reopens the chat on the thread already open, never a new one.
+                selectTile(tile);
                 toggleOpen(true);
               }}
             />

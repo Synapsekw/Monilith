@@ -25,13 +25,10 @@ export type BatchOutcome = {
   content: string;
   trace: AskToolTrace;
   touchedBoardIds: string[];
-  agentId: string | null;
 };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
-type Loaded =
-  | { ok: true; calls: StagedCall[]; agentId: string | null }
-  | { ok: false; error: string };
+type Loaded = { ok: true; calls: StagedCall[] } | { ok: false; error: string };
 
 /**
  * Read the batch back through RLS and refuse it when it is not the caller's
@@ -60,7 +57,7 @@ async function loadBatch(
 
   const row = await supabase
     .from("ai_messages")
-    .select("tool_trace, agent_id")
+    .select("tool_trace")
     .eq("id", messageId)
     .eq("conversation_id", conversationId)
     .maybeSingle();
@@ -85,7 +82,7 @@ async function loadBatch(
   if (prior.data?.length)
     return { ok: false, error: "These changes were already resolved." };
 
-  return { ok: true, calls, agentId: row.data.agent_id };
+  return { ok: true, calls };
 }
 
 type InsertedRow = { id: string | null; error: unknown };
@@ -96,7 +93,6 @@ async function insertOutcomeRow(
   conversationId: string,
   content: string,
   trace: AskToolTrace,
-  agentId: string | null,
 ): Promise<InsertedRow> {
   const ins = await supabase
     .from("ai_messages")
@@ -105,7 +101,6 @@ async function insertOutcomeRow(
       role: "assistant",
       content,
       tool_trace: trace as unknown as Json,
-      agent_id: agentId,
     })
     .select("id")
     .single();
@@ -120,19 +115,17 @@ async function insertOutcome(
   content: string,
   trace: AskToolTrace,
   touchedBoardIds: string[],
-  agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
   const { id } = await insertOutcomeRow(
     supabase,
     conversationId,
     content,
     trace,
-    agentId,
   );
   if (!id) return fail("Couldn't record the result.");
   return {
     ok: true,
-    data: { messageId: id, content, trace, touchedBoardIds, agentId },
+    data: { messageId: id, content, trace, touchedBoardIds },
   };
 }
 
@@ -150,7 +143,6 @@ async function insertAppliedOutcome(
   content: string,
   trace: AskToolTrace,
   touchedBoardIds: string[],
-  agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -159,12 +151,11 @@ async function insertAppliedOutcome(
       conversationId,
       content,
       trace,
-      agentId,
     );
     if (id)
       return {
         ok: true,
-        data: { messageId: id, content, trace, touchedBoardIds, agentId },
+        data: { messageId: id, content, trace, touchedBoardIds },
       };
     lastError = error;
   }
@@ -179,7 +170,6 @@ async function insertAppliedOutcome(
       content,
       trace,
       touchedBoardIds,
-      agentId,
     },
   };
 }
@@ -307,7 +297,6 @@ export async function applyBatch(input: {
         stagedResults: results,
       },
       [...touched],
-      loaded.agentId,
     );
   } catch (e) {
     console.error("[assistant] applyBatch failed", e);
@@ -343,7 +332,6 @@ export async function dismissBatch(input: {
       DISMISSED_OUTCOME,
       { resolvesProposal: messageId, outcome: "cancelled" },
       [],
-      loaded.agentId,
     );
   } catch (e) {
     console.error("[assistant] dismissBatch failed", e);

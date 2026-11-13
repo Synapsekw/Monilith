@@ -22,10 +22,9 @@ import type { Block, Inline } from "./markdown";
  */
 
 /**
- * Local by design. `src/lib/digest/render.ts:16` and
- * `src/lib/agents/briefing-render.ts:41` each keep their own copy; a shared
- * helper is a reasonable future extraction, but it would edit two email
- * renderers that are not part of this change.
+ * Local by design. `src/lib/digest/render.ts:16` keeps its own copy; a shared
+ * helper is a reasonable future extraction, but it would edit an email
+ * renderer that is not part of this change.
  */
 function escapeHtml(s: string): string {
   return s

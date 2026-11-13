@@ -3,6 +3,7 @@ import {
   activeMentionQuery,
   applyMention,
   mentionLabel,
+  type MentionTarget,
 } from "@/lib/collaboration/mentions";
 
 describe("mentions", () => {
@@ -27,22 +28,15 @@ describe("mentions", () => {
     expect(r.caret).toBe(r.text.length);
   });
 
-  it("inserts a handle for an agent target", () => {
-    const r = applyMention("hi @op", 6, {
-      kind: "agent",
-      agentId: "a1",
-      handle: "ops",
-      name: "Ops",
-    });
-    expect(r.text).toBe("hi @ops ");
-  });
-
-  it("labels each kind for display", () => {
-    expect(mentionLabel({ kind: "user", userId: "u", fullName: null })).toBe(
+  it("mentions are people only", () => {
+    const t: MentionTarget = {
+      kind: "user",
+      userId: "u1",
+      fullName: "Mira Kovač",
+    };
+    expect(mentionLabel(t)).toBe("@Mira Kovač");
+    expect(mentionLabel({ kind: "user", userId: "u2", fullName: null })).toBe(
       "@Someone",
     );
-    expect(
-      mentionLabel({ kind: "agent", agentId: "a", handle: "ops", name: "Ops" }),
-    ).toBe("@ops");
   });
 });

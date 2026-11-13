@@ -7,8 +7,7 @@ import { runAi } from "@/lib/ai/gateway";
 import { createClient } from "@/lib/supabase/server";
 import { composeFolderScope } from "@/lib/ai/ask/persona";
 import { getFolderHead } from "@/lib/folders/queries";
-import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
-import { composeAgentChatSystem } from "@/lib/ai/ask/agent-knowledge";
+import { getMessages } from "@/lib/ai/ask/conversations";
 import {
   splitForCompaction,
   composeSystem,
@@ -129,7 +128,7 @@ export async function POST(req: Request) {
 
   const conv = await supabase
     .from("ai_conversations")
-    .select("summary, summarized_upto, board_id, folder_id, agent_id, user_id")
+    .select("summary, summarized_upto, board_id, folder_id, user_id")
     .eq("id", conversationId)
     .single();
   if (conv.error || !conv.data)
@@ -147,12 +146,10 @@ export async function POST(req: Request) {
       { status: 403 },
     );
 
-  // Board scope only, here. Persona composition moves to the per-turn agent
-  // read below (WHO ANSWERS) — the addressed agent is the LAST USER TURN's
-  // `agent_id`, not a pre-turn read of the conversation column. This read
-  // goes through the USER client, so RLS decides what is visible; a row that
-  // reads back null degrades to plain Ask rather than failing a turn whose
-  // history is still worth continuing.
+  // Board scope only, here. Every turn is answered by the org assistant. This
+  // read goes through the USER client, so RLS decides what is visible; a row
+  // that reads back null degrades to plain Ask rather than failing a turn
+  // whose history is still worth continuing.
   // The system text itself is composed inside the turn, after the opening
   // status, because it names the signed-in user (a members read).
   let folderScope: Parameters<typeof composeFolderScope>[1] = null;
@@ -282,29 +279,6 @@ export async function POST(req: Request) {
 
       const allRows = await getMessages(conversationId);
 
-      // WHO ANSWERS. `ai_conversations.agent_id` — the column the header
-      // switcher writes — with the newest user turn as the fallback for a lost
-      // column write (see `currentPersonaFrom`). The request body carries no
-      // agent field at all, so a client cannot select a persona here.
-      //
-      // `enabled` is part of the read for the same reason it is part of
-      // `ownedAgentId`: every display path resolves names against the
-      // enabled-only `listOwnerAgentTargets`, so answering AS a disabled agent
-      // would compose its instructions, documents and memory into a turn the
-      // header and the kicker both label "Monolith". A disabled agent degrades
-      // to the plain assistant, which is what the whole UI is already saying.
-      const personaAgentId = currentPersonaFrom(allRows, conv.data.agent_id);
-      const personaAgent = personaAgentId
-        ? (
-            await supabase
-              .from("user_agents")
-              .select("id, name, instructions, doc_nonce")
-              .eq("id", personaAgentId)
-              .eq("enabled", true)
-              .maybeSingle()
-          ).data
-        : null;
-
       let summary = conv.data.summary;
       const isFirstExchange =
         allRows.length === 1 && allRows[0].role === "user";
@@ -356,24 +330,6 @@ export async function POST(req: Request) {
             }
           }
 
-          // Composed HERE, not above: `model.contextLength` is what the
-          // knowledge envelope is divided against, and it is only resolved
-          // inside this callback (execute-run.ts, same reason). `system`
-          // already carries the FOCUS block, so a persona keeps it.
-          const turnSystem = personaAgent
-            ? await composeAgentChatSystem({
-                client: supabase,
-                preamble: system,
-                agent: {
-                  id: personaAgent.id,
-                  name: personaAgent.name,
-                  instructions: personaAgent.instructions,
-                  docNonce: personaAgent.doc_nonce,
-                },
-                contextLength: model.contextLength,
-              })
-            : system;
-
           // SECURITY: reads run, and staged writes are later applied, as the
           // signed-in user through their own cookie-bound client, so RLS is
           // the boundary. Never a service-role client here.
@@ -398,7 +354,7 @@ export async function POST(req: Request) {
           const beforeLoop = usage;
           const r = await runAssistantLoop({
             model: lm,
-            system: composeSystem(turnSystem, summary),
+            system: composeSystem(system, summary),
             messages: recent.map((m) => ({
               role: m.role as "user" | "assistant",
               content: m.content,
@@ -450,12 +406,6 @@ export async function POST(req: Request) {
       const trace: AskToolTrace = { boardsConsulted: [] };
       if (result.staged.length) trace.stagedCalls = result.staged;
 
-      // Stamped with the agent that was actually READ, never the id we set out
-      // to resolve: a deleted or unreadable agent leaves `personaAgent` null,
-      // and stamping the dangling id would have the FK reject the whole insert
-      // — losing a fully-streamed, already-paid answer to attribute a turn that
-      // was, in the end, answered by the plain assistant (that is what the
-      // composed system prompt says above).
       const ins = await supabase
         .from("ai_messages")
         .insert({
@@ -463,7 +413,6 @@ export async function POST(req: Request) {
           role: "assistant",
           content: result.answer,
           tool_trace: trace as unknown as Json,
-          agent_id: personaAgent?.id ?? null,
         })
         .select("id")
         .single();

@@ -8,18 +8,14 @@ import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
 import { ThreadSummary } from "@/components/ai/summarize/ThreadSummary";
-import {
-  mentionLabel,
-  type AgentMentionTarget,
-  type MentionTarget,
-} from "@/lib/collaboration/mentions";
+import { mentionLabel, type MentionTarget } from "@/lib/collaboration/mentions";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
 import type { MentionTargetInput } from "@/lib/validations/collaboration-actions";
 
 /**
  * Display-only accenting of mention tokens inside a persisted update body —
- * `@Full Name` for a person, `@handle` for an agent. Purely cosmetic: scans the
+ * `@Full Name` for a person. Purely cosmetic: scans the
  * plain-text string for a known label after an `@`, and returns the original
  * text split into plain-string fragments interleaved with accented `<span>`s
  * for each match. Never mutates, reformats, or reparses the underlying text —
@@ -66,10 +62,6 @@ function renderBody(text: string, names: string[]): ReactNode[] {
   return nodes;
 }
 
-/** Stable empty default — a fresh `[]` literal would bust the targets memo on
- *  every render. */
-const NO_AGENTS: readonly AgentMentionTarget[] = [];
-
 /**
  * The agent marker `postAgentReply` writes into an agent-authored update's
  * `body`.
@@ -96,7 +88,6 @@ export function UpdatesTab({
   cache,
   isError = false,
   members,
-  agents = NO_AGENTS,
   onAdd,
   onDelete,
 }: {
@@ -104,9 +95,6 @@ export function UpdatesTab({
   cache: UpdatesCache | undefined;
   isError?: boolean;
   members: readonly Member[];
-  /** The author's own agents, addressable by `@handle`. Already loaded by the
-   *  page — mention filtering is pure client state, so typing costs nothing. */
-  agents?: readonly AgentMentionTarget[];
   onAdd: (text: string, mentions: MentionTargetInput[]) => void;
   onDelete: (updateId: string) => void;
 }) {
@@ -116,8 +104,8 @@ export function UpdatesTab({
   const threadIsEmpty = !cache || cache.updates.length === 0;
 
   const targets = useMemo<MentionTarget[]>(
-    () => [...members.map((m) => ({ kind: "user" as const, ...m })), ...agents],
-    [members, agents],
+    () => members.map((m) => ({ kind: "user" as const, ...m })),
+    [members],
   );
 
   function reset() {
@@ -128,18 +116,14 @@ export function UpdatesTab({
 
   /** The full target behind a recorded (id-only) mention, if it is still known. */
   function resolve(m: MentionTargetInput): MentionTarget | undefined {
-    return targets.find((t) =>
-      m.kind === "agent"
-        ? t.kind === "agent" && t.agentId === m.agentId
-        : t.kind === "user" && t.userId === m.userId,
-    );
+    return targets.find((t) => t.userId === m.userId);
   }
 
   function submit() {
     const t = text.trim();
     if (!t) return;
     // Drop targets whose label was edited back out before sending, so we don't
-    // notify someone — or wake an agent — the final text no longer mentions.
+    // notify someone the final text no longer mentions.
     const present = mentions.filter((m) => {
       const target = resolve(m);
       return !!target && t.includes(mentionLabel(target));

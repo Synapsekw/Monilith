@@ -17,7 +17,7 @@ function mount(open: boolean) {
     </>,
   );
   const cap = screen.getByRole("button", {
-    name: open ? /close agent dock/i : /open agent dock/i,
+    name: open ? /close assistant dock/i : /open assistant dock/i,
   });
   return { ...handlers, cap, strip: cap.parentElement as HTMLElement };
 }

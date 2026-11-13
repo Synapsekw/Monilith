@@ -13,35 +13,16 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh }),
 }));
 const recoverConversation = vi.fn();
-// Typed as taking the ids argument (the impl ignores it), matching the
-// `applyAskProposal`/`cancelAskProposal` spies below.
-type SwitchAgentCall = (
-  input: unknown,
-) => Promise<{ ok: true; data: { agentId: string | null } }>;
-const setConversationAgent = vi.fn<SwitchAgentCall>(async () => ({
-  ok: true as const,
-  data: { agentId: null },
-}));
 vi.mock("@/lib/ai/ask/conversation-actions", () => ({
-  // Echoes back whichever `agentId` the caller asked to start the thread
-  // with (or null) — realistic enough that `AskChat`'s header reflects the
-  // real persona after a send, without re-implementing server routing here.
-  createConversation: vi.fn(
-    async (input: {
-      firstMessage: string;
-      boardId?: string;
-      agentId?: string;
-    }) => ({
-      ok: true,
-      data: { conversationId: "c1", agentId: input.agentId ?? null },
-    }),
-  ),
+  createConversation: vi.fn(async () => ({
+    ok: true,
+    data: { conversationId: "c1" },
+  })),
   appendUserMessage: vi.fn(async () => ({
     ok: true,
-    data: { messageId: "m2", agentId: null },
+    data: { messageId: "m2" },
   })),
   recoverConversation: (i: unknown) => recoverConversation(i),
-  setConversationAgent: (i: unknown) => setConversationAgent(i as never),
 }));
 // Typed as taking the ids argument (the impl ignores it) so the spy can be
 // asserted with `toHaveBeenCalledWith` without an unused-parameter binding.
@@ -102,16 +83,6 @@ const resync = vi.fn();
 vi.mock("@/lib/boards/use-resync-boards", () => ({
   useResyncBoards: () => resync,
 }));
-// The briefing thread renders the run's queued approvals. Their decide path is
-// its own Server Action, mocked here so this file stays about the chat.
-const decideProposal = vi.fn(async () => ({
-  ok: true as const,
-  data: { status: "approved" as const },
-}));
-vi.mock("@/lib/agents/proposal-actions", () => ({
-  decideProposal: () => decideProposal(),
-}));
-
 import { AskChat } from "./AskChat";
 import {
   appendUserMessage,
@@ -248,80 +219,6 @@ describe("AskChat", () => {
     );
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
   });
-
-  // The outcome turn used to be attributed TWICE by two different rules: the
-  // server stamped the persisted row, and `resolve()` stamped its own copy
-  // from whatever persona the client happened to be holding. They disagree the
-  // moment the header switches between the proposal and the approval, and the
-  // reload relabelled the turn. The SERVER is the single source — here the
-  // client's own persona is null and the server's is Ops, so only a client
-  // reading `res.data.agentId` can render "Ops".
-  it("attributes the proposal outcome turn to the agent the SERVER stamped", async () => {
-    const RESOLVE_OPS_ID = "55555555-5555-4555-8555-555555555555";
-    const RESOLVE_OPS = {
-      kind: "agent" as const,
-      agentId: RESOLVE_OPS_ID,
-      handle: "ops",
-      name: "Ops",
-    };
-    send.mockImplementation(
-      async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
-        onEvent({ type: "token", text: "I'll create that — " });
-        onEvent({ type: "proposal", actions: [ACTION] });
-        onEvent({
-          type: "done",
-          conversationId: "c1",
-          assistantMessageId: "a1",
-          boardsConsulted: ["b1"],
-        });
-      },
-    );
-    // The thread already belongs to Ops (sticky routing) — this plain
-    // follow-up addresses nobody, so the real `appendUserMessage` echoes back
-    // the SAME persona rather than resetting it.
-    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      data: { messageId: "m2", agentId: RESOLVE_OPS_ID },
-    });
-    applyAskProposal.mockResolvedValueOnce({
-      ok: true as const,
-      data: {
-        messageId: "o1",
-        content: 'Done — Create task "Ship v2" in Backlog.',
-        trace: {
-          resolvesProposal: "a1",
-          outcome: "applied" as const,
-          results: [{ ok: true as const, itemId: "i1" }],
-        },
-        effects: [],
-        agentId: RESOLVE_OPS_ID,
-      },
-    });
-    render(
-      <AskChat
-        conversationId="c1"
-        initialMessages={[]}
-        agents={[RESOLVE_OPS]}
-        initialAgentId={RESOLVE_OPS_ID}
-      />,
-    );
-    ask("create Ship v2 in Backlog");
-    await waitFor(() =>
-      expect(screen.getByText(ACTION.summary)).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
-
-    await waitFor(() =>
-      expect(
-        screen.getByText('Done — Create task "Ship v2" in Backlog.'),
-      ).toBeInTheDocument(),
-    );
-    // The outcome turn's label reads "Ops" (same as the header and the
-    // proposal turn before it) — never "Monolith".
-    expect(screen.getAllByText("Ops").length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText("Monolith")).not.toBeInTheDocument();
-  });
 });
 
 /** Drive a turn that ends at a confirm card, then hand back the rendered card. */
@@ -389,7 +286,6 @@ describe("AskChat — rendering an approved write on the board", () => {
 // holds (gotcha-09).
 describe("AskChat — surface-agnostic (board dock)", () => {
   const BOARD_ID = "11111111-1111-4111-8111-111111111111";
-  const AGENT_ID = "22222222-2222-4222-8222-222222222222";
 
   it("does not rewrite the URL to /ask when a surface supplies onStarted", async () => {
     const onStarted = vi.fn();
@@ -451,13 +347,12 @@ describe("AskChat — surface-agnostic (board dock)", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("passes boardId and agentId to createConversation", async () => {
+  it("passes boardId — and no agent — to createConversation", async () => {
     render(
       <AskChat
         conversationId={null}
         initialMessages={[]}
         boardId={BOARD_ID}
-        agentId={AGENT_ID}
         onStarted={() => {}}
       />,
     );
@@ -467,11 +362,8 @@ describe("AskChat — surface-agnostic (board dock)", () => {
       expect(createConversation).toHaveBeenCalledWith({
         firstMessage: "hello",
         boardId: BOARD_ID,
-        agentId: AGENT_ID,
       }),
     );
-    // The persona is a CREATE-time argument only: /api/ask reads it off the
-    // conversation row, so it must never ride along per turn.
     expect(send).toHaveBeenCalledWith("c1", expect.any(Function));
   });
 
@@ -763,295 +655,41 @@ describe("AskChat — severed stream (gotcha-61)", () => {
   });
 });
 
-describe("AskChat — an agent briefing thread", () => {
-  const PROPOSAL = {
-    id: "p1",
-    runId: "run-1",
-    userAgentId: "agent-1",
-    toolName: "create_item",
-    capability: "board.write",
-    summary: 'Add "Draft proposal" to a board group.',
-    status: "pending" as const,
-    expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
-    createdAt: new Date().toISOString(),
-    target: null,
-  };
-
-  it("renders the run's queued approvals under the report", () => {
+// The org assistant answers every turn: an old briefing thread still renders
+// its messages, but no persona, proposal list or switcher is offered.
+describe("AskChat — no agent surfaces", () => {
+  it("renders an old briefing thread's messages and nothing agent-shaped", () => {
     render(
       <AskChat
         conversationId="c1"
         initialMessages={[ANSWER_ROW]}
-        agentProposals={[PROPOSAL]}
+        title="Morning brief"
       />,
     );
-    expect(screen.getByText(/Add "Draft proposal"/)).toBeInTheDocument();
+    expect(screen.getByText(ANSWER_ROW.content)).toBeInTheDocument();
+    expect(screen.getByText("Monolith assistant")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /approve/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("renders nothing extra for an ordinary chat", () => {
-    render(<AskChat conversationId="c1" initialMessages={[ANSWER_ROW]} />);
+      screen.queryByRole("button", { name: /monolith assistant/i }),
+    ).toBeNull();
     expect(
-      screen.queryByRole("group", { name: /awaiting approval/i }),
+      screen.queryByRole("button", { name: /approve/i }),
     ).not.toBeInTheDocument();
   });
-});
 
-// Spec 3 addressing: a LEADING `@handle` in the composer chooses which of the
-// owner's agents answers. The persona is a property of the CONVERSATION ROW —
-// `/api/ask` reads it from there — so it can only be set as the thread is
-// minted, never bolted onto one that already exists.
-describe("AskChat — @handle picks the persona", () => {
-  const OPS_ID = "33333333-3333-4333-8333-333333333333";
-  const OPS = {
-    kind: "agent" as const,
-    agentId: OPS_ID,
-    handle: "ops",
-    name: "Ops Chaser",
-  };
-
-  it("passes the addressed agent to createConversation for a new thread", async () => {
-    render(
-      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
-    );
-    ask("@ops what is late?");
-
-    await waitFor(() =>
-      expect(createConversation).toHaveBeenCalledWith({
-        firstMessage: "@ops what is late?",
-        agentId: OPS_ID,
-      }),
-    );
-  });
-
-  it("still starts an ordinary thread when no handle leads the message", async () => {
-    render(
-      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
-    );
-    ask("what is late?");
-
-    await waitFor(() =>
-      expect(createConversation).toHaveBeenCalledWith({
-        firstMessage: "what is late?",
-      }),
-    );
-  });
-
-  // Plan removal: a handle addressed inside an EXISTING thread used to be
-  // refused outright ("Start a new chat to ask a different agent."), because
-  // the thread could not be re-personified. Now it just answers as the
-  // addressed agent (the server resolves and persists the switch — see
-  // `resolveAddressedAgent`/`appendUserMessage`) and the header names them.
-  it("answers as the addressed agent in an existing thread, with no refusal notice", async () => {
-    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      data: { messageId: "m2", agentId: OPS_ID },
-    });
-    render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
-    ask("@ops what is late?");
-
+  it("sends a leading @handle as plain text to appendUserMessage", async () => {
+    render(<AskChat conversationId="c1" initialMessages={[]} />);
+    ask("@ops what slipped?");
     await waitFor(() =>
       expect(appendUserMessage).toHaveBeenCalledWith({
         conversationId: "c1",
-        content: "@ops what is late?",
+        content: "@ops what slipped?",
       }),
     );
-    // Never minted a second thread — the existing one is re-personified.
-    expect(createConversation).not.toHaveBeenCalled();
-    // The old refusal is gone…
-    expect(
-      screen.queryByText(/start a new chat to ask a different agent/i),
-    ).not.toBeInTheDocument();
-    // …and the header chip names who actually answered. Exact name, not a
-    // substring match: Task 11 gave the composer its own "@ops" chip, which
-    // would otherwise also satisfy a loose /ops/i.
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Ops Chaser" }),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  // Regression: the streaming bubble named the addressed agent correctly, but
-  // the row pushed on `done` carried no `agentId`, so the transcript flipped
-  // to "Monolith" the instant the answer landed and stayed wrong for the rest
-  // of the session (`messages` never resyncs from the server). This drives
-  // AskChat's REAL send → done path — not a MessageList render with
-  // hand-built props — because that gap is exactly why the bug shipped.
-  it("keeps the landed turn attributed to the agent once the turn is done, not the plain assistant", async () => {
-    render(
-      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
-    );
-    ask("@ops what is late?");
-
-    // The turn lands (persisted assistant content from the `done` event).
     await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
-
-    // Both the header chip and the transcript's per-turn label read "Ops
-    // Chaser" — neither one has fallen back to "Monolith".
-    expect(screen.getAllByText("Ops Chaser").length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText("Monolith")).not.toBeInTheDocument();
-  });
-
-  it("keeps naming the addressed agent across a follow-up that addresses nobody (sticky routing)", async () => {
-    (appendUserMessage as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        ok: true,
-        data: { messageId: "m2", agentId: OPS_ID },
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        data: { messageId: "m3", agentId: OPS_ID },
-      });
-    render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
-    ask("@ops what is late?");
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Ops Chaser" }),
-      ).toBeInTheDocument(),
-    );
-
-    ask("what about tomorrow?");
-
-    await waitFor(() => expect(appendUserMessage).toHaveBeenCalledTimes(2));
-    // Still Ops: a plain follow-up inherits the thread's persona — the header
-    // reflects what the server resolved, not a client guess. Exact name: the
-    // composer's own "@ops" chip (Task 11) would also match a loose /ops/i.
-    expect(
-      screen.getByRole("button", { name: "Ops Chaser" }),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Monolith").length).toBeGreaterThanOrEqual(1);
   });
 });
 
-// The header switcher itself: AskChat owns the live persona state and is the
-// only thing that ever calls `setConversationAgent` — the ONE targeted
-// Server Action working agreement #5 requires, never a navigation.
-describe("AskChat — the header agent switcher", () => {
-  const SWITCH_OPS_ID = "44444444-4444-4444-8444-444444444444";
-  const SWITCH_AGENTS = [
-    {
-      kind: "agent" as const,
-      agentId: SWITCH_OPS_ID,
-      handle: "ops",
-      name: "Ops",
-    },
-  ];
-
-  it("switches an existing thread's persona with one Server Action and no navigation", async () => {
-    const user = userEvent.setup();
-    render(
-      <AskChat
-        conversationId="c1"
-        initialMessages={[]}
-        agents={SWITCH_AGENTS}
-      />,
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: /monolith assistant/i }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
-
-    expect(setConversationAgent).toHaveBeenCalledWith({
-      conversationId: "c1",
-      agentId: SWITCH_OPS_ID,
-    });
-    // Reads as instant — the chip updates without waiting on the action.
-    // Exact name: the composer's own "@ops" chip (Task 11) would also
-    // satisfy a loose /ops/i.
-    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
-    // No RSC navigation for an in-page switch (working agreement #5).
-    expect(refresh).not.toHaveBeenCalled();
-  });
-
-  it("reverts the chip when the switch fails, after showing the optimistic pick", async () => {
-    // Held open deliberately (not `mockResolvedValueOnce`): a promise that
-    // resolves before the assertions run would make "the chip ends up back
-    // at Monolith assistant" indistinguishable from an entirely unwired
-    // `onSelect` — the initial render already reads "Monolith assistant", so
-    // that alone proves nothing changed, let alone reverted.
-    let settle!: (v: { ok: false; error: string }) => void;
-    setConversationAgent.mockReturnValueOnce(
-      new Promise((resolve) => {
-        settle = resolve;
-      }) as never,
-    );
-    const user = userEvent.setup();
-    render(
-      <AskChat
-        conversationId="c1"
-        initialMessages={[]}
-        agents={SWITCH_AGENTS}
-      />,
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: /monolith assistant/i }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
-
-    // The Server Action really was called, with the picked agent...
-    expect(setConversationAgent).toHaveBeenCalledWith({
-      conversationId: "c1",
-      agentId: SWITCH_OPS_ID,
-    });
-    // ...and the chip already reads "Ops" while that call is still in
-    // flight — the optimistic update this test exists to prove happened.
-    // Exact name: the composer's own "@ops" chip (Task 11) would also
-    // satisfy a loose /ops/i.
-    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
-
-    await act(async () => {
-      settle({ ok: false, error: "Couldn't switch agent." });
-    });
-
-    // Only NOW, after the failure lands, does it revert.
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /monolith assistant/i }),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  it("on a not-yet-minted chat, hands the chosen agent to createConversation instead of writing anywhere", async () => {
-    const user = userEvent.setup();
-    render(
-      <AskChat
-        conversationId={null}
-        initialMessages={[]}
-        agents={SWITCH_AGENTS}
-      />,
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: /monolith assistant/i }),
-    );
-    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
-
-    // Nothing to write to yet — the choice is client state only.
-    expect(setConversationAgent).not.toHaveBeenCalled();
-
-    ask("what is late?");
-
-    await waitFor(() =>
-      expect(createConversation).toHaveBeenCalledWith({
-        firstMessage: "what is late?",
-        agentId: SWITCH_OPS_ID,
-      }),
-    );
-  });
-});
-
-// A thread shared to a board renders on /ask/<id> for every member of that
-// board, not only its owner (`ai_conversations_select_board_shared`). Every
-// write on this surface — the switch, the send, the approval — is scoped to
-// the owner by RLS, so a viewer must be offered none of them: the switcher
-// used to report success on an update that matched zero rows.
-// The composer's alert/Retry surface (Track E). Distinct from the header
-// switcher's revert-on-failure test above: this is the SEND itself failing,
-// before any stream opens.
 describe("AskChat — composer error and retry", () => {
   it("surfaces a failed send as a composer alert and resends the same message on retry", async () => {
     (createConversation as ReturnType<typeof vi.fn>)
@@ -1061,7 +699,7 @@ describe("AskChat — composer error and retry", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        data: { conversationId: "c1", agentId: null },
+        data: { conversationId: "c1" },
       });
     render(<AskChat conversationId={null} initialMessages={[]} />);
     ask("what's overdue?");
@@ -1101,14 +739,7 @@ describe("AskChat — composer error and retry", () => {
 });
 
 describe("AskChat — a viewer of someone else's shared thread", () => {
-  const OPS = {
-    kind: "agent" as const,
-    agentId: "88888888-8888-4888-8888-888888888888",
-    handle: "ops",
-    name: "Ops",
-  };
-
-  it("reads the transcript but offers no composer and no switcher", () => {
+  it("reads the transcript but offers no composer", () => {
     render(
       <AskChat
         conversationId="c1"
@@ -1116,8 +747,6 @@ describe("AskChat — a viewer of someone else's shared thread", () => {
           { id: "m1", role: "user", content: "what slipped?" },
           { id: "m2", role: "assistant", content: "Three items." },
         ]}
-        agents={[OPS]}
-        initialAgentId={OPS.agentId}
         title="Q3 slippage"
         readOnly
       />,
@@ -1126,31 +755,25 @@ describe("AskChat — a viewer of someone else's shared thread", () => {
     expect(screen.getByText("Three items.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Your question")).toBeNull();
     expect(screen.getByText(/only its owner can reply/i)).toBeInTheDocument();
-    // The chip names who is answering; it is not a control any more.
-    expect(screen.getByText("Ops")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ops" })).toBeNull();
+    expect(screen.getByText("Monolith assistant")).toBeInTheDocument();
   });
 
-  it("keeps the owner's composer and switcher untouched", () => {
+  it("keeps the owner's composer untouched", () => {
     render(
       <AskChat
         conversationId="c1"
         initialMessages={[{ id: "m1", role: "user", content: "what slipped?" }]}
-        agents={[OPS]}
-        initialAgentId={OPS.agentId}
         title="Q3 slippage"
       />,
     );
     expect(screen.getByLabelText("Your question")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
     expect(screen.queryByText(/only its owner can reply/i)).toBeNull();
   });
 });
 
-// The dock renders this component on the wash (spec §3) and needs to know
-// when a turn is live (presence dot, §2). /ask passes neither and changes not
-// at all.
-describe("AskChat — surface and busy signal", () => {
+// The dock renders this component on the wash (spec §3). /ask passes no
+// surface and changes not at all.
+describe("AskChat — surface", () => {
   it("defaults to the /ask card: composer strip, muted user bubble, bordered read-only notice", () => {
     render(
       <AskChat conversationId="c1" initialMessages={[USER_ROW]} readOnly />,
@@ -1191,74 +814,6 @@ describe("AskChat — surface and busy signal", () => {
     const note = screen.getByText(/only its owner can reply/i);
     expect(note.className).toBe("text-muted-foreground px-3.5 py-3 text-sm");
   });
-
-  it("aligns queued approvals to the wash column, and keeps /ask's own padding", () => {
-    const PROPOSAL = {
-      id: "p1",
-      runId: "run-1",
-      userAgentId: "agent-1",
-      toolName: "create_item",
-      capability: "board.write",
-      summary: 'Add "Draft proposal" to a board group.',
-      status: "pending" as const,
-      expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
-      createdAt: new Date().toISOString(),
-      target: null,
-    };
-    const block = () =>
-      screen.getByText(/Add "Draft proposal"/).closest("div.flex-col.gap-2")!;
-    const { rerender } = render(
-      <AskChat
-        conversationId="c1"
-        initialMessages={[ANSWER_ROW]}
-        agentProposals={[PROPOSAL]}
-      />,
-    );
-    // /ask is untouched.
-    expect(block().className).toBe("flex flex-col gap-2 px-4 pb-2");
-    rerender(
-      <AskChat
-        conversationId="c1"
-        initialMessages={[ANSWER_ROW]}
-        agentProposals={[PROPOSAL]}
-        surface="atmosphere"
-      />,
-    );
-    // On the wash the title row, ledger, transcript, notice and error banner
-    // are all px-3.5; px-4 left these cards 2px out of the column.
-    expect(block().className).toBe("flex flex-col gap-2 px-3.5 pb-2");
-  });
-
-  it("reports the turn busy from submit until it settles — including a failed send", async () => {
-    const onBusyChange = vi.fn();
-    const open = holdCreateConversation();
-    render(
-      <AskChat
-        conversationId={null}
-        initialMessages={[]}
-        onBusyChange={onBusyChange}
-      />,
-    );
-    ask();
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true));
-    expect(onBusyChange).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      open();
-    });
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
-    expect(onBusyChange).toHaveBeenCalledTimes(2);
-
-    // A refused send is still a settled turn. The thread exists now ("c1"),
-    // so the second send goes through appendUserMessage, not createConversation.
-    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: false,
-      error: "Couldn't reach the server.",
-    });
-    onBusyChange.mockClear();
-    ask("again");
-    await screen.findByRole("alert");
-    expect(onBusyChange.mock.calls.map((c) => c[0])).toEqual([true, false]);
-  });
 });
 
 describe("AskChat — staged batches", () => {
@@ -1289,7 +844,6 @@ describe("AskChat — staged batches", () => {
           stagedResults: [{ id: "a", ok: true }],
         },
         touchedBoardIds: ["b-1"],
-        agentId: null,
       },
     });
     render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);
@@ -1319,7 +873,6 @@ describe("AskChat — staged batches", () => {
         content: "Dismissed — nothing was changed.",
         trace: { resolvesProposal: "m-1", outcome: "cancelled" },
         touchedBoardIds: [],
-        agentId: null,
       },
     });
     render(<AskChat conversationId="conv-1" initialMessages={[STAGED_ROW]} />);

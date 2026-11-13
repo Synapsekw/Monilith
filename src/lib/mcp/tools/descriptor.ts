@@ -1,13 +1,13 @@
 import type { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { GetClient, ToolResult } from "./shared";
-import type { AgentCapability } from "@/lib/agents/capabilities";
+import type { AgentCapability } from "./capabilities";
 
 /**
- * The single definition of a tool, consumed by BOTH transports: the MCP server
- * (`registerDescriptor` below) and the in-app agent runtime
- * (`src/lib/agents/tools.ts`). Two transports over one definition is the whole
- * point — a tool cannot be reachable from one and stale in the other.
+ * The single definition of a tool, consumed by the MCP server
+ * (`registerDescriptor` below) and by any in-app runtime that wraps the same
+ * descriptors. One definition across transports is the whole point — a tool
+ * cannot be reachable from one and stale in another.
  */
 
 /**
@@ -51,14 +51,14 @@ export type ToolDescriptor = {
    *  the MCP server SDK rejects. */
   inputSchema: Record<string, z.ZodType>;
   /** `null` means an always-on read. The vocabulary lives in
-   *  `@/lib/agents/capabilities` — one declaration, imported by both the
-   *  descriptor layer and the agent editor.
+   *  `./capabilities` — one declaration shared by every consumer of
+   *  the descriptor layer.
    *  A scalar for a single-purpose tool; a per-action map for a
    *  grouped-dispatch tool, keyed by the `action` input value. */
   capability: AgentCapability | null | Record<string, AgentCapability | null>;
   scope: ToolScope | Record<string, ToolScope>;
   /** Actions that create a new top-level object, addressing no existing board.
-   *  Refused when the agent's board_scope is narrowed — see `buildAgentTools`. */
+   *  Meant to be refused for a caller whose board scope is narrowed. */
   unscopedCreateActions?: readonly string[];
   /** Served over MCP but never offered to an agent. See create-attachment-upload. */
   agentExcluded?: true;

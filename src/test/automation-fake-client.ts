@@ -69,8 +69,7 @@ export type AutomationClientSpec = {
  * any table it could filter). Recording is what a suite needs to state the
  * property that matters: a lookup that drops `user_id` or `board_id` is asking
  * a DIFFERENT question of the database, and an argument-blind fake answers both
- * questions identically. Same discipline as `src/test/ai-models-fake-client.ts`
- * and `src/lib/agents/documents-db.fake.ts`.
+ * questions identically. Same discipline as `src/test/ai-models-fake-client.ts`.
  */
 export type AutomationRead = {
   table: string;

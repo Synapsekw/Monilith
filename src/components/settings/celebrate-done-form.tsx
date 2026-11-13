@@ -9,7 +9,7 @@ const ERROR_ID = "celebrate-done-error";
 
 /**
  * Whether marking an item done plays the short celebration. Same shape as the
- * other settings switches (`BriefingPreferenceForm`): the visible label lives
+ * other settings switches (`DigestPreferenceForm`): the visible label lives
  * on the enclosing SettingRow, so this renders the control alone and carries
  * the label as `aria-label`.
  *

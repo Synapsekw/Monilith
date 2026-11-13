@@ -18,7 +18,6 @@ export function settingsNavGroups(isAdmin: boolean): SettingsNavGroup[] {
         { href: "/settings/profile", label: "Profile" },
         { href: "/settings/preferences", label: "Preferences" },
         { href: "/settings/notifications", label: "Notifications" },
-        { href: "/settings/agents", label: "Agent setup" },
         { href: "/settings/security", label: "Security" },
       ],
     },

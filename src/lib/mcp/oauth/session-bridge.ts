@@ -50,8 +50,8 @@ const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60_000;
  *
  * surfacing as a bare HTTP 500 from POST /api/oauth/token — i.e. a user who had
  * connected one MCP client could never connect a second, and a user with a
- * personal agent (src/lib/agents/owner-client.ts mints through this same
- * function) could not connect an MCP client at all.
+ * personal agent (the since-retired agent owner client minted through this
+ * same function) could not connect an MCP client at all.
  *
  * Two clients must NOT share one bridge anyway: each holds its own GoTrue
  * session, and collapsing them onto one Vault row would make each client's
@@ -75,25 +75,21 @@ function payloadFromSession(session: Session): BridgeSecretPayload {
 }
 
 /**
- * Mints a real GoTrue session for `userId` (via generateLink + verifyOtp —
- * no email is sent, this is a server-side impersonation primitive gated
- * entirely behind the service-role key) and stores its refresh token in
- * Vault. Returns the new bridge_secret_id to persist on the oauth_tokens row.
+ * Mints a real GoTrue session for `userId` without sending email
+ * (generateLink + verifyOtp, gated behind the service-role key). The user
+ * must have an email address. Callers decide whether to store anything.
  */
-export async function mintBridgeSecret(userId: string): Promise<string> {
-  const svc = createServiceClient();
+export async function mintSessionForUser(userId: string): Promise<Session> {
   const { SUPABASE_SERVICE_ROLE_KEY } = getServerEnv();
   const admin = createClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
-
   const { data: userRes, error: userErr } =
     await admin.auth.admin.getUserById(userId);
   if (userErr || !userRes.user?.email)
     throw new Error(userErr?.message ?? "User has no email; cannot bridge.");
-
   const { data: linkData, error: linkErr } =
     await admin.auth.admin.generateLink({
       type: "magiclink",
@@ -101,21 +97,31 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
     });
   if (linkErr || !linkData)
     throw new Error(linkErr?.message ?? "generateLink failed.");
-
-  const anon = anonClient();
-  const { data: sessionData, error: verifyErr } = await anon.auth.verifyOtp({
-    token_hash: linkData.properties.hashed_token,
-    type: "magiclink",
-  });
+  const { data: sessionData, error: verifyErr } =
+    await anonClient().auth.verifyOtp({
+      token_hash: linkData.properties.hashed_token,
+      type: "magiclink",
+    });
   if (verifyErr || !sessionData.session)
     throw new Error(verifyErr?.message ?? "verifyOtp failed.");
+  return sessionData.session;
+}
+
+/**
+ * Mints a real GoTrue session for `userId` (see mintSessionForUser) and
+ * stores it in Vault. Returns the new bridge_secret_id to persist on the
+ * oauth_tokens row.
+ */
+export async function mintBridgeSecret(userId: string): Promise<string> {
+  const svc = createServiceClient();
+  const session = await mintSessionForUser(userId);
 
   const { data: secretId, error: rpcErr } = await typedRpc(
     svc,
     "oauth_bridge_rotate_secret",
     {
       p_old_secret_id: null,
-      p_secret: JSON.stringify(payloadFromSession(sessionData.session)),
+      p_secret: JSON.stringify(payloadFromSession(session)),
       p_name: bridgeSecretName(userId),
     },
   );
@@ -124,7 +130,9 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
   return secretId;
 }
 
-function clientFromAccessToken(accessToken: string): SupabaseClient<Database> {
+export function clientFromAccessToken(
+  accessToken: string,
+): SupabaseClient<Database> {
   return createClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

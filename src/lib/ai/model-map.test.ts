@@ -17,7 +17,6 @@ describe("tierForFeature", () => {
       "ask_pulse",
       "conversational_action",
       "automation_ai_step",
-      "autopilot_run",
       "dashboard_gen",
     ])
       expect(tierForFeature(f)).toBe("standard");
@@ -47,8 +46,8 @@ describe("tierForFeature", () => {
       expect(["cheap", "standard", "strong"]).toContain(tierForFeature(f));
   });
 
-  it("still covers all 15 known features", () => {
-    expect(AI_FEATURES).toHaveLength(15);
+  it("still covers all 13 known features", () => {
+    expect(AI_FEATURES).toHaveLength(13);
   });
 });
 

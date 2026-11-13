@@ -11,8 +11,6 @@ import {
   toThreadMessages,
   type ThreadMessage,
 } from "@/lib/ai/ask/conversations";
-import { resolveAddressedAgent } from "@/lib/ai/ask/persona-routing";
-import { listOwnerAgentTargets } from "@/lib/ai/ask/owner-agents";
 // Canonical shared result type — never re-declare locally (AGENTS.md invariant).
 import { type ActionResult, fail } from "@/lib/actions/result";
 
@@ -23,32 +21,6 @@ const titleSchema = z.string().trim().min(1).max(120);
 const idSchema = z.string().uuid();
 const visibilitySchema = z.enum(["private", "board"]);
 
-/**
- * Resolve an ENABLED agent the CALLER owns, or null.
- *
- * `user_agents` is owner-scoped by RLS, so a foreign or non-existent id reads
- * back as null through the user client — the check and the query are the same
- * statement. Never accept an agent id on trust: the persona it selects becomes
- * part of the system prompt.
- *
- * `enabled` is part of the predicate because every DISPLAY path resolves names
- * against `listOwnerAgentTargets`, which is enabled-only (spec §1: a handle
- * matches an ENABLED agent). Without it, disabling an agent mid-thread left its
- * instructions, documents and memory composing every turn while the header and
- * every kicker read "Monolith" — routing and attribution disagreeing about who
- * is answering.
- */
-async function ownedAgentId(agentId: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("user_agents")
-    .select("id")
-    .eq("id", agentId)
-    .eq("enabled", true)
-    .maybeSingle();
-  return data?.id ?? null;
-}
-
 /** A board the caller may read, together with the org it lives in. */
 type ReadableBoard = { id: string; orgId: string };
 
@@ -58,9 +30,8 @@ type ReadableBoard = { id: string; orgId: string };
  * `boards`' SELECT policy is `is_org_member(org_id) AND (created_by =
  * auth.uid() OR is_board_member(id))` — exactly the predicate
  * `can_read_board()` evaluates — so an RLS-scoped read through the user client
- * fails closed identically, and the check and the query are one statement. Same
- * shape as `ownedAgentId` above, and for the same reason: a uuid-SHAPED board id
- * is not a board the caller may write to — otherwise a trusted `boardId` would
+ * fails closed identically, and the check and the query are one statement. A
+ * uuid-SHAPED board id is not a board the caller may write to — otherwise a trusted `boardId` would
  * let any authenticated user place a titled, attacker-authored thread into a
  * foreign board's dock by sharing it afterwards.
  *
@@ -103,9 +74,9 @@ async function readableFolder(
  * (resolveActiveOrg) — never trusted from the client, and never getUserOrgs()[0]
  * which would scope a multi-org user to the wrong tenant.
  *
- * `boardId`/`agentId` are optional: `/ask` calls this with neither and keeps
- * behaving exactly as before (plain thread, revalidates `/ask`). The board
- * dock passes both to open a thread scoped to that board and agent.
+ * `boardId` is optional: `/ask` calls this without it (plain thread,
+ * revalidates `/ask`). The board dock passes it to open a thread scoped to
+ * that board. Every thread is answered by the org assistant.
  *
  * `folderId` is mutually exclusive with `boardId` — a thread is scoped to
  * one or the other, never both — and `boardId` wins when a caller somehow
@@ -117,8 +88,7 @@ export async function createConversation(input: {
   firstMessage: string;
   boardId?: string;
   folderId?: string;
-  agentId?: string;
-}): Promise<ActionResult<{ conversationId: string; agentId: string | null }>> {
+}): Promise<ActionResult<{ conversationId: string }>> {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
 
@@ -133,33 +103,6 @@ export async function createConversation(input: {
   }
 
   const user = await requireUser();
-
-  let agentId: string | null = null;
-  if (input.agentId !== undefined) {
-    const a = idSchema.safeParse(input.agentId);
-    if (!a.success) return fail("Invalid agent.");
-    agentId = await ownedAgentId(a.data);
-    // Fails CLOSED, and with one message for both "not yours" and "not there" —
-    // distinguishing them would make this a membership oracle.
-    if (!agentId) return fail("Agent not found.");
-  }
-
-  // A handle LEADING the first message WINS over the client-supplied
-  // `agentId` — the same rule `appendUserMessage` applies to every following
-  // turn, and what the spec means by "the server re-derives the persona from
-  // the message text against the owner's roster". The explicit id is the
-  // surface's default (the board dock's chosen persona, or the header
-  // switcher's pick on a not-yet-minted chat), so it is what an unaddressed
-  // message inherits — but "@ops what slipped?" is the user saying who to ask
-  // in this very message, and it must not be silently overruled by a default.
-  // The roster is RLS-scoped and enabled-only, so a handle can only ever select
-  // an agent the caller could have picked anyway.
-  const roster = await listOwnerAgentTargets(user.id);
-  agentId = resolveAddressedAgent({
-    text: parsed.data,
-    roster,
-    currentAgentId: agentId,
-  }).agentId;
 
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
@@ -207,7 +150,6 @@ export async function createConversation(input: {
       title: "New chat",
       board_id: board?.id ?? null,
       folder_id: folder?.id ?? null,
-      agent_id: agentId,
       // `visibility` is deliberately omitted: the column default 'private' is
       // what makes the widened SELECT policy unable to match a fresh row.
     })
@@ -219,7 +161,6 @@ export async function createConversation(input: {
     conversation_id: conv.data.id,
     role: "user",
     content: parsed.data,
-    agent_id: agentId,
   });
   if (msg.error) return fail("Couldn't save your message.");
 
@@ -227,7 +168,7 @@ export async function createConversation(input: {
   // flow, and revalidating the BOARD path would re-run getBoardPayload on every
   // send — the exact refetch working agreement #5 forbids (gotcha-09).
   if (!board) revalidatePath("/ask");
-  return { ok: true, data: { conversationId: conv.data.id, agentId } };
+  return { ok: true, data: { conversationId: conv.data.id } };
 }
 
 /**
@@ -278,50 +219,19 @@ export async function setThreadVisibility(input: {
 }
 
 /**
- * Append a follow-up user message, and decide who answers it.
- *
- * The persona is re-derived HERE, server-side, from the message text and an
- * RLS-scoped roster — the client's belief about which agent it addressed is
- * never an input. A leading handle switches the thread; anything else inherits
- * (see persona-routing.ts). The switch is written to the conversation row only
- * when it IS a switch, so a habitual "@ops …" costs one insert, not two writes.
- *
- * What a turn INHERITS is `ai_conversations.agent_id` — the column the header
- * switcher writes — and nothing else. Reading it through `currentPersonaFrom`'s
- * message fallback would make the switcher's one deliberate escape hatch
- * impossible: clearing the persona nulls the column, and the fallback would
- * hand the very next turn straight back to the agent still stamped on the last
- * question. The fallback is a repair for a LOST column write (route.ts and
- * proposal-actions.ts read it that way); it is not what "who is on duty" means
- * when we are the ones about to write the answer to that question.
+ * Append a follow-up user message. The org assistant answers every turn, so
+ * there is no persona to resolve. RLS scopes the insert to the thread's owner.
  */
 export async function appendUserMessage(input: {
   conversationId: string;
   content: string;
-}): Promise<ActionResult<{ messageId: string; agentId: string | null }>> {
+}): Promise<ActionResult<{ messageId: string }>> {
   const content = messageSchema.safeParse(input.content);
   const id = idSchema.safeParse(input.conversationId);
   if (!content.success || !id.success) return fail("Invalid message.");
 
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createClient();
-
-  // Both reads are RLS-scoped: a thread that is not the caller's returns no
-  // rows, and the insert below would fail anyway.
-  const [roster, conv] = await Promise.all([
-    listOwnerAgentTargets(user.id),
-    supabase
-      .from("ai_conversations")
-      .select("agent_id")
-      .eq("id", id.data)
-      .maybeSingle(),
-  ]);
-
-  const { agentId, switched } = resolveAddressedAgent({
-    text: content.data,
-    roster,
-    currentAgentId: conv.data?.agent_id ?? null,
-  });
 
   const { data, error } = await supabase
     .from("ai_messages")
@@ -329,72 +239,12 @@ export async function appendUserMessage(input: {
       conversation_id: id.data,
       role: "user",
       content: content.data,
-      agent_id: agentId,
     })
     .select("id")
     .single();
   if (error || !data) return fail("Couldn't save your message.");
 
-  if (switched) {
-    // Best-effort: the message already records who was addressed, and
-    // `currentPersonaFrom`'s fallback reads it when the column carries
-    // nothing — so a failed column write still routes THIS turn to the agent
-    // it addressed. The cost of losing it is the NEXT unaddressed turn falling
-    // back to the plain assistant, which is at least what the header chip
-    // (read from the same column) will be showing.
-    await supabase
-      .from("ai_conversations")
-      .update({ agent_id: agentId })
-      .eq("id", id.data);
-  }
-
-  return { ok: true, data: { messageId: data.id, agentId } };
-}
-
-/**
- * Put a different agent on duty for the rest of the thread — the header
- * switcher, and the ONLY way back to the plain Monolith assistant (`null`).
- * There is no magic handle for that: "monolith" and "none" are reserved and
- * can never be an agent's handle (see agents/handle.ts · RESERVED_HANDLES).
- *
- * This column is what decides who answers the next turn (`currentPersonaFrom`
- * reads it first, and only falls back to the newest user turn when it is
- * null) — which is why a write that matched NOTHING must be reported as a
- * failure. `ai_conversations_select_board_shared` lets any member of the board
- * READ a shared thread, so /ask/<id> renders for a non-owner; the RLS-scoped
- * update then matches zero rows with `error` null, and returning `ok` there
- * moved the chip while nothing happened. `.select().single()` turns "no row
- * matched" into an error, exactly as `setThreadVisibility` above does.
- *
- * One targeted write, no revalidation: the rail does not render personas, and
- * revalidating `/ask` here would re-run the page's reads for a chip
- * (working agreement #5).
- */
-export async function setConversationAgent(input: {
-  conversationId: string;
-  agentId: string | null;
-}): Promise<ActionResult<{ agentId: string | null }>> {
-  const id = idSchema.safeParse(input.conversationId);
-  if (!id.success) return fail("Invalid conversation.");
-
-  let agentId: string | null = null;
-  if (input.agentId !== null) {
-    const a = idSchema.safeParse(input.agentId);
-    if (!a.success) return fail("Invalid agent.");
-    agentId = await ownedAgentId(a.data);
-    // Fails CLOSED, with one message for "not yours" and "not there" alike.
-    if (!agentId) return fail("Agent not found.");
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("ai_conversations")
-    .update({ agent_id: agentId })
-    .eq("id", id.data)
-    .select("id")
-    .single();
-  if (error || !data) return fail("Couldn't switch agent.");
-  return { ok: true, data: { agentId } };
+  return { ok: true, data: { messageId: data.id } };
 }
 
 /**
