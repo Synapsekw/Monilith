@@ -79,4 +79,28 @@ describe("MemberAvatar", () => {
     );
     expect(container.textContent).not.toContain("AL");
   });
+
+  it("draws a Mono in the same circle as a person, with its label", () => {
+    const { container } = render(
+      <MemberAvatar
+        userId="m1"
+        name="Nova"
+        avatarUrl={null}
+        mono={{ color: "#7395ff", ownerName: "Ada" } as never}
+      />,
+    );
+    const disc = container.querySelector('[data-slot="member-avatar"]');
+    expect(disc?.className).toContain("rounded-full");
+    expect(disc?.className).toContain("size-6");
+    expect(disc?.className).toContain("overflow-hidden");
+    // Centred by absolute positioning set inline (MonoAvatar's own inline
+    // `position: relative` would otherwise win and leave it off-centre).
+    expect(
+      (disc?.querySelector('[role="img"]') as HTMLElement).style.position,
+    ).toBe("absolute");
+    expect(disc?.querySelector('[role="img"]')).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Nova"),
+    );
+  });
 });

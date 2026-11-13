@@ -119,6 +119,23 @@ describe("MonoTab", () => {
     expect(loadMyMonoThread).toHaveBeenCalledTimes(1);
   });
 
+  it("gives the chat the Mono's identity", async () => {
+    render(
+      <MonoTab
+        boardId={BOARD}
+        initialMono={mono("key")}
+        initialOnBoard
+        ownerName="Ada Owner"
+      />,
+    );
+    await screen.findByTestId("ask-chat");
+    expect(askChatProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        speaker: expect.objectContaining({ name: "Nova", tint: "#7395ff" }),
+      }),
+    );
+  });
+
   it("disables New chat while a turn is running", async () => {
     render(
       <MonoTab

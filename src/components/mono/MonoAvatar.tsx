@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { subscribeMonoClock } from "./mono-clock";
 import { DEFAULT_MONO_COLOR, isMonoColor, monoPalette } from "./mono-palette";
 import { drawMono, type MonoMood } from "./mono-renderer";
@@ -14,12 +14,14 @@ export function MonoAvatar({
   size,
   label,
   className,
+  style,
 }: {
   color: string;
   mood?: MonoMood;
   size: number;
   label: string;
   className?: string;
+  style?: CSSProperties;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // An invalid colour must never take a page down: render the default Mono.
@@ -94,6 +96,7 @@ export function MonoAvatar({
         width: `${size}px`,
         height: `${height}px`,
         flex: "none",
+        ...style,
       }}
     >
       <canvas

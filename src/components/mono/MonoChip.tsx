@@ -16,6 +16,13 @@ export function AgentChip({ className }: { className?: string }) {
   );
 }
 
+/** A Mono's name colour: its own colour mixed toward the foreground so pale
+ *  colours stay readable in light mode. */
+export function monoNameColor(color: string): string {
+  const safe = isMonoColor(color) ? color : DEFAULT_MONO_COLOR;
+  return `color-mix(in oklab, ${safe} 65%, var(--foreground))`;
+}
+
 /**
  * A Mono wherever it is named: face, name tinted by its colour (mixed toward
  * the foreground so pale colours stay readable in light mode), the Agent chip
@@ -46,7 +53,7 @@ export function MonoIdentity({
       />
       <span
         className="truncate font-semibold"
-        style={{ color: `color-mix(in oklab, ${safe} 65%, var(--foreground))` }}
+        style={{ color: monoNameColor(safe) }}
       >
         {name}
       </span>
