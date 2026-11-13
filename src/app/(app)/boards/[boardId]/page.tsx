@@ -1,10 +1,12 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { BoardViews } from "@/components/boards/BoardViews";
 import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner";
 import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveActiveOrg } from "@/lib/org/active";
+import { BOARD_ENTRY_COOKIE } from "@/lib/boards/last-board";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
@@ -82,6 +84,19 @@ export default async function BoardPage({
       )
       .catch(() => null),
   ]);
+  // Opening the app (`/`) lands here straight from the proxy on the strength
+  // of the last-board cookie, which the proxy cannot check against the DB. If
+  // that board has since been deleted, un-shared or archived, do not park the
+  // visitor on a dead end every time they open the app: hand them to the /home
+  // dispatcher, whose own probe rejects this board and falls through to a live
+  // one (so this cannot loop). Only for that cookie-driven arrival — the
+  // short-lived marker names the board — so any other visit to a dead link
+  // keeps the honest not-found page, and an archived board opened on purpose
+  // still renders. The cookie is read only on this rare path.
+  if (!payload || payload.board.archived_at) {
+    const entry = (await cookies()).get(BOARD_ENTRY_COOKIE)?.value;
+    if (entry === boardId) redirect("/home");
+  }
   if (!payload) notFound();
 
   const sp = await searchParams;

@@ -172,3 +172,45 @@ describe("BoardPage — org member roster", () => {
     await expect(run()).rejects.toThrow("NOT_FOUND");
   });
 });
+
+describe("BoardPage — arriving from the app entry (`/`) on a dead board", () => {
+  it("hands a missing board to /home when the proxy's entry marker names it", async () => {
+    cookieStore.set("pulse_board_entry", BOARD);
+    getBoardPayload.mockResolvedValue(null);
+
+    await expect(run()).rejects.toThrow("REDIRECT:/home");
+  });
+
+  it("hands an ARCHIVED board to /home on that same arrival", async () => {
+    cookieStore.set("pulse_board_entry", BOARD);
+    getBoardPayload.mockResolvedValue(payloadIn("o1", "2026-01-01T00:00:00Z"));
+
+    await expect(run()).rejects.toThrow("REDIRECT:/home");
+  });
+
+  it("keeps the not-found page when the marker names a different board", async () => {
+    cookieStore.set(
+      "pulse_board_entry",
+      "11111111-1111-4111-8111-111111111111",
+    );
+    getBoardPayload.mockResolvedValue(null);
+
+    await expect(run()).rejects.toThrow("NOT_FOUND");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("still renders an archived board that was opened on purpose", async () => {
+    getBoardPayload.mockResolvedValue(payloadIn("o1", "2026-01-01T00:00:00Z"));
+
+    expect(boardViewsProps(await run())).not.toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("ignores the marker for a live board", async () => {
+    cookieStore.set("pulse_board_entry", BOARD);
+    getBoardPayload.mockResolvedValue(payloadIn("o1"));
+
+    expect(boardViewsProps(await run())).not.toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});

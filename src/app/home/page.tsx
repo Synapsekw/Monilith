@@ -19,8 +19,10 @@ import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
  * Authenticated entry dispatcher. The public landing (`/`) is a static hero with
  * no per-user data; the cookie-reading "where does this user go" logic lives
  * here so `/` can be prerendered and served from the edge. `proxy.ts` redirects
- * logged-in visitors who hit `/` to this route; a logged-out visitor who reaches
- * it directly is sent to /login. Routing logic is unchanged from the prior `/`.
+ * logged-in visitors who hit `/` to this route — unless they carry a last-board
+ * cookie, in which case it sends them straight to that board and this route is
+ * only the fallback the board page hands off to when that board is gone. A
+ * logged-out visitor who reaches it directly is sent to /login.
  */
 export async function HomeDispatch() {
   const user = await getUser();

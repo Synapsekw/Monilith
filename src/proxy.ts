@@ -3,7 +3,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
-import { boardIdFromPath, LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
+import {
+  BOARD_ENTRY_COOKIE,
+  BOARD_ENTRY_MAX_AGE_SECONDS,
+  boardIdFromPath,
+  LAST_BOARD_COOKIE,
+  validBoardId,
+} from "@/lib/boards/last-board";
 import { DESKTOP_RELEASE_PATH } from "@/lib/desktop/release-contract";
 import { loginPath, NEXT_PATH_HEADER } from "@/lib/auth/next-path";
 import type { Database } from "@/types/database.types";
@@ -136,12 +142,39 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // A logged-in visitor never sees the static public landing: send them to the
-  // dynamic /home dispatcher (orgs/boards lookup → board, onboarding, or welcome
-  // shell). This is what lets `/` itself stay a static, edge-cached page for
-  // anonymous traffic instead of a per-request server render.
+  // A logged-in visitor never sees the static public landing. This is what
+  // lets `/` itself stay a static, edge-cached page for anonymous traffic
+  // instead of a per-request server render.
+  //
+  // Returning visitor: the last-board cookie (stamped below) already names
+  // where /home would send them, so go there directly and save the /home hop —
+  // a document request, a board probe and a second, streamed redirect. Still
+  // NO DB lookup here: the cookie is only shape-validated (a tampered value
+  // can never become a path), and the board page is what discovers a board
+  // that is gone/hidden/archived. The entry marker tells it this was a
+  // cookie-driven arrival so it can hand off to /home instead of a dead end.
+  // The board page runs `requireUser()` itself, so the forced password-change
+  // gate /home applied still applies.
+  //
+  // Everyone else: the dynamic /home dispatcher (orgs/boards lookup → board,
+  // onboarding, or welcome shell).
   if (pathname === "/" && isAuthenticated) {
-    return NextResponse.redirect(new URL("/home", request.url));
+    const entryBoardId = validBoardId(
+      request.cookies.get(LAST_BOARD_COOKIE)?.value,
+    );
+    if (!entryBoardId) {
+      return NextResponse.redirect(new URL("/home", request.url));
+    }
+    const toBoard = NextResponse.redirect(
+      new URL(`/boards/${entryBoardId}`, request.url),
+    );
+    toBoard.cookies.set(BOARD_ENTRY_COOKIE, entryBoardId, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: BOARD_ENTRY_MAX_AGE_SECONDS,
+    });
+    return toBoard;
   }
 
   const isAuthRoute = AUTH_ROUTES.some(
@@ -162,8 +195,8 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // Remember the last board the user actually navigated to, so /home can skip
-  // its list reads next login. Prefetches are excluded — a hovered board link
+  // Remember the last board the user actually navigated to, so the `/` entry
+  // above can go straight to it and /home can skip its list reads next login. Prefetches are excluded — a hovered board link
   // must not hijack the fast path. Set on the FINAL response object (the
   // supabase adapter above may have rebuilt `response`).
   const lastBoardId = isAuthenticated ? boardIdFromPath(pathname) : null;
