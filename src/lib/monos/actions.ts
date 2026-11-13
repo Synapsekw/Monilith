@@ -35,12 +35,16 @@ export async function createMyMono(input: {
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
 
+  // Set once the bot user exists; cleared only when `create_mono` adopts it.
+  // Anything else (a lost race, a refusal, a throw) deletes it in `finally`.
+  let orphanBotId: string | null = null;
+  let svc: ReturnType<typeof createServiceClient> | null = null;
   try {
     const supabase = await createClient();
     const existing = await getMyMono(supabase, org.id);
     if (existing) return { ok: true, data: existing };
 
-    const svc = createServiceClient();
+    svc = createServiceClient();
     const monoId = randomUUID();
     const { error: createErr } = await svc.auth.admin.createUser({
       id: monoId,
@@ -53,6 +57,7 @@ export async function createMyMono(input: {
       console.error("[mono] bot user create failed", createErr.message);
       return fail(CREATE_FAILED);
     }
+    orphanBotId = monoId;
 
     const { data: winner, error: rpcErr } = await svc.rpc("create_mono", {
       p_org_id: org.id,
@@ -61,13 +66,13 @@ export async function createMyMono(input: {
       p_name: parsed.data.name,
       p_color: parsed.data.color,
     });
-    if (rpcErr || winner !== monoId) {
-      await svc.auth.admin.deleteUser(monoId);
-      if (rpcErr) {
-        console.error("[mono] create_mono refused", rpcErr.message);
-        return fail(CREATE_FAILED);
-      }
+    if (rpcErr) {
+      console.error("[mono] create_mono refused", rpcErr.message);
+      return fail(CREATE_FAILED);
     }
+    // Our bot is now the Mono; a different id means another tab won the
+    // race, so ours stays marked for deletion and the winner is returned.
+    if (winner === monoId) orphanBotId = null;
 
     updateTag(orgMembersTag(org.id));
     const mono = await getMyMono(supabase, org.id);
@@ -75,6 +80,28 @@ export async function createMyMono(input: {
   } catch (e) {
     console.error("[mono] createMyMono failed", e);
     return fail(CREATE_FAILED);
+  } finally {
+    if (svc && orphanBotId) await deleteOrphanBot(svc, orphanBotId);
+  }
+}
+
+/** Best-effort delete of an unused Mono bot user; logs (never throws) on failure. */
+async function deleteOrphanBot(
+  svc: ReturnType<typeof createServiceClient>,
+  botId: string,
+): Promise<void> {
+  try {
+    const { error } = await svc.auth.admin.deleteUser(botId);
+    if (error)
+      console.error("[mono] orphan bot cleanup failed", {
+        botId,
+        message: error.message,
+      });
+  } catch (e) {
+    console.error("[mono] orphan bot cleanup failed", {
+      botId,
+      message: e instanceof Error ? e.message : String(e),
+    });
   }
 }
 

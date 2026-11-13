@@ -122,6 +122,63 @@ describe("createMyMono", () => {
     expect(deleteUser).toHaveBeenCalledTimes(1);
     expect(res.ok).toBe(false);
   });
+
+  it("deletes its bot when the RPC call throws after the bot was created", async () => {
+    getMyMono.mockResolvedValueOnce(null);
+    svcRpc.mockRejectedValue(new Error("network down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await createMyMono({ name: "Nova", color: "#7395ff" });
+    const createdId = (createUser.mock.calls[0]![0] as { id: string }).id;
+    expect(deleteUser).toHaveBeenCalledWith(createdId);
+    expect(res.ok).toBe(false);
+    errSpy.mockRestore();
+  });
+
+  it("keeps the adopted bot when a later read throws", async () => {
+    getMyMono.mockResolvedValueOnce(null);
+    svcRpc.mockImplementation(
+      async (_fn: string, args: { p_mono_id: string }) => ({
+        data: args.p_mono_id,
+        error: null,
+      }),
+    );
+    getMyMono.mockRejectedValueOnce(new Error("read failed"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await createMyMono({ name: "Nova", color: "#7395ff" });
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(res.ok).toBe(false);
+    errSpy.mockRestore();
+  });
+
+  it("logs the bot id when cleanup itself fails, without throwing", async () => {
+    getMyMono.mockResolvedValueOnce(null);
+    svcRpc.mockResolvedValue({ data: null, error: { message: "nope" } });
+    deleteUser.mockResolvedValue({ data: null, error: { message: "gone" } });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await createMyMono({ name: "Nova", color: "#7395ff" });
+    const createdId = (createUser.mock.calls[0]![0] as { id: string }).id;
+    expect(res.ok).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith("[mono] orphan bot cleanup failed", {
+      botId: createdId,
+      message: "gone",
+    });
+    errSpy.mockRestore();
+  });
+
+  it("logs the bot id when cleanup throws", async () => {
+    getMyMono.mockResolvedValueOnce(null);
+    svcRpc.mockRejectedValue(new Error("network down"));
+    deleteUser.mockRejectedValue(new Error("auth down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await createMyMono({ name: "Nova", color: "#7395ff" });
+    const createdId = (createUser.mock.calls[0]![0] as { id: string }).id;
+    expect(res.ok).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith("[mono] orphan bot cleanup failed", {
+      botId: createdId,
+      message: "auth down",
+    });
+    errSpy.mockRestore();
+  });
 });
 
 describe("updateMyMono", () => {
