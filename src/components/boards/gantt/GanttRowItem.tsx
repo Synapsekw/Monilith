@@ -5,8 +5,11 @@ import { useDraggable } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { CacheDependency } from "@/lib/boards/cache";
-import type { GanttRow } from "@/lib/boards/gantt";
+import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
+import {
+  LinkStubs,
+  type ExternalLinkStub,
+} from "@/components/boards/gantt/LinkStubs";
 import {
   intelRowClasses,
   useIntelMatch,
@@ -35,6 +38,10 @@ import {
   type BarDragData,
 } from "@/components/boards/gantt/utils";
 
+const NO_STUBS: ExternalLinkStub[] = [];
+/** px between a bar's edge and its link stubs. */
+const STUB_GAP = 4;
+
 export function GanttRowItem({
   row,
   criticalLabel,
@@ -43,19 +50,19 @@ export function GanttRowItem({
   dayW,
   todayOffset,
   dayCount,
-  startColumnId,
-  endColumnId,
   readOnly = false,
   isExpanded = false,
   onToggleExpand,
   color,
-  allRows,
+  linkCandidates,
   dependencies,
   violations,
-  onBarResized: handleBarResized,
-  addDependency,
-  removeDependency,
+  onResize,
+  onAddDependency,
+  onRemoveDependency,
   onItemTap,
+  stubs = NO_STUBS,
+  onStubTap,
 }: {
   row: GanttRow;
   /** Effective-critical marker text (see effectiveCriticalLabel), or null. */
@@ -66,33 +73,31 @@ export function GanttRowItem({
   dayW: number;
   todayOffset: number;
   dayCount: number;
-  startColumnId: string;
-  endColumnId: string | null;
-  /** When true the bar can't be dragged/resized (timestamp-sourced dates). */
+  /** When true the bar can't be dragged/resized (e.g. timestamp-sourced dates). */
   readOnly?: boolean;
   /** For a parent row (row.hasChildren): whether its sub-items are revealed. */
   isExpanded?: boolean;
   onToggleExpand?: (itemId: string) => void;
   color: string | null;
-  allRows: GanttRow[];
-  dependencies: CacheDependency[];
-  violations: Set<string>;
-  onBarResized: (
-    itemId: string,
-    newEndISO: string,
-    range: { start: string; end: string },
-  ) => void;
-  addDependency: (
-    vars: { predecessorId: string; successorId: string },
-    callbacks?: { onError?: (err: Error) => void },
-  ) => void;
-  removeDependency: (vars: { dependencyId: string }) => void;
+  /** Items offered in the "Blocked by…" picker (already excludes this row). */
+  linkCandidates: { itemId: string; name: string }[];
+  dependencies: readonly GanttDependency[];
+  violations: ReadonlySet<string>;
+  /** Commit a right-edge resize to a new end date. */
+  onResize: (itemId: string, newEndISO: string) => void;
+  onAddDependency: (vars: {
+    predecessorId: string;
+    successorId: string;
+  }) => void;
+  onRemoveDependency: (vars: { dependencyId: string }) => void;
   /** Plain tap (no drag activated) on the bar body or milestone — carries the
    * element's rect so the board can anchor the quick-edit peek. */
   onItemTap: (itemId: string, anchorRect: DOMRect) => void;
+  /** Cross-board / out-of-view links drawn as chips beside the bar. */
+  stubs?: ExternalLinkStub[];
+  onStubTap?: (stub: ExternalLinkStub) => void;
 }) {
   void rowIdx;
-  void allRows;
   void violations;
 
   const dragData: BarDragData = {
@@ -100,8 +105,6 @@ export function GanttRowItem({
     itemId: row.itemId,
     startISO: row.startISO ?? "",
     endISO: row.endISO ?? "",
-    startColumnId,
-    endColumnId,
     startDayOffset: row.startCol ?? 0,
   };
 
@@ -158,15 +161,26 @@ export function GanttRowItem({
   // nesting the primitive.
   const soft = color ? softPillText(color) : null;
 
+  // Horizontal extent of the bar/diamond — anchors the link stubs.
+  const barStartX = row.isMilestone
+    ? barLeft + dayW / 2 - MILESTONE / 2
+    : barLeft;
+  const barEndX = row.isMilestone ? barStartX + MILESTONE : barLeft + barWidth;
+  const waitingOn = useMemo(
+    () => stubs.filter((s) => s.direction === "waiting_on"),
+    [stubs],
+  );
+  const blocking = useMemo(
+    () => stubs.filter((s) => s.direction === "blocking"),
+    [stubs],
+  );
+
   // Predecessors of this item (items that must finish before this starts)
   const predecessorDeps = useMemo(
     () => dependencies.filter((d) => d.successor_id === row.itemId),
     [dependencies, row.itemId],
   );
-  const otherItems = useMemo(
-    () => allRows.filter((r) => r.itemId !== row.itemId),
-    [allRows, row.itemId],
-  );
+  const otherItems = linkCandidates;
 
   // Resize state. The refs hold the gesture origin; `resizeDeltaRef` mirrors
   // the previewed day delta so pointerup can commit without reading state.
@@ -222,8 +236,7 @@ export function GanttRowItem({
       return;
     }
     const newEndISO = formatISO(parseISO(origEnd) + deltaDays * 86_400_000);
-    const range = { start: row.startISO ?? "", end: row.endISO ?? "" };
-    handleBarResized(row.itemId, newEndISO, range);
+    onResize(row.itemId, newEndISO);
   }
 
   /** Interrupted gesture (pointercancel) — drop the preview, write nothing. */
@@ -337,15 +350,10 @@ export function GanttRowItem({
                   <DropdownMenuItem
                     key={other.itemId}
                     onSelect={() =>
-                      addDependency(
-                        {
-                          predecessorId: other.itemId,
-                          successorId: row.itemId,
-                        },
-                        {
-                          onError: (err) => console.error(err),
-                        },
-                      )
+                      onAddDependency({
+                        predecessorId: other.itemId,
+                        successorId: row.itemId,
+                      })
                     }
                   >
                     {other.name}
@@ -358,7 +366,7 @@ export function GanttRowItem({
               <DropdownMenuItem
                 key={dep.id}
                 variant="destructive"
-                onSelect={() => removeDependency({ dependencyId: dep.id })}
+                onSelect={() => onRemoveDependency({ dependencyId: dep.id })}
               >
                 Remove dep #{dep.id.slice(0, 6)}
               </DropdownMenuItem>
@@ -473,6 +481,29 @@ export function GanttRowItem({
               />
             )}
           </div>
+        )}
+
+        {/* Cross-board / out-of-view link stubs: "waiting on" chips sit left
+            of the bar, "blocking" chips to its right. */}
+        {row.scheduled && onStubTap && stubs.length > 0 && (
+          <>
+            {waitingOn.length > 0 && (
+              <div
+                className="absolute flex -translate-y-1/2 justify-end"
+                style={{ right: totalW - barStartX + STUB_GAP, top: ROW_H / 2 }}
+              >
+                <LinkStubs stubs={waitingOn} onTap={onStubTap} />
+              </div>
+            )}
+            {blocking.length > 0 && (
+              <div
+                className="absolute flex -translate-y-1/2"
+                style={{ left: barEndX + STUB_GAP, top: ROW_H / 2 }}
+              >
+                <LinkStubs stubs={blocking} onTap={onStubTap} />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
