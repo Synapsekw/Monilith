@@ -7,6 +7,12 @@ describe("assistant catalog", () => {
     expect(findDescriptor("create_attachment_upload")).toBeUndefined();
     expect(assistantDescriptors().every((d) => !d.agentExcluded)).toBe(true);
   });
+  it("does not offer list_organizations: the assistant works in one org", () => {
+    expect(findDescriptor("list_organizations")).toBeUndefined();
+    expect(
+      assistantDescriptors().some((d) => d.name === "list_organizations"),
+    ).toBe(false);
+  });
   it("classifies a capability-free tool as a read", () => {
     expect(effectOf(findDescriptor("list_items")!, { boardId: "b" })).toBe(
       "read",

@@ -8,6 +8,7 @@ import { parseToolTrace, type AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Json } from "@/types/database.types";
 import { findDescriptor } from "./catalog";
+import { takesOrgId } from "./org-pin";
 import { MAX_STAGED_CALLS, type StagedCall, type StagedResult } from "./staged";
 
 const idsSchema = z.object({
@@ -86,14 +87,14 @@ async function loadBatch(
   return { ok: true, calls, agentId: row.data.agent_id };
 }
 
-async function insertOutcome(
+/** Insert the outcome turn. Returns its id, or null when the insert failed. */
+async function insertOutcomeRow(
   supabase: Supabase,
   conversationId: string,
   content: string,
   trace: AskToolTrace,
-  touchedBoardIds: string[],
   agentId: string | null,
-): Promise<ActionResult<BatchOutcome>> {
+): Promise<string | null> {
   const ins = await supabase
     .from("ai_messages")
     .insert({
@@ -105,17 +106,83 @@ async function insertOutcome(
     })
     .select("id")
     .single();
-  if (ins.error || !ins.data) return fail("Couldn't record the result.");
+  return ins.error || !ins.data ? null : ins.data.id;
+}
+
+async function insertOutcome(
+  supabase: Supabase,
+  conversationId: string,
+  content: string,
+  trace: AskToolTrace,
+  touchedBoardIds: string[],
+  agentId: string | null,
+): Promise<ActionResult<BatchOutcome>> {
+  const id = await insertOutcomeRow(
+    supabase,
+    conversationId,
+    content,
+    trace,
+    agentId,
+  );
+  if (!id) return fail("Couldn't record the result.");
   return {
     ok: true,
-    data: { messageId: ins.data.id, content, trace, touchedBoardIds, agentId },
+    data: { messageId: id, content, trace, touchedBoardIds, agentId },
   };
 }
+
+/**
+ * The apply path's outcome insert. By now the rows have RUN, so a failure
+ * here must not read as "nothing happened": the card would reopen and a second
+ * Apply would duplicate every create. Retry once; if it still fails, log it
+ * and report success under a local id so the card locks and boards resync in
+ * this session. The durable fix (claim the batch before running it) is
+ * tracked for Plan B.
+ */
+async function insertAppliedOutcome(
+  supabase: Supabase,
+  conversationId: string,
+  content: string,
+  trace: AskToolTrace,
+  touchedBoardIds: string[],
+  agentId: string | null,
+): Promise<ActionResult<BatchOutcome>> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const id = await insertOutcomeRow(
+      supabase,
+      conversationId,
+      content,
+      trace,
+      agentId,
+    );
+    if (id)
+      return {
+        ok: true,
+        data: { messageId: id, content, trace, touchedBoardIds, agentId },
+      };
+  }
+  console.error(
+    `[assistant] applied batch outcome could not be recorded for ${conversationId}`,
+  );
+  return {
+    ok: true,
+    data: {
+      messageId: `local-${crypto.randomUUID()}`,
+      content,
+      trace,
+      touchedBoardIds,
+      agentId,
+    },
+  };
+}
+
+const ORG_ROW_MISMATCH = "This change targets a different organization.";
 
 /** Run one staged call under the user's own client. Never throws. */
 async function runCall(
   supabase: Supabase,
   actorId: string,
+  orgId: string,
   call: StagedCall,
 ): Promise<StagedResult> {
   const descriptor = findDescriptor(call.tool);
@@ -128,6 +195,11 @@ async function runCall(
   const input = z.object(descriptor.inputSchema).safeParse(call.input);
   if (!input.success)
     return { id: call.id, ok: false, error: "This change is no longer valid." };
+  // Staging pinned every org-scoped call to the org it was staged in. Apply
+  // runs it only in that same org, so a batch staged in org A cannot write
+  // into org B after the user switches.
+  if (takesOrgId(descriptor) && input.data.orgId !== orgId)
+    return { id: call.id, ok: false, error: ORG_ROW_MISMATCH };
   try {
     const r = await descriptor.invoke(
       { getClient: async () => supabase, actorId },
@@ -195,12 +267,12 @@ export async function applyBatch(input: {
         continue;
       }
       seen.add(call.id);
-      const result = await runCall(supabase, user.id, call);
+      const result = await runCall(supabase, user.id, org.id, call);
       results.push(result);
       if (result.ok && call.boardId) touched.add(call.boardId);
     }
 
-    return await insertOutcome(
+    return await insertAppliedOutcome(
       supabase,
       conversationId,
       loaded.calls.map((c, i) => outcomeLine(c, results[i]!)).join("\n"),
@@ -212,7 +284,8 @@ export async function applyBatch(input: {
       [...touched],
       loaded.agentId,
     );
-  } catch {
+  } catch (e) {
+    console.error("[assistant] applyBatch failed", e);
     return fail("Couldn't apply those changes. Please try again.");
   }
 }
@@ -247,7 +320,8 @@ export async function dismissBatch(input: {
       [],
       loaded.agentId,
     );
-  } catch {
+  } catch (e) {
+    console.error("[assistant] dismissBatch failed", e);
     return fail("Couldn't dismiss that. Please try again.");
   }
 }

@@ -2,8 +2,6 @@ import { NextResponse, after } from "next/server";
 import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
-import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
 import { createClient } from "@/lib/supabase/server";
@@ -17,6 +15,7 @@ import {
   KEEP_RECENT,
 } from "@/lib/ai/ask/context";
 import { languageModelFor } from "@/lib/ai/providers/language-model";
+import { anthropicReasoningOptions } from "@/lib/ai/providers/anthropic-options";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import {
@@ -58,13 +57,22 @@ function todayIn(timezone: string): string {
   }
 }
 
-/** The stable preamble plus the one line that changes daily. The focus block
- *  is appended by the caller, after this, so the preamble stays cacheable. */
-function buildSystem(today: string, timezone: string): string {
+/** The stable preamble plus the per-turn lines (the date and the active org).
+ *  The focus block is appended by the caller, after this, so the preamble
+ *  stays cacheable. The org name is JSON-quoted: it is user-written text. */
+function buildSystem(
+  today: string,
+  timezone: string,
+  org: { id: string; name?: string | null },
+): string {
+  const orgLabel = org.name
+    ? `organization ${JSON.stringify(org.name)} (id ${org.id})`
+    : `organization ${org.id}`;
   return [
     ASSISTANT_PREAMBLE,
     "",
     `Today is ${today} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
+    `You are working in the ${orgLabel}. Work only inside that organization; never read or change another one.`,
   ].join("\n");
 }
 
@@ -96,11 +104,6 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createClient();
-  const workspaceId = await getActiveWorkspaceId(
-    await listWorkspacesCached(org.id),
-  );
-  if (!workspaceId)
-    return NextResponse.json({ error: "No workspace." }, { status: 400 });
 
   const timezone = (await getUserTimeZoneCached(user.id)) ?? "UTC";
 
@@ -130,10 +133,11 @@ export async function POST(req: Request) {
   // goes through the USER client, so RLS decides what is visible; a row that
   // reads back null degrades to plain Ask rather than failing a turn whose
   // history is still worth continuing.
-  let system = buildSystem(todayIn(timezone), timezone);
+  let system = buildSystem(todayIn(timezone), timezone, org);
 
-  // Folder scope, mutually exclusive with the board branch above (a thread is
-  // scoped to one or the other; `createConversation` never stamps both). The
+  // Folder scope, mutually exclusive with board focus (a thread is scoped to
+  // one or the other; `createConversation` never stamps both; the board's
+  // FOCUS block is built inside the turn below). The
   // ruling for this task: a folder read that fails — RLS hides it, it was
   // deleted, or an unexpected transport error — degrades the turn to plain
   // Ask rather than leaking Postgres error text or branching on a specific
@@ -291,6 +295,9 @@ export async function POST(req: Request) {
           if (toFold.length > 0) {
             const s = await summarizeThread(lm, summary, toFold);
             usage = addUsage(usage, s.usage);
+            // Metered NOW, so a turn that dies before the loop's first step
+            // still pays for the summary it already spent.
+            reportUsage(usage);
             // `summarizeThread` hands back the PRIOR summary when the model
             // returned nothing. Advancing the cursor then would drop the
             // folded turns for good, so only a new, non-empty summary moves it.
@@ -331,6 +338,8 @@ export async function POST(req: Request) {
           const tools = buildAssistantTools({
             ctx: { getClient: async () => supabase, actorId: user.id },
             client: supabase,
+            // Every org-scoped call is pinned to the org this turn runs in.
+            orgId: org.id,
             stage: (call) => {
               if (staged.length >= MAX_STAGED_CALLS) return false;
               staged.push(call);
@@ -348,6 +357,13 @@ export async function POST(req: Request) {
             })),
             tools,
             emit,
+            // The AI SDK sends no thinking config unless asked. Anthropic
+            // models get the repo's own per-model request shape; other wire
+            // formats have no such knob.
+            providerOptions:
+              adapter.kind === "anthropic"
+                ? anthropicReasoningOptions(model.requestModel)
+                : undefined,
             // A turn that dies at step 9 still spent steps 1 to 8.
             onUsage: (running) => reportUsage(addUsage(beforeLoop, running)),
           });
@@ -371,6 +387,9 @@ export async function POST(req: Request) {
             staged.length > 0 && !r.wroteText
               ? PROPOSAL_FALLBACK_ANSWER
               : r.text;
+          // The model wrote nothing, so nothing was streamed: send the stored
+          // answer now, so the live bubble reads exactly like the reloaded row.
+          if (!r.wroteText) emit({ type: "token", text: answer });
           return { result: { answer, staged, title }, usage };
         },
       );

@@ -13,14 +13,17 @@ vi.mock("next/server", async (importActual) => {
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
 }));
+const { activeOrg } = vi.hoisted(() => ({
+  activeOrg: {
+    current: { id: "org1", name: "Acme", timezone: null } as {
+      id: string;
+      name: string;
+      timezone: string | null;
+    },
+  },
+}));
 vi.mock("@/lib/org/active", () => ({
-  resolveActiveOrg: vi.fn(async () => ({ id: "org1" })),
-}));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
-}));
-vi.mock("@/lib/workspaces/active", () => ({
-  getActiveWorkspaceId: vi.fn(async () => "ws1"),
+  resolveActiveOrg: vi.fn(async () => activeOrg.current),
 }));
 vi.mock("@/lib/ai/entitlement", () => ({
   requireAiEntitlement: vi.fn(async () => undefined),
@@ -29,6 +32,12 @@ vi.mock("@/lib/ai/entitlement", () => ({
 // `meteredSpy` standing in for `record_ai_usage` is the billing assertion.
 const { meteredSpy } = vi.hoisted(() => ({ meteredSpy: vi.fn() }));
 const supportsToolsRef = vi.hoisted(() => ({ value: true }));
+const adapterKindRef = vi.hoisted(() => ({
+  value: "anthropic" as "anthropic" | "openai",
+}));
+const requestModelRef = vi.hoisted(() => ({
+  value: "claude-sonnet-5-20260101",
+}));
 const reportUsageSpy = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: vi.fn(
@@ -36,7 +45,7 @@ vi.mock("@/lib/ai/gateway", () => ({
       _a: unknown,
       fn: (
         r: {
-          adapter: { kind: "anthropic" };
+          adapter: { kind: "anthropic" | "openai" };
           apiKey: string;
           baseUrl: null;
           provider: string;
@@ -49,12 +58,12 @@ vi.mock("@/lib/ai/gateway", () => ({
     ) => {
       const r = await fn(
         {
-          adapter: { kind: "anthropic" },
+          adapter: { kind: adapterKindRef.value },
           apiKey: "k",
           baseUrl: null,
           provider: "anthropic",
           model: {
-            ...fakeResolvedModel(),
+            ...fakeResolvedModel({ requestModel: requestModelRef.value }),
             supportsTools: supportsToolsRef.value,
           },
         },
@@ -77,6 +86,7 @@ type LoopArgs = {
   system: string;
   messages: { role: string; content: string }[];
   onUsage?: (u: LoopUsage) => void;
+  providerOptions?: Record<string, Record<string, unknown>>;
 };
 type LoopResult = {
   text: string;
@@ -126,6 +136,7 @@ vi.mock("@/lib/assistant/thread-housekeeping", () => ({
 type ToolsArgs = {
   ctx: { getClient: () => Promise<unknown>; actorId: string };
   client: unknown;
+  orgId: string;
   stage: (c: unknown) => boolean;
 };
 const buildAssistantTools = vi.fn<(a: ToolsArgs) => Record<string, never>>();
@@ -451,6 +462,9 @@ beforeEach(() => {
   single.mockResolvedValue({ data: { id: "a1" }, error: null });
   setMessagesRows(defaultMessagesRows());
   supportsToolsRef.value = true;
+  adapterKindRef.value = "anthropic";
+  requestModelRef.value = "claude-sonnet-5-20260101";
+  activeOrg.current = { id: "org1", name: "Acme", timezone: null };
   // Emits one token so the streaming tests still see a token on the wire.
   runAssistantLoop.mockImplementation(async (a) => {
     a.emit({ type: "token", text: "Answer." });
@@ -496,7 +510,7 @@ describe("POST /api/ask", () => {
     await (await POST(makeReq())).text();
   };
 
-  it("persists boardsConsulted with no proposals on a read-only turn", async () => {
+  it("persists an empty trace (no staged calls) on a read-only turn", async () => {
     await post();
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -593,6 +607,21 @@ describe("POST /api/ask", () => {
   });
 
   it("reports running usage from the loop, on top of what the turn spent first", async () => {
+    // A thread long enough to fold, so the summary really spent tokens first.
+    setMessagesRows(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `turn ${i}`,
+        tool_trace: null,
+        created_at: `t${String(i).padStart(2, "0")}`,
+        agent_id: null,
+      })),
+    );
+    summarizeThread.mockResolvedValueOnce({
+      summary: "S",
+      usage: { inputTokens: 7, outputTokens: 3 },
+    });
     runAssistantLoop.mockImplementationOnce(async (a) => {
       a.onUsage?.({
         inputTokens: 10,
@@ -603,9 +632,37 @@ describe("POST /api/ask", () => {
       return loopResult();
     });
     await readEvents();
-    expect(reportUsageSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ inputTokens: 10, outputTokens: 2 }),
+    expect(summarizeThread).toHaveBeenCalledTimes(1);
+    expect(reportUsageSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inputTokens: 17, outputTokens: 5 }),
     );
+  });
+
+  it("meters the summary spend even when the loop dies on its first step", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setMessagesRows(
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `turn ${i}`,
+        tool_trace: null,
+        created_at: `t${String(i).padStart(2, "0")}`,
+        agent_id: null,
+      })),
+    );
+    summarizeThread.mockResolvedValueOnce({
+      summary: "S",
+      usage: { inputTokens: 7, outputTokens: 3 },
+    });
+    runAssistantLoop.mockImplementationOnce(async () => {
+      throw new Error("provider down");
+    });
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "error")).toBe(true);
+    expect(reportUsageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 7, outputTokens: 3 }),
+    );
+    spy.mockRestore();
   });
 
   // Once caching engages, Anthropic's input_tokens is the UNCACHED remainder
@@ -1246,5 +1303,100 @@ describe("POST /api/ask · fallback text on a staged turn", () => {
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ content: "Answer." }),
     );
+  });
+});
+
+// F1: the catalog was built for a user-level MCP connection. Here every
+// org-scoped call is pinned to the org the user is working in.
+describe("POST /api/ask · pinned to the active org", () => {
+  it("hands the tool builder the active org", async () => {
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].orgId).toBe("org1");
+  });
+
+  it("names the active org in the turn's system text", async () => {
+    await readEvents();
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toMatch(/organization "Acme" \(id org1\)/);
+    expect(system).toMatch(/only inside that organization/);
+  });
+
+  it("follows the org switcher, not a fixed org", async () => {
+    activeOrg.current = { id: "org2", name: "Beta", timezone: null };
+    await readEvents();
+    expect(buildAssistantTools.mock.calls[0]![0].orgId).toBe("org2");
+    expect(runAssistantLoop.mock.calls[0]![0].system).toContain("org2");
+  });
+});
+
+// F3: a turn whose model wrote no text used to show an empty bubble live and
+// the fallback line only after a reload.
+describe("POST /api/ask · a turn with no text streams its stored answer", () => {
+  const tokens = (events: { type: string; text?: unknown }[]) =>
+    events
+      .filter((e) => e.type === "token")
+      .map((e) => e.text)
+      .join("");
+
+  it("streams the staged fallback before done", async () => {
+    stageOnBuild("c1");
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({
+        text: "I finished without writing an answer.",
+        wroteText: false,
+      }),
+    );
+    const events = await readEvents();
+    expect(tokens(events)).toBe(PROPOSAL_FALLBACK_ANSWER);
+    const tokenAt = events.findIndex((e) => e.type === "token");
+    expect(tokenAt).toBeGreaterThan(-1);
+    expect(tokenAt).toBeLessThan(events.findIndex((e) => e.type === "done"));
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: PROPOSAL_FALLBACK_ANSWER }),
+    );
+  });
+
+  it("streams the step-cap fallback that it stores", async () => {
+    const capped =
+      "I reached my 12-step limit before I could finish. I used: list_items. Ask me to continue.";
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({ text: capped, wroteText: false, hitStepCap: true }),
+    );
+    const events = await readEvents();
+    expect(tokens(events)).toBe(capped);
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: capped }),
+    );
+  });
+
+  it("adds nothing to a turn whose model wrote its own text", async () => {
+    const events = await readEvents();
+    expect(tokens(events)).toBe("Answer.");
+  });
+});
+
+// F4: the old loop sent an explicit thinking shape; the AI SDK sends none
+// unless asked, so the route maps the repo's own request shape onto the
+// Anthropic provider options.
+describe("POST /api/ask · reasoning options", () => {
+  it("sends the model's thinking shape and effort on the anthropic adapter", async () => {
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toEqual({
+      anthropic: { thinking: { type: "adaptive" }, effort: "high" },
+    });
+  });
+
+  it("sends the budgeted thinking form, and no effort, for Haiku", async () => {
+    requestModelRef.value = "claude-haiku-4-5-20251001";
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 1024 } },
+    });
+  });
+
+  it("sends no provider options on another adapter", async () => {
+    adapterKindRef.value = "openai";
+    await readEvents();
+    expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toBeUndefined();
   });
 });

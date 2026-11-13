@@ -3,6 +3,7 @@ import { z } from "zod";
 import { simulateReadableStream, tool } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import {
+  ASSISTANT_MAX_OUTPUT_TOKENS,
   ASSISTANT_MAX_STEPS,
   ASSISTANT_PREAMBLE,
   runAssistantLoop,
@@ -160,6 +161,38 @@ describe("runAssistantLoop", () => {
     expect(onUsage).toHaveBeenCalledTimes(2);
     expect(r.usage.outputTokens).toBe(40);
     expect(r.usage.cacheReadTokens).toBe(40);
+  });
+
+  it("bounds every step's output", async () => {
+    const model = scripted([textChunks("ok")]);
+    await runAssistantLoop({
+      model,
+      system: "s",
+      messages,
+      tools: {},
+      emit: () => {},
+    });
+    expect(ASSISTANT_MAX_OUTPUT_TOKENS).toBe(8192);
+    expect(model.doStreamCalls[0]!.maxOutputTokens).toBe(
+      ASSISTANT_MAX_OUTPUT_TOKENS,
+    );
+  });
+
+  it("passes provider options through to the model", async () => {
+    const model = scripted([textChunks("ok")]);
+    await runAssistantLoop({
+      model,
+      system: "s",
+      messages,
+      tools: {},
+      emit: () => {},
+      providerOptions: {
+        anthropic: { thinking: { type: "adaptive" }, effort: "high" },
+      },
+    });
+    expect(model.doStreamCalls[0]!.providerOptions).toMatchObject({
+      anthropic: { thinking: { type: "adaptive" }, effort: "high" },
+    });
   });
 
   it("tells the model that staged does not mean done", () => {

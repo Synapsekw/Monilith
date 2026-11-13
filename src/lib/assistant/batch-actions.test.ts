@@ -12,6 +12,9 @@ const state = {
   prior: false,
   priorError: false,
   insertError: false,
+  /** Fail only the first N inserts (then succeed). */
+  insertFailures: 0,
+  throwOnLoad: false,
   ownerId: "u-1",
   convOrg: "o-1",
   msgConv: CONV,
@@ -39,6 +42,7 @@ function q(answer: (eqs: Eqs) => unknown) {
 
 const supabase = {
   from: (table: string) => {
+    if (state.throwOnLoad) throw new Error("transport down");
     if (table === "ai_conversations")
       return {
         select: () =>
@@ -76,8 +80,9 @@ const supabase = {
         content: string;
       }) => {
         state.inserted.push(row);
+        const failThis = state.insertError || state.insertFailures-- > 0;
         return q(() =>
-          state.insertError
+          failThis
             ? { data: null, error: { message: "nope" } }
             : { data: { id: "out-1" }, error: null },
         );
@@ -108,7 +113,17 @@ vi.mock("./catalog", () => ({
           capability: "board.write",
           invoke,
         }
-      : undefined,
+      : name === "manage_goal"
+        ? {
+            name,
+            inputSchema: {
+              action: z.string(),
+              orgId: z.string().optional(),
+            },
+            capability: { create: "board.write" },
+            invoke,
+          }
+        : undefined,
 }));
 
 import { applyBatch, dismissBatch } from "./batch-actions";
@@ -128,6 +143,8 @@ beforeEach(() => {
   state.prior = false;
   state.priorError = false;
   state.insertError = false;
+  state.insertFailures = 0;
+  state.throwOnLoad = false;
   state.convOrg = "o-1";
   state.msgConv = CONV;
   state.ownerId = "u-1";
@@ -304,10 +321,102 @@ describe("applyBatch hardening", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("fails when the outcome insert fails", async () => {
+  // Was "fails when the outcome insert fails": the rows have already run by
+  // then, so a failure result made the card reopen and a second Apply
+  // duplicate the creates. See F7.
+  it("retries a failed outcome insert once", async () => {
+    state.insertFailures = 1;
+    const res = await applyBatch(args);
+    expect(state.inserted).toHaveLength(2);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ ok: true, data: { messageId: "out-1" } });
+  });
+
+  it("still reports success when the outcome cannot be recorded, because the rows ran", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     state.insertError = true;
     const res = await applyBatch(args);
+    expect(state.inserted).toHaveLength(2);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.messageId).toMatch(/^local-/);
+      expect(res.data.content).toContain("Done — Change a");
+      expect(res.data.trace).toMatchObject({
+        resolvesProposal: MSG,
+        outcome: "applied",
+      });
+      expect(res.data.touchedBoardIds).toEqual([BOARD]);
+    }
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("logs an unexpected failure instead of swallowing it", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.throwOnLoad = true;
+    const res = await applyBatch(args);
     expect(res.ok).toBe(false);
+    expect(spy).toHaveBeenCalledWith(
+      "[assistant] applyBatch failed",
+      expect.any(Error),
+    );
+    spy.mockRestore();
+  });
+});
+
+describe("applyBatch · pinned to the active org", () => {
+  const args = { conversationId: CONV, messageId: MSG, selectedIds: ["g"] };
+
+  it("refuses a row that targets another org, without invoking", async () => {
+    state.trace = {
+      stagedCalls: [
+        call("g", {
+          tool: "manage_goal",
+          input: { action: "create", orgId: "o-2" },
+          boardId: null,
+        }),
+      ],
+    };
+    const res = await applyBatch(args);
+    expect(res.ok).toBe(true);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(state.inserted[0]!.tool_trace.stagedResults).toEqual([
+      {
+        id: "g",
+        ok: false,
+        error: "This change targets a different organization.",
+      },
+    ]);
+  });
+
+  it("refuses an org-scoped row that carries no org", async () => {
+    state.trace = {
+      stagedCalls: [
+        call("g", {
+          tool: "manage_goal",
+          input: { action: "create" },
+          boardId: null,
+        }),
+      ],
+    };
+    await applyBatch(args);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("runs a row for the active org", async () => {
+    state.trace = {
+      stagedCalls: [
+        call("g", {
+          tool: "manage_goal",
+          input: { action: "create", orgId: "o-1" },
+          boardId: null,
+        }),
+      ],
+    };
+    await applyBatch(args);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke.mock.calls[0]![1]).toMatchObject({ orgId: "o-1" });
   });
 });
 
@@ -333,6 +442,24 @@ describe("dismissBatch", () => {
     const res = await dismissBatch(args);
     expect(res.ok).toBe(false);
     expect(state.inserted).toHaveLength(0);
+  });
+
+  it("fails when the outcome cannot be recorded: nothing ran", async () => {
+    state.insertError = true;
+    const res = await dismissBatch(args);
+    expect(res.ok).toBe(false);
+  });
+
+  it("logs an unexpected failure instead of swallowing it", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.throwOnLoad = true;
+    const res = await dismissBatch(args);
+    expect(res.ok).toBe(false);
+    expect(spy).toHaveBeenCalledWith(
+      "[assistant] dismissBatch failed",
+      expect.any(Error),
+    );
+    spy.mockRestore();
   });
 
   it("records a cancelled outcome and runs nothing", async () => {

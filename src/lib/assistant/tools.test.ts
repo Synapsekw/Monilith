@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { executeAgentTool } from "@/test/agent-tool-exec";
 import type { StagedCall } from "./staged";
-import { buildAssistantTools } from "./tools";
+import {
+  buildAssistantTools,
+  ORG_MISMATCH_ERROR,
+  STAGE_INVALID_ERROR,
+} from "./tools";
 
 function descriptor(over: Partial<ToolDescriptor>): ToolDescriptor {
   return {
@@ -21,6 +25,10 @@ function descriptor(over: Partial<ToolDescriptor>): ToolDescriptor {
 }
 
 const ctx = { getClient: vi.fn(), actorId: "u-1" } as never;
+const ORG = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const OTHER_ORG = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const client = {} as never;
 
 describe("buildAssistantTools", () => {
@@ -30,6 +38,7 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage,
       descriptors: [read],
     });
@@ -47,6 +56,7 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage: (c) => (staged.push(c), true),
       descriptors: [write],
     });
@@ -55,7 +65,8 @@ describe("buildAssistantTools", () => {
     expect(out).toMatchObject({ staged: true });
     expect(staged).toHaveLength(1);
     expect(staged[0]).toMatchObject({
-      id: "test-update_item",
+      // A fresh id, never the provider's tool call id ("test-update_item").
+      id: expect.stringMatching(UUID),
       tool: "update_item",
       input: { id: "i-1" },
       destructive: false,
@@ -73,6 +84,7 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage: (c) => (staged.push(c), true),
       descriptors: [manage],
     });
@@ -88,6 +100,7 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage: () => false,
       descriptors: [write],
     });
@@ -107,6 +120,7 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage: () => true,
       descriptors: [read],
     });
@@ -125,11 +139,155 @@ describe("buildAssistantTools", () => {
     const tools = buildAssistantTools({
       ctx,
       client,
+      orgId: ORG,
       stage: () => true,
       descriptors: [read],
     });
     expect(await executeAgentTool(tools, "read_it", {})).toEqual({
       error: "boom",
     });
+  });
+});
+
+describe("buildAssistantTools · staged call validation", () => {
+  it("gives every staged call its own id, even when the provider repeats one", async () => {
+    const write = descriptor({
+      name: "update_item",
+      capability: "board.write",
+    });
+    const staged: StagedCall[] = [];
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: (c) => (staged.push(c), true),
+      descriptors: [write],
+    });
+    // executeAgentTool always passes the same toolCallId for a tool name.
+    await executeAgentTool(tools, "update_item", { id: "i-1" });
+    await executeAgentTool(tools, "update_item", { id: "i-2" });
+    expect(staged).toHaveLength(2);
+    expect(staged[0]!.id).toMatch(UUID);
+    expect(staged[1]!.id).toMatch(UUID);
+    expect(staged[0]!.id).not.toBe(staged[1]!.id);
+  });
+
+  it("refuses to stage a call the stored trace would not parse back", async () => {
+    // A boardId-scoped tool whose boardId is not a uuid: the staged row's
+    // `boardId` would fail `stagedCallSchema` on reload.
+    const write = descriptor({
+      name: "update_board",
+      capability: "board.write",
+      scope: "boardId",
+      inputSchema: { boardId: z.string() },
+    });
+    const stage = vi.fn(() => true);
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage,
+      descriptors: [write],
+    });
+    const out = await executeAgentTool(tools, "update_board", {
+      boardId: "not-a-uuid",
+    });
+    expect(out).toEqual({ error: STAGE_INVALID_ERROR });
+    expect(stage).not.toHaveBeenCalled();
+    expect(write.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildAssistantTools · pinned to the active org", () => {
+  const orgScoped = (over: Partial<ToolDescriptor>) =>
+    descriptor({ inputSchema: { orgId: z.string().optional() }, ...over });
+
+  it("fills in the active org for a read that omits it", async () => {
+    const read = orgScoped({ name: "list_goals" });
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: () => true,
+      descriptors: [read],
+    });
+    await executeAgentTool(tools, "list_goals", {});
+    expect(read.invoke).toHaveBeenCalledWith(ctx, { orgId: ORG });
+  });
+
+  it("refuses a read for another org without invoking it", async () => {
+    const read = orgScoped({ name: "list_goals" });
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: () => true,
+      descriptors: [read],
+    });
+    expect(
+      await executeAgentTool(tools, "list_goals", { orgId: OTHER_ORG }),
+    ).toEqual({ error: ORG_MISMATCH_ERROR });
+    expect(read.invoke).not.toHaveBeenCalled();
+  });
+
+  it("passes a read that names the active org through unchanged", async () => {
+    const read = orgScoped({ name: "list_goals" });
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: () => true,
+      descriptors: [read],
+    });
+    await executeAgentTool(tools, "list_goals", { orgId: ORG });
+    expect(read.invoke).toHaveBeenCalledWith(ctx, { orgId: ORG });
+  });
+
+  it("stores the injected org on a staged write, so Apply uses the same org", async () => {
+    const write = orgScoped({
+      name: "manage_goal",
+      capability: { create: "board.write" },
+      inputSchema: { action: z.string(), orgId: z.string().optional() },
+    });
+    const staged: StagedCall[] = [];
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: (c) => (staged.push(c), true),
+      descriptors: [write],
+    });
+    await executeAgentTool(tools, "manage_goal", { action: "create" });
+    expect(staged[0]!.input).toEqual({ action: "create", orgId: ORG });
+  });
+
+  it("refuses to stage a write for another org", async () => {
+    const write = orgScoped({ name: "log_time", capability: "board.write" });
+    const stage = vi.fn(() => true);
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage,
+      descriptors: [write],
+    });
+    expect(
+      await executeAgentTool(tools, "log_time", { orgId: OTHER_ORG }),
+    ).toEqual({ error: ORG_MISMATCH_ERROR });
+    expect(stage).not.toHaveBeenCalled();
+    expect(write.invoke).not.toHaveBeenCalled();
+  });
+
+  it("leaves a tool without an orgId input alone", async () => {
+    const read = descriptor({ name: "read_it" });
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: () => true,
+      descriptors: [read],
+    });
+    await executeAgentTool(tools, "read_it", { id: "x" });
+    expect(read.invoke).toHaveBeenCalledWith(ctx, { id: "x" });
   });
 });

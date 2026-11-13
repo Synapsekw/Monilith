@@ -6,6 +6,10 @@ import type { AiUsageTokens } from "@/lib/ai/pricing";
 /** Hard ceiling on model round-trips in one turn. */
 export const ASSISTANT_MAX_STEPS = 12;
 
+/** Output ceiling for each model round-trip. Without it the SDK sends the
+ *  model's own maximum, so one step's worst-case spend is unbounded. */
+export const ASSISTANT_MAX_OUTPUT_TOKENS = 8192;
+
 export const ASSISTANT_PREAMBLE = [
   "You are the assistant inside Monolith, a work management app. You act for the signed-in user and can see and change only what they can.",
   "Ground every claim in data from the tools or the FOCUS block. Never fabricate.",
@@ -17,6 +21,11 @@ export const ASSISTANT_PREAMBLE = [
   "If the target board, group or item is ambiguous, stage nothing and ask exactly one short question.",
   "When no FOCUS block is given, start with list_boards.",
 ].join("\n");
+
+/** `ai` does not re-export its `ProviderOptions` type; take it from the call. */
+type ProviderOptions = NonNullable<
+  Parameters<typeof streamText>[0]["providerOptions"]
+>;
 
 export type AssistantEvent =
   { type: "token"; text: string } | { type: "status"; text: string };
@@ -67,6 +76,9 @@ export async function runAssistantLoop(args: {
   emit: (e: AssistantEvent) => void;
   /** Running total after each completed step, for metering a turn that dies. */
   onUsage?: (running: AiUsageTokens) => void;
+  /** Provider-namespaced request options (for example Anthropic thinking).
+   *  The caller decides; this loop stays provider-agnostic. */
+  providerOptions?: ProviderOptions;
 }): Promise<{
   text: string;
   usage: AiUsageTokens;
@@ -96,6 +108,8 @@ export async function runAssistantLoop(args: {
       ...args.messages,
     ],
     tools: args.tools,
+    maxOutputTokens: ASSISTANT_MAX_OUTPUT_TOKENS,
+    ...(args.providerOptions ? { providerOptions: args.providerOptions } : {}),
     stopWhen: stepCountIs(ASSISTANT_MAX_STEPS),
     onStepEnd: (step) => {
       steps++;

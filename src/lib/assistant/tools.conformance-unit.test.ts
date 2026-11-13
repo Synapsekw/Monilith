@@ -17,6 +17,9 @@ function writeInputs(): { name: string; input: Record<string, unknown> }[] {
     for (const [action, capability] of Object.entries(d.capability))
       if (capability !== null) out.push({ name: d.name, input: { action } });
     out.push({ name: d.name, input: { action: "not-a-real-action" } });
+    // Prototype keys and non-string actions must also fail closed.
+    out.push({ name: d.name, input: { action: "constructor" } });
+    out.push({ name: d.name, input: { action: 1 } });
   }
   return out;
 }
@@ -41,6 +44,7 @@ describe("staging conformance over the real catalog", () => {
           throw new Error("no db in unit tests");
         },
       } as never,
+      orgId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       stage: (c) => (staged.push(c.tool), true),
     });
     for (const { name, input } of writeInputs())
