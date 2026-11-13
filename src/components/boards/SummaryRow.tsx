@@ -65,6 +65,16 @@ export const NAME_FREEZE_EDGE =
 // width rather than shifting the grid.
 export const NAME_FREEZE_RULE = "border-r border-border";
 
+// Board Total's theme-coloured surface and label. Literal class strings, not
+// built at runtime, for the same Tailwind-scanner reason as the constants
+// above. 14% of the brand mixed into the raised surface; the label is the
+// brand pulled 18% toward the foreground so it clears AA on that tint in
+// every preset.
+const BOARD_TOTAL_SURFACE =
+  "bg-[color-mix(in_srgb,var(--color-brand)_14%,var(--color-surface))]";
+const BOARD_TOTAL_LABEL =
+  "font-semibold text-[color-mix(in_srgb,var(--color-brand)_82%,var(--color-foreground))]";
+
 /** True when at least one column has a user-assigned footer aggregation. */
 export function hasAssignedSummary(columns: readonly Column[]): boolean {
   return columns.some(
@@ -204,18 +214,34 @@ export function SummaryRow({
       // ROW_HAIRLINE, for the same reason NAME_FREEZE_SHADOW/NAME_FREEZE_EDGE
       // above are duplicated rather than composed: Tailwind only emits a
       // class whose exact text appears literally in scanned source.
+      //
+      // The two variants are deliberately unequal (2026-11-13): the group row
+      // sits on the plain surface with dimmed values, and Board Total is
+      // tinted with the theme colour, a full-width solid theme rule replacing
+      // ROW_HAIRLINE's inset one, and bold values. Every colour derives from
+      // --color-brand, so all presets and both modes follow with no
+      // per-theme code. The tint is mixed into the surface, never layered
+      // with alpha: this row is sticky, so it must stay opaque over the rows
+      // scrolling beneath it.
       className={cn(
         ROW_HAIRLINE,
-        "bg-surface-muted grid",
-        variant === "board" && "sticky bottom-0 z-[15]",
-        variant === "group" &&
+        "grid",
+        variant === "board" && [
+          "sticky bottom-0 z-[15] min-h-[38px]",
+          BOARD_TOTAL_SURFACE,
+          "before:bg-brand before:left-0 before:opacity-100",
+        ],
+        variant === "group" && [
+          "bg-surface",
           "after:bg-border after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:left-4 after:h-px after:opacity-70 after:content-['']",
+        ],
       )}
       style={{ gridTemplateColumns: template }}
     >
       <div
         className={cn(
-          "bg-surface-muted sticky left-0 z-10 flex items-center gap-2 px-4 py-1.5",
+          "sticky left-0 z-10 flex items-center gap-2 px-4 py-1.5",
+          variant === "board" ? BOARD_TOTAL_SURFACE : "bg-surface",
           NAME_FREEZE_EDGE,
           NAME_FREEZE_RULE,
         )}
@@ -228,7 +254,12 @@ export function SummaryRow({
             style={{ backgroundColor: groupColor }}
           />
         )}
-        <Kicker size="xs">{label}</Kicker>
+        <Kicker
+          size="xs"
+          className={cn(variant === "board" && BOARD_TOTAL_LABEL)}
+        >
+          {label}
+        </Kicker>
       </div>
       {perColumn.map(({ col, meta, values, current }) => (
         <div key={col.id} className="flex min-w-0 items-center py-1.5">
@@ -242,6 +273,7 @@ export function SummaryRow({
             allowed={allowedAggregations(meta.aggregateKind)}
             canEdit={canEdit}
             onChange={(agg) => onChange(col, agg)}
+            tone={variant === "board" ? "strong" : "quiet"}
           />
         </div>
       ))}

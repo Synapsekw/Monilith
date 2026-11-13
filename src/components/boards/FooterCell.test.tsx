@@ -26,6 +26,20 @@ describe("FooterValue", () => {
     expect(screen.getByText("2/3")).toBeInTheDocument();
   });
 
+  it("tone sets the value's emphasis: quiet dims it, strong bolds it", () => {
+    const { rerender } = render(
+      <FooterValue result={{ kind: "number", value: 30 }} tone="quiet" />,
+    );
+    expect(screen.getByText("30").className).toContain("text-muted-foreground");
+    rerender(
+      <FooterValue result={{ kind: "number", value: 30 }} tone="strong" />,
+    );
+    expect(screen.getByText("30").className).toContain("font-semibold");
+    expect(screen.getByText("30").className).toContain("text-foreground");
+    rerender(<FooterValue result={{ kind: "number", value: 30 }} />);
+    expect(screen.getByText("30").className).toContain("font-medium");
+  });
+
   it("renders nothing when empty", () => {
     const { container } = render(<FooterValue result={{ kind: "empty" }} />);
     expect(container.textContent).toBe("");
