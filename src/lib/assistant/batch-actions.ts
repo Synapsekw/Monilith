@@ -39,15 +39,21 @@ type Loaded =
 async function loadBatch(
   supabase: Supabase,
   userId: string,
+  orgId: string,
   conversationId: string,
   messageId: string,
 ): Promise<Loaded> {
   const conv = await supabase
     .from("ai_conversations")
-    .select("user_id")
+    .select("user_id, org_id")
     .eq("id", conversationId)
     .maybeSingle();
-  if (conv.error || !conv.data || conv.data.user_id !== userId)
+  if (
+    conv.error ||
+    !conv.data ||
+    conv.data.user_id !== userId ||
+    conv.data.org_id !== orgId
+  )
     return { ok: false, error: "Conversation not found." };
 
   const row = await supabase
@@ -68,6 +74,12 @@ async function loadBatch(
     .eq("conversation_id", conversationId)
     .eq("tool_trace->>resolvesProposal", messageId)
     .limit(1);
+  // Fail closed: this query is the only guard against a double write.
+  if (prior.error)
+    return {
+      ok: false,
+      error: "Couldn't check those changes. Please try again.",
+    };
   if (prior.data?.length)
     return { ok: false, error: "These changes were already resolved." };
 
@@ -129,11 +141,8 @@ async function runCall(
       };
     return { id: call.id, ok: true };
   } catch (e) {
-    return {
-      id: call.id,
-      ok: false,
-      error: e instanceof Error ? e.message : "Failed.",
-    };
+    console.error("[assistant] staged call threw", call.tool, e);
+    return { id: call.id, ok: false, error: "Failed." };
   }
 }
 
@@ -170,6 +179,7 @@ export async function applyBatch(input: {
     const loaded = await loadBatch(
       supabase,
       user.id,
+      org.id,
       conversationId,
       messageId,
     );
@@ -177,12 +187,14 @@ export async function applyBatch(input: {
 
     const selected = new Set(selectedIds);
     const results: StagedResult[] = [];
+    const seen = new Set<string>();
     const touched = new Set<string>();
     for (const call of loaded.calls) {
-      if (!selected.has(call.id)) {
+      if (!selected.has(call.id) || seen.has(call.id)) {
         results.push({ id: call.id, ok: false, skipped: true });
         continue;
       }
+      seen.add(call.id);
       const result = await runCall(supabase, user.id, call);
       results.push(result);
       if (result.ok && call.boardId) touched.add(call.boardId);
@@ -216,10 +228,13 @@ export async function dismissBatch(input: {
 
   try {
     const user = await requireUser();
+    const org = await resolveActiveOrg();
+    if (!org) return fail("No organization.");
     const supabase = await createClient();
     const loaded = await loadBatch(
       supabase,
       user.id,
+      org.id,
       conversationId,
       messageId,
     );
