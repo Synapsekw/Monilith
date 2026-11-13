@@ -128,7 +128,7 @@ function preparedReply(message, links = {}) {
   )
     return {
       reply:
-        "Keep projects, people and the context around each task together. Explore the product tour to see the board, task details and agent dock in one connected workspace.",
+        "Keep projects, people and the context around each task together. Explore the product tour to see the board, task details and assistant dock in one connected workspace.",
       links: link("Explore the workspace", "product"),
     };
   if (/^(hi|hello|hey|thanks|thank you)[!. ]*$/.test(text))

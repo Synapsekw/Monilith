@@ -4,6 +4,7 @@ import { cellValueSchema } from "@/lib/validations/boards";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Database, Json, Tables } from "@/types/database.types";
 import { notifyNewAssignees } from "./assign-notify";
+import { monoAssignErrorMessage } from "@/lib/monos/members";
 
 /** What a cell write needs, already parsed by the caller's own Zod boundary. */
 export type UpsertCellCoreInput = {
@@ -95,7 +96,11 @@ export async function upsertCellCore(
     .select("*")
     .single();
   if (error || !cell)
-    return fail(error?.message ?? "Could not write the cell.");
+    return fail(
+      (error && monoAssignErrorMessage(error)) ??
+        error?.message ??
+        "Could not write the cell.",
+    );
 
   if (column.kind === "people") {
     await notifyNewAssignees(supabase, {

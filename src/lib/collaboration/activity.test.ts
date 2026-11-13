@@ -95,6 +95,33 @@ describe("resolveActivity", () => {
     expect(d).toMatchObject({ kind: "cell_changed", to: "Ada" });
   });
 
+  it("labels a Mono in a people change as whose Mono it is", () => {
+    const pplCol = {
+      ...COL,
+      id: "col-p",
+      kind: "people",
+      name: "Owner",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-p", new_value: { userIds: ["u1", "m1"] } }),
+      [pplCol],
+      [
+        { userId: "u1", fullName: "Ada" },
+        {
+          userId: "m1",
+          fullName: "Nova",
+          mono: {
+            color: "#7395ff",
+            ownerId: "u1",
+            ownerName: "Ada Owner",
+            directable: false,
+          },
+        },
+      ],
+    );
+    expect(d).toMatchObject({ to: "Ada, Nova (Ada's Mono)" });
+  });
+
   it("resolves a text cell to its text", () => {
     const txtCol = {
       ...COL,

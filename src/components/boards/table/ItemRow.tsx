@@ -340,6 +340,7 @@ export const ItemRow = memo(function ItemRow({
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
+                mono={creator?.mono}
               />
             </div>
             <div className="flex h-full items-center px-4">

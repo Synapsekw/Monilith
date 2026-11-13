@@ -153,6 +153,15 @@ const { getBoardPayload, listOrgMembersCached } = vi.hoisted(() => ({
   ),
 }));
 vi.mock("@/lib/boards/queries", () => ({ getBoardPayload }));
+const { resolveMonoTurn, getMonoClient } = vi.hoisted(() => ({
+  resolveMonoTurn: vi.fn(),
+  getMonoClient: vi.fn(async () => ({ mono: "client" })),
+}));
+vi.mock("@/lib/monos/turn", () => ({
+  resolveMonoTurn,
+  monoSystemLines: () => "MONO LINES",
+}));
+vi.mock("@/lib/mono/session", () => ({ getMonoClient }));
 vi.mock("@/lib/org/queries-cached", () => ({ listOrgMembersCached }));
 vi.mock("@/lib/profile/queries-cached", () => ({
   getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
@@ -211,6 +220,7 @@ type ConversationRow = {
   folder_id: string | null;
   agent_id: string | null;
   user_id: string;
+  mono_id: string | null;
 };
 const defaultConversationRow = (): ConversationRow => ({
   summary: null,
@@ -219,6 +229,7 @@ const defaultConversationRow = (): ConversationRow => ({
   folder_id: null,
   agent_id: null,
   user_id: USER_ID,
+  mono_id: null,
 });
 let conversationRow: { data: ConversationRow | null; error: unknown } = {
   data: defaultConversationRow(),
@@ -1231,5 +1242,58 @@ describe("POST /api/ask · reasoning options", () => {
     adapterKindRef.value = "openai";
     await readEvents();
     expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toBeUndefined();
+  });
+});
+
+describe("POST /api/ask · a Mono thread", () => {
+  it("acts as the Mono, on the owner's own key, metered as mono_chat", async () => {
+    mockConversationRow({ mono_id: "m1" });
+    resolveMonoTurn.mockResolvedValue({
+      ok: true,
+      turn: { mono: { userId: "m1", name: "Nova" }, provider: "openai" },
+    });
+    await (await POST(makeReq())).text();
+
+    expect(resolveMonoTurn).toHaveBeenCalledWith(
+      theClient.current,
+      USER_ID,
+      "org1",
+      "m1",
+    );
+    expect(getMonoClient).toHaveBeenCalledWith("m1");
+    const built = buildAssistantTools.mock.calls[0]![0];
+    expect(built.ctx.actorId).toBe("m1");
+    expect(await built.ctx.getClient()).toEqual({ mono: "client" });
+    expect(built.client).toEqual({ mono: "client" });
+    expect(vi.mocked(runAi).mock.calls[0]![0]).toMatchObject({
+      orgId: "org1",
+      userId: USER_ID,
+      feature: "mono_chat",
+      credential: "personal",
+      provider: "openai",
+    });
+    expect(runAssistantLoop.mock.calls[0]![0].system).toContain("MONO LINES");
+  });
+
+  it("refuses before streaming when the Mono cannot answer", async () => {
+    mockConversationRow({ mono_id: "m1" });
+    resolveMonoTurn.mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "Your Mono is asleep.",
+    });
+    const res = await POST(makeReq());
+    expect(res.status).toBe(409);
+    expect(runAi).not.toHaveBeenCalled();
+  });
+
+  it("never resolves a Mono for an ordinary thread", async () => {
+    await (await POST(makeReq())).text();
+    expect(resolveMonoTurn).not.toHaveBeenCalled();
+    expect(getMonoClient).not.toHaveBeenCalled();
+    expect(vi.mocked(runAi).mock.calls[0]![0]).toMatchObject({
+      feature: "ask_pulse",
+    });
+    expect(vi.mocked(runAi).mock.calls[0]![0]).not.toHaveProperty("credential");
   });
 });

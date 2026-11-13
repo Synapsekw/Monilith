@@ -718,6 +718,31 @@ describe("AskChat — composer error and retry", () => {
     expect(createConversation).toHaveBeenCalledTimes(2);
   });
 
+  it("fires onTurnEnd on a failed turn too, so a busy caller never sticks", async () => {
+    (createConversation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      error: "Couldn't reach the server.",
+    });
+    const onTurnStart = vi.fn();
+    const onTurnComplete = vi.fn();
+    const onTurnEnd = vi.fn();
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        onStarted={() => {}}
+        onTurnStart={onTurnStart}
+        onTurnComplete={onTurnComplete}
+        onTurnEnd={onTurnEnd}
+      />,
+    );
+    ask("what's overdue?");
+    await screen.findByRole("alert");
+    expect(onTurnStart).toHaveBeenCalledTimes(1);
+    expect(onTurnComplete).not.toHaveBeenCalled();
+    expect(onTurnEnd).toHaveBeenCalledTimes(1);
+  });
+
   it("clears a stale alert the moment a fresh message is sent", async () => {
     (createConversation as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,

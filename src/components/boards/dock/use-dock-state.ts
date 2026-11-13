@@ -44,7 +44,10 @@ function readStored(boardId: string): Stored {
           : CLOSED.width,
       // Old rows (pre-tab) have no `tab` key — default them to chat rather
       // than treating the row as corrupt.
-      tab: parsed.tab === "intelligence" ? "intelligence" : "chat",
+      tab:
+        parsed.tab === "intelligence" || parsed.tab === "mono"
+          ? parsed.tab
+          : "chat",
     };
   } catch {
     return CLOSED;

@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AskChat } from "@/components/ai/ask/AskChat";
+import { MonoTab } from "@/components/mono/rail/MonoTab";
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
+import type { MyMono } from "@/lib/monos/types";
 import type { DockTab } from "@/stores/board-intelligence";
 import { cn } from "@/lib/utils";
 import { DockThreadList } from "./DockThreadList";
@@ -42,7 +44,7 @@ export type DockBodyProps = {
   chatKey: string;
   onStarted: (conversationId: string) => void;
   onTurnComplete: () => void;
-  /** Which section is showing. Chat and Intelligence never render at once. */
+  /** Which section is showing. Only one of the three ever renders. */
   tab: DockTab;
   /** Unresolved suggestions, on the Intelligence tile. */
   badge: number;
@@ -60,6 +62,12 @@ export type DockBodyProps = {
    *  per board-role — so a viewer gets the button too, same as an editor.
    *  Only `undefined` (never passed) renders no button. */
   onOpenInChat?: (pair: QaPair) => void | Promise<void>;
+  /** The viewer's own Mono (page-read once), or null before it exists. */
+  myMono: MyMono | null;
+  /** Is the viewer's Mono a member of this board (page-read once)? */
+  monoOnBoard: boolean;
+  /** The viewer's display name, for the Mono's accessible label. */
+  ownerName: string | null;
 };
 
 /** Full-layer entrance (spec §5): 14px slide from the right, staggered band →
@@ -113,6 +121,9 @@ export function DockBody({
   onRanOnMount,
   ruleMeta,
   onOpenInChat,
+  myMono,
+  monoOnBoard,
+  ownerName,
 }: DockBodyProps) {
   // Component state, not persisted (spec §6): the ledger opens on demand and
   // folds again when a thread is picked, so the transcript is what you see.
@@ -147,7 +158,16 @@ export function DockBody({
             height, rather than depending on a fixed pixel offset that only
             happened to fit one specific tile size. */}
         <div className="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto">
-          <DockTiles tab={tab} badge={badge} onSelect={onSelectTile} />
+          <DockTiles
+            tab={tab}
+            badge={badge}
+            mono={
+              myMono
+                ? { color: myMono.color, asleep: myMono.brain === "none" }
+                : null
+            }
+            onSelect={onSelectTile}
+          />
         </div>
         {tab === "chat" && (
           <Button
@@ -192,7 +212,21 @@ export function DockBody({
         </div>
       )}
 
-      {tab === "chat" ? (
+      {tab === "mono" ? (
+        <div
+          id="dock-panel-mono"
+          role="tabpanel"
+          aria-labelledby={dockTileId({ kind: "mono" })}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+        >
+          <MonoTab
+            boardId={boardId}
+            initialMono={myMono}
+            initialOnBoard={monoOnBoard}
+            ownerName={ownerName}
+          />
+        </div>
+      ) : tab === "chat" ? (
         // A real flex column rather than `display: contents`: the panel has to
         // own the same min-height-0 column the dock body did, and a contents
         // box is skipped by part of the a11y tree it is meant to name.

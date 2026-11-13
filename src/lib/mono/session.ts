@@ -51,6 +51,17 @@ export async function getMonoClient(
   return clientFromAccessToken(accessToken);
 }
 
+/**
+ * Drop a Mono's cached token, for a Mono that was removed or no longer
+ * belongs to the caller. A stale token is already powerless (removal deletes
+ * the Mono's memberships in the same transaction), so this only stops a warm
+ * instance from holding on to it.
+ */
+export function forgetMonoSession(monoUserId: string): void {
+  cache.delete(monoUserId);
+  inflight.delete(monoUserId);
+}
+
 export function __resetMonoSessionCache(): void {
   cache.clear();
   inflight.clear();

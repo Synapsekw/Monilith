@@ -18,6 +18,7 @@ describe("tierForFeature", () => {
       "conversational_action",
       "automation_ai_step",
       "dashboard_gen",
+      "mono_chat",
     ])
       expect(tierForFeature(f)).toBe("standard");
   });
@@ -46,8 +47,8 @@ describe("tierForFeature", () => {
       expect(["cheap", "standard", "strong"]).toContain(tierForFeature(f));
   });
 
-  it("still covers all 13 known features", () => {
-    expect(AI_FEATURES).toHaveLength(13);
+  it("still covers all 14 known features", () => {
+    expect(AI_FEATURES).toHaveLength(14);
   });
 });
 

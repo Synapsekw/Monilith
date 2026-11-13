@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
+import { MonoIdentity } from "@/components/mono/MonoChip";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
@@ -12,6 +13,7 @@ import { mentionLabel, type MentionTarget } from "@/lib/collaboration/mentions";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
 import type { MentionTargetInput } from "@/lib/validations/collaboration-actions";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 /**
  * Display-only accenting of mention tokens inside a persisted update body —
@@ -94,7 +96,7 @@ export function UpdatesTab({
   itemId: string;
   cache: UpdatesCache | undefined;
   isError?: boolean;
-  members: readonly Member[];
+  members: readonly (Member & { mono?: MonoMemberMeta })[];
   onAdd: (text: string, mentions: MentionTargetInput[]) => void;
   onDelete: (updateId: string) => void;
 }) {
@@ -104,7 +106,29 @@ export function UpdatesTab({
   const threadIsEmpty = !cache || cache.updates.length === 0;
 
   const targets = useMemo<MentionTarget[]>(
-    () => members.map((m) => ({ kind: "user" as const, ...m })),
+    () =>
+      members.flatMap((m): MentionTarget[] =>
+        m.mono
+          ? m.mono.directable
+            ? [
+                {
+                  kind: "mono",
+                  userId: m.userId,
+                  name: m.fullName ?? "Mono",
+                  ownerName: m.mono.ownerName,
+                  color: m.mono.color,
+                },
+              ]
+            : []
+          : [{ kind: "user", userId: m.userId, fullName: m.fullName }],
+      ),
+    [members],
+  );
+
+  // Accent every known name in a body, including a Mono the viewer may not
+  // mention themselves (its owner may have).
+  const mentionNames = useMemo(
+    () => members.map((m) => m.fullName ?? (m.mono ? "Mono" : "Someone")),
     [members],
   );
 
@@ -116,7 +140,7 @@ export function UpdatesTab({
 
   /** The full target behind a recorded (id-only) mention, if it is still known. */
   function resolve(m: MentionTargetInput): MentionTarget | undefined {
-    return targets.find((t) => t.userId === m.userId);
+    return targets.find((t) => t.kind === m.kind && t.userId === m.userId);
   }
 
   function submit() {
@@ -183,12 +207,25 @@ export function UpdatesTab({
               >
                 <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2">
-                    <span className="text-foreground font-extrabold">
-                      {bot?.name ??
-                        members.find((m) => m.userId === u.author_id)
-                          ?.fullName ??
-                        "Someone"}
-                    </span>
+                    {(() => {
+                      const author = members.find(
+                        (m) => m.userId === u.author_id,
+                      );
+                      if (!bot && author?.mono)
+                        return (
+                          <MonoIdentity
+                            name={author.fullName ?? "Mono"}
+                            color={author.mono.color}
+                            ownerName={author.mono.ownerName}
+                            size={18}
+                          />
+                        );
+                      return (
+                        <span className="text-foreground font-extrabold">
+                          {bot?.name ?? author?.fullName ?? "Someone"}
+                        </span>
+                      );
+                    })()}
                     {bot && (
                       <Kicker
                         size="xs"
@@ -213,10 +250,7 @@ export function UpdatesTab({
                   </RevealOnHover>
                 </div>
                 <p className="whitespace-pre-wrap">
-                  {renderBody(
-                    u.body_text,
-                    targets.map((t) => mentionLabel(t).slice(1)),
-                  )}
+                  {renderBody(u.body_text, mentionNames)}
                 </p>
                 {u.edited_at && (
                   <span className="text-muted-foreground text-xs">

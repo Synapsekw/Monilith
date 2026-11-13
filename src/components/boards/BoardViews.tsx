@@ -224,6 +224,7 @@ export function BoardViews({
         userId: m.userId,
         fullName: m.fullName,
         avatarUrl: m.avatarUrl,
+        mono: m.mono,
       })),
     [members],
   );

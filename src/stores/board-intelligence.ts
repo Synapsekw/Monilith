@@ -10,7 +10,7 @@ import type { Draft } from "@/components/boards/automations/recipes";
  * are nonce-stamped commands — the consumer clears exactly the request it
  * handled, so a request issued while another is in flight is never lost.
  */
-export type DockTab = "chat" | "intelligence";
+export type DockTab = "chat" | "intelligence" | "mono";
 export type OpenRequest = { boardId: string; nonce: number; run: boolean };
 export type FilterRequest = {
   boardId: string;

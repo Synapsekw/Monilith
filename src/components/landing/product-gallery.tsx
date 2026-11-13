@@ -37,10 +37,10 @@ const SCREENS: {
   },
   {
     id: "agent-dock",
-    tab: "Agent dock",
+    tab: "Assistant panel",
     icon: Bot,
     label: "Bring AI alongside",
-    text: "Open the agent dock without leaving your board. Ask questions with your workspace as context.",
+    text: "Open the assistant panel without leaving your board. Ask questions with your workspace as context.",
     asset: agentDockShot,
   },
 ];

@@ -25,8 +25,7 @@ export type WidgetCompletion =
   | { ok: false; error: string };
 
 export type WidgetHealth =
-  | { ok: true; counts: HealthCounts }
-  | { ok: false; error: string };
+  { ok: true; counts: HealthCounts } | { ok: false; error: string };
 
 type DB = SupabaseClient<Database>;
 
@@ -208,7 +207,9 @@ export async function resolveSeries(
       const { data: members } = await supabase
         .from("org_members")
         .select("user_id")
-        .eq("org_id", orgId);
+        .eq("org_id", orgId)
+        // A Mono (role `agent`) is never a person in a widget dimension.
+        .neq("role", "agent");
       const userIds = (members ?? []).map((m) => m.user_id);
       if (userIds.length > 0) {
         const { data: profiles } = await supabase

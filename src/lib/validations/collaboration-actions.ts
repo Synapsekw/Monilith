@@ -4,14 +4,15 @@ const TEXT = z.string().trim().min(1, "Update cannot be empty").max(10_000);
 
 /**
  * A mention is TAGGED by kind, so a later target kind (Plan 2's Mono) can be
- * added without the server guessing which table an id belongs to. Today a
- * mention is a person only.
+ * added without the server guessing which table an id belongs to. A mention
+ * is a person or the author's own Mono.
  *
  * `.max(20)` bounds the array: `actions.ts` fans out one notification INSERT
  * per entry.
  */
 export const mentionTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("user"), userId: z.string().uuid() }),
+  z.object({ kind: z.literal("mono"), userId: z.string().uuid() }),
 ]);
 export type MentionTargetInput = z.infer<typeof mentionTargetSchema>;
 

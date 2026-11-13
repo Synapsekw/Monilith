@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   activeMentionQuery,
   applyMention,
+  keepOwnMonoMentions,
   mentionLabel,
   type MentionTarget,
 } from "@/lib/collaboration/mentions";
@@ -38,5 +39,33 @@ describe("mentions", () => {
     expect(mentionLabel({ kind: "user", userId: "u2", fullName: null })).toBe(
       "@Someone",
     );
+  });
+
+  it("labels a Mono mention with the Mono's name", () => {
+    expect(
+      mentionLabel({
+        kind: "mono",
+        userId: "m1",
+        name: "Nova",
+        ownerName: "Ada",
+        color: "#7395ff",
+      }),
+    ).toBe("@Nova");
+  });
+
+  it("keeps only Mono mentions of the author's own Mono", () => {
+    expect(
+      keepOwnMonoMentions(
+        [
+          { kind: "user", userId: "u2" },
+          { kind: "mono", userId: "m1" },
+          { kind: "mono", userId: "m2" },
+        ],
+        ["m1"],
+      ),
+    ).toEqual([
+      { kind: "user", userId: "u2" },
+      { kind: "mono", userId: "m1" },
+    ]);
   });
 });

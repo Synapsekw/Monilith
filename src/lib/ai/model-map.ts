@@ -23,6 +23,7 @@ const FEATURE_TIERS = Object.freeze(
     // Tool-use loops — quality-sensitive.
     ask_pulse: "standard",
     conversational_action: "standard",
+    mono_chat: "standard",
     automation_ai_step: "standard",
     // Structured generation — moderate difficulty.
     dashboard_gen: "standard",

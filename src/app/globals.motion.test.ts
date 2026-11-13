@@ -9,7 +9,7 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
  * Read from the stylesheet so the utility can never drift from the class the
  * component uses, and so "nothing scales" is a check, not a comment.
  */
-describe("presence pulse (agent dock)", () => {
+describe("presence pulse (board dock)", () => {
   it("declares the pulse-ring utility in @theme and its keyframes", () => {
     expect(CSS).toMatch(
       /--animate-pulse-ring:\s*pulse-ring 1\.4s cubic-bezier\(0\.16, 1, 0\.3, 1\)\s+infinite;/,

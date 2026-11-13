@@ -11,6 +11,8 @@ import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 import { MemberAvatar } from "./member-avatar";
+import { AgentChip } from "@/components/mono/MonoChip";
+import { monoAccessibleLabel } from "@/lib/monos/labels";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -142,6 +144,7 @@ export function PeopleCell({
       id,
       label: memberLabel(member),
       avatarUrl: member?.avatarUrl ?? null,
+      mono: member?.mono,
     };
   });
 
@@ -149,13 +152,22 @@ export function PeopleCell({
   if (assignees.length === 1) {
     const only = assignees[0];
     return (
-      <span className="text-cell flex items-center gap-1.5 truncate">
+      <span
+        className="text-cell flex items-center gap-1.5 truncate"
+        title={
+          only.mono
+            ? monoAccessibleLabel(only.label, only.mono.ownerName)
+            : undefined
+        }
+      >
         <MemberAvatar
           userId={only.id}
           name={only.label}
           avatarUrl={only.avatarUrl}
+          mono={only.mono}
         />
         <span className="truncate">{only.label}</span>
+        {only.mono ? <AgentChip /> : null}
       </span>
     );
   }
@@ -181,9 +193,13 @@ export function PeopleCell({
           userId={a.id}
           name={a.label}
           avatarUrl={a.avatarUrl}
+          mono={a.mono}
           // The ring in the cell's own surface colour keeps the overlapped
-          // edges legible; hairlines would read as borders here.
-          className="ring-surface -ml-2 ring-2 first:ml-0"
+          // edges legible; hairlines would read as borders here. A Mono's
+          // pebble is not a disc, so it overlaps without the (square) ring.
+          className={
+            a.mono ? "-ml-2 first:ml-0" : "ring-surface -ml-2 ring-2 first:ml-0"
+          }
         />
       ))}
       {overflow > 0 ? (

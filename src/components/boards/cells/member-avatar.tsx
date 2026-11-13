@@ -6,6 +6,9 @@
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
+import { MonoAvatar } from "@/components/mono/MonoAvatar";
+import { monoAccessibleLabel } from "@/lib/monos/labels";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 import {
   STATUS_COLORS,
   statusToneClasses,
@@ -55,13 +58,25 @@ export function MemberAvatar({
   userId,
   name,
   avatarUrl,
+  mono,
   className,
 }: {
   userId: string;
   name: string;
   avatarUrl: string | null;
+  mono?: MonoMemberMeta;
   className?: string;
 }) {
+  // A Mono keeps its pebble body everywhere; people keep round avatars.
+  if (mono)
+    return (
+      <MonoAvatar
+        color={mono.color}
+        size={AVATAR_PX}
+        label={monoAccessibleLabel(name, mono.ownerName)}
+        className={cn("shrink-0", className)}
+      />
+    );
   return (
     <span
       data-slot="member-avatar"

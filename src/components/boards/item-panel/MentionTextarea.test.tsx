@@ -65,4 +65,35 @@ describe("MentionTextarea", () => {
       { kind: "user", userId: "u2" },
     ]);
   });
+  it("suggests the author's own Mono as a Mono and records a mono target", () => {
+    const onChange = vi.fn();
+    render(
+      <MentionTextarea
+        value=""
+        mentions={[]}
+        targets={[
+          ...targets,
+          {
+            kind: "mono",
+            userId: "m1",
+            name: "Nova",
+            ownerName: "Ada Lovelace",
+            color: "#7395ff",
+          },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hi @No", selectionStart: 6 },
+    });
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nova, Ada's Mono" }),
+    ).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByText("Nova"));
+    const [text, mentions] = onChange.mock.calls.at(-1)!;
+    expect(text).toContain("@Nova ");
+    expect(mentions).toEqual([{ kind: "mono", userId: "m1" }]);
+  });
 });

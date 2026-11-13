@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MONO_PRESET_COLORS, monoPalette } from "./mono-palette";
+import {
+  DEFAULT_MONO_COLOR,
+  MONO_PRESET_COLORS,
+  isMonoColor,
+  monoPalette,
+} from "./mono-palette";
 
 describe("monoPalette", () => {
   it("derives every shade from one hex", () => {
@@ -19,5 +24,14 @@ describe("monoPalette", () => {
     expect(MONO_PRESET_COLORS).toHaveLength(7);
     for (const c of MONO_PRESET_COLORS)
       expect(() => monoPalette(c.hex)).not.toThrow();
+  });
+});
+describe("isMonoColor", () => {
+  it("accepts #rrggbb in either case and nothing else", () => {
+    expect(isMonoColor("#7395ff")).toBe(true);
+    expect(isMonoColor("#A77BFF")).toBe(true);
+    expect(isMonoColor("blue")).toBe(false);
+    expect(isMonoColor("#abc")).toBe(false);
+    expect(isMonoColor(DEFAULT_MONO_COLOR)).toBe(true);
   });
 });

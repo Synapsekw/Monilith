@@ -35,6 +35,13 @@ beforeEach(() => {
 });
 
 describe("settingsNavGroups", () => {
+  it("offers My Mono to everyone", () => {
+    const all = (a: boolean) =>
+      settingsNavGroups(a).flatMap((g) => g.items.map((i) => i.href));
+    expect(all(false)).toContain("/settings/my-mono");
+    expect(all(true)).toContain("/settings/my-mono");
+  });
+
   const hrefs = (isAdmin: boolean) =>
     settingsNavGroups(isAdmin).flatMap((g) => g.items.map((i) => i.href));
 

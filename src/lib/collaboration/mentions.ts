@@ -1,14 +1,37 @@
-/** A mention target is a person. Plan 2 adds the owner's own Mono. */
+/** A person, or the author's own Mono (Personal Monos spec §4). */
 export type UserMentionTarget = {
   kind: "user";
   userId: string;
   fullName: string | null;
 };
-export type MentionTarget = UserMentionTarget;
+export type MonoMentionTarget = {
+  kind: "mono";
+  userId: string;
+  name: string;
+  ownerName: string | null;
+  color: string;
+};
+export type MentionTarget = UserMentionTarget | MonoMentionTarget;
 
 /** The text a mention writes into the body, including the leading `@`. */
 export function mentionLabel(target: MentionTarget): string {
-  return `@${target.fullName ?? "Someone"}`;
+  return target.kind === "mono"
+    ? `@${target.name}`
+    : `@${target.fullName ?? "Someone"}`;
+}
+
+/**
+ * Only the author's own Mono may be mentioned (spec §4). The picker already
+ * offers no other; this is the server's copy of the rule. In Plan 2A a kept
+ * Mono mention wakes nothing: it is stored in `body.mentions` for Plan 2B's
+ * inbox trigger, which re-checks ownership.
+ */
+export function keepOwnMonoMentions<
+  M extends { kind: "user" | "mono"; userId: string },
+>(mentions: readonly M[], ownMonoIds: readonly string[]): M[] {
+  return mentions.filter(
+    (m) => m.kind !== "mono" || ownMonoIds.includes(m.userId),
+  );
 }
 
 /** The `@query` immediately preceding the caret, or null. A space closes the

@@ -137,7 +137,7 @@ test.describe("AI write visibility", () => {
     expect(target, "the second group must exist").toBeTruthy();
 
     // ── 3. Ask the dock to move it, and approve ──────────────────────────────
-    await page.getByRole("button", { name: "Open agent dock" }).click();
+    await page.getByRole("button", { name: "Open assistant dock" }).click();
     const composer = page.getByLabel("Your question");
     await expect(composer).toBeVisible({ timeout: 15_000 });
     await composer.fill(`move "${itemName}" to Group 2`);

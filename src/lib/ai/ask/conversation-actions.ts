@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/ask/conversations";
 // Canonical shared result type — never re-declare locally (AGENTS.md invariant).
 import { type ActionResult, fail } from "@/lib/actions/result";
+import { getMyMono } from "@/lib/monos/queries";
 
 // Bounded free text: it flows verbatim into the Anthropic prompt, so an
 // unbounded string is a token/cost-abuse vector.
@@ -88,6 +89,7 @@ export async function createConversation(input: {
   firstMessage: string;
   boardId?: string;
   folderId?: string;
+  monoId?: string;
 }): Promise<ActionResult<{ conversationId: string }>> {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
@@ -106,6 +108,17 @@ export async function createConversation(input: {
 
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
+
+  // A Mono thread (Personal Monos 2A): the caller's own Mono in this org, and
+  // never also a board or folder thread.
+  let monoId: string | null = null;
+  if (input.monoId !== undefined) {
+    const m = idSchema.safeParse(input.monoId);
+    if (!m.success) return fail("Invalid Mono.");
+    const mine = await getMyMono(await createClient(), org.id);
+    if (!mine || mine.userId !== m.data) return fail("Mono not found.");
+    monoId = mine.userId;
+  }
 
   // The thread's org attribution must be the board's org. Reachable only for a
   // board the caller has already proven they may read, so naming the mismatch
@@ -148,8 +161,9 @@ export async function createConversation(input: {
       user_id: user.id,
       workspace_id: workspaceId || null,
       title: "New chat",
-      board_id: board?.id ?? null,
-      folder_id: folder?.id ?? null,
+      board_id: monoId ? null : (board?.id ?? null),
+      folder_id: monoId ? null : (folder?.id ?? null),
+      mono_id: monoId,
       // `visibility` is deliberately omitted: the column default 'private' is
       // what makes the widened SELECT policy unable to match a fresh row.
     })
@@ -167,7 +181,7 @@ export async function createConversation(input: {
   // A board thread never revalidates: /ask does not list it in this surface's
   // flow, and revalidating the BOARD path would re-run getBoardPayload on every
   // send — the exact refetch working agreement #5 forbids (gotcha-09).
-  if (!board) revalidatePath("/ask");
+  if (!board && !monoId) revalidatePath("/ask");
   return { ok: true, data: { conversationId: conv.data.id } };
 }
 

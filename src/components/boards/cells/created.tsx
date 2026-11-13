@@ -3,6 +3,10 @@
  *  both reuse them. */
 
 import Image from "next/image";
+import { MonoAvatar } from "@/components/mono/MonoAvatar";
+import { AgentChip } from "@/components/mono/MonoChip";
+import { monoAccessibleLabel, ownerPossessive } from "@/lib/monos/labels";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 /**
  * Format a creation timestamp for the board table / item panel.
@@ -42,9 +46,12 @@ export function CreatedByCell({
   name,
   avatarUrl,
   showAvatar = true,
+  mono,
 }: {
   name: string | null;
   avatarUrl?: string | null;
+  /** Set when the creator is a Mono: pebble, Agent chip, whose Mono. */
+  mono?: MonoMemberMeta;
   /** When false, render the name as plain text only (no avatar). Used by the
    *  read-only table columns; the item panel keeps the avatar. */
   showAvatar?: boolean;
@@ -52,6 +59,24 @@ export function CreatedByCell({
   if (!name)
     return (
       <span className="text-muted-foreground text-xs opacity-60">Unknown</span>
+    );
+  if (mono)
+    return (
+      <span className="flex min-w-0 items-center gap-1.5 truncate text-xs opacity-60">
+        {showAvatar ? (
+          <MonoAvatar
+            color={mono.color}
+            size={20}
+            label={monoAccessibleLabel(name, mono.ownerName)}
+            className="shrink-0"
+          />
+        ) : null}
+        <span className="truncate">{name}</span>
+        <AgentChip />
+        <span className="text-muted-foreground truncate">
+          {ownerPossessive(mono.ownerName)}
+        </span>
+      </span>
     );
   return (
     <span className="flex items-center gap-2 truncate text-xs opacity-60">

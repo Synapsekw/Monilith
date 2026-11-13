@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { parseToolTrace, type AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import type { Json } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/types/database.types";
+import { getMonoClient } from "@/lib/mono/session";
+import { loadOwnedMono } from "@/lib/monos/turn";
 import { findDescriptor } from "./catalog";
 import { takesOrgId } from "./org-pin";
 import { unsupportedReason } from "./unsupported";
@@ -28,7 +31,9 @@ export type BatchOutcome = {
 };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
-type Loaded = { ok: true; calls: StagedCall[] } | { ok: false; error: string };
+type Loaded =
+  | { ok: true; calls: StagedCall[]; monoId: string | null }
+  | { ok: false; error: string };
 
 /**
  * Read the batch back through RLS and refuse it when it is not the caller's
@@ -44,7 +49,7 @@ async function loadBatch(
 ): Promise<Loaded> {
   const conv = await supabase
     .from("ai_conversations")
-    .select("user_id, org_id")
+    .select("user_id, org_id, mono_id")
     .eq("id", conversationId)
     .maybeSingle();
   if (
@@ -82,7 +87,7 @@ async function loadBatch(
   if (prior.data?.length)
     return { ok: false, error: "These changes were already resolved." };
 
-  return { ok: true, calls };
+  return { ok: true, calls, monoId: conv.data.mono_id ?? null };
 }
 
 type InsertedRow = { id: string | null; error: unknown };
@@ -176,9 +181,10 @@ async function insertAppliedOutcome(
 
 const ORG_ROW_MISMATCH = "This change targets a different organization.";
 
-/** Run one staged call under the user's own client. Never throws. */
+/** Run one staged call under the acting client (the user's own, or on a Mono
+ *  thread the Mono's own session). Never throws. */
 async function runCall(
-  supabase: Supabase,
+  supabase: SupabaseClient<Database>,
   actorId: string,
   orgId: string,
   call: StagedCall,
@@ -267,6 +273,23 @@ export async function applyBatch(input: {
     );
     if (!loaded.ok) return fail(loaded.error);
 
+    // A Mono thread applies as the Mono, so RLS judges its own board
+    // memberships and the rows show the Mono as their author. The outcome
+    // turn is still written by the owner, who owns the thread.
+    let actingClient: SupabaseClient<Database> = supabase;
+    let actorId = user.id;
+    if (loaded.monoId) {
+      const mono = await loadOwnedMono(
+        supabase,
+        user.id,
+        org.id,
+        loaded.monoId,
+      );
+      if (!mono) return fail("Conversation not found.");
+      actingClient = await getMonoClient(mono.userId);
+      actorId = mono.userId;
+    }
+
     const selected = new Set(selectedIds);
     if (!loaded.calls.some((c) => selected.has(c.id)))
       return fail("Pick at least one change to apply.");
@@ -279,7 +302,7 @@ export async function applyBatch(input: {
         continue;
       }
       seen.add(call.id);
-      const result = await runCall(supabase, user.id, org.id, call);
+      const result = await runCall(actingClient, actorId, org.id, call);
       results.push(result);
       if (result.ok && call.boardId) touched.add(call.boardId);
     }

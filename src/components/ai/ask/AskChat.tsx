@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   appendUserMessage,
@@ -75,6 +75,10 @@ export function AskChat({
   onStarted,
   onTurnComplete,
   surface = "card",
+  monoId,
+  onTurnStart,
+  onTurnEnd,
+  onMessagesChange,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
@@ -106,9 +110,24 @@ export function AskChat({
   /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
    *  Threaded to `MessageList` and `Composer`; see `surface.ts`. */
   surface?: ChatSurface;
+  /** The caller's own Mono: a first send starts a Mono thread (the board
+   *  rail's My Mono tab). Mutually exclusive with boardId/folderId. */
+  monoId?: string;
+  /** Fired when a turn begins (the Mono's `thinking` mood). */
+  onTurnStart?: () => void;
+  /** Fired when a turn settles on EVERY path, failure included (unlike
+   *  `onTurnComplete`, which means "an answer landed"). Pairs with
+   *  `onTurnStart` so a caller's busy state can never stick. */
+  onTurnEnd?: () => void;
+  /** Mirrors the transcript to a parent that outlives this component (the
+   *  My Mono tab's store), so remounting it costs no read. */
+  onMessagesChange?: (messages: UIMessage[]) => void;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
+  useEffect(() => {
+    onMessagesChange?.(messages);
+  }, [messages, onMessagesChange]);
   const [streamText, setStreamText] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   // The live conversation id. The prop is null on /ask until the first send
@@ -183,6 +202,7 @@ export function AskChat({
     if (turnInFlight.current) return;
     turnInFlight.current = true;
     setTurnBusy(true);
+    onTurnStart?.();
     try {
       let convId = activeId;
       setDropState("none");
@@ -201,7 +221,13 @@ export function AskChat({
       if (!convId) {
         const res = await createConversation({
           firstMessage: text,
-          ...(boardId ? { boardId } : folderId ? { folderId } : {}),
+          ...(monoId
+            ? { monoId }
+            : boardId
+              ? { boardId }
+              : folderId
+                ? { folderId }
+                : {}),
         });
         if (!res.ok) {
           setStreamText(null);
@@ -283,6 +309,7 @@ export function AskChat({
       // is the failure mode this guard exists to avoid, not to create.
       turnInFlight.current = false;
       setTurnBusy(false);
+      onTurnEnd?.();
     }
   }
 

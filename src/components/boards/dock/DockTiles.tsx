@@ -3,6 +3,8 @@
 import { useRef } from "react";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { MonolithMark } from "@/components/brand/monolith-mark";
+import { MonoAvatar } from "@/components/mono/MonoAvatar";
+import { DEFAULT_MONO_COLOR } from "@/components/mono/mono-palette";
 import {
   Tooltip,
   TooltipContent,
@@ -13,7 +15,8 @@ import { cn } from "@/lib/utils";
 import type { DockTab } from "@/stores/board-intelligence";
 
 /** What a tile stands for. Everything the reader can consult is one of these. */
-export type DockTile = { kind: "intelligence" } | { kind: "ask" };
+export type DockTile =
+  { kind: "intelligence" } | { kind: "ask" } | { kind: "mono" };
 
 export type DockTilesProps = {
   /** Which section is open (persisted, `use-dock-state`). */
@@ -30,11 +33,17 @@ export type DockTilesProps = {
    *  the tiles with NO panel mounted, and `aria-controls` pointing at a node
    *  that is not there is a dangling reference. */
   panelMounted?: boolean;
+  /** The viewer's own Mono, for its tile face. Null before it exists. */
+  mono?: { color: string; asleep: boolean } | null;
   onSelect: (tile: DockTile) => void;
 };
 
-/** The two tiles, in order: the same on the band and on the mini rail. */
-const TILES: readonly DockTile[] = [{ kind: "intelligence" }, { kind: "ask" }];
+/** The three tiles, in order: the same on the band and on the mini rail. */
+const TILES: readonly DockTile[] = [
+  { kind: "intelligence" },
+  { kind: "ask" },
+  { kind: "mono" },
+];
 
 /** The band's id namespace — the one a mounted panel's `aria-labelledby`
  *  points into. The mini rail renders the SAME tiles in a second,
@@ -58,33 +67,62 @@ export function dockTileId(
       return `${prefix}-intelligence`;
     case "ask":
       return `${prefix}-ask`;
+    case "mono":
+      return `${prefix}-mono`;
   }
 }
 
 /** Only the OPEN section is mounted (DockBody), so only the selected tile has
  *  a panel to point at. */
 function panelIdFor(tile: DockTile): string {
+  if (tile.kind === "mono") return "dock-panel-mono";
   return tile.kind === "intelligence"
     ? "dock-panel-intelligence"
     : "dock-panel-chat";
 }
 
 function isActive(tile: DockTile, tab: DockTab) {
-  return tab === "intelligence"
-    ? tile.kind === "intelligence"
-    : tile.kind === "ask";
+  return tile.kind === "intelligence"
+    ? tab === "intelligence"
+    : tile.kind === "mono"
+      ? tab === "mono"
+      : tab === "chat";
 }
 
 /** The accessible name — and the tooltip. The badge is said in words here so
  *  it is not colour-only (spec §8). */
 function labelFor(tile: DockTile, badge: number): string {
+  if (tile.kind === "mono") return "My Mono";
   if (tile.kind === "ask") return "Ask";
   if (badge <= 0) return "Intelligence";
   return `Intelligence · ${badge} suggestion${badge === 1 ? "" : "s"}`;
 }
 
 /** The 26px face inside the 32px tab: a mark on the chrome fill. */
-function TileFace({ tile }: { tile: DockTile }) {
+function TileFace({
+  tile,
+  mono,
+}: {
+  tile: DockTile;
+  mono: { color: string; asleep: boolean } | null;
+}) {
+  if (tile.kind === "mono") {
+    // The tab button already carries the name, so the face is decorative:
+    // hidden from AT rather than an unnamed `role="img"`.
+    return (
+      <span
+        aria-hidden="true"
+        className="bg-chrome-fill flex size-6.5 items-center justify-center rounded-sm border"
+      >
+        <MonoAvatar
+          color={mono?.color ?? DEFAULT_MONO_COLOR}
+          mood={!mono || mono.asleep ? "dozing" : "idle"}
+          size={18}
+          label=""
+        />
+      </span>
+    );
+  }
   if (tile.kind === "intelligence") {
     return (
       <span className="bg-chrome-fill text-brand flex size-6.5 items-center justify-center rounded-sm border">
@@ -100,7 +138,7 @@ function TileFace({ tile }: { tile: DockTile }) {
 }
 
 /**
- * The dock's one tab row: Intelligence and Ask (spec §2).
+ * The dock's one tab row: Intelligence, Ask and My Mono.
  *
  * Icon-only tiles, 32px, hairline that brightens on hover; the active one gets
  * a `border-border` hairline and the sidebar's 3px edge bar — under the tile
@@ -120,6 +158,7 @@ export function DockTiles({
   orientation = "horizontal",
   idPrefix = DOCK_TILE_ID_PREFIX,
   panelMounted = true,
+  mono = null,
   onSelect,
 }: DockTilesProps) {
   const vertical = orientation === "vertical";
@@ -259,7 +298,7 @@ export function DockTiles({
                       selected && "border-border",
                     )}
                   >
-                    <TileFace tile={tile} />
+                    <TileFace tile={tile} mono={mono} />
                     {tile.kind === "intelligence" && badge > 0 ? (
                       <span
                         aria-hidden="true"

@@ -29,6 +29,9 @@ import {
   formatCreatedAt,
 } from "@/components/boards/cells/created";
 import { MetaChip } from "@/components/ui/meta-chip";
+import type { MonoMemberMeta } from "@/lib/monos/types";
+import { AgentChip } from "@/components/mono/MonoChip";
+import { ownerPossessive } from "@/lib/monos/labels";
 
 // Lazy-load the AI assist panel (and its action/SDK imports) only when the
 // fields tab is first opened — keeps opening the item panel / switching to
@@ -79,14 +82,18 @@ function ItemPanelInner({
   columns: readonly Column[];
   // Superset of activity's Member: the created-by row also renders the avatar
   // (optional so activity consumers passing bare {userId, fullName} still fit).
-  members: readonly (Member & { avatarUrl?: string | null })[];
+  members: readonly (Member & {
+    avatarUrl?: string | null;
+    mono?: MonoMemberMeta;
+  })[];
   createdBy: string | null;
   createdAt: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("updates");
   const { updates, activity } = useItemCollab(itemId);
-  const creatorName = members.find((m) => m.userId === createdBy)?.fullName;
+  const creator = members.find((m) => m.userId === createdBy);
+  const creatorName = creator?.fullName;
   const mutations = useUpdateMutations(itemId ?? "none", currentUserId, {
     orgId,
     boardId,
@@ -135,7 +142,19 @@ function ItemPanelInner({
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {creatorName ? (
-              <MetaChip label="OWNER">{creatorName}</MetaChip>
+              <MetaChip label="OWNER">
+                {creator?.mono ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    {creatorName}
+                    <AgentChip />
+                    <span className="text-muted-foreground font-normal">
+                      {ownerPossessive(creator.mono.ownerName)}
+                    </span>
+                  </span>
+                ) : (
+                  creatorName
+                )}
+              </MetaChip>
             ) : null}
             {createdAt ? (
               <MetaChip label="CREATED">{formatCreatedAt(createdAt)}</MetaChip>
@@ -194,17 +213,11 @@ function ItemPanelInner({
                       Created by
                     </dt>
                     <dd>
-                      {(() => {
-                        const creator = members.find(
-                          (m) => m.userId === createdBy,
-                        );
-                        return (
-                          <CreatedByCell
-                            name={creator?.fullName ?? null}
-                            avatarUrl={creator?.avatarUrl ?? null}
-                          />
-                        );
-                      })()}
+                      <CreatedByCell
+                        name={creator?.fullName ?? null}
+                        avatarUrl={creator?.avatarUrl ?? null}
+                        mono={creator?.mono}
+                      />
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">

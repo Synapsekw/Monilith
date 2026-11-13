@@ -3,6 +3,16 @@ import type { MonoPalette } from "./mono-palette";
 export type MonoMood =
   "idle" | "hello" | "listening" | "thinking" | "needsyou" | "done" | "dozing";
 
+export const MONO_MOODS: readonly MonoMood[] = [
+  "idle",
+  "hello",
+  "listening",
+  "thinking",
+  "needsyou",
+  "done",
+  "dozing",
+];
+
 type Pose = {
   r: number;
   y: number;

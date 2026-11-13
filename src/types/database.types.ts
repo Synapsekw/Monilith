@@ -200,6 +200,7 @@ export type Database = {
           created_at: string;
           folder_id: string | null;
           id: string;
+          mono_id: string | null;
           org_id: string;
           run_id: string | null;
           summarized_upto: string | null;
@@ -216,6 +217,7 @@ export type Database = {
           created_at?: string;
           folder_id?: string | null;
           id?: string;
+          mono_id?: string | null;
           org_id: string;
           run_id?: string | null;
           summarized_upto?: string | null;
@@ -232,6 +234,7 @@ export type Database = {
           created_at?: string;
           folder_id?: string | null;
           id?: string;
+          mono_id?: string | null;
           org_id?: string;
           run_id?: string | null;
           summarized_upto?: string | null;
@@ -263,6 +266,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "folders";
             referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_mono_id_fkey";
+            columns: ["mono_id"];
+            isOneToOne: false;
+            referencedRelation: "monos";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_mono_id_fkey";
+            columns: ["mono_id"];
+            isOneToOne: false;
+            referencedRelation: "org_monos";
+            referencedColumns: ["user_id"];
           },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";
@@ -2558,6 +2575,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      monos: {
+        Row: {
+          brain: string;
+          color: string;
+          created_at: string;
+          last_seen_at: string | null;
+          name: string;
+          oauth_client_id: string | null;
+          org_id: string;
+          owner_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          brain?: string;
+          color: string;
+          created_at?: string;
+          last_seen_at?: string | null;
+          name: string;
+          oauth_client_id?: string | null;
+          org_id: string;
+          owner_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          brain?: string;
+          color?: string;
+          created_at?: string;
+          last_seen_at?: string | null;
+          name?: string;
+          oauth_client_id?: string | null;
+          org_id?: string;
+          owner_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "monos_oauth_client_id_fkey";
+            columns: ["oauth_client_id"];
+            isOneToOne: false;
+            referencedRelation: "oauth_clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "monos_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notification_preferences: {
         Row: {
           channel: Database["public"]["Enums"]["notification_channel"];
@@ -3954,7 +4025,38 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      org_monos: {
+        Row: {
+          color: string | null;
+          name: string | null;
+          org_id: string | null;
+          owner_id: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          color?: string | null;
+          name?: string | null;
+          org_id?: string | null;
+          owner_id?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          color?: string | null;
+          name?: string | null;
+          org_id?: string | null;
+          owner_id?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "monos_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Functions: {
       _admin_audit: {
@@ -4059,6 +4161,7 @@ export type Database = {
         Returns: string[];
       };
       _health_digest_ping: { Args: never; Returns: undefined };
+      _mono_brain_for: { Args: { p_owner: string }; Returns: string };
       _org_health_digest: {
         Args: { p_org_id: string; p_since: string };
         Returns: {
@@ -4072,6 +4175,10 @@ export type Database = {
           overdue_items: number;
           total_items: number;
         }[];
+      };
+      _owner_board_level: {
+        Args: { p_board_id: string; p_owner: string };
+        Returns: Database["public"]["Enums"]["board_access"];
       };
       _parse_iso_date: { Args: { p: string }; Returns: string };
       _personal_agent_sweep: { Args: { p_now?: string }; Returns: undefined };
@@ -4096,6 +4203,10 @@ export type Database = {
         Returns: {
           qualified_column: string;
         }[];
+      };
+      add_my_mono_to_board: {
+        Args: { p_board_id: string };
+        Returns: undefined;
       };
       add_portfolio_board: {
         Args: {
@@ -4439,6 +4550,16 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_mono: {
+        Args: {
+          p_color: string;
+          p_mono_id: string;
+          p_name: string;
+          p_org_id: string;
+          p_owner_id: string;
+        };
+        Returns: string;
+      };
       create_organization: {
         Args: { p_name: string; p_slug: string; p_workspace_name?: string };
         Returns: {
@@ -4673,6 +4794,20 @@ export type Database = {
           user_agent_id: string;
         }[];
       };
+      get_my_mono: {
+        Args: { p_org_id: string };
+        Returns: {
+          brain: string;
+          color: string;
+          created_at: string;
+          key_provider: string;
+          last_seen_at: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          user_id: string;
+        }[];
+      };
       get_my_work_items: {
         Args: { p_limit?: number };
         Returns: {
@@ -4898,6 +5033,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      prune_mono_sessions: { Args: never; Returns: number };
       reactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
@@ -4923,6 +5059,10 @@ export type Database = {
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      remove_my_mono_from_board: {
+        Args: { p_board_id: string };
         Returns: undefined;
       };
       replace_agent_documents: {
@@ -5041,6 +5181,10 @@ export type Database = {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;
       };
+      update_my_mono: {
+        Args: { p_color: string; p_name: string; p_org_id: string };
+        Returns: undefined;
+      };
       upsert_time_allocation: {
         Args: {
           p_board_id?: string;
@@ -5122,7 +5266,7 @@ export type Database = {
         | "account_deleted"
         | "agent_briefing"
         | "agent_reply";
-      org_role: "owner" | "admin" | "member" | "guest";
+      org_role: "owner" | "admin" | "member" | "guest" | "agent";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
@@ -5304,7 +5448,7 @@ export const Constants = {
         "agent_briefing",
         "agent_reply",
       ],
-      org_role: ["owner", "admin", "member", "guest"],
+      org_role: ["owner", "admin", "member", "guest", "agent"],
       portfolio_health: ["on_track", "at_risk", "off_track"],
       portfolio_priority: ["low", "medium", "high", "critical"],
       view_kind: ["table", "kanban", "calendar", "timeline"],

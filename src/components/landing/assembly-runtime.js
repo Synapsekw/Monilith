@@ -182,7 +182,11 @@ export function mountAssembly(root) {
 
   let chapter = 0;
   const story = $(".assembly-story");
-  const titles = ["01 / THE BOARD", "02 / THE DETAIL", "03 / THE AGENT DOCK"];
+  const titles = [
+    "01 / THE BOARD",
+    "02 / THE DETAIL",
+    "03 / THE ASSISTANT DOCK",
+  ];
   const captions = [
     "The big picture, without losing the details.",
     "Every decision, still part of the story.",

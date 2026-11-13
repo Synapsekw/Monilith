@@ -7,7 +7,8 @@ vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 //   from("org_members").select("user_id").eq("org_id", …).limit(…)
 //   from("profiles").select(…).in("id", userIds)
 const memberLimit = vi.fn();
-const memberEq = vi.fn(() => ({ limit: memberLimit }));
+const memberNeq = vi.fn(() => ({ limit: memberLimit }));
+const memberEq = vi.fn(() => ({ neq: memberNeq }));
 const memberSelect = vi.fn(() => ({ eq: memberEq }));
 const profilesIn = vi.fn();
 const profilesSelect = vi.fn(() => ({ in: profilesIn }));
@@ -26,12 +27,19 @@ import { listOrgMembersCached, ORG_MEMBERS_LIMIT } from "./queries-cached";
 beforeEach(() => {
   memberSelect.mockClear();
   memberEq.mockClear();
+  memberNeq.mockClear();
   memberLimit.mockReset();
   profilesSelect.mockClear();
   profilesIn.mockReset();
 });
 
 describe("listOrgMembersCached", () => {
+  it("lists people only: a Mono (role agent) is never a member row", async () => {
+    memberLimit.mockResolvedValue({ data: [], error: null });
+    await listOrgMembersCached("org-A");
+    expect(memberNeq).toHaveBeenCalledWith("role", "agent");
+  });
+
   it("filters by orgId (tenant boundary) and bounds the read", async () => {
     memberLimit.mockResolvedValue({ data: [{ user_id: "u1" }], error: null });
     profilesIn.mockResolvedValue({
