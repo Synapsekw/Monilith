@@ -1,6 +1,5 @@
 "use client";
 
-import { peopleOnly } from "@/lib/monos/people";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -32,6 +31,7 @@ import {
   PAGE_TITLE_CLASS,
   PAGE_TITLE_INPUT_CLASS,
 } from "@/components/ui/page-header";
+import { peopleOnly } from "@/lib/monos/people";
 import { once, useEverOpened } from "@/lib/ui/lazy-dialog";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
