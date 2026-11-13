@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
+    kind: "new",
+    title: "New accounts are reviewed before they get in",
+    description:
+      "When someone signs up or is invited, their account waits for an administrator's approval. They see a clear waiting screen, and they are let in as soon as it is approved.",
+  },
+  {
+    date: "2026-11-13",
     kind: "improved",
     title: "The assistant can now act on your boards",
     description:
