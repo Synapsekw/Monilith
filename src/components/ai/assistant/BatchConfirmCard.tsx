@@ -7,6 +7,50 @@ import { Kicker } from "@/components/ui/kicker";
 import type { ConfirmState } from "@/components/ai/actions/ActionConfirmCard";
 import type { StagedCall } from "@/lib/assistant/staged";
 
+/** Longest value shown in Details, so one huge field cannot swamp the card. */
+const MAX_VALUE_CHARS = 200;
+
+function showValue(value: unknown): string {
+  let text: string;
+  try {
+    text = JSON.stringify(value) ?? String(value);
+  } catch {
+    text = String(value);
+  }
+  return text.length > MAX_VALUE_CHARS
+    ? `${text.slice(0, MAX_VALUE_CHARS)}…`
+    : text;
+}
+
+/**
+ * What a row will actually do: the tool and every input it will run with.
+ * The summary line names no target and no values, so thirty identical rows
+ * cannot be told apart without this. Values render as text, never as HTML.
+ * Destructive rows open by default.
+ */
+function CallDetails({ call }: { call: StagedCall }) {
+  const entries = Object.entries(call.input);
+  return (
+    <details open={call.destructive} className="group ml-8 pb-1">
+      <summary className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 w-fit cursor-pointer rounded-sm px-1.5 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11">
+        Details
+      </summary>
+      <dl className="bg-surface-sunken mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-sm border px-2.5 py-1.5 text-xs">
+        <dt className="text-kicker font-mono">tool</dt>
+        <dd className="text-foreground font-mono break-all">{call.tool}</dd>
+        {entries.map(([key, value]) => (
+          <div key={key} className="contents">
+            <dt className="text-kicker font-mono break-all">{key}</dt>
+            <dd className="text-foreground font-mono break-all whitespace-pre-wrap">
+              {showValue(value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 /**
  * One card for every change the assistant lined up in a turn. Presentational:
  * the parent owns the Server Action call and the resolved state. Sits beside
@@ -79,6 +123,7 @@ export function BatchConfirmCard({
                   ) : null}
                 </span>
               </label>
+              <CallDetails call={call} />
             </li>
           );
         })}

@@ -7,7 +7,7 @@ const calls = [
   {
     id: "a",
     tool: "update_item",
-    input: {},
+    input: { itemId: "item-123", name: "Demo video" },
     summary: "Assign Marko to Demo video",
     destructive: false,
     boardId: null,
@@ -15,7 +15,10 @@ const calls = [
   {
     id: "b",
     tool: "update_item",
-    input: {},
+    input: {
+      itemId: "item-456",
+      note: "<b>bold</b><img src=x onerror=alert(1)>",
+    },
     summary: "Set status of Press kit to Done",
     destructive: false,
     boardId: null,
@@ -23,7 +26,7 @@ const calls = [
   {
     id: "c",
     tool: "manage_item",
-    input: {},
+    input: { action: "archive", itemId: "item-789", long: "x".repeat(300) },
     summary: "Archive Old brief",
     destructive: true,
     boardId: null,
@@ -106,5 +109,65 @@ describe("BatchConfirmCard", () => {
     expect(
       screen.queryByRole("button", { name: /Apply/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows each row's tool and input values behind a closed Details disclosure", () => {
+    setup();
+    const details = screen.getAllByText("Details");
+    expect(details).toHaveLength(3);
+    const first = details[0]!.closest("details")!;
+    expect(first.open).toBe(false);
+    expect(first).toHaveTextContent("update_item");
+    expect(first).toHaveTextContent("itemId");
+    expect(first).toHaveTextContent('"item-123"');
+    expect(first).toHaveTextContent('"Demo video"');
+  });
+
+  it("opens a destructive row's details by default", () => {
+    setup();
+    const destructive = screen.getAllByText("Details")[2]!.closest("details")!;
+    expect(destructive.open).toBe(true);
+    expect(destructive).toHaveTextContent("manage_item");
+    expect(destructive).toHaveTextContent('"archive"');
+  });
+
+  // A native <summary> is in the tab order and the browser toggles it on
+  // Enter/Space. jsdom does not synthesise that key activation, so this checks
+  // the tab order and the toggle itself.
+  it("puts Details in the tab order and toggles it", async () => {
+    setup();
+    const summary = screen.getAllByText("Details")[0]!;
+    const details = summary.closest("details")!;
+    await userEvent.tab(); // first checkbox
+    await userEvent.tab(); // its Details
+    expect(summary).toHaveFocus();
+    await userEvent.click(summary);
+    expect(details.open).toBe(true);
+    await userEvent.click(summary);
+    expect(details.open).toBe(false);
+  });
+
+  it("renders a value containing markup as text, never as HTML", () => {
+    const { container } = render(
+      <BatchConfirmCard
+        calls={[calls[1]!]}
+        state="idle"
+        onApply={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("b")).toBeNull();
+    expect(container).toHaveTextContent(
+      '"<b>bold</b><img src=x onerror=alert(1)>"',
+    );
+  });
+
+  it("truncates a long value to 200 characters with an ellipsis", () => {
+    setup();
+    const destructive = screen.getAllByText("Details")[2]!.closest("details")!;
+    const value = `"${"x".repeat(300)}"`;
+    expect(destructive).toHaveTextContent(`${value.slice(0, 200)}…`);
+    expect(destructive).not.toHaveTextContent(value);
   });
 });
