@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { MessageList, type UIMessage } from "./MessageList";
 import type { MentionTarget } from "@/lib/collaboration/mentions";
@@ -17,16 +18,27 @@ const base = { streamingText: null, status: null };
 function renderList(messages: UIMessage[], overrides = {}) {
   const onApprove = vi.fn();
   const onCancel = vi.fn();
+  const onApplyBatch = vi.fn();
+  const onDismissBatch = vi.fn();
   const { container, unmount } = render(
     <MessageList
       {...base}
       messages={messages}
       onApprove={onApprove}
       onCancel={onCancel}
+      onApplyBatch={onApplyBatch}
+      onDismissBatch={onDismissBatch}
       {...overrides}
     />,
   );
-  return { onApprove, onCancel, container, unmount };
+  return {
+    onApprove,
+    onCancel,
+    onApplyBatch,
+    onDismissBatch,
+    container,
+    unmount,
+  };
 }
 
 describe("MessageList proposals", () => {
@@ -102,6 +114,102 @@ describe("MessageList proposals", () => {
       { busyMessageId: "p1" },
     );
     expect(screen.getByRole("button", { name: /applying/i })).toBeDisabled();
+  });
+});
+
+const STAGED = [
+  {
+    id: "a",
+    tool: "update_item",
+    input: {},
+    summary: "Assign Marko to Demo video",
+    destructive: false,
+    boardId: null,
+  },
+  {
+    id: "b",
+    tool: "update_item",
+    input: {},
+    summary: "Set status of Press kit to Done",
+    destructive: false,
+    boardId: null,
+  },
+];
+
+describe("MessageList staged batches", () => {
+  it("renders one batch card for a message with staged calls and forwards Apply", async () => {
+    const { onApplyBatch } = renderList([
+      {
+        id: "m-1",
+        role: "assistant",
+        content: "Lined up two changes.",
+        trace: { stagedCalls: STAGED },
+      },
+    ]);
+    expect(
+      screen.getAllByRole("region", {
+        name: "Changes waiting for your confirmation",
+      }),
+    ).toHaveLength(1);
+    await userEvent.click(
+      screen.getByRole("button", { name: /Apply 2 changes/ }),
+    );
+    expect(onApplyBatch).toHaveBeenCalledWith("m-1", ["a", "b"]);
+  });
+
+  it("forwards Dismiss with the message id", async () => {
+    const { onDismissBatch } = renderList([
+      {
+        id: "m-1",
+        role: "assistant",
+        content: "Lined up two changes.",
+        trace: { stagedCalls: STAGED },
+      },
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(onDismissBatch).toHaveBeenCalledWith("m-1");
+  });
+
+  it("locks the card and shows the note once a later turn applied it", () => {
+    renderList([
+      {
+        id: "m-1",
+        role: "assistant",
+        content: "Lined up two changes.",
+        trace: { stagedCalls: STAGED },
+      },
+      {
+        id: "o-1",
+        role: "assistant",
+        content: "Done.",
+        trace: {
+          resolvesProposal: "m-1",
+          outcome: "applied",
+          stagedResults: [
+            { id: "a", ok: true },
+            { id: "b", ok: true },
+          ],
+        },
+      },
+    ]);
+    expect(screen.queryByRole("button", { name: /Apply/ })).toBeNull();
+    expect(screen.getByText("Applied.")).toBeInTheDocument();
+  });
+
+  it("offers a viewer of a shared thread no decision on a batch", () => {
+    renderList(
+      [
+        {
+          id: "m-1",
+          role: "assistant",
+          content: "Lined up two changes.",
+          trace: { stagedCalls: STAGED },
+        },
+      ],
+      { readOnly: true },
+    );
+    expect(screen.getByText("Assign Marko to Demo video")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Apply/ })).toBeNull();
   });
 });
 
@@ -237,6 +345,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText("Ops")).toBeInTheDocument();
@@ -253,6 +363,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText("Monolith")).toBeInTheDocument();
@@ -279,6 +391,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText("Retired Ops")).toBeInTheDocument();
@@ -302,6 +416,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText("Monolith")).toBeInTheDocument();
@@ -316,6 +432,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText(/@ops/)).toBeInTheDocument();
@@ -331,6 +449,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByText("Ops")).toBeInTheDocument();
@@ -346,6 +466,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent("Ops is working…");
@@ -361,6 +483,8 @@ describe("MessageList — per-turn attribution", () => {
         status={null}
         onApprove={vi.fn()}
         onCancel={vi.fn()}
+        onApplyBatch={vi.fn()}
+        onDismissBatch={vi.fn()}
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent("Thinking…");

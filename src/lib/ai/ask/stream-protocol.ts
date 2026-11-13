@@ -11,6 +11,7 @@
 // (`applyAskProposal`) returning `ActionResult`, which is also where AGENTS.md
 // puts every mutation.
 import type { ValidatedAction } from "@/lib/ai/write/schema";
+import type { StagedCall } from "@/lib/assistant/staged";
 
 /** Persisted + rendered when a proposal turn produced no lead-in text of its
  *  own. Shared so the engine, the DB row and the optimistic client bubble all
@@ -34,6 +35,9 @@ export type AskStreamEvent =
   /** The turn ended at a confirm card. Emitted before persistence so the client
    *  can stash the actions; it binds them to the real message id at `done`. */
   | { type: "proposal"; actions: ValidatedAction[] }
+  /** The turn lined up changes. Emitted before persistence; the client binds
+   *  the calls to the real message id at `done`. */
+  | { type: "staged"; calls: StagedCall[] }
   | {
       type: "done";
       conversationId: string;

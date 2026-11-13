@@ -1,5 +1,4 @@
 import { NextResponse, after } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
@@ -7,21 +6,32 @@ import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
-import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { createClient } from "@/lib/supabase/server";
-import { composeBoardScope, composeFolderScope } from "@/lib/ai/ask/persona";
+import { composeFolderScope } from "@/lib/ai/ask/persona";
 import { getFolderHead } from "@/lib/folders/queries";
 import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
 import { composeAgentChatSystem } from "@/lib/ai/ask/agent-knowledge";
-import { askPulseStream } from "@/lib/ai/ask/ask-stream";
 import {
-  buildAskMessages,
   splitForCompaction,
   composeSystem,
-  summarize,
-  generateTitle,
   KEEP_RECENT,
 } from "@/lib/ai/ask/context";
+import { languageModelFor } from "@/lib/ai/providers/language-model";
+import { getBoardPayload } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import {
+  ASSISTANT_PREAMBLE,
+  addUsage,
+  runAssistantLoop,
+} from "@/lib/assistant/runtime";
+import { buildAssistantTools } from "@/lib/assistant/tools";
+import { MAX_STAGED_CALLS, type StagedCall } from "@/lib/assistant/staged";
+import { renderFocusBlock } from "@/lib/assistant/focus/types";
+import { buildBoardFocus } from "@/lib/assistant/focus/board";
+import {
+  summarizeThread,
+  titleThread,
+} from "@/lib/assistant/thread-housekeeping";
 import {
   encodeEvent,
   OPENING_STATUS,
@@ -34,7 +44,7 @@ import type { AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import type { Json } from "@/types/database.types";
 
 // Runs on the default Node.js runtime (Cache Components forbids an explicit
-// `runtime` export). The Anthropic SDK + service client need Node APIs anyway.
+// `runtime` export). The provider SDKs + service client need Node APIs anyway.
 
 /** Today's calendar date in a given IANA zone, so "Friday" resolves correctly
  *  for a write. `zonedDayOf` is the canonical helper; a stored zone the runtime
@@ -47,24 +57,13 @@ function todayIn(timezone: string): string {
   }
 }
 
-/**
- * One prompt for one loop: the read guidance that grounds every answer, plus
- * the write guidance already proven in `src/lib/ai/write/propose.ts`. The
- * propose_* tools do not write — the "stop after proposing" instruction matches
- * the engine, which ends the turn at the confirm card either way.
- */
+/** The stable preamble plus the one line that changes daily. The focus block
+ *  is appended by the caller, after this, so the preamble stays cacheable. */
 function buildSystem(today: string, timezone: string): string {
   return [
-    "You are the AI assistant for Monolith, a helpful analyst answering questions about the user's boards — and, when asked, proposing changes to them.",
-    "Use the read tools to ground every claim in real data. Never fabricate.",
-    "Start broad (list_boards, get_board_overview) and query_items only for the rows a question needs.",
-    "Cell values reference option/user ids — decode labels via get_board_overview before answering.",
-    "If you cannot answer from the data, say so plainly.",
+    ASSISTANT_PREAMBLE,
     "",
     `Today is ${today} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
-    "When the user asks you to CHANGE something, first resolve the exact board, group, status option and owner userIds with the read tools (list_boards, get_board_overview, list_board_members). To change or move an EXISTING item, get its item_id from the `id` field query_items returns for that board. NEVER assume an id you have not read.",
-    "Then call a propose_* tool with the resolved ids. The propose_* tools do NOT write — the user confirms first. Say in ONE short sentence what you are about to propose, then stop.",
-    "If the target board, group or item is ambiguous, DO NOT propose — ask exactly ONE focused question and wait for the answer.",
   ].join("\n");
 }
 
@@ -132,13 +131,19 @@ export async function POST(req: Request) {
   // history is still worth continuing.
   let system = buildSystem(todayIn(timezone), timezone);
 
+  // FOCUS. A board thread's board is what the user is looking at. The payload
+  // read is RLS-scoped; a board that reads back null (or belongs to another
+  // org) degrades to no focus.
+  let focusText: string | null = null;
   if (conv.data.board_id) {
-    const { data: board } = await supabase
-      .from("boards")
-      .select("id, name")
-      .eq("id", conv.data.board_id)
-      .maybeSingle();
-    system = composeBoardScope(system, board ?? null);
+    const payload = await getBoardPayload(conv.data.board_id);
+    if (payload && payload.board.org_id === org.id) {
+      const members = (await listOrgMembersCached(org.id)).map((m) => ({
+        userId: m.userId,
+        fullName: m.fullName,
+      })); // email never reaches a prompt
+      focusText = buildBoardFocus({ payload, members });
+    }
   }
 
   // Folder scope, mutually exclusive with the board branch above (a thread is
@@ -167,6 +172,13 @@ export async function POST(req: Request) {
         : null,
     );
   }
+
+  // A folder thread is scoped by its folder block above; every other thread
+  // gets a FOCUS block (or the explicit "no page is in focus" line). Same
+  // guard as the folder branch, so a thread carrying both ids (board wins)
+  // still gets its board.
+  if (conv.data.board_id || !conv.data.folder_id)
+    system = `${system}\n\n${renderFocusBlock(focusText)}`;
 
   // The response body is a pure OBSERVER of the turn, never its host
   // (gotcha-62). It owns a controller that `emit` writes to while a reader is
@@ -244,15 +256,21 @@ export async function POST(req: Request) {
 
       const result = await runAi(
         { orgId: org.id, userId: user.id, feature: "ask_pulse" },
-        async ({ apiKey, provider, model }) => {
-          assertToolLoopCapable(provider, "ask_pulse");
-          // The whole turn — rolling summary, the tool-use loop, and the
-          // auto-title — runs on the ONE model runAi resolved, so all three
-          // agree with the ledger row it meters. The WIRE id, not the catalog
-          // key: this call goes straight to the Anthropic SDK.
-          const askModel = model.requestModel;
-          const client = new Anthropic({ apiKey });
-          const usage: AiUsageTokens = {
+        async ({ adapter, apiKey, baseUrl, model }, reportUsage) => {
+          if (!model.supportsTools)
+            throw new Error(
+              `${model.model} can't use tools. Pick a tool-capable model in Settings → AI.`,
+            );
+          // The whole turn — rolling summary, the tool loop and the auto-title —
+          // runs on the ONE model runAi resolved, so all three agree with the
+          // ledger row it meters. The WIRE id, never the catalog key.
+          const lm = languageModelFor({
+            kind: adapter.kind,
+            apiKey,
+            baseUrl,
+            model: model.requestModel,
+          });
+          let usage: AiUsageTokens = {
             inputTokens: 0,
             outputTokens: 0,
             cacheReadTokens: 0,
@@ -260,27 +278,27 @@ export async function POST(req: Request) {
           };
 
           if (toFold.length > 0) {
-            const s = await summarize(
-              client.messages,
-              askModel,
-              summary,
-              toFold,
-            );
-            summary = s.summary;
-            usage.inputTokens += s.usage.inputTokens;
-            usage.outputTokens += s.usage.outputTokens;
-            await supabase
-              .from("ai_conversations")
-              .update({
-                summary,
-                summarized_upto: toFold[toFold.length - 1].created_at,
-              })
-              .eq("id", conversationId);
+            const s = await summarizeThread(lm, summary, toFold);
+            usage = addUsage(usage, s.usage);
+            // `summarizeThread` hands back the PRIOR summary when the model
+            // returned nothing. Advancing the cursor then would drop the
+            // folded turns for good, so only a new, non-empty summary moves it.
+            if (s.summary.length > 0 && s.summary !== (summary ?? "")) {
+              summary = s.summary;
+              await supabase
+                .from("ai_conversations")
+                .update({
+                  summary,
+                  summarized_upto: toFold[toFold.length - 1].created_at,
+                })
+                .eq("id", conversationId);
+            }
           }
 
           // Composed HERE, not above: `model.contextLength` is what the
           // knowledge envelope is divided against, and it is only resolved
-          // inside this callback (execute-run.ts, same reason).
+          // inside this callback (execute-run.ts, same reason). `system`
+          // already carries the FOCUS block, so a persona keeps it.
           const turnSystem = personaAgent
             ? await composeAgentChatSystem({
                 client: supabase,
@@ -295,59 +313,58 @@ export async function POST(req: Request) {
               })
             : system;
 
-          const r = await askPulseStream({
-            apiKey,
-            model: askModel,
-            orgId: org.id,
-            workspaceId,
-            client,
-            messages: buildAskMessages(recent),
-            system: composeSystem(turnSystem, summary),
-            emit,
+          // SECURITY: reads run, and staged writes are later applied, as the
+          // signed-in user through their own cookie-bound client, so RLS is
+          // the boundary. Never a service-role client here.
+          const staged: StagedCall[] = [];
+          const tools = buildAssistantTools({
+            ctx: { getClient: async () => supabase, actorId: user.id },
+            client: supabase,
+            stage: (call) => {
+              if (staged.length >= MAX_STAGED_CALLS) return false;
+              staged.push(call);
+              return true;
+            },
           });
-          usage.inputTokens += r.usage.inputTokens;
-          usage.outputTokens += r.usage.outputTokens;
-          usage.cacheReadTokens =
-            (usage.cacheReadTokens ?? 0) + (r.usage.cacheReadTokens ?? 0);
-          usage.cacheWriteTokens =
-            (usage.cacheWriteTokens ?? 0) + (r.usage.cacheWriteTokens ?? 0);
 
-          // Auto-title on the first exchange — reuses the resolved key (works
-          // for managed/BYO/per-user) and meters its tokens. Best-effort.
+          const beforeLoop = usage;
+          const r = await runAssistantLoop({
+            model: lm,
+            system: composeSystem(turnSystem, summary),
+            messages: recent.map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })),
+            tools,
+            emit,
+            // A turn that dies at step 9 still spent steps 1 to 8.
+            onUsage: (running) => reportUsage(addUsage(beforeLoop, running)),
+          });
+          usage = addUsage(usage, r.usage);
+
+          // Auto-title on the first exchange — same model, metered. Best-effort.
           let title: string | undefined;
           if (isFirstExchange) {
             try {
-              const t = await generateTitle(
-                client.messages,
-                askModel,
-                allRows[0].content,
-              );
+              const t = await titleThread(lm, allRows[0].content);
               title = t.title;
-              usage.inputTokens += t.usage.inputTokens;
-              usage.outputTokens += t.usage.outputTokens;
+              usage = addUsage(usage, t.usage);
             } catch {
               /* title is best-effort */
             }
           }
 
-          return {
-            result: {
-              answer: r.answer,
-              boardsConsulted: r.boardsConsulted,
-              proposedActions: r.proposedActions,
-              title,
-            },
-            usage,
-          };
+          return { result: { answer: r.text, staged, title }, usage };
         },
       );
 
-      // One column, two shapes (see lib/ai/ask/tool-trace.ts): a read-only
-      // turn stores only boardsConsulted; a proposal turn also stores the
-      // actions, which is what makes an unconfirmed card survive a reload.
-      const trace: AskToolTrace = { boardsConsulted: result.boardsConsulted };
-      if (result.proposedActions.length)
-        trace.proposedActions = result.proposedActions;
+      // The staged batch rides the trace (see lib/ai/ask/tool-trace.ts), which
+      // is what makes an unconfirmed card survive a reload. Apply re-reads the
+      // calls from this row; the client copy is only for the live render.
+      if (result.staged.length) emit({ type: "staged", calls: result.staged });
+
+      const trace: AskToolTrace = { boardsConsulted: [] };
+      if (result.staged.length) trace.stagedCalls = result.staged;
 
       // Stamped with the agent that was actually READ, never the id we set out
       // to resolve: a deleted or unreadable agent leaves `personaAgent` null,
@@ -391,7 +408,7 @@ export async function POST(req: Request) {
         type: "done",
         conversationId,
         assistantMessageId: ins.data.id,
-        boardsConsulted: result.boardsConsulted,
+        boardsConsulted: [],
         title: result.title,
       });
     } catch (e) {

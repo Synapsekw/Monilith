@@ -14,6 +14,9 @@ import {
 } from "@/lib/ai/ask/proposal-actions";
 import { PROPOSAL_FALLBACK_ANSWER } from "@/lib/ai/ask/stream-protocol";
 import { useApplyBoardEffects } from "@/lib/boards/use-ai-effects";
+import { useResyncBoards } from "@/lib/boards/use-resync-boards";
+import { applyBatch, dismissBatch } from "@/lib/assistant/batch-actions";
+import type { StagedCall } from "@/lib/assistant/staged";
 import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
@@ -36,8 +39,9 @@ import type { ChatSurface } from "./surface";
  * completed turn we `router.refresh()` once so the rail picks up a new
  * auto-title.
  *
- * Phase 2: a turn can end at a confirm card. The `proposal` event arrives before
- * the message is persisted, so its actions are stashed and bound to the real
+ * Phase 2: a turn can end at a confirm card. The `staged` event (the unified
+ * runtime's batch; legacy threads carry `proposal`) arrives before the message
+ * is persisted, so its calls are stashed and bound to the real
  * `assistantMessageId` at `done`. Approve/Cancel are Server Actions that take
  * only ids — the actions themselves are re-read server-side from the message
  * row through RLS — and their outcome turn is appended to client state, so
@@ -168,6 +172,9 @@ export function AskChat({
   // on /ask (no board cache) and for a board the user isn't viewing, so it
   // needs no guard here.
   const applyBoardEffects = useApplyBoardEffects();
+  // After an applied batch: refetch each touched board that is mounted. The
+  // catalog tools return text, not rows, so there is nothing to patch in.
+  const resyncBoards = useResyncBoards();
 
   /**
    * ONE turn at a time, owned HERE rather than by the network layer.
@@ -298,6 +305,7 @@ export function AskChat({
       // `done` handler sees both regardless of React's render batching.
       let acc = "";
       let proposed: ValidatedAction[] = [];
+      let stagedCalls: StagedCall[] = [];
       const outcome = await send(convId, (e) => {
         if (e.type === "token") {
           acc += e.text;
@@ -306,6 +314,8 @@ export function AskChat({
           setStatus(e.text);
         } else if (e.type === "proposal") {
           proposed = e.actions;
+        } else if (e.type === "staged") {
+          stagedCalls = e.calls;
         } else if (e.type === "error") {
           setStatus(e.message);
           setStreamText(null);
@@ -315,13 +325,19 @@ export function AskChat({
             {
               id: e.assistantMessageId || `a-${Date.now()}`,
               role: "assistant",
-              content: acc || (proposed.length ? PROPOSAL_FALLBACK_ANSWER : ""),
-              trace: proposed.length
-                ? {
-                    boardsConsulted: e.boardsConsulted,
-                    proposedActions: proposed,
-                  }
-                : null,
+              content:
+                acc ||
+                (proposed.length || stagedCalls.length
+                  ? PROPOSAL_FALLBACK_ANSWER
+                  : ""),
+              trace:
+                proposed.length || stagedCalls.length
+                  ? {
+                      boardsConsulted: e.boardsConsulted,
+                      ...(proposed.length ? { proposedActions: proposed } : {}),
+                      ...(stagedCalls.length ? { stagedCalls } : {}),
+                    }
+                  : null,
               agentId: turnAgentId,
             },
           ]);
@@ -409,6 +425,41 @@ export function AskChat({
     });
   }
 
+  /** Apply the ticked rows of a staged batch, or dismiss it. Both append the
+   *  server's outcome turn, which is what flips the card out of `idle`. */
+  function resolveBatch(messageId: string, selectedIds: string[] | null) {
+    if (!activeId || busyId) return;
+    setBusyId(messageId);
+    setStatus(null);
+    startTransition(async () => {
+      const res =
+        selectedIds === null
+          ? await dismissBatch({ conversationId: activeId, messageId })
+          : await applyBatch({
+              conversationId: activeId,
+              messageId,
+              selectedIds,
+            });
+      setBusyId(null);
+      if (!res.ok) {
+        setStatus(res.error);
+        return;
+      }
+      resyncBoards(res.data.touchedBoardIds);
+      setMessages((m) => [
+        ...m,
+        {
+          id: res.data.messageId,
+          role: "assistant",
+          content: res.data.content,
+          trace: res.data.trace,
+          // The server's stamp, never a client guess (same rule as `resolve`).
+          agentId: res.data.agentId,
+        },
+      ]);
+    });
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* The board dock owns its own header (thread list + share toggle) and
@@ -436,6 +487,8 @@ export function AskChat({
         busyMessageId={busyId}
         onApprove={(id) => resolve(id, true)}
         onCancel={(id) => resolve(id, false)}
+        onApplyBatch={(id, ids) => resolveBatch(id, ids)}
+        onDismissBatch={(id) => resolveBatch(id, null)}
         dropState={dropState}
         onRetryDrop={() => {
           if (activeId) void recoverAfterDrop(activeId);
