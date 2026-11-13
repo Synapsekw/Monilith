@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { DuplicateToolNameError, descriptorsFor } from "./tool-descriptors";

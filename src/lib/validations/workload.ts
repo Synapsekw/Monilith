@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected an ISO date");

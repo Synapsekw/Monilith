@@ -1,6 +1,6 @@
 "use server";
 
-import { z } from "zod";
+import * as z from "zod";
 import { getBoardPayload, type BoardPayload } from "@/lib/boards/queries";
 
 const boardIdSchema = z.string().uuid();

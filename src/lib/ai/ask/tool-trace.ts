@@ -2,7 +2,7 @@
 // stream protocol's consumers, and the proposal Server Actions. Shapes the
 // `ai_messages.tool_trace` jsonb column, which is untyped at the DB level — so
 // everything read out of it goes through Zod before it is trusted.
-import { z } from "zod";
+import * as z from "zod";
 import {
   validatedActionSchema,
   executionResultSchema,

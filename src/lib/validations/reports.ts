@@ -11,7 +11,7 @@
  * `scope:'portfolio'` with a board list — is rejected here rather than bouncing
  * off the DB's `reports_scope_binding_ck` with an unreadable Postgres error.
  */
-import { z } from "zod";
+import * as z from "zod";
 import { reportConfigSchema } from "@/lib/reports/config";
 import { REPORT_BOARDS_LIMIT, type ReportScope } from "@/lib/reports/queries";
 

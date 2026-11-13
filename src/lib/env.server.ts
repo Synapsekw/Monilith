@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 import { env } from "@/lib/env";
 import { labelSupabaseTarget } from "@/lib/supabase/project-refs";
 

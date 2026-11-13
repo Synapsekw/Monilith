@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Guards the `itemId` that becomes a panel presence focus-target before it is

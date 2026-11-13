@@ -1,6 +1,6 @@
 "use server";
 
-import { z } from "zod";
+import * as z from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import type { RelationCandidate } from "@/components/boards/cells/RelationPicker";

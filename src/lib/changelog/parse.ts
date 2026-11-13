@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { ChangelogEntry } from "./types";
 
 // Field separators shared with the generator's `git log --format` string

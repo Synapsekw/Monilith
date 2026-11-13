@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { attachFileHandler } from "@/lib/mcp/tools/attach-file";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import type { ToolResult } from "@/lib/mcp/tools/shared";

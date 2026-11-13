@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { truncate } from "./schema";
 
 /** Pairs kept in the tab and replayed as context (spec §3.2). */

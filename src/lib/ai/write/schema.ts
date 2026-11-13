@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 
 // ISO calendar date (YYYY-MM-DD) — matches dateValueSchema's `date`.

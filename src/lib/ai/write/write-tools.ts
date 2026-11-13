@@ -1,6 +1,6 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
+import * as z from "zod";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { proposedActionSchema, type ValidatedAction } from "./schema";

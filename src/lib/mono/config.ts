@@ -1,6 +1,6 @@
 import "server-only";
 import { isIP } from "node:net";
-import { z } from "zod";
+import * as z from "zod";
 
 export const monoEnvironmentSchema = z.object({
   MONO_SITE_ORIGIN: z.string().max(300).optional(),

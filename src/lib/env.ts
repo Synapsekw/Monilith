@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 // Public environment — safe to import from both server and client components.
 // Only reads NEXT_PUBLIC_* vars, which Next.js inlines at build time.

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { listFilterSchema } from "@/lib/validations/dashboards";
 
 export const automationTriggerSchema = z.discriminatedUnion("type", [

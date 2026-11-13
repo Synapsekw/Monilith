@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import * as z from "zod";
 import { getServerEnv } from "@/lib/env.server";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { embedBatch, embedBackfill } from "@/lib/ai/embeddings/index-actions";

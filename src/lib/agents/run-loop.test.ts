@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { tool, type LanguageModel } from "ai";
-import { z } from "zod";
+import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { ToolInvokeContext } from "@/lib/mcp/tools/descriptor";

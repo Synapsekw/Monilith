@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Client-safe shared config for the F14 Autopilot agent: the task vocabulary,

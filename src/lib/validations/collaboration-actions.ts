@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 const TEXT = z.string().trim().min(1, "Update cannot be empty").max(10_000);
 

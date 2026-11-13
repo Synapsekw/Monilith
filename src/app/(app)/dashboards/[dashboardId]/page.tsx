@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { z } from "zod";
+import * as z from "zod";
 
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";

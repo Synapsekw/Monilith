@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { SourceFormat } from "@/lib/documents/extract-text";
 import { INSTRUCTIONS_SENTINEL } from "@/lib/agents/document-inject";
 

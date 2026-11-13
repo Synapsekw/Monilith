@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 export const FEEDBACK_KINDS = ["bug", "feature_request"] as const;
 export const FEEDBACK_STATUSES = [

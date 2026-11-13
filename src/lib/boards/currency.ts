@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Curated ISO 4217 codes offered by the currency column picker. Curated (not

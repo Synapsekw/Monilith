@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { parseAction, toToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 import { columnKindSchema } from "@/lib/validations/boards";

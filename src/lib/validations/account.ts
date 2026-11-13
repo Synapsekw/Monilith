@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * The typed confirmation from the delete-account dialog. The value is re-verified

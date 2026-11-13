@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { SignalKind } from "@/lib/boards/intelligence/types";
 import {
   MAX_PAYLOAD_SIGNALS,
