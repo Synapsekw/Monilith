@@ -57,6 +57,9 @@ describe("NewDashboardDialog", () => {
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboards/d9"));
     expect(attachDashboardToFolder).not.toHaveBeenCalled();
+    // push only — createDashboard already invalidated; a refresh after the
+    // push rendered the destination a second time.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("shows the action's error and stays open", async () => {
@@ -78,6 +81,7 @@ describe("NewDashboardDialog", () => {
       }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboards/d9"));
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("will not submit an empty name", () => {

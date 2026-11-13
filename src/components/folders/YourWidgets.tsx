@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FolderInput, Plus, Sparkles } from "lucide-react";
 import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { NewDashboardDialog } from "@/components/dashboards/NewDashboardDialog";
@@ -58,7 +58,6 @@ export function YourWidgets({
   boards: BoardOption[];
   unfiled: { id: string; name: string }[];
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   const [newOpen, setNewOpen] = useState(false);
@@ -74,7 +73,8 @@ export function YourWidgets({
         );
         return;
       }
-      router.refresh();
+      // attachDashboardToFolder's updateTag re-renders the route inside the
+      // action response — no client refresh.
     });
   }
 

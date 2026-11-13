@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEffect, useState, type ComponentType } from "react";
 import { useUIStore } from "@/stores/ui";
@@ -9,8 +9,10 @@ const { searchParamsStore, newDashboardDialogProps } = vi.hoisted(() => ({
   searchParamsStore: { value: new URLSearchParams() },
   newDashboardDialogProps: { current: null as { open: boolean } | null },
 }));
+// Shared spy (read lazily by the mock) so a stray router.refresh() is observable.
+const routerRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ refresh: routerRefresh, push: vi.fn() }),
   useSearchParams: () => searchParamsStore.value,
 }));
 vi.mock("@/lib/folders/actions", () => ({
@@ -79,6 +81,12 @@ describe("UnfiledDashboards", () => {
       dashboardId: "d1",
       folderId: "f1",
     });
+    // attachDashboardToFolder's updateTag re-renders the route in the action
+    // response; the component must not stack a client refresh on it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
   it("hosts the New dashboard dialog", () => {
     render(<UnfiledDashboards workspaceId="w1" dashboards={[]} folders={[]} />);

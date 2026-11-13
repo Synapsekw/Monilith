@@ -56,6 +56,9 @@ describe("NewBoardDialog", () => {
       }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/boards/b1"));
+    // push only — the action's updateTag already refreshed the sidebar list in
+    // its response; a refresh after the push re-rendered the destination twice.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("defaults to the Blank template", async () => {

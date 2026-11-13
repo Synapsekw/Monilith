@@ -68,8 +68,10 @@ export function NewDashboardDialog({
       }
       setName("");
       onOpenChange(false);
+      // push only: createDashboard (and the attach) already invalidated the
+      // dashboards/folders tags, so the sidebar re-rendered in the action
+      // response and the push fetches the new dashboard's page fresh.
       router.push(`/dashboards/${res.data.dashboard.id}`);
-      router.refresh();
     });
   }
 

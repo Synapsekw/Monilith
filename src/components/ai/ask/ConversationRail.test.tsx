@@ -1,12 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationRail } from "./ConversationRail";
 import type { ConversationRow } from "@/lib/ai/ask/conversations";
+import {
+  deleteConversation,
+  renameConversation,
+} from "@/lib/ai/ask/conversation-actions";
 
+// Hoisted, shared spies: a factory minting a fresh `{ push, refresh }` per call
+// could never observe a stray `router.refresh()`.
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+  pathname: "/ask",
+}));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => "/ask",
+  useRouter: () => ({ push: nav.push, refresh: nav.refresh }),
+  usePathname: () => nav.pathname,
 }));
 // The rename/delete Server Actions are `"use server"` modules that pull in
 // `server-only` transitively. This test is about the rail's surface model, so
@@ -131,5 +142,88 @@ describe("ConversationRail surface model", () => {
       "hiring",
     );
     expect(sectionFor(/^older$/i).open).toBe(true);
+  });
+});
+
+/**
+ * renameConversation / deleteConversation both `revalidatePath("/ask")`, so the
+ * action's own response already carries the re-rendered rail. A client
+ * `router.refresh()` after them was a second full render of the same route.
+ */
+describe("ConversationRail mutations", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+  beforeEach(() => {
+    nav.push.mockClear();
+    nav.refresh.mockClear();
+    nav.pathname = "/ask";
+    vi.mocked(renameConversation).mockReset();
+    vi.mocked(deleteConversation).mockReset();
+    vi.mocked(renameConversation).mockResolvedValue({
+      ok: true,
+      data: { title: "Q3 risks" },
+    });
+    vi.mocked(deleteConversation).mockResolvedValue({ ok: true, data: {} });
+  });
+
+  async function openRowMenu() {
+    // c1 was updated "now", so it sits in the open Today bucket.
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Conversation actions" })[0],
+    );
+  }
+
+  it("renames a conversation without a client refresh", async () => {
+    render(<ConversationRail chats={chats} briefings={[]} />);
+    await openRowMenu();
+    await userEvent.click(screen.getByRole("menuitem", { name: /rename/i }));
+    const input = screen.getByLabelText("Conversation title");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Q3 risks{Enter}");
+
+    await waitFor(() =>
+      expect(renameConversation).toHaveBeenCalledWith({
+        conversationId: "c1",
+        title: "Q3 risks",
+      }),
+    );
+    await settle();
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  it("deletes a non-active conversation with no navigation and no refresh", async () => {
+    render(<ConversationRail chats={chats} briefings={[]} />);
+    await openRowMenu();
+    await userEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await userEvent.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(deleteConversation).toHaveBeenCalledWith({ conversationId: "c1" }),
+    );
+    await settle();
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  it("leaves a deleted ACTIVE thread by navigating to /ask — still no refresh", async () => {
+    nav.pathname = "/ask/c1";
+    render(<ConversationRail chats={chats} briefings={[]} />);
+    await openRowMenu();
+    await userEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await userEvent.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/ask"));
+    expect(nav.refresh).not.toHaveBeenCalled();
   });
 });

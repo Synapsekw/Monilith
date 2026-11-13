@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DashboardItemMenu } from "./DashboardItemMenu";
 
@@ -26,9 +26,20 @@ vi.mock("@/lib/dashboards/actions", () => ({
     renameDashboard(input),
   deleteDashboard: (input: { dashboardId: string }) => deleteDashboard(input),
 }));
+// Shared spies so a stray call is observable. Every action here invalidates
+// (updateTag/revalidatePath), so its response already carries the re-rendered
+// route — the menu must not add a client router.refresh() on top.
+const routerPush = vi.fn();
+const routerRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
 }));
+/** Drain the awaited (mocked) Server Action and its transition continuation,
+ *  so a "did NOT refresh" assertion runs after the success path, not before. */
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
 beforeEach(() => vi.clearAllMocks());
 const open = () =>
@@ -64,6 +75,31 @@ describe("DashboardItemMenu", () => {
     await open();
     await userEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
     expect(duplicateDashboard).toHaveBeenCalledWith({ dashboardId: "d1" });
+    await settle();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("renames without a client refresh", async () => {
+    render(
+      <DashboardItemMenu
+        dashboard={{ id: "d1", name: "Ops" }}
+        isActive={false}
+      />,
+    );
+    await open();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+    const input = screen.getByRole("textbox");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Ops 2");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(renameDashboard).toHaveBeenCalledWith({
+      dashboardId: "d1",
+      name: "Ops 2",
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument(),
+    );
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("deletes after confirming", async () => {
@@ -79,6 +115,26 @@ describe("DashboardItemMenu", () => {
       screen.getByRole("button", { name: /delete dashboard/i }),
     );
     expect(deleteDashboard).toHaveBeenCalledWith({ dashboardId: "d1" });
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    // Not the active dashboard: nothing to navigate away from, nothing to
+    // refresh — the action response re-rendered the sidebar.
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("navigates to /dashboards — without a refresh — when the ACTIVE one is deleted", async () => {
+    render(
+      <DashboardItemMenu dashboard={{ id: "d1", name: "Ops" }} isActive />,
+    );
+    await open();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /delete dashboard/i }),
+    );
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith("/dashboards"));
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("gives the actions trigger a coarse-pointer touch target (>=44px)", () => {

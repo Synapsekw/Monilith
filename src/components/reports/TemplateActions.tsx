@@ -1,6 +1,5 @@
 "use client";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { LayoutTemplate } from "lucide-react";
 import { saveReportAsTemplate } from "@/lib/reports/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
@@ -39,7 +38,6 @@ export function TemplateActions({
   reportName: string;
   disabled?: boolean;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +60,8 @@ export function TemplateActions({
         return;
       }
       setOpen(false);
-      // A new row exists in the org's template gallery — server data changed,
-      // so this refresh is warranted (unlike the builder's in-page toggles).
-      router.refresh();
+      // A new row exists in the org's template gallery — server data changed;
+      // saveReportAsTemplate's revalidatePath covers it in the action response.
     });
   }
 

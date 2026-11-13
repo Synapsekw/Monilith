@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 
 import {
@@ -50,7 +49,6 @@ export function EditPlacementPopover({
   row: PortfolioRow;
   members: RowOwner[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   // Local, uncommitted draft for the free-text fields (budget / status note) so
   // typing doesn't fire a server round-trip per keystroke — we patch on blur.
@@ -66,7 +64,8 @@ export function EditPlacementPopover({
         placementId: row.id,
         portfolioId,
       });
-      router.refresh();
+      // No router.refresh(): on success the action's revalidatePath re-renders
+      // the route inside its response; on failure nothing changed to re-read.
     });
   }
 
@@ -89,8 +88,9 @@ export function EditPlacementPopover({
 
   function remove() {
     startTransition(async () => {
+      // removePortfolioBoard revalidates the portfolio path — its response
+      // already carries the grid without this row.
       await removePortfolioBoard({ placementId: row.id, portfolioId });
-      router.refresh();
     });
   }
 

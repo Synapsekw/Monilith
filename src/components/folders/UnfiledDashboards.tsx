@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FolderInput, Plus } from "lucide-react";
 import { attachDashboardToFolder } from "@/lib/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
@@ -45,7 +45,6 @@ export function UnfiledDashboards({
   folders: { id: string; name: string }[];
   workspaceId: string;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   const storeOpen = useUIStore((s) => s.newDashboardOpen);
@@ -70,7 +69,8 @@ export function UnfiledDashboards({
         );
         return;
       }
-      router.refresh(); // server data changed
+      // Server data changed — attachDashboardToFolder's updateTag re-renders
+      // the route inside the action response (no client refresh).
     });
   }
 

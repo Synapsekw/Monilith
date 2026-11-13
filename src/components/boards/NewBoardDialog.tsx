@@ -90,8 +90,9 @@ export function NewBoardDialog({
         return;
       }
       setOpen(false);
+      // push only: the action's updateTag already refreshed the sidebar list
+      // in its response, and the new board's page is fetched by the push.
       router.push(`/boards/${res.data.boardId}`);
-      router.refresh();
     });
   }
 

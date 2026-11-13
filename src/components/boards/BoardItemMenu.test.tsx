@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BoardItemMenu } from "./BoardItemMenu";
 
@@ -37,8 +37,14 @@ vi.mock("@/lib/ui/mutation-toast", () => ({
   },
   showMutationError: (...a: unknown[]) => showMutationError(...a),
 }));
+// Shared spies: a mock minting a fresh `{ push, refresh }` per call could never
+// observe a stray `router.refresh()`. Every action here invalidates a tag, so
+// its own response carries the re-rendered route — the menu must not stack a
+// second render on top.
+const routerPush = vi.fn();
+const routerRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
 }));
 
 beforeEach(() => {
@@ -47,6 +53,8 @@ beforeEach(() => {
 });
 const open = () =>
   userEvent.click(screen.getByRole("button", { name: /board actions/i }));
+/** Let the pending transition (the awaited action + its continuation) drain. */
+const settle = () => act(async () => {});
 
 describe("BoardItemMenu", () => {
   it("shows Rename, Duplicate and Delete", async () => {
@@ -72,6 +80,8 @@ describe("BoardItemMenu", () => {
     await open();
     await userEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
     expect(duplicateBoard).toHaveBeenCalledWith({ boardId: "b1" });
+    await settle();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("renames via the dialog", async () => {
@@ -88,6 +98,12 @@ describe("BoardItemMenu", () => {
       boardId: "b1",
       name: "Roadmap 2",
     });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("textbox", { name: /board name/i }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("archives (moves to Trash) after confirming, with reversible copy", async () => {
@@ -107,6 +123,25 @@ describe("BoardItemMenu", () => {
       screen.getByRole("button", { name: /move to trash/i }),
     );
     expect(archiveBoard).toHaveBeenCalledWith({ boardId: "b1" });
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    // Not the active board: no navigation, and no client refresh either.
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("navigates to /boards — without a refresh — when the ACTIVE board is archived", async () => {
+    render(
+      <BoardItemMenu board={{ id: "b1", name: "Roadmap" }} isActive={true} />,
+    );
+    await open();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /move to trash/i }),
+    );
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith("/boards"));
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("offers an Undo toast that restores the board", async () => {
@@ -122,6 +157,8 @@ describe("BoardItemMenu", () => {
     expect(undoToast?.message).toMatch(/trash/i);
     undoToast?.onUndo();
     expect(restoreBoard).toHaveBeenCalledWith({ boardId: "b1" });
+    await settle();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("surfaces a failed archive inline and keeps the confirm dialog open", async () => {
