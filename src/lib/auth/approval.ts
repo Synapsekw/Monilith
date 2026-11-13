@@ -32,6 +32,22 @@ export async function getAccountApproval(
   cacheLife("guard");
   cacheTag(approvalTag(userId));
 
+  return queryApproval(userId);
+}
+
+/**
+ * The same read with NO cache: always the live row. Used wherever a stale
+ * "pending" would be wrong (the waiting screen's "Check again", and the gate's
+ * second look before it sends an account to the waiting screen). Same
+ * semantics: missing row -> "pending", read error -> throws.
+ */
+export async function readAccountApproval(
+  userId: string,
+): Promise<ApprovalStatus> {
+  return queryApproval(userId);
+}
+
+async function queryApproval(userId: string): Promise<ApprovalStatus> {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("account_approvals")
@@ -45,11 +61,16 @@ export async function getAccountApproval(
   return "pending";
 }
 
-/** Send an account that is not approved to the waiting screen. A read error
- * propagates (never a redirect). redirect() throws — keep it outside try/catch. */
+/** Send an account that is not approved to the waiting screen. Only
+ * "approved" is trusted from the cache: any other cached status is re-checked
+ * live (a just-approved account must not bounce off a stale "pending" held by
+ * another server instance). A read error propagates (never a redirect).
+ * redirect() throws — keep it outside try/catch. */
 export async function enforceApproval(
   user: Pick<SessionUser, "id">,
 ): Promise<void> {
-  const status = await getAccountApproval(user.id);
-  if (status !== "approved") redirect(PENDING_APPROVAL_PATH);
+  if ((await getAccountApproval(user.id)) === "approved") return;
+  if ((await readAccountApproval(user.id)) !== "approved") {
+    redirect(PENDING_APPROVAL_PATH);
+  }
 }

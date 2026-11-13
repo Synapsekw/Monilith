@@ -10,6 +10,10 @@ const { redirect, cacheTag, cacheLife, db } = vi.hoisted(() => ({
   db: {
     rows: [] as { user_id: string; status: string }[],
     error: null as { message: string } | null,
+    // When set, each read consumes the next scripted status (null = no row)
+    // instead of looking at `rows`: lets a test give the cached read and the
+    // live read different answers (the cache itself is not modelled here).
+    script: null as (string | null)[] | null,
     calls: [] as {
       table: string;
       columns: string;
@@ -50,6 +54,12 @@ vi.mock("@/lib/supabase/service", () => ({
         },
         async maybeSingle() {
           if (db.error) return { data: null, error: db.error };
+          if (db.script) {
+            const next = db.script.shift() ?? null;
+            if (next === "__error__")
+              return { data: null, error: { message: "boom" } };
+            return { data: next ? { status: next } : null, error: null };
+          }
           const matches = db.rows.filter((r) =>
             call.filters.every(
               ([c, v]) => (r as Record<string, unknown>)[c] === v,
@@ -71,6 +81,7 @@ import {
   approvalTag,
   enforceApproval,
   getAccountApproval,
+  readAccountApproval,
   PENDING_APPROVAL_PATH,
 } from "./approval";
 
@@ -80,6 +91,7 @@ beforeEach(() => {
   cacheLife.mockClear();
   db.rows = [];
   db.error = null;
+  db.script = null;
   db.calls = [];
 });
 
@@ -125,10 +137,52 @@ describe("getAccountApproval", () => {
     expect(cacheTag).toHaveBeenCalledWith("account-approval:u1");
   });
 
+  it("uses the guard cache profile", async () => {
+    await getAccountApproval("u1");
+    expect(cacheLife).toHaveBeenCalledWith("guard");
+  });
+
+  it("counts an unexpected status value as pending", async () => {
+    db.rows = [{ user_id: "u1", status: "banana" }];
+    expect(await getAccountApproval("u1")).toBe("pending");
+  });
+
   it("throws on a read error instead of returning a status", async () => {
     db.rows = [{ user_id: "u1", status: "approved" }];
     db.error = { message: "connection refused" };
     await expect(getAccountApproval("u1")).rejects.toThrow(
+      "Could not verify account approval.",
+    );
+  });
+});
+
+describe("readAccountApproval (live, uncached)", () => {
+  it.each(["approved", "pending", "rejected"] as const)(
+    "returns %s for a row with that status",
+    async (status) => {
+      db.rows = [{ user_id: "u1", status }];
+      expect(await readAccountApproval("u1")).toBe(status);
+    },
+  );
+
+  it("treats a missing row as pending", async () => {
+    expect(await readAccountApproval("u1")).toBe("pending");
+  });
+
+  it("never returns another account's status", async () => {
+    db.rows = [{ user_id: "someone-else", status: "approved" }];
+    expect(await readAccountApproval("u1")).toBe("pending");
+  });
+
+  it("is not cached or tagged", async () => {
+    await readAccountApproval("u1");
+    expect(cacheTag).not.toHaveBeenCalled();
+    expect(cacheLife).not.toHaveBeenCalled();
+  });
+
+  it("throws on a read error", async () => {
+    db.error = { message: "connection refused" };
+    await expect(readAccountApproval("u1")).rejects.toThrow(
       "Could not verify account approval.",
     );
   });
@@ -160,6 +214,34 @@ describe("enforceApproval", () => {
     await expect(enforceApproval({ id: "u1" })).rejects.toThrow(
       "REDIRECT:/pending-approval",
     );
+  });
+
+  it("lets a cached pending through when the live read says approved", async () => {
+    db.script = ["pending", "approved"];
+    await expect(enforceApproval({ id: "u1" })).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(db.calls).toHaveLength(2);
+  });
+
+  it("redirects when the cached and the live read are both pending", async () => {
+    db.script = ["pending", "pending"];
+    await expect(enforceApproval({ id: "u1" })).rejects.toThrow(
+      "REDIRECT:/pending-approval",
+    );
+  });
+
+  it("never makes the live read for a cached approved", async () => {
+    db.script = ["approved"];
+    await enforceApproval({ id: "u1" });
+    expect(db.calls).toHaveLength(1);
+  });
+
+  it("propagates a failing live read and does not redirect", async () => {
+    db.script = ["pending", "__error__"];
+    await expect(enforceApproval({ id: "u1" })).rejects.toThrow(
+      "Could not verify account approval.",
+    );
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("propagates a read error and does not redirect", async () => {

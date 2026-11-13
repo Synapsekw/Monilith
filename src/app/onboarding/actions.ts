@@ -68,12 +68,16 @@ export async function createWorkspaceOrg(
     // P0001 = the RPC's own `raise exception` guard messages, written to be
     // user-facing ("You already have an organization."). Anything else is raw
     // Postgres text — keep it out of the UI.
-    return {
-      error:
-        orgError?.code === "P0001"
-          ? orgError.message
-          : "Could not create your organization. Please try again.",
-    };
+    // The membership trigger's raw `account_not_approved` is a machine token,
+    // not copy — map it before the verbatim pass-through.
+    if (orgError?.code === "P0001") {
+      return {
+        error: orgError.message.includes("account_not_approved")
+          ? "Your account is waiting for approval."
+          : orgError.message,
+      };
+    }
+    return { error: "Could not create your organization. Please try again." };
   }
 
   // redirect() throws — must be called outside the try/catch logic above.

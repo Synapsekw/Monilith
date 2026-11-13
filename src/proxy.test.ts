@@ -181,6 +181,17 @@ describe("proxy()", () => {
     );
   });
 
+  it("redirects an anonymous visitor on /pending-approval to login (it needs a session)", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    const res = await proxy(req("/pending-approval"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?next=%2Fpending-approval",
+    );
+  });
+
   it("preserves the query string in next", async () => {
     getClaims.mockResolvedValue({ data: null, error: null });
 
