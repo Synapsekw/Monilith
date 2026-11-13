@@ -46,6 +46,7 @@ test.describe("Item PDF preview: upload → lightbox renders inline", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

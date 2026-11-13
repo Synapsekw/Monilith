@@ -42,6 +42,7 @@ describe.skipIf(!integrationTargetReady())(
       const email = `embed-${label}-${randomUUID()}@example.com`;
       const { data: created, error: createErr } =
         await admin.auth.admin.createUser({
+          app_metadata: { pre_approved: true },
           email,
           password: PASSWORD,
           email_confirm: true,

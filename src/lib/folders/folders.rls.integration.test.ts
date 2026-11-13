@@ -43,6 +43,7 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
   async function provisionUser(label: string) {
     const email = `sf-${label}-${randomUUID()}@example.com`;
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,
@@ -127,6 +128,7 @@ describe.skipIf(!integrationTargetReady())("RLS: shared folders", () => {
     const cEmail = `sf-c-${randomUUID()}@example.com`;
     const { data: cCreated, error: cCreateErr } =
       await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: cEmail,
         password: PASSWORD,
         email_confirm: true,

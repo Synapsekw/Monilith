@@ -58,6 +58,7 @@ test.describe("Boards happy path", () => {
     });
 
     const { data, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

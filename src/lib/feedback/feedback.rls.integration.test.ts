@@ -25,6 +25,7 @@ describe.skipIf(!integrationTargetReady())("RLS: feedback", () => {
   }> {
     const email = `rls-feedback-${randomUUID()}@example.com`;
     const { data: created } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

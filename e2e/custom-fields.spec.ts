@@ -61,6 +61,7 @@ test.describe("Custom fields: edit status labels / rating / files column", () =>
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

@@ -41,6 +41,7 @@ describe.skipIf(!integrationTargetReady())(
     async function createUser(label: string): Promise<TestUser> {
       const email = `del-${label}-${randomUUID()}@example.com`;
       const { data, error } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PW,
         email_confirm: true,

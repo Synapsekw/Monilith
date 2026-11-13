@@ -52,6 +52,7 @@ test.describe("Automations 5c-2: webhook rule → queued run", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const u = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

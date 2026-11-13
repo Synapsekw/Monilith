@@ -192,6 +192,7 @@ describe.skipIf(!resolution.ok)(
       const coMemberEmail = `useragents-comember-${tag}@example.com`;
       const { data: created, error: createErr } =
         await admin.auth.admin.createUser({
+          app_metadata: { pre_approved: true },
           email: coMemberEmail,
           password: "Test-Password-123!",
           email_confirm: true,

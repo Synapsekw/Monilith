@@ -110,6 +110,7 @@ describe.skipIf(!integrationTargetReady())("engine: automations 5b-1", () => {
     // ── create userA ──────────────────────────────────────────────────────
     const emailA = `eng5b1-a-${randomUUID()}@example.com`;
     const { data: createdA, error: errA } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,
@@ -287,6 +288,7 @@ describe.skipIf(!integrationTargetReady())("engine: automations 5b-1", () => {
     // ── create userB in a separate org ───────────────────────────────────
     const emailB = `eng5b1-b-${randomUUID()}@example.com`;
     const { data: createdB, error: errB } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailB,
       password: PASSWORD,
       email_confirm: true,

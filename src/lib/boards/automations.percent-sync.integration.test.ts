@@ -70,6 +70,7 @@ describe.skipIf(!integrationTargetReady())("engine: percent sync", () => {
 
     const emailA = `pctsync-a-${randomUUID()}@example.com`;
     const { data: createdA, error: errA } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: emailA,
       password: PASSWORD,
       email_confirm: true,

@@ -37,6 +37,7 @@ test.describe("Column-summary footer: per-column aggregation", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

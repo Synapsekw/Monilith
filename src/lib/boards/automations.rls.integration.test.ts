@@ -71,6 +71,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailA = `rls-auto-a-${randomUUID()}@example.com`;
       const { data: createdA, error: errA } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailA,
           password: PASSWORD,
           email_confirm: true,
@@ -187,6 +188,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailB = `rls-auto-b-${randomUUID()}@example.com`;
       const { data: createdB, error: errB } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailB,
           password: PASSWORD,
           email_confirm: true,
@@ -856,6 +858,7 @@ describe.skipIf(!integrationTargetReady())(
         // Create a plain member user and add them to orgA with role 'member'
         const { data: createdMember, error: memberErr } =
           await admin.auth.admin.createUser({
+            app_metadata: { pre_approved: true },
             email: memberEmail,
             password: PASSWORD,
             email_confirm: true,
