@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 21:20",
+  "updated": "2026-11-13 22:52",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -188,6 +188,16 @@
     ]
   },
   "next": [
+    {
+      "title": "Live-run Personal Monos before promoting",
+      "why": "Plans 1 and 2A are on develop but nobody has used a Mono in a browser: create one, add a key, chat, confirm a change and see the Mono as author, and check a teammate cannot assign it. Then write Plan 2B.",
+      "tags": [
+        "owner",
+        "verify",
+        "ai",
+        "critical"
+      ]
+    },
     {
       "title": "Try signup approval on production",
       "why": "It shipped in PR #150 after a local live run. Sign up a throwaway account on the live site, confirm the waiting screen, approve it from the admin users page, then delete it. An invited person and a password-reset link while waiting were unit-tested only.",
@@ -440,32 +450,16 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/monos-p2a",
-      "head": "d216431a",
-      "note": "monos"
-    },
-    {
-      "branch": "task/monos-p2a-t3",
-      "head": "6518f631",
-      "note": "monos"
-    },
-    {
-      "branch": "task/monos-p2a-t6",
-      "head": "d216431a",
-      "note": "monos"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-11-13-2120-edge-nubs-and-leave-board",
-    "when": "2026-11-13 21:20",
-    "title": "Edge-nub panel toggles and Leave board",
+    "id": "2026-11-13-2252-personal-monos-retire-and-your-mono",
+    "when": "2026-11-13 22:52",
+    "title": "Personal Monos: old agents retired, your Mono in the app",
     "bullets": [
-      "Sidebar and dock fold controls are now always-visible pills on the card edge, not hover-only chevrons.",
-      "Members of a shared board can Leave board from its sidebar menu; the owner still deletes instead.",
-      "A new policy lets a member delete only their own membership row, verified in a rolled-back transaction on DEV.",
-      "Both checked in the browser and by the owner; announced on /updates; awaiting promotion."
+      "The old agent system is retired: 27 agents disabled, Autopilot and agent setup removed, about 160 files deleted.",
+      "Every person can create a Mono: My Mono rail tab, owner-only chat acting as the Mono on their own key, Settings → My Mono.",
+      "Nine Mono migrations are live on DEV; reviews caught an upsert bug and three security holes before merge.",
+      "Merged to develop without a live run; Plan 2B (working on its own, approvals, MCP) not yet written."
     ]
   }
 }
