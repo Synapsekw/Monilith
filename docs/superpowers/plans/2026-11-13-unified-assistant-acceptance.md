@@ -82,4 +82,31 @@ and to ask it to continue. Never an empty bubble.
 
 ## Result
 
-Not run yet.
+Run on 2026-11-13 in Chrome against `pnpm dev -p 3001` (DEV database), board
+"Assistant test", in the board dock, on the organisation's default Anthropic
+model. Two passes: the first exposed defects, the second re-ran the affected
+checks after the fixes.
+
+The setup differed from the script: the board had 6 items with no status, owner
+or date, so "catch me up" was judged against that state.
+
+| Check                       | Pass 1            | Pass 2     | Evidence                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ----------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Catch me up              | Pass              | not re-run | Named the board and all 6 items; said none had a status, owner or date. Did not ask which board. About 20 s.                                                                                                                                                                                                   |
+| 2. Triage                   | Pass with defects | Pass       | Pass 1: asked "which one is you?"; rows read "Set 1 field on an item."; applying 2 of 3 updated the board with no reload. Pass 2: understood "me"; rows read `Landing page QA: set Status to "Done"` and `Demo video: set Owner to Danijel Jovanovic`; all 3 applied and appeared on the board with no reload. |
+| 3. Text to work             | Pass              | not re-run | One card; three items created, the first dated 2026-11-13; visible at once. Pass 1 row read "Run create_item."                                                                                                                                                                                                 |
+| 4. Safety                   | Pass              | not re-run | Archive row unticked, red, details open, Apply disabled. Dismissed; the board stayed.                                                                                                                                                                                                                          |
+| 5. Follow-up after applying | Fail              | Pass       | Pass 1: listed the applied items, then said they were still waiting for confirmation. Pass 2: "I made three updates…", correct, no provider error.                                                                                                                                                             |
+| 6. Any provider             | not run           | not run    | Needs the organisation's default model changed in Settings.                                                                                                                                                                                                                                                    |
+| 7. Old threads              | not run           | not run    |                                                                                                                                                                                                                                                                                                                |
+| 8. Active organisation      | Partly            | not re-run | Only the refusal was checked: asked to create a goal, it declined and pointed to the Goals page; no card. The two-organisation read check was not run.                                                                                                                                                         |
+| 9. Step limit               | not run           | not run    |                                                                                                                                                                                                                                                                                                                |
+| Reload                      | Pass              | not re-run | Resolved cards stayed resolved; no Apply buttons reappeared.                                                                                                                                                                                                                                                   |
+
+Defects found in pass 1 and fixed before pass 2: the assistant did not know who
+the signed-in person was; after Apply it believed the changes were still
+pending; card rows did not name the item or the value; a resolved card still
+said "changes waiting"; answers contained literal Markdown asterisks.
+
+Still to verify before promotion to `main`: checks 6, 7 and 9, and check 8 with
+a person in two organisations.
