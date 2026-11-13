@@ -539,6 +539,85 @@ describe("GanttBoard — quick-edit peek", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Bar resize — live local preview, one write on release
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — bar resize commits once on release", () => {
+  beforeEach(() => setCell.mockClear());
+
+  // "Spanned" runs 2026-06-02 → 2026-06-06 (5 days) at month zoom = 10px/day.
+  function strip() {
+    return screen.getByLabelText("Resize Spanned");
+  }
+  function barWidth() {
+    return (strip().parentElement as HTMLElement).style.width;
+  }
+
+  it("previews the new width while dragging without writing", () => {
+    renderBoard(twoColPayload());
+    expect(barWidth()).toBe("50px");
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 112 });
+    fireEvent.pointerMove(strip(), { clientX: 121 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    expect(barWidth()).toBe("80px");
+    expect(setCell).not.toHaveBeenCalled();
+  });
+
+  it("fires exactly one mutation on pointerup with the final end date", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 110 });
+    fireEvent.pointerMove(strip(), { clientX: 120 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    fireEvent.pointerUp(strip(), { clientX: 130 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: END_COL,
+      value: { date: "2026-06-09" },
+    });
+    // A stray move after release is not part of the gesture.
+    fireEvent.pointerMove(strip(), { clientX: 160 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing when the drag ends on the original date", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    fireEvent.pointerMove(strip(), { clientX: 102 });
+    fireEvent.pointerUp(strip(), { clientX: 102 });
+    expect(setCell).not.toHaveBeenCalled();
+    expect(barWidth()).toBe("50px");
+  });
+
+  it("never drags the end before the start", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: -200 });
+    fireEvent.pointerUp(strip(), { clientX: -200 });
+    expect(setCell).toHaveBeenCalledTimes(1);
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: END_COL,
+      value: { date: "2026-06-02" },
+    });
+  });
+
+  it("pointercancel drops the preview and writes nothing", () => {
+    renderBoard(twoColPayload());
+    fireEvent.pointerDown(strip(), { clientX: 100 });
+    fireEvent.pointerMove(strip(), { clientX: 130 });
+    expect(barWidth()).toBe("80px");
+    fireEvent.pointerCancel(strip());
+    expect(barWidth()).toBe("50px");
+    fireEvent.pointerUp(strip(), { clientX: 130 });
+    expect(setCell).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TOUCH Batch 2 — iPad touch ergonomics (coarse pointer)
 // ---------------------------------------------------------------------------
 
