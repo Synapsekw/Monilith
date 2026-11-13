@@ -10,7 +10,7 @@ import {
 } from "@/lib/ai/providers/provider-rows";
 import { buildModelOptions } from "@/lib/ai/models/model-options";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
-import { getUsageSummary } from "@/lib/ai/usage-summary";
+import { getUsageSummary, type UsageSummary } from "@/lib/ai/usage-summary";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { AiKeyList } from "@/components/settings/AiKeyList";
 import { ProviderVerificationList } from "@/components/settings/ProviderVerificationBadge";
@@ -88,19 +88,23 @@ export default async function AiSettingsPage() {
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
 
-  // Only an admin sees the org form, so only an admin pays for the catalog
-  // reads. `buildModelOptions` returns one flat list, sorted providers-by-label
-  // (the order `listEnabledProviders` returns) and cheapest-first within a
-  // provider (the order `listActiveModels` returns) — the picker groups it
-  // without re-sorting. Shared with Settings → Agents, which needs the same
-  // list for the per-agent pin.
-  const modelOptions: ModelOption[] =
-    isAdmin && orgAi.ok ? await buildModelOptions(supabase, providers) : [];
-
-  // Same "only an admin pays for the extra read" pattern as `modelOptions`
-  // above — `getUsageSummary` is a bounded, admin-only read folded into this
-  // page's existing first-paint data, not a client fetch.
-  const usage = isAdmin && orgAi.ok ? await getUsageSummary(org.id) : null;
+  // Only an admin sees the org form and the usage breakdown, so only an admin
+  // pays for these two reads — and they are independent of each other (both
+  // hang off the wave above), so they share one round-trip.
+  //
+  // `buildModelOptions` returns one flat list, sorted providers-by-label (the
+  // order `listEnabledProviders` returns) and cheapest-first within a provider
+  // (the order `listActiveModels` returns) — the picker groups it without
+  // re-sorting. Shared with Settings → Agents, which needs the same list for
+  // the per-agent pin. `getUsageSummary` is a bounded, admin-only read folded
+  // into this page's first-paint data, not a client fetch.
+  const showOrgAi = isAdmin && orgAi.ok;
+  const [modelOptions, usage]: [ModelOption[], UsageSummary | null] = showOrgAi
+    ? await Promise.all([
+        buildModelOptions(supabase, providers),
+        getUsageSummary(org.id),
+      ])
+    : [[], null];
 
   return (
     <>
