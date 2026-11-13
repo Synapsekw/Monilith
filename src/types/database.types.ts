@@ -4159,6 +4159,10 @@ export type Database = {
           total_items: number;
         }[];
       };
+      _owner_board_level: {
+        Args: { p_board_id: string; p_owner: string };
+        Returns: Database["public"]["Enums"]["board_access"];
+      };
       _parse_iso_date: { Args: { p: string }; Returns: string };
       _personal_agent_sweep: { Args: { p_now?: string }; Returns: undefined };
       _reassign_authorship_target: {
@@ -4182,6 +4186,10 @@ export type Database = {
         Returns: {
           qualified_column: string;
         }[];
+      };
+      add_my_mono_to_board: {
+        Args: { p_board_id: string };
+        Returns: undefined;
       };
       add_portfolio_board: {
         Args: {
@@ -5034,6 +5042,10 @@ export type Database = {
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      remove_my_mono_from_board: {
+        Args: { p_board_id: string };
         Returns: undefined;
       };
       replace_agent_documents: {
