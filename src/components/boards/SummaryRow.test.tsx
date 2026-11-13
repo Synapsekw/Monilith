@@ -129,6 +129,40 @@ describe("SummaryRow", () => {
     expect(nameTrack.querySelector("[aria-hidden]")).not.toBeInTheDocument();
   });
 
+  it("board variant is tinted with the theme colour and carries a full-width theme rule", () => {
+    render(
+      <SummaryRow
+        {...baseProps({
+          variant: "board",
+          testId: "board-summary-footer",
+          label: "Board Total",
+        })}
+      />,
+    );
+    const row = screen.getByTestId("board-summary-footer");
+    // Derived from --color-brand, so every preset and mode follows it.
+    expect(row.className).toContain(
+      "bg-[color-mix(in_srgb,var(--color-brand)_14%,var(--color-surface))]",
+    );
+    expect(row.className).toContain("before:bg-brand");
+    expect(row.className).toContain("before:left-0");
+    expect(row.className).not.toContain("bg-surface-muted");
+    const label = screen.getByText("Board Total");
+    expect(label.className).toContain("var(--color-brand)");
+    // Values read first: bold, full foreground.
+    expect(screen.getByText("3").className).toContain("font-semibold");
+  });
+
+  it("group variant drops the muted fill and dims its values so the board total owns the bottom", () => {
+    render(<SummaryRow {...baseProps()} />);
+    const row = screen.getByTestId("group-summary-g1");
+    expect(row.className).not.toContain("bg-surface-muted");
+    expect(row.className).toContain("bg-surface");
+    const nameTrack = row.firstElementChild as HTMLElement;
+    expect(nameTrack.className).not.toContain("bg-surface-muted");
+    expect(screen.getByText("3").className).toContain("text-muted-foreground");
+  });
+
   it("editors can pick an aggregation; onChange fires with the column + choice", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
