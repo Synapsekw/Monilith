@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { ArchiveX, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 
 import { purgeBoard, restoreBoard } from "@/lib/boards/actions";
@@ -38,11 +37,11 @@ export type ArchivedBoard = {
  * always permitted; the server action re-checks regardless.
  *
  * Restore/purge are server-data changes → Server Actions. On success the row is
- * dropped optimistically and `router.refresh()` re-runs the RSC so the sidebar
- * board list (busted via `invalidateMyBoards`) reflects the change.
+ * dropped optimistically; the action's `invalidateMyBoards` (updateTag) makes
+ * its own response carry the re-rendered route, so the sidebar board list
+ * reflects the change with no client `router.refresh()`.
  */
 export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
-  const router = useRouter();
   const [rows, setRows] = useState(boards);
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -74,7 +73,6 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
         return;
       }
       setRows((prev) => prev.filter((b) => b.id !== boardId));
-      router.refresh();
     });
   }
 
@@ -92,7 +90,6 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
       }
       setConfirmId(null);
       setRows((prev) => prev.filter((b) => b.id !== boardId));
-      router.refresh();
     });
   }
 

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { ReportScopePicker } from "@/components/reports/ReportScopePicker";
 
 const refresh = vi.fn();
@@ -71,8 +77,12 @@ describe("ReportScopePicker", () => {
         boardId: "b2",
       }),
     );
-    // Scope IS server data — this is the one control that may refresh.
-    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    // Scope IS server data — but the RSC re-run is the one setReportScope's
+    // revalidatePath ships in its own response, not a second client refresh.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("rolls up an explicit set of boards", async () => {

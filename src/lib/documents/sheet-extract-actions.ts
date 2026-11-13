@@ -1,6 +1,6 @@
 "use server";
 
-import { z } from "zod";
+import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { parseWorkbookSheets } from "@/lib/boards/spreadsheet/parse-workbook";
 import { MAX_BYTES } from "@/lib/boards/spreadsheet/types";

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -32,6 +33,14 @@ const { routerPush, routerRefresh } = vi.hoisted(() => ({
   routerPush: vi.fn(),
   routerRefresh: vi.fn(),
 }));
+
+/** Drain the awaited (mocked) Server Action and its `.then`/transition
+ *  continuation, so a "did NOT refresh" assertion is made after the success
+ *  path has fully run rather than before it started. */
+const settleAction = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
@@ -1022,7 +1031,7 @@ describe("BoardsNav folder moves", () => {
     await screen.findByRole("menuitem", { name: "Q3 Launch" });
   }
 
-  it("files an owned board into the folder you pick, then refreshes the sidebar", async () => {
+  it("files an owned board into the folder you pick, with no client refresh", async () => {
     render(
       <TooltipProvider>
         <BoardsNav
@@ -1045,9 +1054,12 @@ describe("BoardsNav folder moves", () => {
         folderId: "f2",
       }),
     );
-    // Placement is server data, so the sidebar must be re-read — without this
-    // the move persists but the nav shows the stale position until a reload.
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    // Placement is server data, so the sidebar must be re-read — and it is, by
+    // the ACTION: moveBoardToFolder's updateTag(foldersTag) puts the re-rendered
+    // route in its own response. A client router.refresh() on top of that is a
+    // second full render of the same tree, so the menu must not issue one.
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("files a shared board from its own row menu", async () => {
@@ -1071,7 +1083,8 @@ describe("BoardsNav folder moves", () => {
         folderId: "f1",
       }),
     );
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("greys out the folder the board is already in, and only that one", async () => {
@@ -1119,7 +1132,8 @@ describe("BoardsNav folder moves", () => {
         folderId: null,
       }),
     );
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("offers no 'Remove from folder' on a board that isn't in one", async () => {
@@ -1355,7 +1369,7 @@ describe("BoardsNav drag a board onto a folder", () => {
     );
   });
 
-  it("files a board dropped on a folder header, then refreshes the sidebar", async () => {
+  it("files a board dropped on a folder header, with no client refresh", async () => {
     renderNav();
     await armDragLayer();
 
@@ -1367,9 +1381,10 @@ describe("BoardsNav drag a board onto a folder", () => {
         folderId: "f1",
       }),
     );
-    // Placement is server data — which subtree the row lives in changes, so
-    // the nav must be re-read.
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    // Placement is server data — which subtree the row lives in changes — but
+    // the re-read rides the action response (updateTag), not a client refresh.
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
     expect(reorderBoard).not.toHaveBeenCalled();
   });
 
@@ -1380,11 +1395,14 @@ describe("BoardsNav drag a board onto a folder", () => {
 
     drop("b1", "folder:f1");
 
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
     // Hover is visual only, so without this the board the user just filed would
     // vanish behind a chevron the moment the pointer left. One write, on the
     // success path — strictly fewer than the old one-per-hover.
-    expect("folder:f1" in useUIStore.getState().collapsedSections).toBe(false);
+    await waitFor(() =>
+      expect("folder:f1" in useUIStore.getState().collapsedSections).toBe(
+        false,
+      ),
+    );
   });
 
   it("leaves an already-open folder open after a drop into it", async () => {
@@ -1395,7 +1413,8 @@ describe("BoardsNav drag a board onto a folder", () => {
 
     drop("b1", "folder:f1");
 
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    await waitFor(() => expect(moveBoardToFolder).toHaveBeenCalled());
+    await settleAction();
     expect("folder:f1" in useUIStore.getState().collapsedSections).toBe(false);
   });
 
@@ -1692,7 +1711,8 @@ describe("BoardsNav dragging a shared board", () => {
         folderId: "f1",
       }),
     );
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
     expect(reorderBoard).not.toHaveBeenCalled();
   });
 
@@ -1872,7 +1892,7 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
     });
   });
 
-  it("drags a filed board into another folder and refreshes", async () => {
+  it("drags a filed board into another folder, with no client refresh", async () => {
     renderNav();
     await armDragLayer();
 
@@ -1884,7 +1904,8 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
         folderId: "f2",
       }),
     );
-    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    await settleAction();
+    expect(routerRefresh).not.toHaveBeenCalled();
     expect(reorderBoard).not.toHaveBeenCalled();
   });
 

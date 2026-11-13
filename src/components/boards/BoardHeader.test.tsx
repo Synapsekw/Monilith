@@ -35,14 +35,38 @@ vi.mock("@/lib/boards/spreadsheet-actions", () => ({
 
 // The Automations dialog pulls in Server Actions (and TanStack Query) that are
 // out of scope for the header rename test; stub it to its trigger only.
+// The stub reports `open` and closes on click, so tests can assert the header's
+// mount-on-first-open / stay-mounted-after-close contract.
 vi.mock("@/components/boards/automations/AutomationsDialog", () => ({
-  AutomationsDialog: () => <div data-testid="automations-dialog" />,
+  AutomationsDialog: ({
+    open,
+    onOpenChange,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="automations-dialog"
+      data-open={String(open)}
+      onClick={() => onOpenChange(false)}
+    />
+  ),
+}));
+
+// The trash dialog fires a Server Action on open; stub it the same way.
+vi.mock("@/components/boards/trash/BoardTrashDialog", () => ({
+  BoardTrashDialog: ({ open }: { open: boolean }) => (
+    <div data-testid="trash-dialog" data-open={String(open)} />
+  ),
 }));
 
 // ShareBoardDialog transitively imports the sharing Server Actions module; stub
 // the dialog (we assert on the header's Share trigger, not the dialog body).
 vi.mock("@/components/boards/ShareBoardDialog", () => ({
-  ShareBoardDialog: () => <div data-testid="share-dialog" />,
+  ShareBoardDialog: ({ open }: { open: boolean }) => (
+    <div data-testid="share-dialog" data-open={String(open)} />
+  ),
 }));
 
 vi.mock("@/lib/boards/sharing-actions", () => ({
@@ -287,9 +311,89 @@ describe("BoardHeader", () => {
       await screen.findByRole("menuitem", { name: "Import" }),
     );
 
+    // The wizard is a next/dynamic chunk fetched on first open — await it.
     expect(
-      screen.getByRole("dialog", { name: "Import from file" }),
+      await screen.findByRole("dialog", { name: "Import from file" }),
     ).toBeInTheDocument();
+  });
+
+  // The four on-demand dialogs are code-split (next/dynamic) and gated on
+  // their open state: nothing is mounted — so no chunk is requested — until the
+  // user opens one.
+  it("mounts no dialog module until one is opened", () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="owner"
+      />,
+    );
+
+    expect(screen.queryByTestId("automations-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("share-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("trash-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("mounts the share dialog after the Share trigger is clicked", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="owner"
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Share board" }));
+    const dialog = await screen.findByTestId("share-dialog");
+    expect(dialog).toHaveAttribute("data-open", "true");
+    // Only the dialog that was asked for is mounted.
+    expect(screen.queryByTestId("automations-dialog")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("trash-dialog")).not.toBeInTheDocument();
+  });
+
+  it("mounts automations and trash from the overflow menu, and keeps a closed dialog mounted", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="owner"
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Automations" }),
+    );
+    const automations = await screen.findByTestId("automations-dialog");
+    expect(automations).toHaveAttribute("data-open", "true");
+
+    // Closing flips `open` but does NOT unmount: the dialog must stay in the
+    // tree so Radix can play its exit animation and keep its internal state.
+    await userEvent.click(automations);
+    expect(screen.getByTestId("automations-dialog")).toHaveAttribute(
+      "data-open",
+      "false",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Trash" }),
+    );
+    expect(await screen.findByTestId("trash-dialog")).toHaveAttribute(
+      "data-open",
+      "true",
+    );
   });
 
   it("renders the presence avatar bar with a face per occupant in the roster", () => {

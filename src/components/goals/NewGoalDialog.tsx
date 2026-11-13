@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { createGoal } from "@/lib/goals/actions";
@@ -37,7 +36,6 @@ export function NewGoalDialog({
   parentGoalId?: string;
   triggerLabel?: string;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -94,7 +92,8 @@ export function NewGoalDialog({
       }
       setOpen(false);
       reset();
-      router.refresh();
+      // createGoal revalidates /goals, so the tree with the new goal arrives in
+      // the action response — no client refresh.
     });
   }
 

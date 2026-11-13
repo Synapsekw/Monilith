@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import {
   ColumnHeader,
   type ColumnReorder,
@@ -196,8 +196,11 @@ describe("ColumnHeader", () => {
         }
       })(),
     );
-    expect(onResize).toHaveBeenCalledWith(240); // 180 + (260-200)
+    // Live updates are frame-throttled, so nothing is sent synchronously on
+    // the move; the release flushes the final width before persisting it.
+    expect(onResize).not.toHaveBeenCalled();
     fireEvent(window, new Event("pointerup"));
+    expect(onResize).toHaveBeenCalledWith(240); // 180 + (260-200)
     expect(onResizeEnd).toHaveBeenCalledWith(240);
   });
 });
@@ -298,5 +301,73 @@ describe("ColumnHeader — Quiet Grid", () => {
       />,
     );
     expect(screen.getByText("Budget").className).toContain("opacity-[0.74]");
+  });
+});
+
+describe("ColumnHeader — resize is frame-throttled", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function setup() {
+    const onResize = vi.fn();
+    const onResizeEnd = vi.fn();
+    render(
+      <ColumnHeader
+        column={col()}
+        width={180}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={onResize}
+        onResizeEnd={onResizeEnd}
+      />,
+    );
+    const handle = screen.getByLabelText("Resize Notes");
+    return { onResize, onResizeEnd, handle };
+  }
+  function move(clientX: number) {
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX }));
+    });
+  }
+  function release() {
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointerup"));
+    });
+  }
+
+  it("coalesces the moves within one frame into a single live update", () => {
+    const { onResize, handle } = setup();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    move(110);
+    move(120);
+    move(130);
+    expect(onResize).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersToNextFrame());
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith(210);
+  });
+
+  it("applies and persists the final width on release, with no stale trailing frame", () => {
+    const { onResize, onResizeEnd, handle } = setup();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    move(110);
+    act(() => void vi.advanceTimersToNextFrame());
+    move(140); // still waiting on its frame when the pointer lifts
+    release();
+    expect(onResize).toHaveBeenLastCalledWith(220);
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd).toHaveBeenCalledWith(220);
+    const calls = onResize.mock.calls.length;
+    act(() => void vi.advanceTimersToNextFrame());
+    expect(onResize).toHaveBeenCalledTimes(calls);
+  });
+
+  it("a click on the handle without a move sends no live update", () => {
+    const { onResize, onResizeEnd, handle } = setup();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    release();
+    act(() => void vi.advanceTimersToNextFrame());
+    expect(onResize).not.toHaveBeenCalled();
+    expect(onResizeEnd).toHaveBeenCalledWith(180);
   });
 });

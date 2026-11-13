@@ -1,7 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
-import { z } from "zod";
+import * as z from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { dashboardsTag } from "@/lib/cache/tags";

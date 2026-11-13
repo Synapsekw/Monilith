@@ -56,8 +56,12 @@ describe("TemplateActions", () => {
         name: "Weekly status layout",
       }),
     );
-    // A new row exists in the org gallery, so the refresh is warranted.
-    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Template name")).not.toBeInTheDocument(),
+    );
+    // A new row exists in the org gallery — saveReportAsTemplate's
+    // revalidatePath("/reports") covers it in the action response.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("will not submit an empty name", async () => {

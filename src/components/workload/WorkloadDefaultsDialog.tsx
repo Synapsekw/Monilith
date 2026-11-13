@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Settings2 } from "lucide-react";
 
 import { setWorkloadDefaults } from "@/lib/workload/actions";
@@ -44,7 +43,6 @@ export function WorkloadDefaultsDialog({
   defaultPerItemHours: number;
   defaultWorkingDays: number[];
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [hours, setHours] = useState(String(defaultHoursPerDay));
   const [perItem, setPerItem] = useState(String(defaultPerItemHours));
@@ -108,8 +106,9 @@ export function WorkloadDefaultsDialog({
         setError({ field: "hours", message: res.error });
         return;
       }
+      // setWorkloadDefaults revalidates /workload: the recomputed grid is in
+      // the action response, so no client refresh follows.
       setOpen(false);
-      router.refresh();
     });
   }
 

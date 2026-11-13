@@ -59,8 +59,9 @@ export function FirstBoardEmptyState({
         toast.error("Couldn't create your board.", { description: res.error });
         return;
       }
+      // push only: the action's updateTag already refreshed the sidebar list
+      // in its response, and the new board's page is fetched by the push.
       router.push(`/boards/${res.data.boardId}`);
-      router.refresh();
     });
   }
 

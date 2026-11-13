@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * THE DECIDE PATH IS SECURITY CODE, not CRUD, and this file pins the order it

@@ -1,6 +1,6 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
+import * as z from "zod";
 import {
   getBoardPayload,
   listMyBoards,

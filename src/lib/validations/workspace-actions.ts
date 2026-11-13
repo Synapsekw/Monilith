@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 const name = z.string().trim().min(1).max(100);
 const uuid = z.string().uuid();

@@ -20,28 +20,30 @@ export default async function MembersSettingsPage() {
   const org = await resolveActiveOrg();
   if (!org) redirect("/onboarding");
 
+  // All three reads key on the org id alone, so they go out together. The
+  // admin gate still runs BEFORE anything is rendered: a non-admin gets
+  // notFound() and the invitations/audit rows — which RLS scopes to what this
+  // caller may read anyway (cookie client) — are simply dropped.
   const supabase = await createClient();
-  const { data: members } = await supabase.rpc("get_org_members", {
-    p_org_id: org.id,
-  });
+  const [{ data: members }, { data: invites }, { data: audit }] =
+    await Promise.all([
+      supabase.rpc("get_org_members", { p_org_id: org.id }),
+      supabase
+        .from("org_invitations")
+        .select("id, email, role, status, created_at")
+        .eq("org_id", org.id)
+        .in("status", ["pending", "declined"])
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("admin_audit_log")
+        .select("id, action, target_email, created_at")
+        .eq("org_id", org.id)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
   const me = (members ?? []).find((m) => m.user_id === user.id);
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   if (!me || !isAdmin) notFound();
-
-  const [{ data: invites }, { data: audit }] = await Promise.all([
-    supabase
-      .from("org_invitations")
-      .select("id, email, role, status, created_at")
-      .eq("org_id", org.id)
-      .in("status", ["pending", "declined"])
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("admin_audit_log")
-      .select("id, action, target_email, created_at")
-      .eq("org_id", org.id)
-      .order("created_at", { ascending: false })
-      .limit(50),
-  ]);
 
   return (
     <SettingsSection

@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 import { tool, type ToolSet } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";

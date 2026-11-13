@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { ToolDescriptor, ToolScope } from "@/lib/mcp/tools/descriptor";

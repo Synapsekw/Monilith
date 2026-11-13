@@ -50,6 +50,11 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
+// The importer's own `boards:user:<me>` invalidation (commitImport, new board).
+vi.mock("@/lib/boards/actions/internal", () => ({
+  invalidateMyBoards: vi.fn(),
+}));
+
 vi.mock("@/lib/boards/queries", () => ({
   getBoardPayload: vi.fn(),
 }));
@@ -68,6 +73,8 @@ import {
   commitImport,
 } from "./spreadsheet-actions";
 import { getBoardPayload } from "@/lib/boards/queries";
+import { invalidateMyBoards } from "@/lib/boards/actions/internal";
+import { revalidatePath } from "next/cache";
 import { MAX_BYTES } from "@/lib/boards/spreadsheet/types";
 import type {
   ImportGroup,
@@ -406,6 +413,12 @@ describe("commitImport", () => {
     expect(rpcArgs.p_template.groups).toHaveLength(1);
     // Task 2 is excluded, leaving Task 1 and Task 3
     expect(rpcArgs.p_template.items).toHaveLength(2);
+
+    // A new board moves exactly one cached read — the importer's board list.
+    expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
+    // …and never the root layout: `revalidatePath("/", "layout")` expires the
+    // implicit tag EVERY cached read in the app sits under, for every user.
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("commitImport rejects two name-role columns", async () => {

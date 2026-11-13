@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { loadGoalTree } from "./list-goals";
 import type { GoalNode } from "@/lib/goals/types";
 import type { GetClient, ToolResult } from "./shared";

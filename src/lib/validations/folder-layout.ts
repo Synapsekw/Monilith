@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /** KPI cards the built-in `kpis` section can show. Spec 1 keeps the existing
  *  closed set; column-derived metrics arrive in spec 2 as widget sections. */

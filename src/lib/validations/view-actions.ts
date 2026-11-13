@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { CREATED_AT_SOURCE, UPDATED_AT_SOURCE } from "@/lib/boards/dates";
 
 const uuid = z.string().uuid();

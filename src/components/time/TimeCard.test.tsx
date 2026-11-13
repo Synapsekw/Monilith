@@ -155,6 +155,32 @@ describe("coalesced refresh", () => {
     }
   });
 
+  it("flushes a pending refresh when the card unmounts inside the debounce window", async () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = render(
+        <TimeCard data={makeData(0)} categories={[]} />,
+      );
+      await commitCellValue(0, "2");
+      expect(refresh).not.toHaveBeenCalled();
+      unmount();
+      // Leaving before the 2s timer fires must not lose the reconciliation.
+      expect(refresh).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not refresh on unmount when no edit is pending", () => {
+    const { unmount } = render(<TimeCard data={makeData(0)} categories={[]} />);
+    unmount();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("keeps the committed value visible after the transition settles (durable overlay)", async () => {
     render(<TimeCard data={makeData(0)} categories={[]} />);
     await commitCellValue(0, "2");

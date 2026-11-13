@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { currencyCodeSchema } from "@/lib/boards/currency";
 import type { Database } from "@/types/database.types";
 

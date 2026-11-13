@@ -10,7 +10,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { LazyCalendar } from "@/components/ui/lazy-calendar";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import { isoToLocalDate, localDateToISO } from "@/lib/boards/iso-date";
 import { cn } from "@/lib/utils";
@@ -345,7 +345,9 @@ export function DateEditor({
         sideOffset={4}
         className="w-auto p-2"
       >
-        <Calendar
+        {/* Code-split: react-day-picker loads when a date cell is first
+            edited, not with the board table. */}
+        <LazyCalendar
           mode="single"
           autoFocus
           defaultMonth={selected}

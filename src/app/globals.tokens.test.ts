@@ -500,3 +500,15 @@ describe("base-layer polish", () => {
     expect(CSS).not.toMatch(/scrollbar-color:\s*var\(--state-active\)/);
   });
 });
+
+describe(".app-wash", () => {
+  it("is not viewport-attached (its root never scrolls)", () => {
+    const start = CSS.indexOf("  .app-wash {");
+    expect(start).toBeGreaterThan(-1);
+    const body = CSS.slice(start, CSS.indexOf("}", start));
+    expect(body).toContain(
+      "background-image: var(--app-bloom), var(--app-wash)",
+    );
+    expect(body).not.toContain("background-attachment");
+  });
+});

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GripVertical, Users2 } from "lucide-react";
 import {
@@ -383,7 +382,6 @@ export function BoardsNavSortable({
    */
   restoreFocus?: BoardsNavFocusAnchor | null;
 }) {
-  const router = useRouter();
   // Selector, as the rest of the tree does — subscribing to the whole store
   // would re-render this list on every unrelated UI-state change.
   const setSection = useUIStore((s) => s.setSection);
@@ -435,7 +433,7 @@ export function BoardsNavSortable({
   /**
    * Filing a board by dropping it on a folder header. Unlike reorder this
    * genuinely changes what the server renders (the placement decides which
-   * subtree the row lives in), so it revalidates — gotcha-44 is about reorder,
+   * subtree the row lives in), so the ACTION revalidates — gotcha-44 is about reorder,
    * where the optimistic order is already authoritative.
    */
   function fileIntoFolder(boardId: string, folderId: string) {
@@ -449,7 +447,8 @@ export function BoardsNavSortable({
       // the board the user just filed. `setSection`, never `toggleSection`: an
       // already-open folder must stay open. Client state only, 0 round-trips.
       setSection(`${FOLDER_DROP_PREFIX}${folderId}`, false);
-      router.refresh();
+      // No router.refresh(): moveBoardToFolder's updateTag(foldersTag) put the
+      // re-rendered sidebar in the action's own response.
     });
   }
 
@@ -487,7 +486,7 @@ export function BoardsNavSortable({
       // Dropping a board back on its OWN folder header is a no-op, not a write.
       // `active.id === over.id` never catches it — the ids are namespaced
       // differently — and without this guard it fires a pointless server write
-      // plus a full router.refresh().
+      // plus a full route re-render.
       if (active.data.current?.folderId === folderId) return;
       fileIntoFolder(String(active.id), folderId);
       return;

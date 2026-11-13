@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import * as z from "zod";
 import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";

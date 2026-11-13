@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 // 60 chars matches the DB CHECK on folders.name — keep the two in step.
 const name = z.string().trim().min(1).max(60);

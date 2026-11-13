@@ -35,9 +35,13 @@ import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { proxy, config } from "./proxy";
 
-function req(path: string) {
-  return new NextRequest(new URL(path, "http://localhost"));
+function req(path: string, cookie?: string, extra?: Record<string, string>) {
+  return new NextRequest(new URL(path, "http://localhost"), {
+    headers: { ...(cookie ? { cookie } : {}), ...extra },
+  });
 }
+
+const LAST_BOARD = "0b9e2a51-6f5c-4d7a-9c3e-8f1d2b4a6c0e";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -45,7 +49,83 @@ beforeEach(() => {
 });
 
 describe("proxy()", () => {
-  it("redirects an authenticated visitor on / to /home", async () => {
+  it("sends an authenticated visitor on / straight to their last board", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "u1" } },
+      error: null,
+    });
+
+    const res = await proxy(req("/", `pulse_last_board=${LAST_BOARD}`));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      `http://localhost/boards/${LAST_BOARD}`,
+    );
+    // The short-lived marker the board page uses to recover when that board
+    // turns out to be gone — the proxy itself never checks the DB.
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain(`pulse_board_entry=${LAST_BOARD}`);
+    expect(setCookie).toContain("Max-Age=60");
+    expect(setCookie).toContain("HttpOnly");
+  });
+
+  it.each([
+    ["not-a-uuid"],
+    [`${LAST_BOARD}%2F..%2F..%2Fadmin`],
+    ["%2F%2Fevil.example"],
+    [""],
+  ])(
+    "falls back to /home for a malformed last-board cookie (%s)",
+    async (value) => {
+      getClaims.mockResolvedValue({
+        data: { claims: { sub: "u1" } },
+        error: null,
+      });
+
+      const res = await proxy(req("/", `pulse_last_board=${value}`));
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe("http://localhost/home");
+      expect(res.headers.get("set-cookie") ?? "").not.toContain(
+        "pulse_board_entry",
+      );
+    },
+  );
+
+  it.each([
+    ["an RSC transition", { rsc: "1" }],
+    ["a Server Action request", { "next-action": "abc123" }],
+  ])(
+    "keeps the /home hop for %s to /, even with a valid last-board cookie",
+    async (_label, headers) => {
+      // A dead board reached this way would strand the visitor: the board
+      // page's hand-off is a streamed redirect a soft navigation ignores.
+      getClaims.mockResolvedValue({
+        data: { claims: { sub: "u1" } },
+        error: null,
+      });
+
+      const res = await proxy(
+        req("/", `pulse_last_board=${LAST_BOARD}`, headers),
+      );
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe("http://localhost/home");
+      expect(res.headers.get("set-cookie") ?? "").not.toContain(
+        "pulse_board_entry",
+      );
+    },
+  );
+
+  it("never uses the last-board cookie for an anonymous visitor on /", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    const res = await proxy(req("/", `pulse_last_board=${LAST_BOARD}`));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("redirects an authenticated visitor with no last-board cookie on / to /home", async () => {
     getClaims.mockResolvedValue({
       data: { claims: { sub: "u1" } },
       error: null,

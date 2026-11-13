@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 
 import { upsertMemberCapacity } from "@/lib/workload/actions";
@@ -45,7 +44,6 @@ export function CapacityEditor({
   workingDays: number[];
   customized: boolean;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [hours, setHours] = useState(String(hoursPerDay));
@@ -82,8 +80,9 @@ export function CapacityEditor({
         setError(res.error);
         return;
       }
+      // upsertMemberCapacity revalidates /workload: the recomputed grid is in
+      // the action response, so no client refresh follows.
       setOpen(false);
-      router.refresh();
     });
   }
 

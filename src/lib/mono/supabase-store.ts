@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { encryptedStore, type RawMonoStore } from "./store";

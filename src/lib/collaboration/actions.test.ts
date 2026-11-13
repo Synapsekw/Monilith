@@ -5,6 +5,12 @@ const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from, auth: { getUser } }),
 }));
+// The actor comes from the session helper (`getClaims()` — a LOCAL JWKS verify),
+// never from `supabase.auth.getUser()` (a network round-trip to Supabase Auth
+// on every call). `getUser` above is that network call: it stays wired into the
+// client mock only so the tests can assert it is never reached.
+const sessionGetUser = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getUser: () => sessionGetUser() }));
 
 // ── the agent trigger's collaborators ───────────────────────────────────
 const checkAgentMentionRateLimit = vi.fn();
@@ -28,6 +34,7 @@ vi.mock("@/lib/agents/run-claim", async (orig) => ({
 import {
   addUpdate,
   deleteUpdate,
+  markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/collaboration/actions";
 
@@ -40,6 +47,7 @@ beforeEach(() => {
   from.mockReset();
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+  sessionGetUser.mockReset().mockResolvedValue({ id: USER });
   checkAgentMentionRateLimit.mockReset().mockResolvedValue({ allowed: true });
   claimAgentRun
     .mockReset()
@@ -322,6 +330,58 @@ describe("markNotificationRead", () => {
     );
     expect(eq).toHaveBeenCalledWith("id", UPD);
     expect(res).toEqual({ ok: true, data: undefined });
+  });
+});
+
+describe("markAllNotificationsRead", () => {
+  function unreadUpdateChain() {
+    const is = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ is });
+    const update = vi.fn().mockReturnValue({ eq });
+    from.mockImplementation(() => ({ update }) as never);
+    return { update, eq, is };
+  }
+
+  it("marks the session user's unread rows read, with no Auth round-trip", async () => {
+    const { update, eq, is } = unreadUpdateChain();
+    const res = await markAllNotificationsRead();
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ read_at: expect.any(String) }),
+    );
+    expect(eq).toHaveBeenCalledWith("recipient_id", USER);
+    expect(is).toHaveBeenCalledWith("read_at", null);
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session, without writing", async () => {
+    sessionGetUser.mockResolvedValue(null);
+    const { update } = unreadUpdateChain();
+    const res = await markAllNotificationsRead();
+    expect(res).toEqual({ ok: false, error: "Not authenticated." });
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("addUpdate actor resolution", () => {
+  it("refuses when there is no session, before reading the item", async () => {
+    sessionGetUser.mockResolvedValue(null);
+    const res = await addUpdate({ itemId: ITEM, text: "hi" });
+    expect(res).toEqual({ ok: false, error: "Not authenticated." });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("never makes the Supabase Auth network call to learn the author", async () => {
+    // Posting a comment is a hot path; the author id is all it needs, and the
+    // locally verified claims already carry it.
+    from.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+      }),
+    }));
+    await addUpdate({ itemId: ITEM, text: "hi" });
+    expect(sessionGetUser).toHaveBeenCalledTimes(1);
+    expect(getUser).not.toHaveBeenCalled();
   });
 });
 

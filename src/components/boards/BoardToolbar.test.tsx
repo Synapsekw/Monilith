@@ -164,4 +164,27 @@ describe("BoardToolbar", () => {
       screen.queryByRole("button", { name: /Clear all/ }),
     ).not.toBeInTheDocument();
   });
+
+  // FilterBuilder is a next/dynamic chunk: absent while the popover is closed,
+  // fetched and rendered once it opens.
+  it("loads the condition builder only when the Filter popover opens", async () => {
+    render(
+      <BoardToolbar
+        columns={[statusColumn]}
+        members={members}
+        currentUserId="me"
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /add condition/i }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    expect(
+      await screen.findByRole("button", { name: /add condition/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("filter-builder-skeleton"),
+    ).not.toBeInTheDocument();
+  });
 });

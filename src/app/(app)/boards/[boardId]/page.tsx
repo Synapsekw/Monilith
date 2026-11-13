@@ -1,9 +1,12 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { BoardViews } from "@/components/boards/BoardViews";
 import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner";
 import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { resolveActiveOrg } from "@/lib/org/active";
+import { BOARD_ENTRY_COOKIE } from "@/lib/boards/last-board";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { getBoardViewPrefs } from "@/lib/boards/view-prefs";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
@@ -34,6 +37,7 @@ export default async function BoardPage({
     viewPrefs,
     lastSeenAt,
     latestRun,
+    activeOrgMembers,
   ] = await Promise.all([
     getBoardPayload(boardId),
     supabase
@@ -63,7 +67,36 @@ export default async function BoardPage({
     // the dock badge and the strip's "updated" meta are true on first paint,
     // and the tab's first open costs no read.
     getLatestBoardIntelligenceRun(supabase, boardId, user.id),
+    // The member roster is keyed on the board's org, which is only known once
+    // the payload lands — so it used to be a wave of its own after this one.
+    // Almost every board lives in the ACTIVE org, and that is resolvable now
+    // (request-memoised, the shell resolves it too), so the roster for it is
+    // read speculatively here and used below only when the org matches. A
+    // board from another org (shared across orgs) falls back to the read that
+    // was always there. `resolveActiveOrg` is membership-verified, so this
+    // never reads a roster the caller could not already see; a failure here
+    // must not fail the page, hence the catch → fallback.
+    resolveActiveOrg()
+      .then(async (org) =>
+        org
+          ? { orgId: org.id, members: await listOrgMembersCached(org.id) }
+          : null,
+      )
+      .catch(() => null),
   ]);
+  // Opening the app (`/`) lands here straight from the proxy on the strength
+  // of the last-board cookie, which the proxy cannot check against the DB. If
+  // that board has since been deleted, un-shared or archived, do not park the
+  // visitor on a dead end every time they open the app: hand them to the /home
+  // dispatcher, whose own probe rejects this board and falls through to a live
+  // one (so this cannot loop). Only for that cookie-driven arrival — the
+  // short-lived marker names the board — so any other visit to a dead link
+  // keeps the honest not-found page, and an archived board opened on purpose
+  // still renders. The cookie is read only on this rare path.
+  if (!payload || payload.board.archived_at) {
+    const entry = (await cookies()).get(BOARD_ENTRY_COOKIE)?.value;
+    if (entry === boardId) redirect("/home");
+  }
   if (!payload) notFound();
 
   const sp = await searchParams;
@@ -76,7 +109,10 @@ export default async function BoardPage({
   );
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
-  const members = await listOrgMembersCached(payload.board.org_id);
+  const members =
+    activeOrgMembers?.orgId === payload.board.org_id
+      ? activeOrgMembers.members
+      : await listOrgMembersCached(payload.board.org_id);
 
   const grants = (grantRows ?? []).map((g) => ({
     userId: g.user_id,

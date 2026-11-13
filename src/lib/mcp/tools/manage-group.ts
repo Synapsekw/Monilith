@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import type { ToolDescriptor } from "./descriptor";
 import { parseAction, toToolResult } from "./shared";
 import {

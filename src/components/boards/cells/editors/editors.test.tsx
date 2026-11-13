@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   CellEditor,
@@ -463,7 +469,9 @@ describe("PeopleEditor", () => {
 });
 
 describe("DateEditor", () => {
-  it("opens the calendar immediately on edit", () => {
+  // The calendar (react-day-picker + date-fns) is a code-split chunk: the
+  // popover opens at once, the grid follows when the chunk resolves.
+  it("opens the calendar immediately on edit", async () => {
     render(
       <DateEditor
         value={{ date: "2026-06-10" }}
@@ -472,7 +480,27 @@ describe("DateEditor", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(screen.getByRole("grid")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Pick a date" })).toBeVisible();
+    expect(await screen.findByRole("grid")).toBeInTheDocument();
+  });
+
+  it("moves keyboard focus into the day grid once the calendar has loaded", async () => {
+    render(
+      <DateEditor
+        value={{ date: "2026-06-10" }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+    const grid = await screen.findByRole("grid");
+    // `Calendar autoFocus` focuses the selected day — not the popover shell,
+    // and never the Clear button that sits beside the calendar.
+    await waitFor(() =>
+      expect(grid).toContainElement(document.activeElement as HTMLElement),
+    );
+    expect(document.activeElement).toHaveTextContent("10");
   });
 
   it("commits the picked day as a local ISO date (no off-by-one)", async () => {
@@ -485,7 +513,7 @@ describe("DateEditor", () => {
         onCancel={vi.fn()}
       />,
     );
-    await userEvent.click(screen.getByText("15"));
+    await userEvent.click(await screen.findByText("15"));
     // Exact equality also proves no `end` is synthesised for a single day.
     expect(onCommit).toHaveBeenCalledWith({ date: "2026-06-15" });
   });
@@ -500,7 +528,7 @@ describe("DateEditor", () => {
         onCancel={vi.fn()}
       />,
     );
-    await userEvent.click(screen.getByText("15"));
+    await userEvent.click(await screen.findByText("15"));
     // 3-day span (10→13) shifts forward with the new start (15→18).
     expect(onCommit).toHaveBeenCalledWith({
       date: "2026-06-15",

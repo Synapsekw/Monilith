@@ -38,7 +38,7 @@ function openAndType(value: string) {
 }
 
 describe("NewFolderDialog", () => {
-  it("creates a folder with the trimmed name, then closes and refreshes", async () => {
+  it("creates a folder with the trimmed name, then closes — the action re-renders the nav", async () => {
     // This is the ONLY way a user can create a folder, so it is the one path
     // that must never ship broken.
     openAndType("  Acme Rebrand  ");
@@ -55,7 +55,9 @@ describe("NewFolderDialog", () => {
         screen.queryByRole("dialog", { name: "New folder" }),
       ).not.toBeInTheDocument(),
     );
-    expect(refresh).toHaveBeenCalled();
+    // createFolder's updateTag(foldersTag) carries the re-rendered sidebar in
+    // the action response — no second render via router.refresh().
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("confirms the create with a toast that names the folder and says what to do next", async () => {

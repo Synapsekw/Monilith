@@ -31,10 +31,29 @@ import { boardKey } from "@/lib/boards/use-board-cache";
  * re-renders driven from inside the cell (store subscriptions), which a mocked
  * `EditableCell` wrapper would miss.
  */
-const { cellRenders, rowBodyRenders } = vi.hoisted(() => ({
+const { cellRenders, rowBodyRenders, boardFooterItemIds } = vi.hoisted(() => ({
   cellRenders: [] as string[],
   rowBodyRenders: [] as string[],
+  boardFooterItemIds: [] as (readonly string[])[],
 }));
+
+/**
+ * Board Total footer probe: records the `itemIds` array identity on every
+ * render of the board-variant `SummaryRow`. Its per-column aggregate memo is
+ * keyed on that array, so a fresh array per parent render recomputes every
+ * footer aggregate for nothing.
+ */
+vi.mock("@/components/boards/SummaryRow", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/boards/SummaryRow")>();
+  return {
+    ...actual,
+    SummaryRow: (props: Parameters<typeof actual.SummaryRow>[0]) => {
+      if (props.variant === "board") boardFooterItemIds.push(props.itemIds);
+      return <actual.SummaryRow {...props} />;
+    },
+  };
+});
 
 vi.mock("@/components/boards/presence/PresenceRing", () => ({
   PresenceRing: ({ target }: { target: string }) => {
@@ -208,6 +227,7 @@ function rowBodiesRendered() {
 }
 
 function resetProbes() {
+  boardFooterItemIds.length = 0;
   cellRenders.length = 0;
   rowBodyRenders.length = 0;
 }
@@ -275,6 +295,24 @@ describe("BoardTable render budget", () => {
     expect(rowsRendered()).toEqual(["i1"]);
     // …and only its own cells: one per column, nothing more.
     expect(cellRenders.length).toBe(COLUMN_IDS.length);
+  });
+
+  it("keeps the Board Total footer's itemIds stable across an unrelated re-render", () => {
+    renderBoard();
+    const scroller = screen.getByTestId("board-scroll");
+    Object.defineProperty(scroller, "scrollLeft", {
+      configurable: true,
+      value: 24,
+    });
+    const before = boardFooterItemIds.length;
+    expect(before).toBeGreaterThan(0);
+
+    fireEvent.scroll(scroller);
+
+    // The table really re-rendered (otherwise this proves nothing)…
+    expect(boardFooterItemIds.length).toBeGreaterThan(before);
+    // …and handed the footer the very same array.
+    expect(new Set(boardFooterItemIds).size).toBe(1);
   });
 
   it("a horizontal scroll re-renders no cells", () => {

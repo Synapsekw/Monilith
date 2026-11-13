@@ -37,7 +37,7 @@ function openMenuAndSelect(entry: "Rename" | "Delete") {
 }
 
 describe("BoardFolderMenu", () => {
-  it("renames the folder with the trimmed new name, then refreshes", async () => {
+  it("renames the folder with the trimmed new name — and leaves the re-render to the action", async () => {
     openMenuAndSelect("Rename");
 
     const input = await screen.findByLabelText("Folder name");
@@ -50,7 +50,14 @@ describe("BoardFolderMenu", () => {
         name: "Acme Rebrand 2026",
       }),
     );
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Rename folder" }),
+      ).not.toBeInTheDocument(),
+    );
+    // renameFolder's updateTag(foldersTag) ships the re-rendered route in the
+    // action response; a client refresh on top would be a second full render.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("does not call renameFolder when the name is unchanged", async () => {
@@ -83,7 +90,7 @@ describe("BoardFolderMenu", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("deletes the folder once the confirmation is accepted, then refreshes", async () => {
+  it("deletes the folder once the confirmation is accepted, without a client refresh", async () => {
     openMenuAndSelect("Delete");
 
     // Confirming is a second, deliberate click — selecting Delete in the menu
@@ -96,7 +103,12 @@ describe("BoardFolderMenu", () => {
     await waitFor(() =>
       expect(deleteFolder).toHaveBeenCalledWith({ folderId: "f1" }),
     );
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    // A real delete expires the folders tag server-side — the action response
+    // already carries the sidebar without the folder.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("does not delete when the confirmation is cancelled", async () => {
@@ -130,7 +142,8 @@ describe("BoardFolderMenu", () => {
     // longer exists." with Cancel as the only way forward, and the sidebar kept
     // rendering the ghost folder until a full reload. But that outcome IS the
     // user's goal — the folder is gone. Close, and refresh so the stale row
-    // goes with it.
+    // goes with it. This arm KEEPS its client refresh: deleteFolder returned
+    // before any updateTag, so nothing else would re-render the sidebar.
     deleteFolder.mockResolvedValue({ ok: false, error: FOLDER_GONE_ERROR });
     openMenuAndSelect("Delete");
 
@@ -140,6 +153,6 @@ describe("BoardFolderMenu", () => {
     await waitFor(() =>
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
-    expect(refresh).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

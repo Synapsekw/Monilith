@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { isValidTimeZone } from "@/lib/validations/org";
 import { THEME_PRESET_IDS, THEME_REACH_IDS } from "@/lib/theme/presets";
 

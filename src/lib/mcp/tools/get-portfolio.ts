@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { getPortfolioRowsCore } from "@/lib/portfolios/queries";
 import { serverToday } from "@/lib/portfolios/rollup";
 import { listOrgMemberProfiles } from "@/lib/mcp/org-scope";

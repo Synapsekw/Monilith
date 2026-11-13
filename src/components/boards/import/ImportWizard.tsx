@@ -303,13 +303,17 @@ export function ImportWizard({
 
       onOpenChange(false);
       resetState();
-      // The "new" arm lands on the freshly created board; the "existing" arm
-      // is already on that board's page, so it only needs a data refresh —
-      // no navigation (gotcha-09: never RSC-navigate for in-page data).
+      // The "new" arm lands on the freshly created board: push only — the
+      // action expired the importer's boards tag, so its response already
+      // re-rendered the sidebar and the push fetches the new board fresh. The
+      // "existing" arm is already on that board's page, so it only needs a
+      // data refresh — no navigation (gotcha-09: never RSC-navigate for
+      // in-page data).
       if (destination.type === "new") {
         router.push(`/boards/${res.data.boardId}`);
+      } else {
+        router.refresh();
       }
-      router.refresh();
     });
   }
 

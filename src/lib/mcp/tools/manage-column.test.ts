@@ -52,7 +52,7 @@ describe("manageColumnDescriptor classification", () => {
 // exercises it via a fresh discriminated union with the identical shape it
 // documents — the batch cap and per-kind rejection are the two properties
 // under test.
-import { z } from "zod";
+import * as z from "zod";
 import { columnKindSchema } from "@/lib/validations/boards";
 
 const uuid = z.string().uuid();

@@ -11,7 +11,11 @@ const {
   redirect,
   serverEnv,
   headerMap,
+  authSignOut,
+  cookieDelete,
 } = vi.hoisted(() => ({
+  authSignOut: vi.fn(),
+  cookieDelete: vi.fn(),
   getUser: vi.fn(),
   updateUser: vi.fn(),
   updateUserById: vi.fn(),
@@ -35,6 +39,7 @@ vi.mock("@/lib/supabase/server", () => ({
       signUp,
       signInWithPassword,
       resetPasswordForEmail,
+      signOut: authSignOut,
     },
   }),
 }));
@@ -53,12 +58,17 @@ vi.mock("@/lib/rate-limit/auth-rate-limit", () => ({
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
 }));
-vi.mock("next/headers", () => ({ headers: async () => headerMap }));
+vi.mock("next/headers", () => ({
+  headers: async () => headerMap,
+  cookies: async () => ({ delete: cookieDelete }),
+}));
 
 import {
   changeOwnPassword,
   requestPasswordReset,
   signIn as signInAction,
+  signOut as signOutAction,
+  signOutEverywhere,
   signUp as signUpAction,
 } from "./actions";
 
@@ -77,6 +87,8 @@ beforeEach(() => {
   resetPasswordForEmail.mockReset().mockResolvedValue({ error: null });
   checkRateLimit.mockReset().mockResolvedValue({ allowed: true });
   redirect.mockClear();
+  authSignOut.mockReset().mockResolvedValue({ error: null });
+  cookieDelete.mockReset();
   serverEnv.value = {};
   headerMap.clear();
 });
@@ -405,5 +417,22 @@ describe("signUp — next handling", () => {
     await expect(
       signUpAction({}, signupFdWithNext("/boards/b1")),
     ).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+});
+
+describe("sign out — forgets the last-visited board", () => {
+  // The proxy sends an authenticated `/` straight to the board this cookie
+  // names. Left behind, it would aim the next person to sign in on this
+  // browser at a board they may not be able to read.
+  it("signOut clears the last-board cookie before redirecting to /login", async () => {
+    await expect(signOutAction()).rejects.toThrow("REDIRECT:/login");
+    expect(authSignOut).toHaveBeenCalledWith();
+    expect(cookieDelete).toHaveBeenCalledWith("pulse_last_board");
+  });
+
+  it("signOutEverywhere clears it too", async () => {
+    await expect(signOutEverywhere()).rejects.toThrow("REDIRECT:/login");
+    expect(authSignOut).toHaveBeenCalledWith({ scope: "global" });
+    expect(cookieDelete).toHaveBeenCalledWith("pulse_last_board");
   });
 });

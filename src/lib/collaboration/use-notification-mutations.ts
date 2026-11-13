@@ -19,6 +19,29 @@ export function useNotificationMutations(userId: string) {
   const qc = useQueryClient();
   const key = notificationsKey(userId);
 
+  /**
+   * After a successful mark-read there is normally NOTHING to refetch:
+   *
+   *  - the optimistic patch in `onMutate` already put the cache in its final
+   *    state (`read_at` is only ever truthiness-tested, so the placeholder
+   *    stamp is as good as the server's timestamp for every reader), and
+   *  - the realtime UPDATE handler in `use-notifications.ts` swaps in the real
+   *    server row — one event per row, so it covers mark-one and mark-all.
+   *
+   * Invalidating here re-read the whole 30-row list after every click, and
+   * could flicker a just-read row back to unread: a second mark-read queues
+   * behind the first (Server Actions dispatch one at a time), so the first
+   * one's refetch could land before the second one's write.
+   *
+   * The one case that still refetches: there was no cached list to patch (the
+   * mutation ran before the list loaded, and `cancelQueries` may have dropped
+   * that initial load) — then a refetch is the only way the list arrives.
+   */
+  function settle(c: Ctx | undefined) {
+    if (c?.previous) return;
+    return qc.invalidateQueries({ queryKey: key });
+  }
+
   const readOne = useMutation<void, Error, { id: string }, Ctx>({
     mutationFn: async (v) => {
       assertOnline();
@@ -35,7 +58,7 @@ export function useNotificationMutations(userId: string) {
     onError: (_e, _v, c) => {
       if (c?.previous) qc.setQueryData(key, c.previous);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: (_d, _v, c) => settle(c),
   });
 
   const readAll = useMutation<void, Error, void, Ctx>({
@@ -54,7 +77,7 @@ export function useNotificationMutations(userId: string) {
     onError: (_e, _v, c) => {
       if (c?.previous) qc.setQueryData(key, c.previous);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: (_d, _v, c) => settle(c),
   });
 
   return {

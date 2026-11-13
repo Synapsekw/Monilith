@@ -39,8 +39,9 @@ export function NewPortfolioDialog() {
         return;
       }
       setOpen(false);
+      // push only: createPortfolio's revalidatePath already invalidated the
+      // client's cached routes; the push fetches the new portfolio fresh.
       router.push(`/portfolios/${res.data.portfolio.id}`);
-      router.refresh();
     });
   }
 

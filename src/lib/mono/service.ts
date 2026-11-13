@@ -1,6 +1,6 @@
 import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { z } from "zod";
+import * as z from "zod";
 import {
   monoEnvironmentSchema,
   resolveMonoOrigin,

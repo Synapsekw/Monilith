@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { isAllowedRedirectUri } from "@/lib/mcp/oauth/redirect-uri";
 
 /**

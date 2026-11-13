@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
+import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";

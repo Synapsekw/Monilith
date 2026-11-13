@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /** Server Action input boundary for touchBoardVisit(boardId). */
 export const touchBoardVisitSchema = z.object({

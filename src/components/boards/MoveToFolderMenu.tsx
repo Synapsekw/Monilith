@@ -1,7 +1,6 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { FolderInput } from "lucide-react";
 
 import { moveBoardToFolder } from "@/lib/folders/actions";
@@ -29,7 +28,6 @@ export function MoveToFolderMenu({
   folders: FolderSummary[];
   currentFolderId: string | null;
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
 
   function move(folderId: string | null) {
@@ -40,9 +38,9 @@ export function MoveToFolderMenu({
         showMutationError("Couldn't move the board.", new Error(res.error));
         return;
       }
-      // This one DOES change server data (unlike a folder collapse), so a
-      // targeted refresh is correct here — not the gotcha-09 case.
-      router.refresh();
+      // This one DOES change server data (unlike a folder collapse) — and
+      // moveBoardToFolder's updateTag(foldersTag) re-renders the route inside
+      // the action response, so no client router.refresh() follows it.
     });
   }
 

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Pure Gateway-feed → catalog-row projection. Deliberately free of `server-only`,
