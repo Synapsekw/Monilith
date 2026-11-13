@@ -5,12 +5,16 @@ const {
   readAccountApproval,
   finishAccountSetup,
   updateTag,
+  revalidatePath,
+  calls,
   redirect,
 } = vi.hoisted(() => ({
   getUser: vi.fn(),
   readAccountApproval: vi.fn(),
   finishAccountSetup: vi.fn(),
   updateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+  calls: [] as string[],
   // Real redirect() throws to halt.
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -22,9 +26,18 @@ vi.mock("@/lib/auth/approval", () => ({
   readAccountApproval: (id: string) => readAccountApproval(id),
 }));
 vi.mock("@/lib/auth/finish-setup", () => ({
-  finishAccountSetup: (...a: unknown[]) => finishAccountSetup(...a),
+  finishAccountSetup: (...a: unknown[]) => {
+    calls.push("finishAccountSetup");
+    return finishAccountSetup(...a);
+  },
 }));
-vi.mock("next/cache", () => ({ updateTag: (t: string) => updateTag(t) }));
+vi.mock("next/cache", () => ({
+  updateTag: (t: string) => {
+    calls.push("updateTag");
+    updateTag(t);
+  },
+  revalidatePath: (p: string) => revalidatePath(p),
+}));
 vi.mock("next/navigation", () => ({ redirect: (u: string) => redirect(u) }));
 
 import { checkApproval } from "./actions";
@@ -36,6 +49,8 @@ beforeEach(() => {
   readAccountApproval.mockReset().mockResolvedValue("pending");
   finishAccountSetup.mockReset().mockResolvedValue({ ok: true });
   updateTag.mockReset();
+  revalidatePath.mockReset();
+  calls.length = 0;
   redirect.mockClear();
 });
 
@@ -58,6 +73,7 @@ describe("checkApproval", () => {
       expect(finishAccountSetup).not.toHaveBeenCalled();
       expect(updateTag).not.toHaveBeenCalled();
       expect(redirect).not.toHaveBeenCalled();
+      expect(revalidatePath).toHaveBeenCalledWith("/pending-approval");
     },
   );
 
@@ -67,6 +83,9 @@ describe("checkApproval", () => {
     expect(updateTag).toHaveBeenCalledWith("account-approval:u1");
     expect(finishAccountSetup).toHaveBeenCalledTimes(1);
     expect(finishAccountSetup).toHaveBeenCalledWith(user);
+    // The tag is cleared only after setup has returned ok.
+    expect(calls).toEqual(["finishAccountSetup", "updateTag"]);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("returns a friendly failure and does not redirect when provisioning fails", async () => {
@@ -77,6 +96,7 @@ describe("checkApproval", () => {
       error: "We couldn't finish setting up your account. Please try again.",
     });
     expect(redirect).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
   });
 
   it("fails without setup when the status read fails", async () => {

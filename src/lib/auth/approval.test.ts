@@ -82,6 +82,7 @@ import {
   enforceApproval,
   getAccountApproval,
   readAccountApproval,
+  resolveAccountApproval,
   PENDING_APPROVAL_PATH,
 } from "./approval";
 
@@ -250,5 +251,31 @@ describe("enforceApproval", () => {
       "Could not verify account approval.",
     );
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveAccountApproval", () => {
+  it("returns approved from the cache without a live read", async () => {
+    db.script = ["approved"];
+    expect(await resolveAccountApproval("u1")).toBe("approved");
+    expect(db.calls).toHaveLength(1);
+  });
+
+  it("returns the live value when the cached one is pending", async () => {
+    db.script = ["pending", "approved"];
+    expect(await resolveAccountApproval("u1")).toBe("approved");
+    expect(db.calls).toHaveLength(2);
+  });
+
+  it("returns the live value when it is still not approved", async () => {
+    db.script = ["pending", "rejected"];
+    expect(await resolveAccountApproval("u1")).toBe("rejected");
+  });
+
+  it("propagates a failing live read", async () => {
+    db.script = ["pending", "__error__"];
+    await expect(resolveAccountApproval("u1")).rejects.toThrow(
+      "Could not verify account approval.",
+    );
   });
 });

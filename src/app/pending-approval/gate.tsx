@@ -42,7 +42,7 @@ export async function PendingApprovalGate() {
         <CardDescription>
           {rejected
             ? "An administrator reviewed your account and did not approve it. If you think this is a mistake, contact your administrator."
-            : "An administrator has to approve your account before you can use Monolith. Check back soon, or come back later."}
+            : "An administrator has to approve your account before you can use Monolith. You can close this page and sign in again later."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -50,7 +50,7 @@ export async function PendingApprovalGate() {
           Signed in as{" "}
           <span className="text-foreground font-medium">{user.email}</span>
         </p>
-        <CheckApprovalForm />
+        <CheckApprovalForm rejected={rejected} />
         <form action={signOut}>
           <Button type="submit" variant="ghost" className="w-full">
             Sign out

@@ -4,9 +4,9 @@ const {
   exchangeCodeForSession,
   redeemInvitationsForUser,
   provisionAccountForUser,
-  getAccountApproval,
+  resolveAccountApproval,
 } = vi.hoisted(() => ({
-  getAccountApproval: vi.fn(),
+  resolveAccountApproval: vi.fn(),
   exchangeCodeForSession: vi.fn(),
   redeemInvitationsForUser: vi.fn(),
   provisionAccountForUser: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("@/lib/auth/redeem", () => ({
 // src/lib/auth/approval.test.ts; drive only its status here.
 vi.mock("@/lib/auth/approval", () => ({
   PENDING_APPROVAL_PATH: "/pending-approval",
-  getAccountApproval: (...a: unknown[]) => getAccountApproval(...a),
+  resolveAccountApproval: (...a: unknown[]) => resolveAccountApproval(...a),
 }));
 
 import { NextRequest } from "next/server";
@@ -45,7 +45,7 @@ beforeEach(() => {
   });
   redeemInvitationsForUser.mockReset().mockResolvedValue(1);
   provisionAccountForUser.mockReset().mockResolvedValue({ error: null });
-  getAccountApproval.mockReset().mockResolvedValue("approved");
+  resolveAccountApproval.mockReset().mockResolvedValue("approved");
 });
 
 describe("GET /auth/callback — next handling", () => {
@@ -100,11 +100,11 @@ describe("GET /auth/callback — account approval", () => {
   it.each(["pending", "rejected"] as const)(
     "sends a %s account to the waiting screen and runs no setup",
     async (status) => {
-      getAccountApproval.mockResolvedValue(status);
+      resolveAccountApproval.mockResolvedValue(status);
 
       const res = await call("/auth/callback?code=abc&next=%2Fboards%2Fb1");
 
-      expect(getAccountApproval).toHaveBeenCalledWith("u1");
+      expect(resolveAccountApproval).toHaveBeenCalledWith("u1");
       expect(res.headers.get("location")).toBe(
         "http://localhost/pending-approval",
       );
@@ -112,6 +112,59 @@ describe("GET /auth/callback — account approval", () => {
       expect(provisionAccountForUser).not.toHaveBeenCalled();
     },
   );
+
+  it("runs setup when the cached status was pending but the live one is approved", async () => {
+    // resolveAccountApproval is the cached-then-live rule; the route must use
+    // it (not the raw cached read) so a just-approved account is not bounced.
+    resolveAccountApproval.mockResolvedValue("approved");
+    redeemInvitationsForUser.mockResolvedValue(0);
+
+    const res = await call("/auth/callback?code=abc&next=%2Fboards%2Fb1");
+
+    expect(resolveAccountApproval).toHaveBeenCalledWith("u1");
+    expect(redeemInvitationsForUser).toHaveBeenCalledTimes(1);
+    expect(res.headers.get("location")).toBe("http://localhost/boards/b1");
+  });
+
+  it.each(["pending", "rejected"] as const)(
+    "lets a %s account through to a password-recovery link, with no setup",
+    async (status) => {
+      resolveAccountApproval.mockResolvedValue(status);
+
+      const res = await call(
+        "/auth/callback?code=abc&next=" +
+          encodeURIComponent("/change-password?recovery=1"),
+      );
+
+      expect(res.headers.get("location")).toBe(
+        "http://localhost/change-password?recovery=1",
+      );
+      expect(redeemInvitationsForUser).not.toHaveBeenCalled();
+      expect(provisionAccountForUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not treat a look-alike path as a recovery link", async () => {
+    resolveAccountApproval.mockResolvedValue("pending");
+
+    const res = await call(
+      "/auth/callback?code=abc&next=" + encodeURIComponent("/change-passwordx"),
+    );
+
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/pending-approval",
+    );
+  });
+
+  it("still sends an unapproved account with a hostile next to the waiting screen", async () => {
+    resolveAccountApproval.mockResolvedValue("pending");
+
+    const res = await call("/auth/callback?code=abc&next=%2F%2Fevil.com");
+
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/pending-approval",
+    );
+  });
 
   it("runs setup for an approved account and resumes next", async () => {
     redeemInvitationsForUser.mockResolvedValue(0);
@@ -135,7 +188,7 @@ describe("GET /auth/callback — account approval", () => {
   });
 
   it("bounces to the login error on a failed status read and runs no setup", async () => {
-    getAccountApproval.mockRejectedValue(
+    resolveAccountApproval.mockRejectedValue(
       new Error("Could not verify account approval."),
     );
 
@@ -156,6 +209,6 @@ describe("GET /auth/callback — account approval", () => {
 
     await call("/auth/callback?code=abc");
 
-    expect(getAccountApproval).not.toHaveBeenCalled();
+    expect(resolveAccountApproval).not.toHaveBeenCalled();
   });
 });

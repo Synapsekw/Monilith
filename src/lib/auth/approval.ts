@@ -61,6 +61,18 @@ async function queryApproval(userId: string): Promise<ApprovalStatus> {
   return "pending";
 }
 
+/**
+ * The status to decide on: the cached value when it is "approved", otherwise
+ * the live row (a stale cached "pending" held by this instance must not bounce
+ * a just-approved account). A read error propagates.
+ */
+export async function resolveAccountApproval(
+  userId: string,
+): Promise<ApprovalStatus> {
+  if ((await getAccountApproval(userId)) === "approved") return "approved";
+  return readAccountApproval(userId);
+}
+
 /** Send an account that is not approved to the waiting screen. Only
  * "approved" is trusted from the cache: any other cached status is re-checked
  * live (a just-approved account must not bounce off a stale "pending" held by
@@ -69,8 +81,7 @@ async function queryApproval(userId: string): Promise<ApprovalStatus> {
 export async function enforceApproval(
   user: Pick<SessionUser, "id">,
 ): Promise<void> {
-  if ((await getAccountApproval(user.id)) === "approved") return;
-  if ((await readAccountApproval(user.id)) !== "approved") {
+  if ((await resolveAccountApproval(user.id)) !== "approved") {
     redirect(PENDING_APPROVAL_PATH);
   }
 }

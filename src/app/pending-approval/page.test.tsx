@@ -50,6 +50,10 @@ describe("PendingApprovalGate", () => {
       screen.getByText("Your account is waiting for approval"),
     ).toBeTruthy();
     expect(screen.getByText(/administrator has to approve/i)).toBeTruthy();
+    expect(
+      screen.getByText(/You can close this page and sign in again later\./),
+    ).toBeTruthy();
+    expect(screen.queryByText(/check back soon/i)).toBeNull();
     expect(screen.getByText("new@example.com")).toBeTruthy();
     expect(screen.getByRole("button", { name: /check again/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();

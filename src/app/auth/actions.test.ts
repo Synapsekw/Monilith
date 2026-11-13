@@ -13,7 +13,9 @@ const {
   headerMap,
   authSignOut,
   cookieDelete,
+  readAccountApproval,
 } = vi.hoisted(() => ({
+  readAccountApproval: vi.fn(),
   authSignOut: vi.fn(),
   cookieDelete: vi.fn(),
   getUser: vi.fn(),
@@ -55,6 +57,10 @@ vi.mock("@/lib/rate-limit/auth-rate-limit", () => ({
     error: "Too many attempts. Please try again in about 1 minute.",
   }),
 }));
+vi.mock("@/lib/auth/approval", () => ({
+  PENDING_APPROVAL_PATH: "/pending-approval",
+  readAccountApproval: (...a: unknown[]) => readAccountApproval(...a),
+}));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
 }));
@@ -89,6 +95,7 @@ beforeEach(() => {
   redirect.mockClear();
   authSignOut.mockReset().mockResolvedValue({ error: null });
   cookieDelete.mockReset();
+  readAccountApproval.mockReset().mockResolvedValue("approved");
   serverEnv.value = {};
   headerMap.clear();
 });
@@ -369,6 +376,75 @@ describe("signIn — next handling", () => {
 
     expect(res.error).toBe("Invalid login credentials");
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("signIn / signUp — account approval", () => {
+  const signedIn = () =>
+    signInWithPassword.mockResolvedValue({
+      data: { user: { id: "u1" }, session: { access_token: "t" } },
+      error: null,
+    });
+
+  it.each(["pending", "rejected"] as const)(
+    "signIn sends a %s account straight to the waiting screen",
+    async (status) => {
+      signedIn();
+      readAccountApproval.mockResolvedValue(status);
+      await expect(
+        signInAction({}, loginFdWithNext("/boards/b1")),
+      ).rejects.toThrow("REDIRECT:/pending-approval");
+      expect(readAccountApproval).toHaveBeenCalledWith("u1");
+    },
+  );
+
+  it("signIn keeps the normal next for an approved account", async () => {
+    signedIn();
+    await expect(
+      signInAction({}, loginFdWithNext("/boards/b1")),
+    ).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+
+  it("signIn is not blocked by a failed status read", async () => {
+    signedIn();
+    readAccountApproval.mockRejectedValue(new Error("db down"));
+    await expect(
+      signInAction({}, loginFdWithNext("/boards/b1")),
+    ).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+
+  it("signIn does not read the status when the credentials are wrong", async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: "Invalid login credentials" },
+    });
+    await signInAction({}, loginFdWithNext("/boards/b1"));
+    expect(readAccountApproval).not.toHaveBeenCalled();
+  });
+
+  it("signUp with an immediate session sends a pending account to the waiting screen", async () => {
+    signUp.mockResolvedValue({
+      data: { user: { id: "u2" }, session: { access_token: "t" } },
+      error: null,
+    });
+    readAccountApproval.mockResolvedValue("pending");
+    const f = signupFd();
+    f.set("next", "/boards/b1");
+    await expect(signUpAction({}, f)).rejects.toThrow(
+      "REDIRECT:/pending-approval",
+    );
+    expect(readAccountApproval).toHaveBeenCalledWith("u2");
+  });
+
+  it("signUp with an immediate session is not blocked by a failed read", async () => {
+    signUp.mockResolvedValue({
+      data: { user: { id: "u2" }, session: { access_token: "t" } },
+      error: null,
+    });
+    readAccountApproval.mockRejectedValue(new Error("db down"));
+    const f = signupFd();
+    f.set("next", "/boards/b1");
+    await expect(signUpAction({}, f)).rejects.toThrow("REDIRECT:/boards/b1");
   });
 });
 

@@ -4,18 +4,27 @@ import { render, screen } from "@testing-library/react";
 const {
   requireUser,
   getUserOrgs,
-  redeemInvitationsForUser,
+  finishAccountSetup,
+  orgsAfter,
   redirect,
   sessionClient,
 } = vi.hoisted(() => ({
   requireUser: vi.fn(),
   getUserOrgs: vi.fn(),
-  redeemInvitationsForUser: vi.fn(),
+  finishAccountSetup: vi.fn(),
+  orgsAfter: { value: [] as { id: string }[] },
   // Real next/navigation redirect() throws to halt rendering — mirror that.
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
-  sessionClient: { tag: "session-client" },
+  sessionClient: {
+    tag: "session-client",
+    from: () => ({
+      select: () => ({
+        limit: async () => ({ data: orgsAfter.value, error: null }),
+      }),
+    }),
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,8 +35,8 @@ vi.mock("@/lib/auth/session", () => ({
   requireUser: () => requireUser(),
   getUserOrgs: () => getUserOrgs(),
 }));
-vi.mock("@/lib/auth/redeem", () => ({
-  redeemInvitationsForUser: (...a: unknown[]) => redeemInvitationsForUser(...a),
+vi.mock("@/lib/auth/finish-setup", () => ({
+  finishAccountSetup: (...a: unknown[]) => finishAccountSetup(...a),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => sessionClient,
@@ -42,7 +51,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   requireUser.mockResolvedValue({ id: "u1" });
   getUserOrgs.mockResolvedValue([]);
-  redeemInvitationsForUser.mockResolvedValue(0);
+  orgsAfter.value = [];
+  finishAccountSetup.mockResolvedValue({ ok: true });
 });
 
 describe("Onboarding gate", () => {
@@ -52,25 +62,40 @@ describe("Onboarding gate", () => {
     await expect(OnboardingGate()).rejects.toThrow("REDIRECT:/");
   });
 
-  it("sends a user home once a pending invitation is redeemed", async () => {
-    redeemInvitationsForUser.mockResolvedValue(1);
+  it("sends a user home once setup created or redeemed an organisation", async () => {
+    orgsAfter.value = [{ id: "o1" }];
 
     await expect(OnboardingGate()).rejects.toThrow("REDIRECT:/");
-    expect(redeemInvitationsForUser).toHaveBeenCalledWith(sessionClient);
+    expect(finishAccountSetup).toHaveBeenCalledWith(
+      { id: "u1" },
+      sessionClient,
+    );
   });
 
-  it("shows the form when no invitation was redeemed", async () => {
+  it("shows the form when setup ran but created nothing (no org name)", async () => {
     render(await OnboardingGate());
 
-    expect(redeemInvitationsForUser).toHaveBeenCalledTimes(1);
+    expect(finishAccountSetup).toHaveBeenCalledTimes(1);
     expect(
       screen.getByRole("form", { name: "Create your organization" }),
     ).toBeInTheDocument();
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("falls through to the form when redeeming fails", async () => {
-    redeemInvitationsForUser.mockRejectedValue(new Error("rpc down"));
+  it("falls through to the form when provisioning fails", async () => {
+    finishAccountSetup.mockResolvedValue({ ok: false, reason: "provisioning" });
+    orgsAfter.value = [{ id: "o1" }];
+
+    render(await OnboardingGate());
+
+    expect(
+      screen.getByRole("form", { name: "Create your organization" }),
+    ).toBeInTheDocument();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the form when setup throws", async () => {
+    finishAccountSetup.mockRejectedValue(new Error("rpc down"));
 
     render(await OnboardingGate());
 
@@ -87,6 +112,6 @@ describe("Onboarding gate", () => {
       "REDIRECT:/pending-approval",
     );
     expect(getUserOrgs).not.toHaveBeenCalled();
-    expect(redeemInvitationsForUser).not.toHaveBeenCalled();
+    expect(finishAccountSetup).not.toHaveBeenCalled();
   });
 });

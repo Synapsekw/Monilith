@@ -7,8 +7,14 @@ import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/actions/result";
 
 /** "Check again": posts to the Server Action; no polling. While the account is
- * still waiting the action returns ok and the page simply re-renders. */
-export function CheckApprovalForm() {
+ * still waiting the action returns ok, the page re-renders, and a short line
+ * confirms the check ran. For a rejected account the page message itself is
+ * the feedback, so the line is not shown. */
+export function CheckApprovalForm({
+  rejected = false,
+}: {
+  rejected?: boolean;
+}) {
   const [state, formAction, pending] = useActionState<
     ActionResult | null,
     FormData
@@ -21,6 +27,11 @@ export function CheckApprovalForm() {
           className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-sm"
         >
           {state.error}
+        </p>
+      ) : null}
+      {state?.ok && !rejected ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          Still waiting for approval.
         </p>
       ) : null}
       <Button
