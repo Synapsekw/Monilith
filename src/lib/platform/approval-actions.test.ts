@@ -8,23 +8,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 type Row = Record<string, unknown>;
-const {
-  store,
-  writes,
-  reads,
-  failUpsert,
-  getUser,
-  getUserById,
-  isPlatformAdmin,
-} = vi.hoisted(() => ({
-  store: { account_approvals: [] as Row[], admin_audit_log: [] as Row[] },
-  writes: [] as { table: string; op: string; payload: unknown }[],
-  reads: [] as { table: string; filters: [string, unknown][] }[],
-  failUpsert: { on: false },
-  getUser: vi.fn(),
-  getUserById: vi.fn(),
-  isPlatformAdmin: vi.fn(),
-}));
+const { store, writes, reads, fail, getUser, getUserById, isPlatformAdmin } =
+  vi.hoisted(() => ({
+    store: { account_approvals: [] as Row[], admin_audit_log: [] as Row[] },
+    writes: [] as { table: string; op: string; payload: unknown }[],
+    reads: [] as { table: string; filters: [string, unknown][] }[],
+    fail: { write: false, read: false, audit: false },
+    getUser: vi.fn(),
+    getUserById: vi.fn(),
+    isPlatformAdmin: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser } }),
@@ -36,7 +29,7 @@ vi.mock("@/lib/supabase/service", () => ({
     from: (table: keyof typeof store) => ({
       upsert: async (row: Row, opts?: { onConflict?: string }) => {
         writes.push({ table, op: "upsert", payload: row });
-        if (failUpsert.on) return { error: { message: "boom" } };
+        if (fail.write) return { error: { message: "boom" } };
         const key = opts?.onConflict ?? "id";
         const rows = store[table];
         const i = rows.findIndex((r) => r[key] === row[key]);
@@ -59,6 +52,7 @@ vi.mock("@/lib/supabase/service", () => ({
             const row = store[table].find((r) =>
               read.filters.every(([c, v]) => r[c] === v),
             );
+            if (fail.read) return { data: null, error: { message: "boom" } };
             return { data: row ? { ...row } : null, error: null };
           },
         };
@@ -66,8 +60,47 @@ vi.mock("@/lib/supabase/service", () => ({
       },
       insert: async (row: Row) => {
         writes.push({ table, op: "insert", payload: row });
+        if (table === "admin_audit_log" && fail.audit)
+          return { error: { message: "audit boom" } };
+        if (table === "account_approvals" && fail.write)
+          return { error: { message: "boom" } };
         store[table].push({ ...row });
         return { error: null };
+      },
+      // update(...).eq(...).neq(...).select(...): the filters are RECORDED and
+      // APPLIED, so dropping `.neq('status','approved')` would overwrite an
+      // approved row and fail the tests below.
+      update: (patch: Row) => {
+        const filters: ["eq" | "neq", string, unknown][] = [];
+        const q = {
+          eq(column: string, value: unknown) {
+            filters.push(["eq", column, value]);
+            return q;
+          },
+          neq(column: string, value: unknown) {
+            filters.push(["neq", column, value]);
+            return q;
+          },
+          async select(columns: string) {
+            writes.push({
+              table,
+              op: "update",
+              payload: { patch, filters, columns },
+            });
+            if (fail.write) return { data: null, error: { message: "boom" } };
+            const hit = store[table].filter((r) =>
+              filters.every(([kind, c, v]) =>
+                kind === "eq" ? r[c] === v : r[c] !== v,
+              ),
+            );
+            for (const r of hit) Object.assign(r, patch);
+            return {
+              data: hit.map((r) => ({ user_id: r.user_id })),
+              error: null,
+            };
+          },
+        };
+        return q;
       },
     }),
   }),
@@ -94,7 +127,9 @@ beforeEach(() => {
   store.admin_audit_log = [];
   writes.length = 0;
   reads.length = 0;
-  failUpsert.on = false;
+  fail.write = false;
+  fail.read = false;
+  fail.audit = false;
   getUser.mockReset().mockResolvedValue({ data: { user: { id: actor } } });
   getUserById.mockReset().mockResolvedValue({
     data: { user: { id: target, email: "new@example.com" } },
@@ -181,7 +216,7 @@ describe.each([
   });
 
   it("fails on a database error with no audit row and no tag cleared", async () => {
-    failUpsert.on = true;
+    fail.write = true;
     const r = await action({ userId: target });
     expect(r.ok).toBe(false);
     expect(store.admin_audit_log).toEqual([]);
@@ -205,18 +240,86 @@ describe("rejecting an account that is already approved", () => {
     ];
     const r = await platformRejectUser({ userId: target });
     expect(r).toEqual({ ok: false, error: message });
-    expect(writes).toEqual([]);
+    // The guarded update is attempted but matches nothing; no insert/upsert.
+    expect(writes.filter((w) => w.op !== "update")).toEqual([]);
     expect(store.admin_audit_log).toEqual([]);
     expect(rowOf(target)?.status).toBe("approved");
     expect(updateTag).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("reads only the target's own row", async () => {
+  it("rejects a pending account with one guarded update and no read", async () => {
+    await platformRejectUser({ userId: target });
+    expect(reads).toEqual([]);
+    const updates = writes.filter((w) => w.op === "update");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.payload).toMatchObject({
+      filters: [
+        ["eq", "user_id", target],
+        ["neq", "status", "approved"],
+      ],
+    });
+  });
+
+  it("reads only the target's own row after an update that matched nothing", async () => {
+    store.account_approvals = [
+      {
+        user_id: target,
+        status: "approved",
+        decided_at: "t",
+        decided_by: actor,
+      },
+    ];
     await platformRejectUser({ userId: target });
     expect(reads).toEqual([
       { table: "account_approvals", filters: [["user_id", target]] },
     ]);
+  });
+
+  it("never overwrites an approved row (the guard is in the update)", async () => {
+    store.account_approvals = [
+      {
+        user_id: target,
+        status: "approved",
+        decided_at: "t",
+        decided_by: actor,
+      },
+    ];
+    await platformRejectUser({ userId: target });
+    expect(rowOf(target)).toMatchObject({
+      status: "approved",
+      decided_at: "t",
+    });
+  });
+
+  it("fails on a failed update with no audit row and no tag cleared", async () => {
+    fail.write = true;
+    const r = await platformRejectUser({ userId: target });
+    expect(r).toEqual({ ok: false, error: "Could not reject that account." });
+    expect(store.admin_audit_log).toEqual([]);
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("fails on a failed follow-up read with no audit row and no tag cleared", async () => {
+    store.account_approvals = [];
+    fail.read = true;
+    const r = await platformRejectUser({ userId: target });
+    expect(r).toEqual({ ok: false, error: "Could not reject that account." });
+    expect(writes.filter((w) => w.op === "insert")).toEqual([]);
+    expect(store.admin_audit_log).toEqual([]);
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("inserts a rejected row when the account has none", async () => {
+    store.account_approvals = [];
+    await platformRejectUser({ userId: target });
+    expect(writes).toContainEqual(
+      expect.objectContaining({ table: "account_approvals", op: "insert" }),
+    );
+    expect(rowOf(target)).toMatchObject({
+      status: "rejected",
+      decided_by: actor,
+    });
   });
 
   it("does not read before approving", async () => {
@@ -251,6 +354,32 @@ describe("rejecting an account that is already approved", () => {
       },
     ];
     expect((await platformApproveUser({ userId: target })).ok).toBe(true);
+  });
+});
+
+describe.each([
+  ["approve", platformApproveUser],
+  ["reject", platformRejectUser],
+] as const)("%s — audit trail", (_name, action) => {
+  it("logs a failed audit insert, still returns ok and clears the tag", async () => {
+    fail.audit = true;
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await action({ userId: target });
+    expect(r.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith(`account-approval:${target}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(log).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
+
+  it("records a null target_email when the user lookup fails", async () => {
+    getUserById.mockResolvedValue({
+      data: { user: null },
+      error: { message: "gone" },
+    });
+    const r = await action({ userId: target });
+    expect(r.ok).toBe(true);
+    expect(store.admin_audit_log[0]).toMatchObject({ target_email: null });
   });
 });
 

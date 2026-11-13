@@ -1,6 +1,10 @@
 import Form from "next/form";
 import { ChevronRight } from "lucide-react";
-import { listPendingAccounts, searchUsers } from "@/lib/platform/queries";
+import {
+  countPendingAccounts,
+  listPendingAccounts,
+  searchUsers,
+} from "@/lib/platform/queries";
 import { Pager } from "@/components/platform/pager";
 import { USER_ROW_GRID, UserRow } from "@/components/admin/user-row";
 import { PendingAccounts } from "@/components/admin/pending-accounts";
@@ -29,13 +33,15 @@ export default async function AdminUsers({
   // on — list them collapsed on the first page, never drop them.
   // The pending list ignores the people/system split on purpose: a pending
   // fixture-looking address still needs a decision.
-  const [rows, systemAndTest, pendingAccounts] = await Promise.all([
-    searchUsers(q, PAGE_SIZE + 1, page * PAGE_SIZE, "people"),
-    page === 0
-      ? searchUsers(q, SYSTEM_LIMIT, 0, "system")
-      : Promise.resolve([]),
-    page === 0 ? listPendingAccounts(PENDING_LIMIT) : Promise.resolve([]),
-  ]);
+  const [rows, systemAndTest, pendingAccounts, pendingTotal] =
+    await Promise.all([
+      searchUsers(q, PAGE_SIZE + 1, page * PAGE_SIZE, "people"),
+      page === 0
+        ? searchUsers(q, SYSTEM_LIMIT, 0, "system")
+        : Promise.resolve([]),
+      page === 0 ? listPendingAccounts(PENDING_LIMIT) : Promise.resolve([]),
+      page === 0 ? countPendingAccounts() : Promise.resolve(0),
+    ]);
   const hasNext = rows.length > PAGE_SIZE;
   const people = rows.slice(0, PAGE_SIZE);
 
@@ -63,7 +69,7 @@ export default async function AdminUsers({
         </button>
       </Form>
 
-      <PendingAccounts accounts={pendingAccounts} />
+      <PendingAccounts accounts={pendingAccounts} total={pendingTotal} />
 
       {people.length === 0 && systemAndTest.length === 0 && (
         <p className="text-muted-foreground text-sm">

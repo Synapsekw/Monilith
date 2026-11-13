@@ -127,10 +127,12 @@ export async function platformReactivateUser(
 
 /**
  * Record a platform admin's decision on a new account. Order is load-bearing:
- * validate → actor → platform-admin check → (reject only) read the current status → THEN the service-client write, so a
- * non-admin causes zero writes. `account_approvals` is service-role only, hence
- * the service client. Upsert on `user_id`: a missing row counts as pending, so
- * deciding an account that has none must create it.
+ * validate → actor → platform-admin check → self-reject refusal → THEN the
+ * first service-client call, so a non-admin causes zero reads and writes.
+ * `account_approvals` is service-role only, hence the service client. Approve
+ * is an upsert on `user_id` (a missing row counts as pending, so deciding an
+ * account that has none must create it). Reject is a guarded UPDATE
+ * (`status <> 'approved'`) with an insert fallback for a missing row.
  */
 async function setApproval(
   input: unknown,
@@ -150,40 +152,60 @@ async function setApproval(
     return fail("You can't reject your own account.");
 
   const svc = createServiceClient();
-  if (status === "rejected") {
+  const decision = {
+    status,
+    decided_at: new Date().toISOString(),
+    decided_by: actor.id,
+  };
+  const failure =
+    status === "approved"
+      ? "Could not approve that account."
+      : "Could not reject that account.";
+
+  if (status === "approved") {
+    const { error } = await svc
+      .from("account_approvals")
+      .upsert(
+        { user_id: parsed.data.userId, ...decision },
+        { onConflict: "user_id" },
+      );
+    if (error) return fail(failure);
+  } else {
     // Rejecting only stops NEW memberships (the database rule), so for an
     // account that is already approved it would be a false promise: refuse and
-    // point at the action that really removes access. Read after the admin
-    // check so a non-admin causes no service-client read either.
-    const { data: current, error: readError } = await svc
+    // point at the action that really removes access. The guard is part of the
+    // UPDATE itself (`status <> 'approved'`), so an approval that lands between
+    // a read and a write cannot be overwritten.
+    const { data: updated, error: updateError } = await svc
       .from("account_approvals")
-      .select("status")
+      .update(decision)
       .eq("user_id", parsed.data.userId)
-      .maybeSingle();
-    if (readError) return fail("Could not reject that account.");
-    if (current?.status === "approved")
-      return fail(
-        "This account is already approved. Use Deactivate to remove its access.",
-      );
+      .neq("status", "approved")
+      .select("user_id");
+    if (updateError) return fail(failure);
+    if (!updated || updated.length === 0) {
+      // Nothing updated: the row is approved, or there is no row yet.
+      const { data: current, error: readError } = await svc
+        .from("account_approvals")
+        .select("status")
+        .eq("user_id", parsed.data.userId)
+        .maybeSingle();
+      if (readError) return fail(failure);
+      if (current?.status === "approved")
+        return fail(
+          "This account is already approved. Use Deactivate to remove its access.",
+        );
+      if (current) return fail(failure);
+      // No row (a missing row counts as pending): record the rejection.
+      const { error: insertError } = await svc
+        .from("account_approvals")
+        .insert({ user_id: parsed.data.userId, ...decision });
+      if (insertError) return fail(failure);
+    }
   }
-  const { error } = await svc.from("account_approvals").upsert(
-    {
-      user_id: parsed.data.userId,
-      status,
-      decided_at: new Date().toISOString(),
-      decided_by: actor.id,
-    },
-    { onConflict: "user_id" },
-  );
-  if (error)
-    return fail(
-      status === "approved"
-        ? "Could not approve that account."
-        : "Could not reject that account.",
-    );
 
   const { data: target } = await svc.auth.admin.getUserById(parsed.data.userId);
-  await svc.from("admin_audit_log").insert({
+  const { error: auditErr } = await svc.from("admin_audit_log").insert({
     org_id: null,
     actor_id: actor.id,
     actor_kind: "platform",
@@ -192,6 +214,13 @@ async function setApproval(
     target_email: target?.user?.email ?? null,
     metadata: {},
   });
+  // The decision is already saved: report the failed audit, don't undo it.
+  if (auditErr)
+    console.error("[setApproval] audit-log insert failed (compliance)", {
+      action,
+      targetUserId: parsed.data.userId,
+      error: auditErr.message,
+    });
   // The account's cached status read is tagged; expire it now so the person's
   // next request sees the decision (read-your-own-writes, Server Action only).
   updateTag(approvalTag(parsed.data.userId));

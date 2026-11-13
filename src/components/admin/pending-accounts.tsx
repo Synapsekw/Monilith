@@ -22,10 +22,10 @@ import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { PlatformUser } from "@/lib/platform/queries";
 import type { ActionResult } from "@/lib/actions/result";
 
-/** Same first three columns as USER_ROW_GRID (user-row.tsx) so this section
- *  lines up with the people table below it; the last column is wider because
- *  it holds two labelled buttons instead of one icon menu. */
-const PENDING_ROW_GRID = "grid grid-cols-[1.6fr_2fr_0.7fr_auto] gap-3";
+/** Email, signup date, actions. There is no Organizations column: a pending
+ *  account can never belong to an organization. The last column holds two
+ *  labelled buttons instead of one icon menu. */
+const PENDING_ROW_GRID = "grid grid-cols-[2fr_0.8fr_auto] gap-3";
 
 /** Signup date only. Locale and zone are pinned so the server render and the
  *  hydrated client produce the same string (see lib/datetime/format.ts). */
@@ -39,8 +39,17 @@ const signedUp = new Intl.DateTimeFormat("en-US", {
  * empty. Approve and Reject are Server Actions; on success the route refreshes
  * and the row leaves the list, which is the feedback.
  */
-export function PendingAccounts({ accounts }: { accounts: PlatformUser[] }) {
+export function PendingAccounts({
+  accounts,
+  total,
+}: {
+  accounts: PlatformUser[];
+  /** Exact number of waiting accounts (the list itself is capped). */
+  total?: number;
+}) {
   if (accounts.length === 0) return null;
+  const count = Math.max(total ?? accounts.length, accounts.length);
+  const capped = count > accounts.length;
   return (
     <section
       aria-labelledby="pending-accounts-title"
@@ -54,15 +63,19 @@ export function PendingAccounts({ accounts }: { accounts: PlatformUser[] }) {
           Waiting for approval
         </h2>
         <span className="text-muted-foreground text-sm tabular-nums">
-          {accounts.length}
+          {count}
         </span>
+        {capped ? (
+          <span className="text-muted-foreground text-xs">
+            Showing the newest {accounts.length}
+          </span>
+        ) : null}
         <span className="text-kicker ml-auto hidden text-xs sm:inline">
           New accounts can&apos;t join an organization until approved
         </span>
       </div>
       <div className={`${PENDING_ROW_GRID} border-b px-4 py-2.5`}>
         <Kicker>Email</Kicker>
-        <Kicker>Organizations</Kicker>
         <Kicker>Signed up</Kicker>
         <span />
       </div>
@@ -102,9 +115,6 @@ function PendingRow({ account }: { account: PlatformUser }) {
       className={`${PENDING_ROW_GRID} items-center border-b px-4 py-3 text-sm last:border-b-0`}
     >
       <span className="text-foreground truncate">{account.email ?? "—"}</span>
-      <span className="text-muted-foreground truncate">
-        {account.orgNames.length ? account.orgNames.join(" · ") : "—"}
-      </span>
       <time
         dateTime={account.createdAt}
         className="text-muted-foreground tabular-nums"

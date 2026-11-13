@@ -2,14 +2,18 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { searchUsers, listPendingAccounts } = vi.hoisted(() => ({
-  searchUsers: vi.fn(),
-  listPendingAccounts: vi.fn(),
-}));
+const { searchUsers, listPendingAccounts, countPendingAccounts } = vi.hoisted(
+  () => ({
+    countPendingAccounts: vi.fn(),
+    searchUsers: vi.fn(),
+    listPendingAccounts: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/platform/queries", () => ({
   searchUsers: (...args: unknown[]) => searchUsers(...args),
   listPendingAccounts: (...args: unknown[]) => listPendingAccounts(...args),
+  countPendingAccounts: () => countPendingAccounts(),
 }));
 // The pending section is a client island; its buttons are covered by
 // pending-accounts.test.tsx. Here only the router and the wrappers are stubbed.
@@ -64,6 +68,7 @@ async function renderPage(params: { q?: string; page?: string } = {}) {
 beforeEach(() => {
   searchUsers.mockReset();
   listPendingAccounts.mockReset().mockResolvedValue([]);
+  countPendingAccounts.mockReset().mockResolvedValue(0);
 });
 
 describe("/admin/users", () => {
@@ -159,6 +164,16 @@ describe("/admin/users pending section", () => {
     expect(container.textContent).toContain("Active");
   });
 
+  it("passes the exact pending count so a capped list does not understate", async () => {
+    stubSearch({ people, system: [] });
+    listPendingAccounts.mockResolvedValue([pending("new@eand.com")]);
+    countPendingAccounts.mockResolvedValue(73);
+    await renderPage();
+    expect(countPendingAccounts).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("73")).toBeTruthy();
+    expect(screen.getByText("Showing the newest 1")).toBeTruthy();
+  });
+
   it("renders no pending section when nobody is waiting", async () => {
     stubSearch({ people, system: [] });
     await renderPage();
@@ -170,6 +185,7 @@ describe("/admin/users pending section", () => {
     listPendingAccounts.mockResolvedValue([pending("new@eand.com")]);
     await renderPage({ page: "1" });
     expect(listPendingAccounts).not.toHaveBeenCalled();
+    expect(countPendingAccounts).not.toHaveBeenCalled();
     expect(screen.queryByText(/waiting for approval/i)).toBeNull();
   });
 

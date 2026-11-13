@@ -47,18 +47,30 @@ describe("PendingAccounts", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("lists each waiting account with its signup date and organisations", () => {
+  it("lists each waiting account with its signup date (no organisations column)", () => {
     render(<PendingAccounts accounts={accounts} />);
     expect(
       screen.getByRole("heading", { name: /waiting for approval/i }),
     ).toBeTruthy();
     expect(screen.getByText("ada@eand.com")).toBeTruthy();
     expect(screen.getByText("probe-1@example.com")).toBeTruthy();
-    expect(screen.getByText("Acme")).toBeTruthy();
+    expect(screen.queryByText("Organizations")).toBeNull();
     expect(screen.getAllByText("Nov 12, 2026")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: /^approve/i })).toHaveLength(
       2,
     );
+  });
+
+  it("shows the exact total and a cap note when the list is truncated", () => {
+    render(<PendingAccounts accounts={accounts} total={120} />);
+    expect(screen.getByText("120")).toBeTruthy();
+    expect(screen.getByText("Showing the newest 2")).toBeTruthy();
+  });
+
+  it("shows no cap note when the whole list is shown", () => {
+    render(<PendingAccounts accounts={accounts} total={2} />);
+    expect(screen.getByText("2")).toBeTruthy();
+    expect(screen.queryByText(/showing the newest/i)).toBeNull();
   });
 
   it("approves with the account's id and refreshes", async () => {
