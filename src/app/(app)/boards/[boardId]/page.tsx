@@ -155,6 +155,13 @@ export default async function BoardPage({
           columns: payload.columns.map((c) => ({ id: c.id, kind: c.kind })),
           memberIds: members.map((m) => m.userId),
         }}
+        myMono={roster.myMono}
+        // Reuses the page's own board_members read: no new query.
+        monoOnBoard={
+          roster.myMono !== null &&
+          (grantRows ?? []).some((g) => g.user_id === roster.myMono!.userId)
+        }
+        ownerName={members.find((m) => m.userId === user.id)?.fullName ?? null}
       />
     </div>
   );

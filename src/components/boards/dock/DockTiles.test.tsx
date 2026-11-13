@@ -13,14 +13,14 @@ const selectedName = () =>
     ?.getAttribute("aria-label");
 
 describe("DockTiles — tiles", () => {
-  it("renders Intelligence and Ask as one tab row, with no agent tiles", () => {
+  it("renders Intelligence, Ask and My Mono as one tab row", () => {
     render(<DockTiles tab="chat" badge={0} onSelect={() => {}} />);
     expect(screen.getByRole("tablist")).toHaveAttribute(
       "aria-label",
       "Dock sections",
     );
     expect(screen.getByRole("tablist")).not.toHaveAttribute("aria-orientation");
-    expect(names()).toEqual(["Intelligence", "Ask"]);
+    expect(names()).toEqual(["Intelligence", "Ask", "My Mono"]);
   });
 
   it("gives every tile a stable id the panels can point at", () => {
@@ -118,7 +118,7 @@ describe("DockTiles — selection follows tab", () => {
   it("is one tab stop: only the selected tile is tabbable", () => {
     render(<DockTiles tab="chat" badge={0} onSelect={() => {}} />);
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.tabIndex)).toEqual([-1, 0]);
+    expect(tabs.map((t) => t.tabIndex)).toEqual([-1, 0, -1]);
   });
 
   it("draws the edge bar under the selected tile (band) or on its right (rail)", () => {
@@ -186,9 +186,11 @@ describe("DockTiles — keyboard", () => {
     render(<DockTiles tab="chat" badge={0} onSelect={onSelect} />);
     screen.getByRole("tab", { name: "Ask" }).focus();
     await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "My Mono" })).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
     expect(screen.getByRole("tab", { name: "Intelligence" })).toHaveFocus();
     await userEvent.keyboard("{ArrowLeft}");
-    expect(screen.getByRole("tab", { name: "Ask" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "My Mono" })).toHaveFocus();
     expect(onSelect).not.toHaveBeenCalled();
     expect(selectedName()).toBe("Ask");
   });
@@ -198,9 +200,9 @@ describe("DockTiles — keyboard", () => {
     render(<DockTiles tab="chat" badge={0} onSelect={onSelect} />);
     screen.getByRole("tab", { name: "Ask" }).focus();
     await userEvent.keyboard("{ArrowRight}{Enter}");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "mono" });
     await userEvent.keyboard("{ArrowRight} ");
-    expect(onSelect).toHaveBeenLastCalledWith({ kind: "ask" });
+    expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
     expect(onSelect).toHaveBeenCalledTimes(2);
   });
 
@@ -211,7 +213,7 @@ describe("DockTiles — keyboard", () => {
     await userEvent.keyboard("{Home}");
     expect(screen.getByRole("tab", { name: "Intelligence" })).toHaveFocus();
     await userEvent.keyboard("{End}");
-    expect(screen.getByRole("tab", { name: "Ask" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "My Mono" })).toHaveFocus();
     expect(onSelect).not.toHaveBeenCalled();
   });
 
@@ -246,5 +248,26 @@ describe("DockTiles — keyboard", () => {
     expect(onSelect).toHaveBeenLastCalledWith({ kind: "intelligence" });
     await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
     expect(onSelect).toHaveBeenLastCalledWith({ kind: "ask" });
+  });
+});
+
+describe("DockTiles — My Mono", () => {
+  it("offers a third tile for the viewer's own Mono", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<DockTiles tab="chat" badge={0} onSelect={onSelect} />);
+    const tab = screen.getByRole("tab", { name: "My Mono" });
+    await user.click(tab);
+    expect(onSelect).toHaveBeenCalledWith({ kind: "mono" });
+  });
+
+  it("selects My Mono on the mono tab, controlling its panel", () => {
+    render(<DockTiles tab="mono" badge={0} onSelect={() => {}} />);
+    expect(selectedName()).toBe("My Mono");
+    expect(screen.getByRole("tab", { name: "My Mono" })).toHaveAttribute(
+      "aria-controls",
+      "dock-panel-mono",
+    );
+    expect(dockTileId({ kind: "mono" })).toBe("dock-tab-mono");
   });
 });

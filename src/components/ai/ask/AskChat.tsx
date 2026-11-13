@@ -77,6 +77,7 @@ export function AskChat({
   surface = "card",
   monoId,
   onTurnStart,
+  onTurnEnd,
   onMessagesChange,
 }: {
   conversationId: string | null;
@@ -114,6 +115,10 @@ export function AskChat({
   monoId?: string;
   /** Fired when a turn begins (the Mono's `thinking` mood). */
   onTurnStart?: () => void;
+  /** Fired when a turn settles on EVERY path, failure included (unlike
+   *  `onTurnComplete`, which means "an answer landed"). Pairs with
+   *  `onTurnStart` so a caller's busy state can never stick. */
+  onTurnEnd?: () => void;
   /** Mirrors the transcript to a parent that outlives this component (the
    *  My Mono tab's store), so remounting it costs no read. */
   onMessagesChange?: (messages: UIMessage[]) => void;
@@ -304,6 +309,7 @@ export function AskChat({
       // is the failure mode this guard exists to avoid, not to create.
       turnInFlight.current = false;
       setTurnBusy(false);
+      onTurnEnd?.();
     }
   }
 

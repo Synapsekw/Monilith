@@ -15,6 +15,7 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 import { setThreadVisibility } from "@/lib/ai/ask/conversation-actions";
 import type { RuleBoardMeta } from "@/lib/ai/board-intelligence/rule-draft";
 import type { BoardIntelligenceRun } from "@/lib/ai/board-intelligence/runs";
+import type { MyMono } from "@/lib/monos/types";
 import { openQaInChat } from "@/lib/ai/board-intelligence/qa-thread";
 import {
   unresolvedCount,
@@ -102,7 +103,7 @@ type Failure =
   | null;
 
 /**
- * The board's dock: Intelligence and the org assistant's chat.
+ * The board's dock: Intelligence, the org assistant's chat, and the viewer's own Mono.
  *
  * Fetching budget (working agreement #5): renders CLOSED with zero requests, so
  * the majority of board loads that never open it pay nothing. The first open
@@ -131,6 +132,9 @@ export function BoardDock({
   access = "viewer",
   initialRun = null,
   ruleMeta,
+  myMono = null,
+  monoOnBoard = false,
+  ownerName = null,
 }: {
   boardId: string;
   currentUserId: string;
@@ -145,6 +149,12 @@ export function BoardDock({
    *  what the board looks like, even when that is "nothing" (see the test
    *  fixtures' `NO_RULE_META_FIXTURE`). */
   ruleMeta: RuleBoardMeta;
+  /** The viewer's own Mono, read once by the page (Plan 2A). Never re-read here. */
+  myMono?: MyMono | null;
+  /** Whether that Mono is a member of this board (page-read once). */
+  monoOnBoard?: boolean;
+  /** The viewer's display name, for the Mono's accessible label. */
+  ownerName?: string | null;
 }) {
   const { open, setOpen, width, setWidth, tab, setTab } = useDockState(boardId);
   const narrow = useNarrowViewport();
@@ -490,7 +500,13 @@ export function BoardDock({
    */
   const selectTile = useCallback(
     (tile: DockTile) => {
-      changeTab(tile.kind === "intelligence" ? "intelligence" : "chat");
+      changeTab(
+        tile.kind === "intelligence"
+          ? "intelligence"
+          : tile.kind === "mono"
+            ? "mono"
+            : "chat",
+      );
     },
     [changeTab],
   );
@@ -636,6 +652,9 @@ export function BoardDock({
     onRanOnMount,
     ruleMeta,
     onOpenInChat: openInChat,
+    myMono,
+    monoOnBoard,
+    ownerName,
   };
 
   if (narrow) {
@@ -730,6 +749,11 @@ export function BoardDock({
               tab={tab}
               badge={unresolvedCount(run ?? null)}
               orientation="vertical"
+              mono={
+                myMono
+                  ? { color: myMono.color, asleep: myMono.brain === "none" }
+                  : null
+              }
               // Both layers are mounted for the ~360ms of a fold, so the rail
               // mints its own ids rather than a second `dock-tab-*` set the
               // panel's `aria-labelledby` could resolve to; and it controls

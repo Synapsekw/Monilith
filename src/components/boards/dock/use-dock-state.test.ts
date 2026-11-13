@@ -113,6 +113,15 @@ describe("useDockState", () => {
     });
   });
 
+  it("restores the My Mono tab", () => {
+    window.localStorage.setItem(
+      "monolith.dock.board-1",
+      JSON.stringify({ open: true, width: 380, tab: "mono" }),
+    );
+    const { result } = renderHook(() => useDockState("board-1"));
+    expect(result.current.tab).toBe("mono");
+  });
+
   it("exposes the mini rail width as a constant narrower than the open minimum", () => {
     // The closed dock is a 48px column of tiles (spec §4/§6) — a width the
     // hook never stores, so it is a constant beside the range, not in it.

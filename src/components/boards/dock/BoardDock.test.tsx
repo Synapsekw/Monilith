@@ -7,6 +7,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { MyMono } from "@/lib/monos/types";
+import { useMyMonoStore } from "@/stores/my-mono";
 
 const loadDockThreads = vi.fn();
 const loadThreadMessages = vi.fn();
@@ -65,6 +67,16 @@ vi.mock("./intelligence/use-intelligence-ask", () => ({
  * of this mock had neither, which is why it could not see that adopting a new
  * conversation id was unmounting a live turn.
  */
+// The My Mono tab (Plan 2A): its first open is the one read it may issue.
+const loadMyMonoThread = vi.fn();
+vi.mock("@/lib/monos/thread-actions", () => ({
+  loadMyMonoThread: () => loadMyMonoThread(),
+}));
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 vi.mock("@/components/ai/ask/AskChat", async () => {
   const { useRef, useState } = await import("react");
   let seq = 0;
@@ -261,6 +273,7 @@ beforeEach(() => {
 type MountProps = {
   access?: "owner" | "editor" | "viewer";
   initialRun?: BoardIntelligenceRun | null;
+  myMono?: MyMono | null;
 };
 
 const mount = (props: MountProps = {}) =>
@@ -278,6 +291,8 @@ const mount = (props: MountProps = {}) =>
         access={props.access ?? "editor"}
         initialRun={props.initialRun ?? null}
         ruleMeta={NO_RULE_META_FIXTURE}
+        myMono={props.myMono ?? null}
+        ownerName="Ada Owner"
       />
     </>,
   );
@@ -330,7 +345,7 @@ describe("BoardDock", () => {
     await openDock();
     expect(
       screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
-    ).toEqual(["Intelligence", "Ask"]);
+    ).toEqual(["Intelligence", "Ask", "My Mono"]);
     expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -338,6 +353,43 @@ describe("BoardDock", () => {
     expect(chat()).toHaveAttribute("data-agent", "");
     expect(chat()).toHaveAttribute("data-board", "b1");
     expect(chat()).toHaveAttribute("data-surface", "atmosphere");
+  });
+
+  it("My Mono: first open is one thread read, switching back is free", async () => {
+    useMyMonoStore.setState({ threads: {}, membership: {} });
+    loadMyMonoThread.mockResolvedValue({
+      ok: true,
+      data: { conversationId: "mc1", messages: [] },
+    });
+    mount({
+      myMono: {
+        userId: "mono-1",
+        orgId: "o1",
+        ownerId: "me",
+        name: "Nova",
+        color: "#7395ff",
+        brain: "key",
+        keyProvider: "anthropic",
+        lastSeenAt: null,
+        createdAt: "t",
+      },
+    });
+    await openDock();
+    const threadReads = loadDockThreads.mock.calls.length;
+    await userEvent.click(screen.getByRole("tab", { name: "My Mono" }));
+    expect(
+      await screen.findByRole("tabpanel", { name: "My Mono" }),
+    ).toHaveAttribute("id", "dock-panel-mono");
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "mc1"),
+    );
+    await userEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    await userEvent.click(screen.getByRole("tab", { name: "My Mono" }));
+    await waitFor(() =>
+      expect(chat()).toHaveAttribute("data-conversation", "mc1"),
+    );
+    expect(loadMyMonoThread).toHaveBeenCalledTimes(1);
+    expect(loadDockThreads.mock.calls.length).toBe(threadReads);
   });
 
   it("mounts the chat on a selected thread only once its messages are in hand", async () => {
@@ -719,7 +771,7 @@ describe("BoardDock — Chat and Intelligence", () => {
     await openDock();
     expect(
       screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
-    ).toEqual(["Intelligence", "Ask"]);
+    ).toEqual(["Intelligence", "Ask", "My Mono"]);
     expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -1176,7 +1228,8 @@ describe("BoardDock — the band's keyboard", () => {
     await userEvent.click(screen.getByRole("button", { name: /mock type/i }));
 
     screen.getByRole("tab", { name: "Ask" }).focus();
-    await userEvent.keyboard("{ArrowLeft}{ArrowRight}{ArrowRight}");
+    // Ask → Intelligence → Ask → My Mono → (wraps) Intelligence.
+    await userEvent.keyboard("{ArrowLeft}{ArrowRight}{ArrowRight}{ArrowRight}");
 
     expect(chat()).toHaveAttribute("data-conversation", "c1");
     expect(chat().getAttribute("data-instance")).toBe(instance);
@@ -1281,8 +1334,8 @@ describe("BoardDock — the two layers' tile ids", () => {
     // so the chat panel's `aria-labelledby` can only resolve to the band's.
     await openDock();
     const ids = [...aside()!.querySelectorAll("[role='tab']")].map((t) => t.id);
-    // Rail: Intelligence + Ask (2). Band: Intelligence + Ask (2).
-    expect(ids.length).toBe(4);
+    // Rail: Intelligence + Ask + My Mono (3). Band: the same three.
+    expect(ids.length).toBe(6);
     expect(new Set(ids).size).toBe(ids.length);
     const panel = document.getElementById("dock-panel-chat")!;
     const labelledBy = panel.getAttribute("aria-labelledby")!;
@@ -1306,7 +1359,7 @@ describe("BoardDock — mini rail", () => {
     );
     expect(
       screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
-    ).toEqual(["Intelligence · 2 suggestions", "Ask"]);
+    ).toEqual(["Intelligence · 2 suggestions", "Ask", "My Mono"]);
     expect(aside()!.style.width).toBe(`${DOCK_RAIL_WIDTH}px`);
     // Inside the tile's own right edge: the aside is `overflow-hidden` at
     // 48px, so a bar hung 8px OUTSIDE a centred tile was clipped to ~1px —
