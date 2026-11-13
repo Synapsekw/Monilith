@@ -136,17 +136,22 @@ export function seamHitClasses(side: SeamSide): string {
 }
 
 /**
- * The chevron that fades in at the middle of a lit seam: hidden at rest on a
- * fine pointer, always visible on a coarse one (where there is no hover to
- * reveal it with), and the carrier of the focus ring — the hit strip runs the
- * whole edge, so a ring on IT would outline the entire card.
+ * The edge nub: a small pill centred ON the seam carrying a `PanelGlyph`. It is
+ * visible at rest on every pointer — a control that only appears on hover had
+ * to be discovered — and brightens on approach (`.seam-cap` in globals.css).
+ * It is also the carrier of the focus ring: the hit strip runs the whole edge,
+ * so a ring on IT would outline the entire card.
  *
  * A class rather than a component because the two edges need it on different
  * elements: a `<span>` inside the sidebar's button, and the dock's own
  * `<button>` nested inside a resize separator.
  */
 export const SEAM_CAP =
-  // Opaque, and centred ON the line: the chip breaks the lit seam where the
-  // control is, rather than letting the stroke run through the chevron. It
-  // costs nothing at rest, where the chip is at opacity 0.
-  "seam-cap bg-surface absolute top-1/2 left-1/2 flex size-[22px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[9px] border pointer-coarse:size-8";
+  // Opaque, and centred ON the line: the nub breaks the lit seam where the
+  // control is, rather than letting the stroke run through the glyph.
+  "seam-cap bg-surface text-muted-foreground absolute top-1/2 left-1/2 flex h-11 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border pointer-coarse:w-7 " +
+  // Lit on approach: the hit strip's hover/focus, or the nub's own focus (the
+  // dock's nub is the focusable button itself).
+  "group-hover/hit:border-border-bright group-hover/hit:text-foreground group-hover/hit:h-13 " +
+  "group-focus-visible/hit:border-border-bright group-focus-visible/hit:text-foreground group-focus-visible/hit:h-13 " +
+  "focus-visible:border-border-bright focus-visible:text-foreground focus-visible:h-13";

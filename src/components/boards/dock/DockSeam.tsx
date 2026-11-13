@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   CardSeam,
   SEAM_CAP,
   seamHitClasses,
 } from "@/components/shell/card-seam";
+import { PanelGlyph } from "@/components/shell/panel-glyph";
 import { cn } from "@/lib/utils";
 import { DOCK_MAX_WIDTH, DOCK_MIN_WIDTH } from "./use-dock-state";
 
@@ -134,11 +134,7 @@ export function DockSeam({
             "focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none",
           )}
         >
-          {open ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronLeft className="size-3.5" />
-          )}
+          <PanelGlyph side="right" open={open} />
         </button>
       </div>
     </CardSeam>,
