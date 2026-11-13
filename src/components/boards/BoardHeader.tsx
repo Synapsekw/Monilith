@@ -41,6 +41,7 @@ import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import type { Draft } from "@/components/boards/automations/recipes";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 // The four on-demand dialogs are code-split: each chunk is fetched the first
 // time its dialog is opened (or a moment earlier — see the `prefetch*` helpers),
@@ -97,6 +98,8 @@ export type HeaderMember = {
   userId: string;
   fullName: string | null;
   email: string | null;
+  /** Set when this row is a Mono (Personal Monos). */
+  mono?: MonoMemberMeta;
 };
 
 export type HeaderGrant = { userId: string; access: "viewer" | "editor" };

@@ -143,7 +143,13 @@ describe("addUpdate", () => {
         return {
           select: () => ({
             eq: () => ({
-              eq: async () => ({ data: [{ user_id: MONO_MINE }], error: null }),
+              in: async () => ({
+                data: [
+                  { user_id: MONO_MINE, owner_id: USER },
+                  { user_id: MONO_THEIRS, owner_id: "someone-else" },
+                ],
+                error: null,
+              }),
             }),
           }),
         } as never;
@@ -168,6 +174,88 @@ describe("addUpdate", () => {
       }),
     );
     expect(notifInsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("addUpdate Mono id hardening", () => {
+  it("drops a user-kind mention whose id is a Mono", async () => {
+    const MONO = "44444444-4444-4444-8444-444444444444";
+    const PERSON = "55555555-5555-4555-8555-555555555555";
+    const updInsert = vi.fn().mockReturnValue({
+      select: () => ({
+        single: async () => ({ data: { id: UPD }, error: null }),
+      }),
+    });
+    const notifInsert = vi.fn(async () => ({ error: null }));
+    const inIds = vi.fn(async () => ({
+      data: [{ user_id: MONO, owner_id: USER }],
+      error: null,
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "monos")
+        return { select: () => ({ eq: () => ({ in: inIds }) }) } as never;
+      if (table === "item_updates") return { insert: updInsert } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+    await addUpdate({
+      itemId: ITEM,
+      text: "@Nova @Ben",
+      mentions: [
+        { kind: "user", userId: MONO },
+        { kind: "user", userId: PERSON },
+      ],
+    });
+    expect(inIds).toHaveBeenCalledWith("user_id", [MONO, PERSON]);
+    expect(updInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          text: "@Nova @Ben",
+          mentions: [{ kind: "user", userId: PERSON }],
+        },
+      }),
+    );
+    expect(notifInsert).toHaveBeenCalledWith([
+      expect.objectContaining({ recipient_id: PERSON }),
+    ]);
+  });
+
+  it("skips the Mono read when nothing is mentioned", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "item_updates")
+        return {
+          insert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: UPD }, error: null }),
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+    await addUpdate({ itemId: ITEM, text: "hi" });
+    expect(from).not.toHaveBeenCalledWith("monos");
   });
 });
 
@@ -205,6 +293,12 @@ describe("addUpdate mention fan-out", () => {
             }),
           }),
         } as never;
+      if (table === "monos")
+        return {
+          select: () => ({
+            eq: () => ({ in: async () => ({ data: [], error: null }) }),
+          }),
+        } as never;
       if (table === "notifications") return { insert: notifInsert } as never;
       return {} as never;
     });
@@ -229,6 +323,12 @@ describe("addUpdate mention fan-out", () => {
           }),
         } as never;
       if (table === "item_updates") return { insert: updInsert } as never;
+      if (table === "monos")
+        return {
+          select: () => ({
+            eq: () => ({ in: async () => ({ data: [], error: null }) }),
+          }),
+        } as never;
       if (table === "notifications") return { insert: notifInsert } as never;
       return {} as never;
     });
@@ -291,6 +391,12 @@ describe("addUpdate mention fan-out", () => {
             }),
           }),
         } as never;
+      if (table === "monos")
+        return {
+          select: () => ({
+            eq: () => ({ in: async () => ({ data: [], error: null }) }),
+          }),
+        } as never;
       if (table === "notifications") return { insert: notifInsert } as never;
       return {} as never;
     });
@@ -321,6 +427,12 @@ describe("addUpdate mention fan-out", () => {
           }),
         } as never;
       if (table === "item_updates") return { insert: updInsert } as never;
+      if (table === "monos")
+        return {
+          select: () => ({
+            eq: () => ({ in: async () => ({ data: [], error: null }) }),
+          }),
+        } as never;
       if (table === "notifications") return { insert: notifInsert } as never;
       return {} as never;
     });

@@ -398,6 +398,28 @@ describe("computeSignals — overloaded", () => {
     expect([...over[0].itemIds].sort()).toEqual(["a", "b", "c", "d"]);
   });
 
+  it("never counts a Mono toward workload (people only)", () => {
+    const input = board({
+      items: [item("a"), item("b"), item("c"), item("d"), item("e"), item("f")],
+      cellValues: [
+        ...assign("a", "m1"),
+        ...assign("b", "m1"),
+        ...assign("c", "m1"),
+        ...assign("d", "m1"),
+        ...assign("e", "u2"),
+        ...assign("f", "u3"),
+      ],
+    });
+    const over = ofKind(
+      computeSignals(
+        input,
+        opts({ memberNames: names, monoIds: new Set(["m1"]) }),
+      ),
+      "overloaded",
+    );
+    expect(over).toEqual([]);
+  });
+
   it("emits one signal per overloaded person, highest load first", () => {
     const cells = [
       ...["a1", "a2", "a3", "a4"].flatMap((id) => assign(id, "u1")),

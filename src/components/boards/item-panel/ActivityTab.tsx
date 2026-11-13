@@ -35,16 +35,18 @@ export function ActivityTab({
   }
   return (
     <ul className="flex flex-col gap-2">
-      {cache.activities.map((a) => (
-        <ActivityRow
-          key={a.id}
-          descriptor={resolveActivity(a, columns, members)}
-          actorName={
-            members.find((m) => m.userId === a.actor_id)?.fullName ?? "Someone"
-          }
-          when={a.created_at}
-        />
-      ))}
+      {cache.activities.map((a) => {
+        const actor = members.find((m) => m.userId === a.actor_id);
+        return (
+          <ActivityRow
+            key={a.id}
+            descriptor={resolveActivity(a, columns, members)}
+            actorName={actor?.fullName ?? (actor?.mono ? "Mono" : "Someone")}
+            actorMono={actor?.mono}
+            when={a.created_at}
+          />
+        );
+      })}
     </ul>
   );
 }

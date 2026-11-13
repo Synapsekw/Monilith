@@ -36,6 +36,9 @@ export type SignalsOptions = {
   currentUserId: string;
   /** userId → display name, for "overloaded · Ana". Unknown ids read "someone". */
   memberNames?: ReadonlyMap<string, string>;
+  /** Monos' user ids. Workload is a people-only aggregate: a Mono is never
+   *  counted toward it nor flagged overloaded (Personal Monos spec §8). */
+  monoIds?: ReadonlySet<string>;
 };
 
 const DAY = 86_400_000;
@@ -260,7 +263,9 @@ function overloadedSignals(ctx: Ctx): Signal[] {
           ? (v as { userIds?: unknown }).userIds
           : undefined;
       if (!Array.isArray(ids)) continue;
-      for (const id of ids) if (typeof id === "string") assignees.add(id);
+      for (const id of ids)
+        if (typeof id === "string" && !ctx.opts.monoIds?.has(id))
+          assignees.add(id);
     }
     for (const uid of assignees) {
       const entry = load.get(uid) ?? { total: 0, itemIds: [] };

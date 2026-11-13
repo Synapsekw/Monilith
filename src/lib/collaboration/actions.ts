@@ -55,17 +55,24 @@ export async function addUpdate(input: {
     .maybeSingle();
   if (itemErr || !item) return fail("Item not found.");
 
-  // Owner-only Mono mentions. Read only when the update names a Mono.
+  // Mentions vs Monos (Personal Monos spec §4). One bounded read (≤20 ids on
+  // the monos PK, org-scoped by RLS and the filter) tells which mentioned ids
+  // are Monos: a Mono is never stored as a user mention (no notification, no
+  // Plan 2B ambiguity), and only the author's own Mono is kept as a Mono
+  // mention. Skipped entirely when nothing is mentioned. A failed read keeps
+  // no Mono mention (fails closed).
   let mentions = parsed.data.mentions;
-  if (mentions.some((m) => m.kind === "mono")) {
-    const { data: own } = await supabase
+  if (mentions.length > 0) {
+    const { data: monoRows } = await supabase
       .from("monos")
-      .select("user_id")
-      .eq("owner_id", user.id)
-      .eq("org_id", item.org_id);
+      .select("user_id, owner_id")
+      .eq("org_id", item.org_id)
+      .in("user_id", [...new Set(mentions.map((m) => m.userId))]);
+    const rows = monoRows ?? [];
+    const monoIds = new Set(rows.map((r) => r.user_id));
     mentions = keepOwnMonoMentions(
-      mentions,
-      (own ?? []).map((r) => r.user_id),
+      mentions.filter((m) => !(m.kind === "user" && monoIds.has(m.userId))),
+      rows.filter((r) => r.owner_id === user.id).map((r) => r.user_id),
     );
   }
 
