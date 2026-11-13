@@ -7,6 +7,11 @@ import {
   validatedActionSchema,
   executionResultSchema,
 } from "@/lib/ai/write/schema";
+import {
+  MAX_STAGED_CALLS,
+  stagedCallSchema,
+  stagedResultSchema,
+} from "@/lib/assistant/staged";
 
 /** Hard cap on proposals stored (and later executed) for one turn. Mirrors the
  *  `.max(10)` in `executeActions` so the two surfaces cannot diverge. */
@@ -29,6 +34,8 @@ export const askToolTraceSchema = z.object({
   resolvesProposal: z.string().uuid().optional(),
   outcome: z.enum(["applied", "cancelled"]).optional(),
   results: z.array(executionResultSchema).optional(),
+  stagedCalls: z.array(stagedCallSchema).max(MAX_STAGED_CALLS).optional(),
+  stagedResults: z.array(stagedResultSchema).optional(),
 });
 export type AskToolTrace = z.infer<typeof askToolTraceSchema>;
 
@@ -74,7 +81,12 @@ export function resolveProposalStates(
       });
       continue;
     }
-    const errors = (t.results ?? []).flatMap((r) => (r.ok ? [] : [r.error]));
+    const errors = [
+      ...(t.results ?? []).flatMap((r) => (r.ok ? [] : [r.error])),
+      ...(t.stagedResults ?? []).flatMap((r) =>
+        r.ok || r.skipped ? [] : [r.error ?? "Failed."],
+      ),
+    ];
     resolved.set(
       t.resolvesProposal,
       errors.length
@@ -85,7 +97,8 @@ export function resolveProposalStates(
 
   const out = new Map<string, ProposalStatus>();
   for (const m of messages) {
-    if (!m.trace?.proposedActions?.length) continue;
+    if (!m.trace?.proposedActions?.length && !m.trace?.stagedCalls?.length)
+      continue;
     out.set(m.id, resolved.get(m.id) ?? { state: "idle" });
   }
   return out;
