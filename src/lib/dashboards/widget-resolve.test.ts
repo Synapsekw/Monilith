@@ -82,7 +82,10 @@ describe("resolveSeries people dimension", () => {
     await resolveSeries(c, {
       boardId: "b",
       orgId: "org-1",
-      config: { primary: { kind: "people", columnId: "col" } },
+      config: {
+        chartType: "bar",
+        primary: { kind: "people", columnId: "col" },
+      },
     });
     expect(c.from).toHaveBeenCalledWith("org_members");
     expect(eq).toHaveBeenCalledWith("org_id", "org-1");
