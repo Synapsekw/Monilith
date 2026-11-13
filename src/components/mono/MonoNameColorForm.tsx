@@ -44,7 +44,11 @@ export function MonoNameColorForm({
         e.preventDefault();
         if (!valid) return;
         startTransition(async () => {
-          setError(await onSubmit({ name: trimmed, color }));
+          try {
+            setError(await onSubmit({ name: trimmed, color }));
+          } catch {
+            setError("Something went wrong. Try again.");
+          }
         });
       }}
     >
@@ -95,7 +99,7 @@ export function MonoNameColorForm({
               aria-label="Custom colour"
               value={color}
               onChange={(e) => setColor(e.target.value.toLowerCase())}
-              className="size-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
+              className="size-7 cursor-pointer rounded-full border-0 bg-transparent p-0 pointer-coarse:size-11"
             />
             Custom
           </label>
