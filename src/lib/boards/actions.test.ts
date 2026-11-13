@@ -1147,3 +1147,55 @@ describe("board mutation invalidation (boards tag)", () => {
     expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
   });
 });
+
+import { leaveBoard } from "./actions";
+
+describe("leaveBoard (member drops their own grant)", () => {
+  it("rejects a non-uuid id before touching Supabase", async () => {
+    const res = await leaveBoard({ boardId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("refuses when signed out", async () => {
+    sessionGetUser.mockResolvedValue(null);
+    const res = await leaveBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: false, error: "Board not found." });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("deletes only the session user's grant on a shared board", async () => {
+    const deleteEqs: [string, string][] = [];
+    const del = vi.fn(() => {
+      const chain = {
+        eq: (c: string, v: string) => {
+          deleteEqs.push([c, v]);
+          return chain;
+        },
+        select: async () => ({ data: [{ board_id: BOARD }], error: null }),
+      };
+      return chain;
+    });
+    from.mockImplementation(
+      (t: string) =>
+        (t === "boards"
+          ? {
+              select: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { created_by: "someone-else" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }
+          : { delete: del }) as never,
+    );
+    const res = await leaveBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(deleteEqs).toEqual([
+      ["board_id", BOARD],
+      ["user_id", "owner-1"],
+    ]);
+  });
+});

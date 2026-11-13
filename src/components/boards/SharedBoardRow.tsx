@@ -104,6 +104,7 @@ export function SharedBoardRow({
             board={{ id: board.id, name: board.name }}
             folders={folders}
             currentFolderId={currentFolderId}
+            isActive={isActive}
           />
         </>
       }
