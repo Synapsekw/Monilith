@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   fireEvent,
   render,
@@ -21,6 +21,14 @@ import {
   StatusEditor,
 } from "./index";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+// The calendar is a code-split chunk. Its first import (react-day-picker +
+// date-fns) can take longer than a test's 5s budget on a loaded CI runner, so
+// pay for it once here; LazyCalendar's own import() then resolves from the
+// module cache and each test only waits a tick for the fallback to swap out.
+beforeAll(async () => {
+  await import("@/components/ui/calendar");
+}, 60_000);
 
 const statusSettings = {
   options: [
