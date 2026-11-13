@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -95,6 +101,32 @@ export function MonoTab({
     [monoId, setThread],
   );
 
+  // Bubbles keep a static idle face so old turns never look busy; only the
+  // thinking indicator shows the live mood. Hence no dependency on `busy`.
+  const monoName = mono?.name;
+  const monoColor = mono?.color;
+  const speaker = useMemo(
+    () =>
+      monoName !== undefined && monoColor !== undefined
+        ? {
+            name: monoName,
+            tint: monoColor,
+            mark: (
+              <MonoAvatar color={monoColor} mood="idle" size={22} label="" />
+            ),
+            thinkingMark: (
+              <MonoAvatar
+                color={monoColor}
+                mood="thinking"
+                size={22}
+                label=""
+              />
+            ),
+          }
+        : undefined,
+    [monoName, monoColor],
+  );
+
   if (!mono) {
     return (
       <div
@@ -140,12 +172,6 @@ export function MonoTab({
     busy,
     justCreated: created !== null,
   });
-  const speaker = {
-    name: mono.name,
-    tint: mono.color,
-    mark: <MonoAvatar color={mono.color} mood={mood} size={22} label="" />,
-  };
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-3 px-3.5 pt-3 pb-2">

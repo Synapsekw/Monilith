@@ -95,9 +95,14 @@ export function MemberAvatar({
           color={mono.color}
           size={face}
           label={monoAccessibleLabel(name, mono.ownerName)}
-          className="absolute"
-          // The pebble sits low in its box; nudge it up so the face centres.
-          style={{ left: "50%", top: "50%", translate: "-50% -46%" }}
+          // MonoAvatar sets inline `position: relative`, which beats a class,
+          // so the absolute centring has to travel in `style` too.
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            translate: "-50% -50%",
+          }}
         />
       </span>
     );

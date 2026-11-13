@@ -303,7 +303,10 @@ export function MessageList({
             status yet, `ThinkingIndicator` falls back to its own generic
             label. */}
         {streamingText === "" ? (
-          <ThinkingIndicator label={status} mark={speaker?.mark} />
+          <ThinkingIndicator
+            label={status}
+            mark={speaker?.thinkingMark ?? speaker?.mark}
+          />
         ) : null}
 
         {streamingText ? (

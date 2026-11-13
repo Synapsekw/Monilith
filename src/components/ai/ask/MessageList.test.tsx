@@ -471,8 +471,12 @@ describe("MessageList speaker identity", () => {
     expect(screen.getByText("Nova")).toBeInTheDocument();
     expect(screen.queryByText("Monolith")).toBeNull();
     unmount();
-    renderList([], { speaker, streamingText: "" });
-    expect(screen.getByTestId("speaker-mark")).toBeInTheDocument();
+    renderList([], {
+      speaker: { ...speaker, thinkingMark: <i data-testid="think-mark" /> },
+      streamingText: "",
+    });
+    expect(screen.getByTestId("think-mark")).toBeInTheDocument();
+    expect(screen.queryByTestId("speaker-mark")).toBeNull();
   });
 
   it("dock empty state invites a chat with the speaker", () => {

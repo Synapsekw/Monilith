@@ -93,6 +93,11 @@ describe("MemberAvatar", () => {
     expect(disc?.className).toContain("rounded-full");
     expect(disc?.className).toContain("size-6");
     expect(disc?.className).toContain("overflow-hidden");
+    // Centred by absolute positioning set inline (MonoAvatar's own inline
+    // `position: relative` would otherwise win and leave it off-centre).
+    expect(
+      (disc?.querySelector('[role="img"]') as HTMLElement).style.position,
+    ).toBe("absolute");
     expect(disc?.querySelector('[role="img"]')).toHaveAttribute(
       "aria-label",
       expect.stringContaining("Nova"),

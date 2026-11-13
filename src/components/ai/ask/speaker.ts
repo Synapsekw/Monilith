@@ -6,6 +6,9 @@ export type ChatSpeaker = {
   name: string;
   /** Decorative: drawn in the turn tile / empty state in place of the Ask mark. */
   mark: ReactNode;
+  /** Shown only by the thinking indicator (the live, animated mood). Falls
+   *  back to `mark`. */
+  thinkingMark?: ReactNode;
   /** The speaker's colour; tints the name. */
   tint?: string;
 };

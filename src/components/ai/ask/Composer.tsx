@@ -88,7 +88,9 @@ export function Composer({
             placeholder={
               speakerName ? `Message ${speakerName}…` : "Ask about your boards…"
             }
-            aria-label="Your question"
+            aria-label={
+              speakerName ? `Message ${speakerName}` : "Your question"
+            }
             className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-1.5 py-1.5 shadow-none focus-visible:border-0 focus-visible:ring-0"
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
