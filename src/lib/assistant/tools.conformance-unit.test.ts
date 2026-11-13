@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { executeAgentTool } from "@/test/agent-tool-exec";
 import { assistantDescriptors } from "./catalog";
 import { buildAssistantTools } from "./tools";
+import { unsupportedReason } from "./unsupported";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -47,9 +48,16 @@ describe("staging conformance over the real catalog", () => {
       orgId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       stage: (c) => (staged.push(c.tool), true),
     });
-    for (const { name, input } of writeInputs())
-      await executeAgentTool(tools, name, input);
+    const refused = writeInputs().filter(
+      (w) => unsupportedReason(w.name, w.input) !== null,
+    );
+    expect(refused.length).toBeGreaterThan(0);
+    for (const { name, input } of writeInputs()) {
+      const out = await executeAgentTool(tools, name, input);
+      if (unsupportedReason(name, input) !== null)
+        expect(out).toEqual({ error: expect.any(String) });
+    }
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
-    expect(staged).toHaveLength(writeInputs().length);
+    expect(staged).toHaveLength(writeInputs().length - refused.length);
   });
 });

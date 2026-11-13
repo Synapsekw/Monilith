@@ -11,6 +11,7 @@ import { resolveTargetBoardId } from "@/lib/agents/board-scope-guard";
 import { summariseProposal } from "@/lib/agents/proposal-summary";
 import { assistantDescriptors, effectOf } from "./catalog";
 import { takesOrgId } from "./org-pin";
+import { unsupportedReason } from "./unsupported";
 import { MAX_STAGED_CALLS, stagedCallSchema, type StagedCall } from "./staged";
 
 const OPAQUE_FAILURE = "Tool failed.";
@@ -71,6 +72,8 @@ export function buildAssistantTools(args: {
         execute: async (raw: Record<string, unknown>) => {
           const input = pinToOrg(d, raw, args.orgId);
           if (input === null) return failure(ORG_MISMATCH_ERROR);
+          const reason = unsupportedReason(d.name, input);
+          if (reason) return failure(reason);
           const effect = effectOf(d, input);
           if (effect === "read") {
             try {

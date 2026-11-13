@@ -75,6 +75,30 @@ describe("buildAssistantTools", () => {
     expect(staged[0]!.summary.length).toBeGreaterThan(0);
   });
 
+  it("refuses a goal create without invoking or staging", async () => {
+    const goal = descriptor({
+      name: "manage_goal",
+      capability: { create: "goal.write" } as never,
+    });
+    const stage = vi.fn(() => true);
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage,
+      descriptors: [goal],
+    });
+    const out = await executeAgentTool(tools, "manage_goal", {
+      action: "create",
+    });
+    expect(out).toEqual({
+      error:
+        "Creating goals from the assistant isn't available yet. Create it from the Goals page.",
+    });
+    expect(goal.invoke).not.toHaveBeenCalled();
+    expect(stage).not.toHaveBeenCalled();
+  });
+
   it("marks a board.destroy action as destructive", async () => {
     const manage = descriptor({
       name: "manage_board",
@@ -246,7 +270,7 @@ describe("buildAssistantTools · pinned to the active org", () => {
   it("stores the injected org on a staged write, so Apply uses the same org", async () => {
     const write = orgScoped({
       name: "manage_goal",
-      capability: { create: "board.write" },
+      capability: { create: "board.write", update: "board.write" },
       inputSchema: { action: z.string(), orgId: z.string().optional() },
     });
     const staged: StagedCall[] = [];
@@ -257,8 +281,8 @@ describe("buildAssistantTools · pinned to the active org", () => {
       stage: (c) => (staged.push(c), true),
       descriptors: [write],
     });
-    await executeAgentTool(tools, "manage_goal", { action: "create" });
-    expect(staged[0]!.input).toEqual({ action: "create", orgId: ORG });
+    await executeAgentTool(tools, "manage_goal", { action: "update" });
+    expect(staged[0]!.input).toEqual({ action: "update", orgId: ORG });
   });
 
   it("refuses to stage a write for another org", async () => {

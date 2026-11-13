@@ -9,6 +9,7 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Json } from "@/types/database.types";
 import { findDescriptor } from "./catalog";
 import { takesOrgId } from "./org-pin";
+import { unsupportedReason } from "./unsupported";
 import { MAX_STAGED_CALLS, type StagedCall, type StagedResult } from "./staged";
 
 const idsSchema = z.object({
@@ -87,14 +88,16 @@ async function loadBatch(
   return { ok: true, calls, agentId: row.data.agent_id };
 }
 
-/** Insert the outcome turn. Returns its id, or null when the insert failed. */
+type InsertedRow = { id: string | null; error: unknown };
+
+/** Insert the outcome turn. `id` is null when the insert failed; `error` says why. */
 async function insertOutcomeRow(
   supabase: Supabase,
   conversationId: string,
   content: string,
   trace: AskToolTrace,
   agentId: string | null,
-): Promise<string | null> {
+): Promise<InsertedRow> {
   const ins = await supabase
     .from("ai_messages")
     .insert({
@@ -106,7 +109,9 @@ async function insertOutcomeRow(
     })
     .select("id")
     .single();
-  return ins.error || !ins.data ? null : ins.data.id;
+  return ins.error || !ins.data
+    ? { id: null, error: ins.error }
+    : { id: ins.data.id, error: null };
 }
 
 async function insertOutcome(
@@ -117,7 +122,7 @@ async function insertOutcome(
   touchedBoardIds: string[],
   agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
-  const id = await insertOutcomeRow(
+  const { id } = await insertOutcomeRow(
     supabase,
     conversationId,
     content,
@@ -147,8 +152,9 @@ async function insertAppliedOutcome(
   touchedBoardIds: string[],
   agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
+  let lastError: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const id = await insertOutcomeRow(
+    const { id, error } = await insertOutcomeRow(
       supabase,
       conversationId,
       content,
@@ -160,9 +166,11 @@ async function insertAppliedOutcome(
         ok: true,
         data: { messageId: id, content, trace, touchedBoardIds, agentId },
       };
+    lastError = error;
   }
   console.error(
     `[assistant] applied batch outcome could not be recorded for ${conversationId}`,
+    lastError,
   );
   return {
     ok: true,
@@ -192,6 +200,9 @@ async function runCall(
       ok: false,
       error: "This change is no longer available.",
     };
+  // Authoritative: refuses even a row that was stored before the rule existed.
+  const refusal = unsupportedReason(call.tool, call.input);
+  if (refusal) return { id: call.id, ok: false, error: refusal };
   const input = z.object(descriptor.inputSchema).safeParse(call.input);
   if (!input.success)
     return { id: call.id, ok: false, error: "This change is no longer valid." };
@@ -258,6 +269,8 @@ export async function applyBatch(input: {
     if (!loaded.ok) return fail(loaded.error);
 
     const selected = new Set(selectedIds);
+    if (!loaded.calls.some((c) => selected.has(c.id)))
+      return fail("Pick at least one change to apply.");
     const results: StagedResult[] = [];
     const seen = new Set<string>();
     const touched = new Set<string>();

@@ -6,7 +6,7 @@ import { z } from "zod";
 export const MAX_STAGED_CALLS = 50;
 
 export const stagedCallSchema = z.object({
-  /** The model's tool call id. Unique within a turn. */
+  /** Server-minted UUID. Unique within a turn. */
   id: z.string().min(1).max(200),
   tool: z.string().min(1).max(100),
   input: z.record(z.string(), z.unknown()),

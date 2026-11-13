@@ -63,7 +63,8 @@ describe("staged call contract: stage → store → reload → apply-validate", 
   it("keeps the active org on an org-scoped write through the round-trip", async () => {
     const { staged, tools } = stageAll();
     await executeAgentTool(tools, "manage_goal", {
-      action: "create",
+      action: "update",
+      goalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       name: "Ship v2",
     });
     const trace = parseToolTrace(

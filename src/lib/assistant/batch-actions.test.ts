@@ -120,7 +120,7 @@ vi.mock("./catalog", () => ({
               action: z.string(),
               orgId: z.string().optional(),
             },
-            capability: { create: "board.write" },
+            capability: { create: "board.write", update: "board.write" },
             invoke,
           }
         : undefined,
@@ -261,6 +261,53 @@ describe("applyBatch", () => {
   });
 });
 
+describe("applyBatch · refused creates", () => {
+  it("refuses a stored goal create at Apply without invoking", async () => {
+    state.trace = {
+      stagedCalls: [
+        call("g", {
+          tool: "manage_goal",
+          input: { action: "create", orgId: "o-1" },
+          boardId: null,
+        }),
+      ],
+    };
+    const res = await applyBatch({
+      conversationId: CONV,
+      messageId: MSG,
+      selectedIds: ["g"],
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.trace).toMatchObject({
+        stagedResults: [
+          {
+            id: "g",
+            ok: false,
+            error:
+              "Creating goals from the assistant isn't available yet. Create it from the Goals page.",
+          },
+        ],
+      });
+    }
+  });
+
+  it("refuses when no selected id matches a stored call, before running or recording", async () => {
+    const res = await applyBatch({
+      conversationId: CONV,
+      messageId: MSG,
+      selectedIds: ["nope"],
+    });
+    expect(res).toMatchObject({
+      ok: false,
+      error: "Pick at least one change to apply.",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(state.inserted).toHaveLength(0);
+  });
+});
+
 describe("applyBatch hardening", () => {
   const args = { conversationId: CONV, messageId: MSG, selectedIds: ["a"] };
 
@@ -348,7 +395,10 @@ describe("applyBatch hardening", () => {
       });
       expect(res.data.touchedBoardIds).toEqual([BOARD]);
     }
-    expect(spy).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("could not be recorded"),
+      expect.objectContaining({ message: "nope" }),
+    );
     spy.mockRestore();
   });
 
@@ -373,7 +423,7 @@ describe("applyBatch · pinned to the active org", () => {
       stagedCalls: [
         call("g", {
           tool: "manage_goal",
-          input: { action: "create", orgId: "o-2" },
+          input: { action: "update", orgId: "o-2" },
           boardId: null,
         }),
       ],
@@ -395,7 +445,7 @@ describe("applyBatch · pinned to the active org", () => {
       stagedCalls: [
         call("g", {
           tool: "manage_goal",
-          input: { action: "create" },
+          input: { action: "update" },
           boardId: null,
         }),
       ],
@@ -409,7 +459,7 @@ describe("applyBatch · pinned to the active org", () => {
       stagedCalls: [
         call("g", {
           tool: "manage_goal",
-          input: { action: "create", orgId: "o-1" },
+          input: { action: "update", orgId: "o-1" },
           boardId: null,
         }),
       ],

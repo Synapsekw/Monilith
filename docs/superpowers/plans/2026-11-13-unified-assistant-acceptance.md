@@ -62,8 +62,7 @@ proposal card. Expect: it still renders and still applies.
 Signed in as a person who belongs to two organisations, in the second one,
 ask on `/ask`: `list my boards`, then `what goals do we have?`
 Expect: goals of the active organisation only.
-Known limitation, do not test by applying: creating a goal or a portfolio may
-land in the person's other organisation (see "Known limitations").
+Then ask it to create a goal. Expect: it declines and points to the Goals page; no card.
 
 ## 9. Step limit and empty answers
 
@@ -73,12 +72,9 @@ and to ask it to continue. Never an empty bubble.
 
 ## Known limitations at the time of this run
 
-- Creating a goal or a portfolio through the assistant, for a person in more
-  than one organisation, can land in an organisation other than the active one.
-  The database functions `create_goal` and `create_portfolio` pick an
-  organisation with `limit 1` and ignore the one requested. The card's Details
-  shows the active organisation, which is misleading in this case.
-- Creating a dashboard with a workspace from another organisation lands it there.
+- The assistant refuses to create goals and portfolios, and refuses a dashboard
+  create that names a workspace, until the database functions `create_goal` and
+  `create_portfolio` (which ignore the requested organisation) are fixed.
 - `list_boards` returns boards from every organisation the person belongs to.
 - Cross-board semantic search, which the old chat had, is not offered.
 - If recording the result fails after changes ran, the card locks for the
