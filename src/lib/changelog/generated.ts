@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
+    kind: "improved",
+    title: "Tidier collapsed sidebar and dock",
+    description:
+      "With the sidebar collapsed you now see one Boards button instead of a letter for every board, and the collapsed agent dock shows just Intelligence and your current chat, which reopens right where you left off.",
+  },
+  {
+    date: "2026-11-13",
     kind: "new",
     title: "New accounts are reviewed before they get in",
     description:
