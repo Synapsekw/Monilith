@@ -154,7 +154,7 @@ LIMIT 10
 
 ## 6. Entry points
 
-- **Mission-control board (visual):** https://claude.ai/code/artifact/eb984761-bee4-4d1a-b6ba-30c6bc05119c — derived view of this doc + worktrees + sessions; refreshed by `/board` (see `.claude/commands/board.md`) and at every `/wrapup`
+- **Mission-control board (visual):** https://claude.ai/artifact/YBWtYFQJPBAsy3BH77LTbL — derived view of this doc + worktrees + sessions; refreshed by `/board` (see `.claude/commands/board.md`) and at every `/wrapup`
 - [[product]] — what we're building and for whom
 - [[architecture]] — system + code structure, data model
 - [[platform-roadmap]] — phase 0–9 detail

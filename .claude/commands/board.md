@@ -4,7 +4,7 @@ Refresh `vault/board.html` (the visual plan board) from the project's canonical 
 it as a claude.ai Artifact at the permanent URL below. The board is a **DERIVED view** — it is
 never a source of truth; never edit project state here first.
 
-**Permanent URL (never mint a new one):** https://claude.ai/code/artifact/eb984761-bee4-4d1a-b6ba-30c6bc05119c
+**Permanent URL (never mint a new one):** https://claude.ai/artifact/YBWtYFQJPBAsy3BH77LTbL (artifact id `fc8327d9-…`)
 **Favicon (always the same):** 🗿
 
 > **The 2026-08-27 re-mint was a mistake, corrected 2026-09-07.** This file recorded that
@@ -14,6 +14,11 @@ never a source of truth; never edit project state here first.
 > A `WebFetch` 404 and a failed redeploy were read as proof of deletion in 2026-08-27; they are not
 > — only the listing is. The URL above is restored to `eb984761-…`, which also matches
 > `vault/00-north-star.md` §6.
+>
+> **2026-11-13: `eb984761-…` really is gone now.** The redeploy was refused as deleted AND
+> `Artifact action:"list"` (scope all, 122 artifacts) no longer contains it. The owner chose to
+> republish to the surviving `fc8327d9-…` ("Monolith — Mission Control", listed as
+> `YBWtYFQJPBAsy3BH77LTbL`), which is the URL above from now on.
 >
 > The rule stands and is now cheap to honour: **before re-minting, run `Artifact action:"list"` and
 > confirm the artifact is absent from it.** If that call is blocked, stop and ask rather than
