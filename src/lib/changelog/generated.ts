@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
+    kind: "improved",
+    title: "Board totals stand out",
+    description:
+      "The Board Total row at the bottom of a table is now tinted in your theme colour with bold figures, and group summaries are quieter, so the grand total no longer blends into the last group.",
+  },
+  {
+    date: "2026-11-13",
     kind: "new",
     title: "Leave a shared board",
     description:
