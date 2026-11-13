@@ -84,6 +84,7 @@ type LoopResult = {
   steps: number;
   toolsUsed: string[];
   hitStepCap: boolean;
+  wroteText: boolean;
 };
 const loopResult = (over: Partial<LoopResult> = {}): LoopResult => ({
   text: "Answer.",
@@ -96,6 +97,7 @@ const loopResult = (over: Partial<LoopResult> = {}): LoopResult => ({
   steps: 1,
   toolsUsed: [],
   hitStepCap: false,
+  wroteText: true,
   ...over,
 });
 const runAssistantLoop = vi.fn<(a: LoopArgs) => Promise<LoopResult>>();
@@ -396,7 +398,10 @@ theClient.current = {
 
 import { POST } from "./route";
 import { runAi } from "@/lib/ai/gateway";
-import { OPENING_STATUS } from "@/lib/ai/ask/stream-protocol";
+import {
+  OPENING_STATUS,
+  PROPOSAL_FALLBACK_ANSWER,
+} from "@/lib/ai/ask/stream-protocol";
 
 const CONV_ID = "11111111-1111-4111-8111-111111111111";
 // `agentId` (or any other extra key) is accepted here so a test can prove the
@@ -1140,6 +1145,106 @@ describe("POST /api/ask · rolling summary", () => {
     await readEvents();
     expect(updateSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ summarized_upto: expect.anything() }),
+    );
+  });
+});
+
+// gotcha-62: the opening status is the turn's first byte. A full board
+// payload read must never sit in front of it.
+describe("POST /api/ask · board focus is read inside the turn", () => {
+  const BOARD_ID = "board-1";
+
+  it("emits the opening status before the board read starts", async () => {
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    // Call order across the wire and the read: every encoded event, and the
+    // moment the payload read begins.
+    const order: string[] = [];
+    const realEncode = TextEncoder.prototype.encode;
+    const encodeSpy = vi
+      .spyOn(TextEncoder.prototype, "encode")
+      .mockImplementation(function (this: TextEncoder, input?: string) {
+        const type = /"type":"(\w+)"/.exec(input ?? "")?.[1];
+        if (type) order.push(`emit:${type}`);
+        return realEncode.call(this, input);
+      });
+    let releasePayload!: () => void;
+    const held = new Promise<void>((r) => (releasePayload = r));
+    getBoardPayload.mockImplementation(async () => {
+      order.push("payload read started");
+      await held;
+      return null;
+    });
+    try {
+      // POST returns while the board read is still held: the read is not in
+      // front of the response.
+      const res = await POST(makeReq());
+      const reader = res.body!.getReader();
+      const first = await reader.read();
+      expect(JSON.parse(new TextDecoder().decode(first.value).trim())).toEqual({
+        type: "status",
+        text: OPENING_STATUS,
+      });
+      await vi.waitFor(() => expect(order).toContain("payload read started"));
+      expect(order.indexOf("emit:status")).toBe(0);
+      expect(order.indexOf("emit:status")).toBeLessThan(
+        order.indexOf("payload read started"),
+      );
+      expect(runAssistantLoop).not.toHaveBeenCalled();
+      releasePayload();
+      while (!(await reader.read()).done) {
+        /* drain */
+      }
+      expect(runAssistantLoop).toHaveBeenCalledTimes(1);
+    } finally {
+      encodeSpy.mockRestore();
+    }
+  });
+
+  it("degrades to no focus, and still completes, when the board read throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    getBoardPayload.mockRejectedValue(new Error("transport down"));
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "done")).toBe(true);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    const system = runAssistantLoop.mock.calls[0]![0].system;
+    expect(system).toContain("No page is in focus");
+    spy.mockRestore();
+  });
+});
+
+describe("POST /api/ask · fallback text on a staged turn", () => {
+  it("stores the live fallback line when a staged turn wrote no text", async () => {
+    stageOnBuild("c1");
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({
+        text: "I finished without writing an answer. I did not complete any lookups.",
+        wroteText: false,
+      }),
+    );
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: PROPOSAL_FALLBACK_ANSWER }),
+    );
+  });
+
+  it("keeps the runtime fallback for a turn that staged nothing", async () => {
+    const fallback =
+      "I finished without writing an answer. I did not complete any lookups.";
+    runAssistantLoop.mockImplementationOnce(async () =>
+      loopResult({ text: fallback, wroteText: false }),
+    );
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: fallback }),
+    );
+  });
+
+  it("keeps the model's own text on a staged turn that wrote some", async () => {
+    stageOnBuild("c1");
+    await readEvents();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "Answer." }),
     );
   });
 });

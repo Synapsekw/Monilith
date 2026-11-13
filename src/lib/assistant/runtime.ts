@@ -73,6 +73,9 @@ export async function runAssistantLoop(args: {
   steps: number;
   toolsUsed: string[];
   hitStepCap: boolean;
+  /** True when the model produced non-whitespace text. When false, `text`
+   *  is the runtime's fallback line. */
+  wroteText: boolean;
 }> {
   const used = new Set<string>();
   let steps = 0;
@@ -131,5 +134,6 @@ export async function runAssistantLoop(args: {
     steps,
     toolsUsed,
     hitStepCap,
+    wroteText: trimmed.length > 0,
   };
 }

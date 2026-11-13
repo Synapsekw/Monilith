@@ -63,6 +63,19 @@ describe("runAssistantLoop", () => {
     expect(events).toContainEqual({ type: "token", text: "Hello" });
     expect(r.steps).toBe(1);
     expect(r.hitStepCap).toBe(false);
+    expect(r.wroteText).toBe(true);
+  });
+
+  it("reports wroteText false and keeps the fallback when the model writes only whitespace", async () => {
+    const r = await runAssistantLoop({
+      model: scripted([textChunks("  \n ")]),
+      system: "s",
+      messages,
+      tools: {},
+      emit: () => {},
+    });
+    expect(r.wroteText).toBe(false);
+    expect(r.text).toContain("I finished without writing an answer.");
   });
 
   it("runs a tool, feeds the result back, and reports the tool as used", async () => {
@@ -122,6 +135,7 @@ describe("runAssistantLoop", () => {
     });
     expect(r.steps).toBe(ASSISTANT_MAX_STEPS);
     expect(r.hitStepCap).toBe(true);
+    expect(r.wroteText).toBe(false);
     expect(r.text).toContain("step limit");
   });
 

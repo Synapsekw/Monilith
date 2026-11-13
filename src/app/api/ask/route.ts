@@ -35,6 +35,7 @@ import {
 import {
   encodeEvent,
   OPENING_STATUS,
+  PROPOSAL_FALLBACK_ANSWER,
   type AskStreamEvent,
 } from "@/lib/ai/ask/stream-protocol";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
@@ -131,21 +132,6 @@ export async function POST(req: Request) {
   // history is still worth continuing.
   let system = buildSystem(todayIn(timezone), timezone);
 
-  // FOCUS. A board thread's board is what the user is looking at. The payload
-  // read is RLS-scoped; a board that reads back null (or belongs to another
-  // org) degrades to no focus.
-  let focusText: string | null = null;
-  if (conv.data.board_id) {
-    const payload = await getBoardPayload(conv.data.board_id);
-    if (payload && payload.board.org_id === org.id) {
-      const members = (await listOrgMembersCached(org.id)).map((m) => ({
-        userId: m.userId,
-        fullName: m.fullName,
-      })); // email never reaches a prompt
-      focusText = buildBoardFocus({ payload, members });
-    }
-  }
-
   // Folder scope, mutually exclusive with the board branch above (a thread is
   // scoped to one or the other; `createConversation` never stamps both). The
   // ruling for this task: a folder read that fails — RLS hides it, it was
@@ -174,11 +160,11 @@ export async function POST(req: Request) {
   }
 
   // A folder thread is scoped by its folder block above; every other thread
-  // gets a FOCUS block (or the explicit "no page is in focus" line). Same
-  // guard as the folder branch, so a thread carrying both ids (board wins)
-  // still gets its board.
-  if (conv.data.board_id || !conv.data.folder_id)
-    system = `${system}\n\n${renderFocusBlock(focusText)}`;
+  // gets a FOCUS block (or the explicit "no page is in focus" line), built
+  // inside the turn below. Same guard as the folder branch, so a thread
+  // carrying both ids (board wins) still gets its board.
+  const wantsFocus = Boolean(conv.data.board_id) || !conv.data.folder_id;
+  const focusBoardId = conv.data.board_id;
 
   // The response body is a pure OBSERVER of the turn, never its host
   // (gotcha-62). It owns a controller that `emit` writes to while a reader is
@@ -222,6 +208,31 @@ export async function POST(req: Request) {
     // engine's statuses cannot fire until a round has finished (gotcha-62).
     emit({ type: "status", text: OPENING_STATUS });
     try {
+      // FOCUS. Read HERE, after the opening status, so a full board payload
+      // never delays the turn's first byte (gotcha-62). A board thread's board
+      // is what the user is looking at. The read is RLS-scoped; a board that
+      // reads back null, belongs to another org, or fails to read at all
+      // degrades to no focus rather than failing the turn.
+      if (wantsFocus) {
+        let focusText: string | null = null;
+        if (focusBoardId) {
+          try {
+            const payload = await getBoardPayload(focusBoardId);
+            if (payload && payload.board.org_id === org.id) {
+              const members = (await listOrgMembersCached(org.id)).map((m) => ({
+                userId: m.userId,
+                fullName: m.fullName,
+              })); // email never reaches a prompt
+              focusText = buildBoardFocus({ payload, members });
+            }
+          } catch (e) {
+            console.error("[ask] board focus read failed:", e);
+            focusText = null;
+          }
+        }
+        system = `${system}\n\n${renderFocusBlock(focusText)}`;
+      }
+
       const allRows = await getMessages(conversationId);
 
       // WHO ANSWERS. `ai_conversations.agent_id` — the column the header
@@ -354,7 +365,13 @@ export async function POST(req: Request) {
             }
           }
 
-          return { result: { answer: r.text, staged, title }, usage };
+          // A staged turn whose model wrote nothing stores the same line the
+          // client bubble shows live, so a reload reads identically.
+          const answer =
+            staged.length > 0 && !r.wroteText
+              ? PROPOSAL_FALLBACK_ANSWER
+              : r.text;
+          return { result: { answer, staged, title }, usage };
         },
       );
 
