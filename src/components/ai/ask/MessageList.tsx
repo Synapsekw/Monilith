@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
 import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
 import { StreamDropNotice, type DropState } from "./StreamDropNotice";
@@ -203,6 +204,28 @@ export function MessageList({
     (a) => a.agentId === streamingAgentId,
   )?.name;
 
+  // One sentence for both surfaces' empty state: who can be addressed, or —
+  // with no agents — what a question can be about.
+  const emptyMessage =
+    agentHandles.length > 0 ? (
+      <>
+        Start with{" "}
+        {agentHandles.map((a, i) => (
+          <span key={a.agentId}>
+            <span className="text-foreground font-mono">@{a.handle}</span>
+            {i < agentHandles.length - 1 ? ", " : ""}
+          </span>
+        ))}{" "}
+        — or just ask.
+      </>
+    ) : (
+      <>
+        Ask a question about your boards — what&apos;s overdue, who&apos;s
+        overloaded, what shipped this week. Answers are grounded in your real
+        data.
+      </>
+    );
+
   return (
     <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
       <div
@@ -212,45 +235,28 @@ export function MessageList({
             : "flex flex-col gap-3.5 px-3.5 py-2"
         }
       >
-        {empty ? (
-          <div
-            className={
-              surface === "card"
-                ? "mt-[12vh] flex flex-col items-center gap-3 text-center"
-                : "mt-8 flex flex-col items-center gap-3 text-center"
-            }
+        {empty && surface === "card" ? (
+          // The /ask page: Mono greets a thread with nothing in it. No actions
+          // row — the page's one action is the composer directly below, which
+          // already holds focus.
+          <EmptyState
+            variant="inline"
+            mascot="happy"
+            title="Your conversation with Monolith will appear here"
+            className="mt-[12vh] py-0"
           >
-            <span
-              className={
-                surface === "card"
-                  ? "bg-surface text-brand flex size-11 items-center justify-center rounded-lg border"
-                  : "bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm"
-              }
-            >
+            {emptyMessage}
+          </EmptyState>
+        ) : empty ? (
+          // The board dock keeps its compact mark: Mono is for page-level
+          // empty states, not a panel on someone else's page.
+          <div className="mt-8 flex flex-col items-center gap-3 text-center">
+            <span className="bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm">
               <AskAiMark className="size-5" />
             </span>
             <Kicker>Agents</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
-              {agentHandles.length > 0 ? (
-                <>
-                  Start with{" "}
-                  {agentHandles.map((a, i) => (
-                    <span key={a.agentId}>
-                      <span className="text-foreground font-mono">
-                        @{a.handle}
-                      </span>
-                      {i < agentHandles.length - 1 ? ", " : ""}
-                    </span>
-                  ))}{" "}
-                  — or just ask.
-                </>
-              ) : (
-                <>
-                  Ask a question about your boards — what&apos;s overdue,
-                  who&apos;s overloaded, what shipped this week. Answers are
-                  grounded in your real data.
-                </>
-              )}
+              {emptyMessage}
             </p>
           </div>
         ) : null}

@@ -83,7 +83,7 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
 
   if (state.success === "check-email") {
     return (
-      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
         <CardHeader className="items-center text-center">
           <CheckCircle2 className="text-primary mb-1 size-8" />
           <CardTitle>Check your email</CardTitle>
@@ -97,7 +97,7 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
   }
 
   return (
-    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
       <CardHeader>
         <Kicker>{isSignup ? "GET STARTED" : "WELCOME"}</Kicker>
         <CardTitle>{text.title}</CardTitle>

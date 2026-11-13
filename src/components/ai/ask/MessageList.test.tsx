@@ -467,5 +467,39 @@ describe("MessageList — surface", () => {
     expect(tile.className).toContain("bg-primary/15");
     expect(tile.className).toContain("text-primary");
     expect(tile.className).toContain("rounded-sm");
+    // Mono is a page-level mascot — never in the dock.
+    expect(container.querySelector("svg[data-mood]")).toBeNull();
+    expect(screen.queryByText(/will appear here/i)).toBeNull();
+  });
+
+  it("greets an empty /ask thread with Mono, a title and who to address", () => {
+    const { container } = renderList([], { agents });
+    expect(container.querySelector("svg[data-mood]")).toHaveAttribute(
+      "data-mood",
+      "happy",
+    );
+    const title = screen.getByText(
+      "Your conversation with Monolith will appear here",
+    );
+    expect(title.className).toContain("text-foreground");
+    expect(title.className).toContain("font-semibold");
+    expect(screen.getByText("@ops")).toBeInTheDocument();
+    expect(container.textContent).toContain("— or just ask.");
+    expect(container.textContent).not.toMatch(/pulse/i);
+  });
+
+  it("with no agents, the /ask empty state says what a question can be about", () => {
+    const { container } = renderList([]);
+    expect(container.querySelector("svg[data-mood]")).not.toBeNull();
+    expect(
+      screen.getByText(/answers are grounded in your real data/i),
+    ).toBeInTheDocument();
+  });
+
+  it("drops the empty state once the thread has a message", () => {
+    const { container } = renderList([
+      { id: "a1", role: "assistant", content: "Two overdue." },
+    ]);
+    expect(container.querySelector("svg[data-mood]")).toBeNull();
   });
 });

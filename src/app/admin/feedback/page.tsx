@@ -17,7 +17,7 @@ export default async function AdminFeedbackPage({
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
+        <h1 className="text-foreground font-heading text-xl font-bold tracking-[-0.02em]">
           Feedback
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">

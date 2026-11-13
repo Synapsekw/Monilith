@@ -63,7 +63,7 @@ export default async function SettingsLayout({
     <div className="w-full px-6 py-10 lg:px-8">
       <div className="mb-8">
         <Kicker className="mb-1.5 block">ADMIN</Kicker>
-        <h1 className="text-foreground font-heading text-2xl font-semibold tracking-tight">
+        <h1 className="text-foreground font-heading text-xl font-bold tracking-[-0.02em]">
           Settings
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">

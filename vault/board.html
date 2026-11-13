@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-10-14 19:04",
+  "updated": "2026-11-12 22:24",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "29e2474e + release records",
+        "value": "26195e93",
         "tone": "ok",
-        "note": "Healed and pushed after PR #136 with an identical application tree. Follow-up release records saved on develop; task worktree and branch removed."
+        "note": "Visual refresh merged (a25d1249) plus changelog announcement; pushed. Task worktree and branch removed."
       },
       {
         "name": "main",
-        "value": "ce263ad3",
-        "tone": "ok",
-        "note": "PR #136 merged without conflicts after green develop/PR checks under explicit owner authorization. Post-merge main CI 38587753000 passed."
+        "value": "581449a3",
+        "tone": "warn",
+        "note": "Still PR #137. Visual-refresh promotion PR prepared; owner merges manually."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY on PR #136. Dark scrollbar verified; Mono executes in Tokyo and live replies took 4.4s / 3.2s versus 8–13s before. Grok flow unchanged and owner-confirmed."
+        "note": "Vercel READY on PR #137. Visual refresh not live until the promotion PR is merged."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "8,081 passing, 1 skipped, 0 failed; durable recovery, quota accounting and latency regressions covered. Live destructive DB tier remains skipped.",
+        "note": "10,993 passing, 1 skipped. Contrast matrix covers every preset, mode and reach level.",
         "label": "test"
       },
       {
@@ -180,14 +180,31 @@
       },
       {
         "name": "ledger",
-        "value": "176/176",
+        "value": "177/177",
         "tone": "ok",
-        "note": "176 committed files / 176 live DEV ledger rows. No schema or database routing changes in this repair.",
+        "note": "177 committed files / 177 live DEV ledger rows. One additive migration: two profiles columns.",
         "label": "ledger"
       }
     ]
   },
   "next": [
+    {
+      "title": "Merge the visual-refresh promotion and walk it",
+      "why": "Nine tasks merged to develop with all gates green, but nobody has seen it in a signed-in browser: a component harness stood in because no test account exists on live data. Everyone lands on Tinted on next load. The eight-step walkthrough is in the 2026-11-12 session note.",
+      "tags": [
+        "owner",
+        "verify",
+        "critical"
+      ]
+    },
+    {
+      "title": "Fix the board-table selected row",
+      "why": "At Tinted and Vivid a hovered row is stronger than a selected one. The row uses its own fill instead of the shared selected token, on the hottest surface in the app.",
+      "tags": [
+        "ui",
+        "follow-up"
+      ]
+    },
     {
       "title": "Walk the folder command center — against production now",
       "why": "It shipped unverified: PR #130 put it live before anyone clicked it. Shared folders in the sidebar (your private folders were copied forward on the live DEV database), the four tabs, the stage filter recalculating with zero requests, Export PDF in dark and light, the folder gallery and the legacy-dashboard redirect, 44px targets on an iPad. The twelve steps are in the 2026-09-15 session note; the URL is now www.monolith.works.",
@@ -391,14 +408,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-10-14-1904-landing-mono-latency-repair",
-    "when": "2026-10-14 19:04",
-    "title": "Landing scrollbar and Mono latency repair",
+    "id": "2026-11-12-2224-visual-refresh-theme-reach",
+    "when": "2026-11-12 22:24",
+    "title": "Visual refresh: themes reach the content",
     "bullets": [
-      "PR #136 merged without conflicts; Vercel production is READY.",
-      "Dark scrollbar scoped to the landing; normal Mono storage waits reduced from 17 to 10.",
-      "Mono now runs beside its Tokyo database. Live replies measured 4.4s / 3.2s; latency still varies.",
-      "Full local gates and develop/PR/main CI passed. Release records and local board refreshed."
+      "Theme reach (Subtle / Tinted / Vivid) tints content, hover and charts; Tinted is the default.",
+      "Aurora, Sunset and Nebula gradient presets; chart colours follow the theme.",
+      "Mono empty states, 20px titles, done burst in the board table.",
+      "Whole-branch review and a 36-shot browser pass fixed 10 defects before merge."
     ]
   }
 }

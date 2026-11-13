@@ -160,7 +160,7 @@ describe("SidebarNav", () => {
     renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const active = screen.getByText("My Work").closest("a")!;
     expect(active).toHaveClass("bg-state-selected");
-    expect(active.className).toContain("before:bg-primary");
+    expect(active.className).toContain("before:bg-brand-gradient");
     expect(active.className).not.toContain("border-primary");
     expect(active).toHaveAttribute("aria-current", "page");
   });
@@ -242,7 +242,7 @@ describe("SidebarNav", () => {
     renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     const goals = screen.getByLabelText("Goals");
     expect(goals.className).toContain("bg-state-selected");
-    expect(goals.className).toContain("before:bg-primary");
+    expect(goals.className).toContain("before:bg-brand-gradient");
     expect(goals.className).not.toContain("bg-primary/80");
     expect(goals.className).not.toContain("hover:border");
   });

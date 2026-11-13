@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
  * suite pins that): the 4px between slot and label is the label's `pl-1`.
  * Text edge = sidebar px-2 (8) + slot (24) + pl-1 (4) = 36px.
  *
- * Active = `--state-selected` tint + a 3px `--brand` bar on the sidebar's
+ * Active = `--state-selected` tint + a 3px `--brand-gradient` bar on the sidebar's
  * outer edge (`before:-left-2` cancels the sidebar's px-2). Rows nested in a
  * folder body (`pl-3`) pass `before:-left-5` so the bar stays on the edge.
  * Never a solid brand fill under `text-foreground` — white on periwinkle is
@@ -34,7 +34,7 @@ const ROW_BASE =
 const ROW_IDLE =
   "text-muted-foreground hover:bg-state-hover hover:text-foreground";
 const ROW_ACTIVE =
-  "bg-state-selected text-foreground before:absolute before:-left-2 before:w-[3px] before:rounded-r-full before:bg-primary before:content-['']";
+  "bg-state-selected text-foreground before:absolute before:-left-2 before:w-[3px] before:rounded-r-full before:bg-brand-gradient before:content-['']";
 
 export function sidebarRowClass({
   active = false,
@@ -137,7 +137,7 @@ const TILE_BASE =
 const TILE_IDLE =
   "text-muted-foreground hover:bg-state-hover hover:text-foreground";
 const TILE_ACTIVE =
-  "bg-state-selected text-foreground before:absolute before:-left-2.5 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r-full before:bg-primary before:content-['']";
+  "bg-state-selected text-foreground before:absolute before:-left-2.5 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r-full before:bg-brand-gradient before:content-['']";
 
 export function railTileClass({
   active = false,

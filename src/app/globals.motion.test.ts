@@ -24,3 +24,35 @@ describe("presence pulse (agent dock)", () => {
     expect(block).not.toMatch(/transform|scale\(/);
   });
 });
+
+/**
+ * The status pill pop (`animate-pill-pop`, components/ui/done-burst.tsx) —
+ * visual refresh spec 4.7. One 380ms run on the keystone curve; transform only,
+ * so it can never trigger layout in a board row.
+ */
+describe("status pill pop", () => {
+  it("declares the pill-pop utility in @theme and its keyframes", () => {
+    expect(CSS).toMatch(
+      /--animate-pill-pop:\s*pill-pop 0\.38s cubic-bezier\(0\.16, 1, 0\.3, 1\);/,
+    );
+    expect(CSS).toMatch(/@keyframes pill-pop \{/);
+  });
+
+  it("runs once — never an infinite loop on a board row", () => {
+    const decl = /--animate-pill-pop:([^;]+);/.exec(CSS)?.[1] ?? "";
+    expect(decl).not.toMatch(/infinite/);
+  });
+
+  it("only ever animates transform, and starts and ends at rest", () => {
+    const block = /@keyframes pill-pop \{([\s\S]*?)\n\}/.exec(CSS)?.[1] ?? "";
+    const properties = [...block.matchAll(/^\s+([a-z-]+):/gm)].map((m) => m[1]);
+    expect(properties.length).toBeGreaterThan(0);
+    expect(new Set(properties)).toEqual(new Set(["transform"]));
+    expect(block).toMatch(/0%,\s*100% \{\s*transform: scale\(1\);/);
+  });
+
+  it("is named by the class the celebration helper toggles", async () => {
+    const { PILL_POP_CLASS } = await import("@/components/ui/done-burst");
+    expect(PILL_POP_CLASS).toBe("animate-pill-pop");
+  });
+});

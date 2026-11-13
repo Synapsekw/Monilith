@@ -4,6 +4,41 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-12",
+    kind: "new",
+    title: "Themes that colour the whole app",
+    description:
+      "Your theme now lightly tints the content area, hover states and charts, not just the frame. Choose how far it reaches (Subtle, Tinted or Vivid) in Settings, Preferences.",
+  },
+  {
+    date: "2026-11-12",
+    kind: "new",
+    title: "Three gradient themes",
+    description:
+      "Aurora, Sunset and Nebula blend two accent colours across buttons, progress bars and charts.",
+  },
+  {
+    date: "2026-11-12",
+    kind: "improved",
+    title: "Clearer dashboard charts",
+    description:
+      "Chart colours follow your theme, every legend shows a colour key and value, and donut charts show their total.",
+  },
+  {
+    date: "2026-11-12",
+    kind: "new",
+    title: "A small celebration when you finish",
+    description:
+      "Marking an item done in a board table plays a short animation. Switch it off any time in Settings, Preferences.",
+  },
+  {
+    date: "2026-11-12",
+    kind: "improved",
+    title: "Friendlier empty pages",
+    description:
+      "Goals, Portfolios, My Time and Ask now explain what will appear and offer a way to start.",
+  },
+  {
     date: "2026-10-14",
     kind: "improved",
     title: "A smoother mobile welcome",

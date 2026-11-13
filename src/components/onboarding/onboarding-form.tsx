@@ -51,7 +51,7 @@ export function OnboardingForm() {
   const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   return (
-    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--color-card)]">
       <CardHeader>
         <Kicker>GET STARTED</Kicker>
         <CardTitle>Create your organization</CardTitle>

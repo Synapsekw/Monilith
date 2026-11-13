@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { GoalTree } from "./GoalTree";
 import { GoalDetailDrawer } from "./GoalDetailDrawer";
+import { NewGoalDialog } from "./NewGoalDialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { applyGoalPatch } from "@/lib/goals/patch";
 import type { GoalNode, RowOwner } from "@/lib/goals/types";
 import type { GoalLink } from "@/lib/goals/queries";
@@ -45,9 +47,24 @@ export function GoalsView({
   );
   return (
     <>
-      <div className="min-h-0 flex-1">
-        <GoalTree tree={localTree} />
-      </div>
+      {localTree.length === 0 ? (
+        // No goals at all (a new org): the sort bar and an empty table say
+        // nothing, so the page offers the same "New goal" dialog the header
+        // does. Rendered outside the table — Mono never sits in a table.
+        <div className="min-h-0 flex-1 p-6">
+          <EmptyState
+            mascot
+            title="Your goals will appear here"
+            actions={<NewGoalDialog members={members} />}
+          >
+            Create a goal to track a measurable objective across your org.
+          </EmptyState>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1">
+          <GoalTree tree={localTree} />
+        </div>
+      )}
       <GoalDetailDrawer
         tree={localTree}
         members={members}

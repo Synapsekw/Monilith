@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useRef } from "react";
 import type { Column, Item } from "@/lib/boards/queries";
 import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -29,10 +29,23 @@ import {
   relationLinksForCell,
   type CacheCellValue,
 } from "@/lib/boards/cache";
+import { isStatusValueComplete } from "@/lib/boards/overdue";
+import { celebrateStatusEdit } from "@/components/ui/done-burst";
 import { useIsCellEditing } from "./editing-store";
 import type { CellControls } from "./shared";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
+
+function statusOptionId(value: unknown): string | null {
+  return typeof value === "object" && value !== null
+    ? ((value as { optionId?: string | null }).optionId ?? null)
+    : null;
+}
+
+/** Re-picking the option a status already holds is not a change. */
+function statusOptionChanged(prev: unknown, next: unknown): boolean {
+  return statusOptionId(prev) !== statusOptionId(next);
+}
 
 /**
  * One configurable-column cell. Resting state renders the read-only
@@ -69,6 +82,11 @@ export const EditableCell = memo(function EditableCell({
   // hook clears it on blur/unmount. Called unconditionally (once per cell) so it
   // stays valid across the kind-specific early returns below.
   usePresenceFocus({ viewKind: "table", targetId: target }, isEditing);
+  // The cell's own box, for the status celebration. A ref and nothing else: no
+  // state, no effect. It is only read inside the commit handler below — i.e.
+  // on the current user's own edit — so realtime updates, first renders and
+  // rows re-mounting in the virtualized window can never replay the animation.
+  const cellRef = useRef<HTMLDivElement>(null);
 
   // Temp-row rule (see @/lib/boards/optimistic-id): a row inserted
   // optimistically carries a client-minted id, so every write keyed by it —
@@ -200,7 +218,7 @@ export const EditableCell = memo(function EditableCell({
 
   if (isEditing) {
     return (
-      <div className="relative flex items-center px-4">
+      <div ref={cellRef} className="relative flex items-center px-4">
         <CellEditor
           kind={column.kind}
           value={value}
@@ -210,6 +228,19 @@ export const EditableCell = memo(function EditableCell({
           columnName={column.name}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
+            if (column.kind === "status" && statusOptionChanged(value, v)) {
+              // "Done" is the Command Center's rule, not a second one: the
+              // board's FIRST status column holding a done/complete option
+              // (@/lib/boards/overdue, mirroring _board_health_flags). A
+              // second status column never completes an item, so it pops
+              // without a burst.
+              const first = controls.statusColumn;
+              const becameDone =
+                first?.id === column.id &&
+                !isStatusValueComplete(value, first) &&
+                isStatusValueComplete(v, first);
+              celebrateStatusEdit(() => cellRef.current, becameDone);
+            }
             // Multi-value kinds (people, multi-select dropdown) commit once
             // per toggle, so closing here would end the selection after one
             // pick. They stay open until the user dismisses them (Escape /
@@ -230,6 +261,7 @@ export const EditableCell = memo(function EditableCell({
 
   return (
     <div
+      ref={cellRef}
       role="button"
       tabIndex={0}
       aria-label={accessibleName}

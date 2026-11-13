@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/auth/session";
 import {
+  getUserCelebrateDoneCached,
   getUserThemePresetCached,
+  getUserThemeReachCached,
   getUserTimeZoneCached,
 } from "@/lib/profile/queries-cached";
 import { SettingsSection } from "@/components/settings/settings-section";
@@ -8,14 +10,18 @@ import { SettingRow } from "@/components/settings/setting-row";
 import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
 import { AppearanceForm } from "@/components/settings/appearance-form";
 import { ThemePresetForm } from "@/components/settings/theme-preset-form";
+import { ThemeReachForm } from "@/components/settings/theme-reach-form";
+import { CelebrateDoneForm } from "@/components/settings/celebrate-done-form";
 
 export const metadata = { title: "Preferences · Settings" };
 
 export default async function PreferencesSettingsPage() {
   const user = await requireUser();
-  const [timeZone, themePreset] = await Promise.all([
+  const [timeZone, themePreset, themeReach, celebrateDone] = await Promise.all([
     getUserTimeZoneCached(user.id),
     getUserThemePresetCached(user.id),
+    getUserThemeReachCached(user.id),
+    getUserCelebrateDoneCached(user.id),
   ]);
 
   return (
@@ -40,6 +46,18 @@ export default async function PreferencesSettingsPage() {
         description="Accent and surface tint. Applies to light and dark."
       >
         <ThemePresetForm currentPreset={themePreset} />
+      </SettingRow>
+      <SettingRow
+        label="Theme reach"
+        description="How far your theme colour reaches into the app."
+      >
+        <ThemeReachForm currentReach={themeReach} />
+      </SettingRow>
+      <SettingRow
+        label="Celebrate completed items"
+        description="A short animation when you mark an item done."
+      >
+        <CelebrateDoneForm initialCelebrateDone={celebrateDone} />
       </SettingRow>
     </SettingsSection>
   );

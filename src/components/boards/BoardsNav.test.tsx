@@ -251,7 +251,7 @@ describe("BoardsNav", () => {
     const row = screen.getByRole("link", { name: "Active Board" })
       .parentElement as HTMLElement;
     expect(row.className).toContain("bg-state-selected");
-    expect(row.className).toContain("before:bg-primary");
+    expect(row.className).toContain("before:bg-brand-gradient");
     expect(row.className).not.toContain("bg-primary/80");
     // The 24px lead slot is still the row's first child.
     expect(row.firstElementChild?.className).toContain("size-6");
@@ -2397,7 +2397,7 @@ describe("BoardsNav folder row alignment", () => {
 
     const row = filedRow("own");
     expect(row.className).toContain("bg-state-selected");
-    expect(row.className).toContain("before:bg-primary");
+    expect(row.className).toContain("before:bg-brand-gradient");
     expect(row.className).toContain("before:-left-5");
     expect(row.className).not.toContain("bg-primary/80");
   });

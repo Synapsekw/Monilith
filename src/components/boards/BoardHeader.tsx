@@ -30,6 +30,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  PAGE_TITLE_CLASS,
+  PAGE_TITLE_INPUT_CLASS,
+} from "@/components/ui/page-header";
+import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
@@ -170,17 +175,22 @@ export function BoardHeader({
                 }
               }}
               aria-label="Board name"
-              className="font-heading h-7 w-56 text-lg font-semibold tracking-tight"
+              className={cn(PAGE_TITLE_INPUT_CLASS, "h-7 w-56")}
             />
           ) : isViewer ? (
-            <h1 className="font-heading flex h-7 items-center truncate text-lg font-semibold tracking-tight">
+            <h1
+              className={cn(PAGE_TITLE_CLASS, "flex h-7 items-center truncate")}
+            >
               {boardName}
             </h1>
           ) : (
             <button
               type="button"
               onClick={openRename}
-              className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone font-heading flex h-7 items-center truncate rounded-sm text-left text-lg font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className={cn(
+                PAGE_TITLE_CLASS,
+                "hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-7 items-center truncate rounded-sm text-left transition-colors focus-visible:ring-2 focus-visible:outline-none",
+              )}
             >
               {boardName}
             </button>

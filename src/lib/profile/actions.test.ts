@@ -42,7 +42,9 @@ vi.mock("@/lib/supabase/service", () => ({
 import {
   removeProfileAvatar,
   updateProfileAvatar,
+  updateProfileCelebrateDone,
   updateProfileThemePreset,
+  updateProfileThemeReach,
   updateProfileTimezone,
 } from "./actions";
 
@@ -258,5 +260,109 @@ describe("updateProfileThemePreset", () => {
 
     expect(res.ok).toBe(false);
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateProfileThemeReach", () => {
+  it("writes theme_reach and expires the caller's profile cache tag", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const eq = vi.fn(async () => ({ error: null }));
+    update.mockReturnValue({ eq });
+
+    const res = await updateProfileThemeReach({ themeReach: "vivid" });
+
+    expect(res.ok).toBe(true);
+    expect(from).toHaveBeenCalledWith("profiles");
+    expect(update).toHaveBeenCalledWith({ theme_reach: "vivid" });
+    expect(eq).toHaveBeenCalledWith("id", "user-1");
+    expect(updateTag).toHaveBeenCalledWith("profile:user:user-1");
+  });
+
+  it("rejects an unknown reach id at the Zod boundary, before any write", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const res = await updateProfileThemeReach({
+      // Deliberately outside the union — the DB column is free text, so this
+      // enum is the boundary.
+      themeReach: "loud" as never,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate when the write fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    update.mockReturnValue({
+      eq: async () => ({ error: { message: "nope" } }),
+    });
+
+    const res = await updateProfileThemeReach({ themeReach: "subtle" });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("Could not update theme.");
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await updateProfileThemeReach({ themeReach: "tinted" });
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateProfileCelebrateDone", () => {
+  it("writes celebrate_done and expires the caller's profile cache tag", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const eq = vi.fn(async () => ({ error: null }));
+    update.mockReturnValue({ eq });
+
+    const res = await updateProfileCelebrateDone({ celebrateDone: false });
+
+    expect(res.ok).toBe(true);
+    expect(from).toHaveBeenCalledWith("profiles");
+    expect(update).toHaveBeenCalledWith({ celebrate_done: false });
+    expect(eq).toHaveBeenCalledWith("id", "user-1");
+    expect(updateTag).toHaveBeenCalledWith("profile:user:user-1");
+  });
+
+  it("rejects a non-boolean at the Zod boundary, before any write", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+
+    const res = await updateProfileCelebrateDone({
+      celebrateDone: "yes" as never,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate when the write fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    update.mockReturnValue({
+      eq: async () => ({ error: { message: "nope" } }),
+    });
+
+    const res = await updateProfileCelebrateDone({ celebrateDone: true });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("Could not update preference.");
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("refuses when there is no session", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+
+    const res = await updateProfileCelebrateDone({ celebrateDone: true });
+
+    expect(res.ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
   });
 });
