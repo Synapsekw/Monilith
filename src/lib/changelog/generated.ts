@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     kind: "improved",
+    title: "A simpler AI setup",
+    description:
+      "Agent setup, Autopilot and agent personas are gone. Ask and the board's assistant dock now run one assistant for your whole organization, which can act on any board you can open, and the sidebar entry that used to say Agents now says Ask.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
     title: "Board totals stand out",
     description:
       "The Board Total row at the bottom of a table is now tinted in your theme colour with bold figures, and group summaries are quieter, so the grand total no longer blends into the last group.",
