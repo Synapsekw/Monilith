@@ -35,9 +35,9 @@ import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { proxy, config } from "./proxy";
 
-function req(path: string, cookie?: string) {
+function req(path: string, cookie?: string, extra?: Record<string, string>) {
   return new NextRequest(new URL(path, "http://localhost"), {
-    headers: cookie ? { cookie } : undefined,
+    headers: { ...(cookie ? { cookie } : {}), ...extra },
   });
 }
 
@@ -83,6 +83,31 @@ describe("proxy()", () => {
       });
 
       const res = await proxy(req("/", `pulse_last_board=${value}`));
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe("http://localhost/home");
+      expect(res.headers.get("set-cookie") ?? "").not.toContain(
+        "pulse_board_entry",
+      );
+    },
+  );
+
+  it.each([
+    ["an RSC transition", { rsc: "1" }],
+    ["a Server Action request", { "next-action": "abc123" }],
+  ])(
+    "keeps the /home hop for %s to /, even with a valid last-board cookie",
+    async (_label, headers) => {
+      // A dead board reached this way would strand the visitor: the board
+      // page's hand-off is a streamed redirect a soft navigation ignores.
+      getClaims.mockResolvedValue({
+        data: { claims: { sub: "u1" } },
+        error: null,
+      });
+
+      const res = await proxy(
+        req("/", `pulse_last_board=${LAST_BOARD}`, headers),
+      );
 
       expect(res.status).toBe(307);
       expect(res.headers.get("location")).toBe("http://localhost/home");

@@ -159,9 +159,18 @@ export async function proxy(request: NextRequest) {
   // Everyone else: the dynamic /home dispatcher (orgs/boards lookup → board,
   // onboarding, or welcome shell).
   if (pathname === "/" && isAuthenticated) {
-    const entryBoardId = validBoardId(
-      request.cookies.get(LAST_BOARD_COOKIE)?.value,
-    );
+    // Document loads only. A client-side transition to `/` (the redirect that
+    // ends sign-in, a password change or onboarding) arrives as an RSC or
+    // Server Action request; if the remembered board is dead, the board page's
+    // hand-off to /home would then be a redirect thrown inside the streamed
+    // shell, which a soft navigation does not follow (gotcha-99) — the visitor
+    // would be parked on an empty content column. Those keep the /home hop,
+    // which probes before it renders anything.
+    const isDocumentRequest =
+      !request.headers.has("rsc") && !request.headers.has("next-action");
+    const entryBoardId = isDocumentRequest
+      ? validBoardId(request.cookies.get(LAST_BOARD_COOKIE)?.value)
+      : null;
     if (!entryBoardId) {
       return NextResponse.redirect(new URL("/home", request.url));
     }
