@@ -9,8 +9,8 @@ import {
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { FolderKanban } from "lucide-react";
+import { useParams, usePathname } from "next/navigation";
+import { LayoutGrid } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import {
@@ -91,6 +91,7 @@ export function BoardsNav({
   collapsed?: boolean;
 }) {
   const { boardId: activeBoardId } = useParams<{ boardId: string }>();
+  const pathname = usePathname();
   const coarse = useCoarsePointer();
 
   // Swap the plain list for the drag-enabled variant on the first pointer or
@@ -203,74 +204,30 @@ export function BoardsNav({
     );
   }, [foldersSupplied, folderIdSignature, pruneSections]);
 
+  // Collapsed: ONE "Boards" tile linking to the board list. The rail used to
+  // stack a letter tile per owned and shared board under a dead label — an
+  // unbounded column of near-identical initials. The board list is a click
+  // away; the open board is still marked active on this tile.
+  const boardsActive = Boolean(activeBoardId) || pathname === "/boards";
   return collapsed ? (
-    <div className="flex flex-col items-center gap-0.5 py-2">
+    <div className="flex flex-col items-center gap-0.5">
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
+          <Link
+            href="/boards"
             aria-label="Boards"
-            className={railTileClass({
-              // Not a link — no hover tint, and the default cursor. NOT
-              // `pointer-events-none`: that would also kill the Radix tooltip
-              // this span is the trigger for.
-              className:
-                "hover:text-muted-foreground cursor-default hover:bg-transparent",
-            })}
+            aria-current={boardsActive ? "page" : undefined}
+            className={railTileClass({ active: boardsActive })}
           >
-            <FolderKanban className="size-4 shrink-0" />
+            <LayoutGrid className="size-4 shrink-0" />
             {coarse ? <CoarseCaption label="Boards" /> : null}
-          </span>
+          </Link>
         </TooltipTrigger>
         <TooltipContent side="right">Boards</TooltipContent>
       </Tooltip>
       {/* Triggerless: keeps the dialog mounted so the ⌘K "New board"
           command can open it even while the sidebar is collapsed. */}
       <NewBoardDialog workspaceId={activeWorkspaceId} collapsed />
-
-      {boards.length === 0
-        ? null
-        : boards.map((b) => (
-            <Tooltip key={b.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={`/boards/${b.id}`}
-                  aria-current={b.id === activeBoardId ? "page" : undefined}
-                  aria-label={b.name}
-                  className={railTileClass({
-                    active: b.id === activeBoardId,
-                    className: "uppercase",
-                  })}
-                >
-                  <span className="shrink-0">{b.name.charAt(0)}</span>
-                  {coarse ? <CoarseCaption label={b.name} /> : null}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{b.name}</TooltipContent>
-            </Tooltip>
-          ))}
-
-      {/* Shared with me */}
-      {sharedBoards.length > 0
-        ? sharedBoards.map((b) => (
-            <Tooltip key={b.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={`/boards/${b.id}`}
-                  aria-current={b.id === activeBoardId ? "page" : undefined}
-                  aria-label={b.name}
-                  className={railTileClass({
-                    active: b.id === activeBoardId,
-                    className: "uppercase",
-                  })}
-                >
-                  <span className="shrink-0">{b.name.charAt(0)}</span>
-                  {coarse ? <CoarseCaption label={b.name} /> : null}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{b.name}</TooltipContent>
-            </Tooltip>
-          ))
-        : null}
     </div>
   ) : (
     <NavSection

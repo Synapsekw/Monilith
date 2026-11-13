@@ -5,6 +5,8 @@ import {
   platformResetUserPassword,
   platformSetUserPassword,
   platformDeleteUser,
+  platformApproveUser,
+  platformRejectUser,
 } from "./actions";
 
 import type { ActionResult } from "@/lib/actions/result";
@@ -42,4 +44,12 @@ export async function setUserPasswordAction(
 
 export async function deleteUserAction(userId: string): Promise<ActionResult> {
   return platformDeleteUser({ userId });
+}
+
+export async function approveUserAction(userId: string): Promise<ActionResult> {
+  return platformApproveUser({ userId });
+}
+
+export async function rejectUserAction(userId: string): Promise<ActionResult> {
+  return platformRejectUser({ userId });
 }

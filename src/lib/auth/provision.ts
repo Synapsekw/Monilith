@@ -10,7 +10,8 @@ import type { Database } from "@/types/database.types";
  */
 export async function provisionAccountForUser(
   supabase: SupabaseClient<Database>,
-  user: User,
+  // Only the id and metadata are read — so a JWT-derived SessionUser works too.
+  user: Pick<User, "id" | "user_metadata">,
 ): Promise<{ error: string | null }> {
   const orgName = user.user_metadata?.org_name;
   if (typeof orgName !== "string" || orgName.trim().length === 0)

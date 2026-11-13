@@ -14,6 +14,30 @@ export type Database = {
   };
   public: {
     Tables: {
+      account_approvals: {
+        Row: {
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          status?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       admin_audit_log: {
         Row: {
           action: string;
@@ -4804,9 +4828,11 @@ export type Database = {
           p_limit?: number;
           p_offset?: number;
           p_only_email_patterns?: string[];
+          p_only_status?: string;
           p_query?: string;
         };
         Returns: {
+          approval_status: string;
           banned_until: string;
           created_at: string;
           email: string;

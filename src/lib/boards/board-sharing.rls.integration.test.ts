@@ -42,6 +42,7 @@ describe.skipIf(!integrationTargetReady())("RLS: board-level sharing", () => {
   async function makeUser(label: string) {
     const email = `share-${label}-${randomUUID()}@example.com`;
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,

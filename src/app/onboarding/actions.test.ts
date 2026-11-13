@@ -104,6 +104,18 @@ describe("createWorkspaceOrg", () => {
     expect(res).toEqual({ error: "You already have an organization." });
   });
 
+  it("maps the membership trigger's account_not_approved to friendly copy", async () => {
+    signedIn();
+    getUserOrgs.mockResolvedValue([]);
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "account_not_approved" },
+    });
+
+    const res = await createWorkspaceOrg({}, formData());
+    expect(res).toEqual({ error: "Your account is waiting for approval." });
+  });
+
   it("maps other DB errors to a friendly message, not raw Postgres text", async () => {
     signedIn();
     getUserOrgs.mockResolvedValue([]);

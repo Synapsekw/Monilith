@@ -13,9 +13,11 @@ const {
   resetUserPasswordAction,
   setUserPasswordAction,
   deleteUserAction,
+  approveUserAction,
   toastError,
   toastSuccess,
 } = vi.hoisted(() => ({
+  approveUserAction: vi.fn(),
   refresh: vi.fn(),
   deactivateUserAction: vi.fn(),
   reactivateUserAction: vi.fn(),
@@ -37,13 +39,22 @@ vi.mock("@/lib/platform/search-action", () => ({
   setUserPasswordAction: (id: string, pw: string) =>
     setUserPasswordAction(id, pw),
   deleteUserAction: (id: string) => deleteUserAction(id),
+  approveUserAction: (id: string) => approveUserAction(id),
 }));
 
 const USER = "22222222-2222-4222-8222-222222222222";
 
-function renderRow(banned = false) {
+function renderRow(
+  banned = false,
+  approvalStatus: "pending" | "approved" | "rejected" = "approved",
+) {
   return render(
-    <UserRowActions userId={USER} email="ada@example.com" banned={banned} />,
+    <UserRowActions
+      userId={USER}
+      email="ada@example.com"
+      banned={banned}
+      approvalStatus={approvalStatus}
+    />,
   );
 }
 
@@ -149,5 +160,44 @@ describe("UserRowActions menu-only successes", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(toastError).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe("UserRowActions approval", () => {
+  async function openMenu(status: "pending" | "approved" | "rejected") {
+    const user = userEvent.setup();
+    renderRow(false, status);
+    await user.click(screen.getByRole("button", { name: "User actions" }));
+    await screen.findAllByRole("menuitem");
+    return user;
+  }
+
+  it.each(["pending", "rejected"] as const)(
+    "offers Approve for a %s account and calls the wrapper with the id",
+    async (status) => {
+      approveUserAction.mockResolvedValue({ ok: true });
+      const user = await openMenu(status);
+      await user.click(screen.getByRole("menuitem", { name: /^approve$/i }));
+      await waitFor(() => expect(approveUserAction).toHaveBeenCalledWith(USER));
+      await waitFor(() => expect(refresh).toHaveBeenCalled());
+    },
+  );
+
+  it("does not offer Approve for an approved account", async () => {
+    await openMenu("approved");
+    expect(screen.queryByRole("menuitem", { name: /^approve$/i })).toBeNull();
+  });
+
+  it("surfaces a refused approval", async () => {
+    approveUserAction.mockResolvedValue({
+      ok: false,
+      error: "Not authorized.",
+    });
+    const user = await openMenu("pending");
+    await user.click(screen.getByRole("menuitem", { name: /^approve$/i }));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("Not authorized."),
+    );
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

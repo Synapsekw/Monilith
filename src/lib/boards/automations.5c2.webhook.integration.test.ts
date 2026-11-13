@@ -85,6 +85,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailA = `wh5c2-a-${randomUUID()}@example.com`;
       const { data: createdA, error: errA } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailA,
           password: PASSWORD,
           email_confirm: true,
@@ -158,6 +159,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailM = `wh5c2-m-${randomUUID()}@example.com`;
       const { data: createdM, error: errM } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailM,
           password: PASSWORD,
           email_confirm: true,
@@ -201,6 +203,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailB = `wh5c2-b-${randomUUID()}@example.com`;
       const { data: createdB, error: errB } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailB,
           password: PASSWORD,
           email_confirm: true,

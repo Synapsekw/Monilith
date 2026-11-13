@@ -41,6 +41,7 @@ describe.skipIf(!integrationTargetReady())("RLS: attachments + storage", () => {
   async function provision(label: string): Promise<U> {
     const email = `rls-att-${randomUUID()}@example.com`;
     const { data: created } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,
@@ -99,6 +100,7 @@ describe.skipIf(!integrationTargetReady())("RLS: attachments + storage", () => {
     // A non-admin member of org A (role 'member').
     const memberEmail = `rls-att-member-${randomUUID()}@example.com`;
     const { data: m } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: memberEmail,
       password: PASSWORD,
       email_confirm: true,

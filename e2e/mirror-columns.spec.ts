@@ -52,6 +52,7 @@ test.describe("Mirror column: mirrors a linked item's value, read-only", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

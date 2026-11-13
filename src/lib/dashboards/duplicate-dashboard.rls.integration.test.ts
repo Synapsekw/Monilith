@@ -39,6 +39,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailA = `rls-dupdash-a-${randomUUID()}@example.com`;
       const { data: createdA, error: errA } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailA,
           password: PASSWORD,
           email_confirm: true,
@@ -89,6 +90,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailB = `rls-dupdash-b-${randomUUID()}@example.com`;
       const { data: createdB, error: errB } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailB,
           password: PASSWORD,
           email_confirm: true,

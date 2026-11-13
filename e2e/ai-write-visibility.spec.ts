@@ -71,6 +71,7 @@ test.describe("AI write visibility", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email: testEmail,
       password: PASSWORD,
       email_confirm: true,

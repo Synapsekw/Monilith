@@ -113,11 +113,13 @@ describe.skipIf(!integrationTargetReady())(
         auth: { autoRefreshToken: false, persistSession: false },
       });
       const a = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-attach-a-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,
       });
       const b = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: `mcp-attach-b-${randomUUID()}@example.com`,
         password: "Test-Password-123!",
         email_confirm: true,

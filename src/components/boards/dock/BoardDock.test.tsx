@@ -1412,14 +1412,10 @@ describe("BoardDock — focus across a fold", () => {
   // what shipped before this branch.
   it("leaves the caret in the composer when the dock opens on a persona", async () => {
     mount();
-    await userEvent.click(
-      await screen.findByRole("tab", { name: "Morning Brief" }),
-    );
+    await userEvent.click(await screen.findByRole("tab", { name: "Ask" }));
     await settled();
     expect(screen.getByLabelText("Your question")).toHaveFocus();
-    expect(
-      screen.getByRole("tab", { name: "Morning Brief" }),
-    ).not.toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Ask" })).not.toHaveFocus();
 
     // And re-opening from the rail's own button, with a persona already
     // chosen, does the same.
@@ -1484,7 +1480,8 @@ describe("BoardDock — the two layers' tile ids", () => {
     // so the chat panel's `aria-labelledby` can only resolve to the band's.
     await openDock();
     const ids = [...aside()!.querySelectorAll("[role='tab']")].map((t) => t.id);
-    expect(ids.length).toBe(8);
+    // Rail: Intelligence + chat (2). Band: Intelligence, Ask, 2 agents (4).
+    expect(ids.length).toBe(6);
     expect(new Set(ids).size).toBe(ids.length);
     const panel = document.getElementById("dock-panel-chat")!;
     const labelledBy = panel.getAttribute("aria-labelledby")!;
@@ -1509,10 +1506,10 @@ describe("BoardDock — mini rail", () => {
     expect(
       screen.getAllByRole("tab").map((t) => t.getAttribute("aria-label")),
     ).toEqual([
+      // Two tiles only — agents are picked in the open band, so the rail no
+      // longer grows a tile per agent.
       "Intelligence · 2 suggestions",
       "Ask",
-      "Morning Brief",
-      "Overdue Chaser",
     ]);
     expect(aside()!.style.width).toBe(`${DOCK_RAIL_WIDTH}px`);
     // Inside the tile's own right edge: the aside is `overflow-hidden` at
@@ -1528,20 +1525,27 @@ describe("BoardDock — mini rail", () => {
     expect(loadDockThreads).not.toHaveBeenCalled();
   });
 
-  it("opens on the tapped agent and starts a new thread on it", async () => {
+  it("the rail's chat tile reopens the persona on screen, not plain Ask", async () => {
     mount();
+    await openDock();
+    await userEvent.click(screen.getByRole("tab", { name: "Overdue Chaser" }));
     await userEvent.click(
-      await screen.findByRole("tab", { name: "Overdue Chaser" }),
+      screen.getByRole("button", { name: /close agent dock/i }),
     );
     await settled();
+    // Collapsed: the chat tile is named for, and wears, the active persona.
+    const railChat = screen.getByRole("tab", { name: "Overdue Chaser" });
+    expect(railChat).toHaveAttribute("aria-selected", "true");
+    expect(railChat).toHaveTextContent("O");
+
+    await userEvent.click(railChat);
+    await settled();
     expect(aside()).toHaveAttribute("data-open", "true");
-    expect(screen.getByRole("tablist")).not.toHaveAttribute("aria-orientation");
     expect(chat()).toHaveAttribute("data-agent", "a2");
     expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
   });
 
   it("opens on Intelligence from the rail, rendering the cached run", async () => {

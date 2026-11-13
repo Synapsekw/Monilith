@@ -46,6 +46,12 @@ export type DockTilesProps = {
    *  the tiles with NO panel mounted, and `aria-controls` pointing at a node
    *  that is not there is a dangling reference. */
   panelMounted?: boolean;
+  /** The collapsed mini rail: only Intelligence and ONE chat tile. Agents are
+   *  picked in the open dock, so the rail no longer grows a tile per agent.
+   *  The chat tile stands for whichever persona is on screen — it is selected
+   *  whenever `tab` is chat, says that persona's name, and carries the
+   *  presence dot when ANY agent is running. */
+  compact?: boolean;
   onSelect: (tile: DockTile) => void;
 };
 
@@ -104,8 +110,14 @@ function panelIdFor(tile: DockTile): string {
     : "dock-panel-chat";
 }
 
-function isActive(tile: DockTile, tab: DockTab, agentId: string | null) {
+function isActive(
+  tile: DockTile,
+  tab: DockTab,
+  agentId: string | null,
+  compact = false,
+) {
   if (tab === "intelligence") return tile.kind === "intelligence";
+  if (compact) return tile.kind === "ask";
   if (tile.kind === "intelligence") return false;
   return tile.kind === "ask" ? agentId === null : tile.agentId === agentId;
 }
@@ -179,21 +191,27 @@ export function DockTiles({
   orientation = "horizontal",
   idPrefix = DOCK_TILE_ID_PREFIX,
   panelMounted = true,
+  compact = false,
   onSelect,
 }: DockTilesProps) {
   const vertical = orientation === "vertical";
-  const tiles: DockTile[] = [
-    { kind: "intelligence" },
-    { kind: "ask" },
-    ...agents.map((a) => ({ kind: "agent" as const, agentId: a.id })),
-  ];
+  const tiles: DockTile[] = compact
+    ? [{ kind: "intelligence" }, { kind: "ask" }]
+    : [
+        { kind: "intelligence" },
+        { kind: "ask" },
+        ...agents.map((a) => ({ kind: "agent" as const, agentId: a.id })),
+      ];
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   // An agentId that names no roster entry (e.g. dock state persisted an id
   // whose agent was since deleted) reads as plain Ask, never as index 0 —
   // that would light up Intelligence while `tab` is still "chat". Resolved
   // once here so `activeIndex` and every tile's `aria-selected` agree.
   const resolvedAgentId = knownAgentId(agentId, agents);
-  const activeIndex = tiles.findIndex((t) => isActive(t, tab, resolvedAgentId));
+  const activeIndex = tiles.findIndex((t) =>
+    isActive(t, tab, resolvedAgentId, compact),
+  );
+  const anyRunning = Object.values(presence).some((p) => p === "running");
 
   /**
    * MANUAL activation (ARIA APG): an arrow MOVES FOCUS ONLY — Enter, Space or
@@ -245,9 +263,21 @@ export function DockTiles({
       >
         {tiles.map((tile, i) => {
           const selected = i === activeIndex;
-          const label = labelFor(tile, agents, badge, presence);
-          const running =
-            tile.kind === "agent" && presence[tile.agentId] === "running";
+          // Compact chat tile: named for the persona on screen, and lit
+          // when any agent is mid-turn (their own tiles are not on the rail).
+          const compactChat = compact && tile.kind === "ask";
+          const persona: DockTile =
+            compactChat && resolvedAgentId
+              ? { kind: "agent", agentId: resolvedAgentId }
+              : tile;
+          const baseLabel = labelFor(persona, agents, badge, presence);
+          const running = compactChat
+            ? anyRunning
+            : tile.kind === "agent" && presence[tile.agentId] === "running";
+          const label =
+            compactChat && running && !baseLabel.endsWith("· running")
+              ? `${baseLabel} · running`
+              : baseLabel;
           return (
             <Tooltip key={dockTileId(tile, idPrefix)}>
               <TooltipTrigger asChild>
@@ -332,7 +362,7 @@ export function DockTiles({
                       selected && "border-border",
                     )}
                   >
-                    <TileFace tile={tile} agents={agents} />
+                    <TileFace tile={persona} agents={agents} />
                     {tile.kind === "intelligence" && badge > 0 ? (
                       <span
                         aria-hidden="true"

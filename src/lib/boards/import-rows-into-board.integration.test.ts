@@ -48,6 +48,7 @@ describe.skipIf(!integrationTargetReady())("import_rows_into_board RPC", () => {
   async function provisionUser(label: string): Promise<TestUser> {
     const email = `import-rows-${randomUUID()}@example.com`;
     const { data: created, error } = await admin.auth.admin.createUser({
+      app_metadata: { pre_approved: true },
       email,
       password: PASSWORD,
       email_confirm: true,
@@ -221,6 +222,7 @@ describe.skipIf(!integrationTargetReady())("import_rows_into_board RPC", () => {
     const email = `import-rows-${randomUUID()}@example.com`;
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PASSWORD,
         email_confirm: true,

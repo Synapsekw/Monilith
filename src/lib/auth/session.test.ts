@@ -3,14 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // getClaims verifies the JWT locally (asymmetric signing keys); we mock it to
 // drive each case. redirect() throws to halt, like the real next/navigation.
 // from() drives the getUserOrgs organizations read.
-const { getClaims, redirect, from, headerMap } = vi.hoisted(() => ({
-  getClaims: vi.fn(),
-  redirect: vi.fn((url: string) => {
-    throw new Error(`REDIRECT:${url}`);
+const { getClaims, redirect, from, headerMap, getAccountApproval } = vi.hoisted(
+  () => ({
+    getClaims: vi.fn(),
+    getAccountApproval: vi.fn(),
+    redirect: vi.fn((url: string) => {
+      throw new Error(`REDIRECT:${url}`);
+    }),
+    from: vi.fn(),
+    headerMap: new Map<string, string>(),
   }),
-  from: vi.fn(),
-  headerMap: new Map<string, string>(),
-}));
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getClaims }, from }),
@@ -21,6 +24,18 @@ vi.mock("next/navigation", () => ({
 // Mirrors src/app/auth/actions.test.ts: a Map stands in for the header store —
 // only `.get()` is used.
 vi.mock("next/headers", () => ({ headers: async () => headerMap }));
+// The approval read (service client + `use cache`) is unit-tested in
+// approval.test.ts; drive only its status here. This mock stands in for
+// enforceApproval: it redirects any account whose mocked status is not approved.
+vi.mock("@/lib/auth/approval", async () => {
+  const { redirect: nav } = await import("next/navigation");
+  return {
+    enforceApproval: async (user: { id: string }) => {
+      if ((await getAccountApproval(user.id)) !== "approved")
+        nav("/pending-approval");
+    },
+  };
+});
 
 // getUser is wrapped in React cache() (no-arg → memoizes for the cache
 // lifetime). Reset modules per test so each gets a fresh, un-memoized getUser.
@@ -30,6 +45,7 @@ beforeEach(() => {
   redirect.mockClear();
   from.mockReset();
   headerMap.clear();
+  getAccountApproval.mockReset().mockResolvedValue("approved");
 });
 
 function claims(overrides: Record<string, unknown> = {}) {
@@ -144,6 +160,59 @@ describe("requireUser", () => {
 
     const user = await requireUser();
     expect(user.id).toBe("u1");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireUser — account approval", () => {
+  it("returns an approved user", async () => {
+    getClaims.mockResolvedValue(claims());
+    getAccountApproval.mockResolvedValue("approved");
+    const { requireUser } = await import("./session");
+
+    expect((await requireUser()).id).toBe("u1");
+    expect(getAccountApproval).toHaveBeenCalledWith("u1");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("sends a pending user to the waiting screen", async () => {
+    getClaims.mockResolvedValue(claims());
+    getAccountApproval.mockResolvedValue("pending");
+    const { requireUser } = await import("./session");
+
+    await expect(requireUser()).rejects.toThrow("REDIRECT:/pending-approval");
+    expect(redirect).toHaveBeenCalledWith("/pending-approval");
+  });
+
+  it("lets the password-change redirect win over the approval gate", async () => {
+    getClaims.mockResolvedValue(
+      claims({ app_metadata: { must_change_password: true } }),
+    );
+    getAccountApproval.mockResolvedValue("pending");
+    const { requireUser } = await import("./session");
+
+    await expect(requireUser()).rejects.toThrow("REDIRECT:/change-password");
+    expect(getAccountApproval).not.toHaveBeenCalled();
+  });
+
+  it("never reads the approval for an unauthenticated request", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+    const { requireUser } = await import("./session");
+
+    await expect(requireUser()).rejects.toThrow("REDIRECT:/login");
+    expect(getAccountApproval).not.toHaveBeenCalled();
+  });
+
+  it("propagates a failed approval read instead of letting the user through", async () => {
+    getClaims.mockResolvedValue(claims());
+    getAccountApproval.mockRejectedValue(
+      new Error("Could not verify account approval."),
+    );
+    const { requireUser } = await import("./session");
+
+    await expect(requireUser()).rejects.toThrow(
+      "Could not verify account approval.",
+    );
     expect(redirect).not.toHaveBeenCalled();
   });
 });

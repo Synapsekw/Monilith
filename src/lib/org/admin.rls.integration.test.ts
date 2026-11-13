@@ -51,6 +51,7 @@ describe.skipIf(!integrationTargetReady())("admin RLS + RPCs", () => {
     const email = `admin-rls-${label}-${randomUUID()}@example.com`;
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PW,
         email_confirm: true,
@@ -478,6 +479,7 @@ describe.skipIf(!integrationTargetReady())("admin RLS + RPCs", () => {
     // Create + sign in that user.
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email: newEmail,
         password: PW,
         email_confirm: true,

@@ -45,6 +45,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailA = `rls-dupboard-a-${randomUUID()}@example.com`;
       const { data: createdA, error: errA } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailA,
           password: PASSWORD,
           email_confirm: true,
@@ -118,6 +119,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailB = `rls-dupboard-b-${randomUUID()}@example.com`;
       const { data: createdB, error: errB } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailB,
           password: PASSWORD,
           email_confirm: true,
@@ -140,6 +142,7 @@ describe.skipIf(!integrationTargetReady())(
       const emailC = `rls-dupboard-c-${randomUUID()}@example.com`;
       const { data: createdC, error: errC } = await admin.auth.admin.createUser(
         {
+          app_metadata: { pre_approved: true },
           email: emailC,
           password: PASSWORD,
           email_confirm: true,

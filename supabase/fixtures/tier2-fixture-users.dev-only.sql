@@ -125,3 +125,14 @@ where u.email in (
     select 1 from auth.identities i
     where i.user_id = u.id and i.provider = 'email'
   );
+
+-- New accounts start `pending` and a pending account cannot hold an org
+-- membership (the org_members trigger refuses it). These identities are
+-- seeded with raw SQL, so the signup trigger may or may not have run for them;
+-- either way, make sure each one is approved.
+insert into public.account_approvals (user_id, status, decided_at)
+values
+  ('aaaa0000-0000-4000-8000-0000000000a1', 'approved', now()),
+  ('bbbb0000-0000-4000-8000-0000000000b1', 'approved', now()),
+  ('aaaa0000-0000-4000-8000-0000000000c1', 'approved', now())
+on conflict (user_id) do update set status = 'approved', decided_at = now();

@@ -2,7 +2,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { orgAdminTag } from "@/lib/cache/tags";
+import { approvalTag, orgAdminTag } from "@/lib/cache/tags";
 import { isPlatformAdmin } from "./guard";
 import {
   platformSetOrgRoleSchema,
@@ -123,6 +123,121 @@ export async function platformReactivateUser(
   input: unknown,
 ): Promise<ActionResult> {
   return setUserBan(input, false, "platform.user_reactivated");
+}
+
+/**
+ * Record a platform admin's decision on a new account. Order is load-bearing:
+ * validate → actor → platform-admin check → self-reject refusal → THEN the
+ * first service-client call, so a non-admin causes zero reads and writes.
+ * `account_approvals` is service-role only, hence the service client. Approve
+ * is an upsert on `user_id` (a missing row counts as pending, so deciding an
+ * account that has none must create it). Reject is a guarded UPDATE
+ * (`status <> 'approved'`) with an insert fallback for a missing row.
+ */
+async function setApproval(
+  input: unknown,
+  status: "approved" | "rejected",
+  action: string,
+): Promise<ActionResult> {
+  const parsed = platformUserTargetSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+  const supabase = await createClient();
+  const {
+    data: { user: actor },
+  } = await supabase.auth.getUser();
+  if (!actor) return fail("Not authenticated.");
+  if (!(await isPlatformAdmin())) return fail("Not authorized.");
+  if (status === "rejected" && actor.id === parsed.data.userId)
+    return fail("You can't reject your own account.");
+
+  const svc = createServiceClient();
+  const decision = {
+    status,
+    decided_at: new Date().toISOString(),
+    decided_by: actor.id,
+  };
+  const failure =
+    status === "approved"
+      ? "Could not approve that account."
+      : "Could not reject that account.";
+
+  if (status === "approved") {
+    const { error } = await svc
+      .from("account_approvals")
+      .upsert(
+        { user_id: parsed.data.userId, ...decision },
+        { onConflict: "user_id" },
+      );
+    if (error) return fail(failure);
+  } else {
+    // Rejecting only stops NEW memberships (the database rule), so for an
+    // account that is already approved it would be a false promise: refuse and
+    // point at the action that really removes access. The guard is part of the
+    // UPDATE itself (`status <> 'approved'`), so an approval that lands between
+    // a read and a write cannot be overwritten.
+    const { data: updated, error: updateError } = await svc
+      .from("account_approvals")
+      .update(decision)
+      .eq("user_id", parsed.data.userId)
+      .neq("status", "approved")
+      .select("user_id");
+    if (updateError) return fail(failure);
+    if (!updated || updated.length === 0) {
+      // Nothing updated: the row is approved, or there is no row yet.
+      const { data: current, error: readError } = await svc
+        .from("account_approvals")
+        .select("status")
+        .eq("user_id", parsed.data.userId)
+        .maybeSingle();
+      if (readError) return fail(failure);
+      if (current?.status === "approved")
+        return fail(
+          "This account is already approved. Use Deactivate to remove its access.",
+        );
+      if (current) return fail(failure);
+      // No row (a missing row counts as pending): record the rejection.
+      const { error: insertError } = await svc
+        .from("account_approvals")
+        .insert({ user_id: parsed.data.userId, ...decision });
+      if (insertError) return fail(failure);
+    }
+  }
+
+  const { data: target } = await svc.auth.admin.getUserById(parsed.data.userId);
+  const { error: auditErr } = await svc.from("admin_audit_log").insert({
+    org_id: null,
+    actor_id: actor.id,
+    actor_kind: "platform",
+    action,
+    target_user_id: parsed.data.userId,
+    target_email: target?.user?.email ?? null,
+    metadata: {},
+  });
+  // The decision is already saved: report the failed audit, don't undo it.
+  if (auditErr)
+    console.error("[setApproval] audit-log insert failed (compliance)", {
+      action,
+      targetUserId: parsed.data.userId,
+      error: auditErr.message,
+    });
+  // The account's cached status read is tagged; expire it now so the person's
+  // next request sees the decision (read-your-own-writes, Server Action only).
+  updateTag(approvalTag(parsed.data.userId));
+  revalidatePath("/admin");
+  return ok();
+}
+
+export async function platformApproveUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setApproval(input, "approved", "platform.user_approved");
+}
+
+export async function platformRejectUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setApproval(input, "rejected", "platform.user_rejected");
 }
 
 /** Auth-plane: send the target user a Supabase password-recovery email. */

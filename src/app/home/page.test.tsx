@@ -11,7 +11,9 @@ const {
   redirect,
   cookieStore,
   boardProbe,
+  getAccountApproval,
 } = vi.hoisted(() => ({
+  getAccountApproval: vi.fn(),
   getUser: vi.fn(),
   getUserOrgs: vi.fn(),
   listMyBoards: vi.fn(),
@@ -38,6 +40,15 @@ vi.mock("@/lib/auth/session", () => ({
   // (and none in a unit test) it returns a bare "/login", which is what the
   // logged-out case below asserts.
   loginRedirectPath: async () => "/login",
+}));
+// The approval read is unit-tested in src/lib/auth/approval.test.ts; drive only
+// its status here (every existing case is an approved account). The mock
+// stands in for enforceApproval: it redirects any non-approved mocked status.
+vi.mock("@/lib/auth/approval", () => ({
+  enforceApproval: async (user: { id: string }) => {
+    if ((await getAccountApproval(user.id)) !== "approved")
+      redirect("/pending-approval");
+  },
 }));
 // The page resolves the active org (cookie-scoped) rather than orgs[0]; derive
 // it from the same getUserOrgs mock so each case's org list still drives it.
@@ -87,6 +98,7 @@ import { HomeDispatch } from "./page";
 beforeEach(() => {
   vi.clearAllMocks();
   cookieStore.clear();
+  getAccountApproval.mockResolvedValue("approved");
 });
 
 const LAST = "0b9e2a51-6f5c-4d7a-9c3e-8f1d2b4a6c0e";
@@ -97,6 +109,25 @@ describe("Home dispatcher (/home)", () => {
 
     await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/login");
     expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("sends a pending account to the waiting screen before any org or board read", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getAccountApproval.mockResolvedValue("pending");
+    cookieStore.set("pulse_last_board", LAST);
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listMyBoards.mockResolvedValue([{ id: "b1" }]);
+
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/pending-approval");
+    expect(getAccountApproval).toHaveBeenCalledWith("u1");
+    expect(boardProbe).not.toHaveBeenCalled();
+    expect(getUserOrgs).not.toHaveBeenCalled();
+    expect(listMyBoards).not.toHaveBeenCalled();
+    expect(listSharedBoards).not.toHaveBeenCalled();
   });
 
   it("redirects a logged-in user with a board to that board", async () => {

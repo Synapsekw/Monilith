@@ -43,6 +43,7 @@ describe.skipIf(!integrationTargetReady())(
     async function provision(label: string) {
       const email = `fr-${label}-${randomUUID()}@example.com`;
       const { data: created, error } = await admin.auth.admin.createUser({
+        app_metadata: { pre_approved: true },
         email,
         password: PASSWORD,
         email_confirm: true,
