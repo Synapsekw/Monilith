@@ -40,7 +40,8 @@ describe("NewBoardDialog", () => {
     render(<NewBoardDialog workspaceId="ws1" />);
     fireEvent.click(screen.getByRole("button", { name: /new board/i }));
 
-    expect(screen.getByText("Blank board")).toBeInTheDocument();
+    // The dialog body is a next/dynamic chunk fetched on first open — await it.
+    expect(await screen.findByText("Blank board")).toBeInTheDocument();
     expect(screen.getByText("Sprint planning")).toBeInTheDocument();
     expect(screen.getByText("Content calendar")).toBeInTheDocument();
     expect(screen.getByText("Sales CRM")).toBeInTheDocument();
@@ -64,7 +65,9 @@ describe("NewBoardDialog", () => {
   it("defaults to the Blank template", async () => {
     render(<NewBoardDialog workspaceId="ws1" />);
     fireEvent.click(screen.getByRole("button", { name: /new board/i }));
-    fireEvent.click(screen.getByRole("button", { name: /create board/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /create board/i }),
+    );
     await waitFor(() =>
       expect(createBoardFromTemplate).toHaveBeenCalledWith(
         expect.objectContaining({ templateId: "blank" }),
@@ -106,7 +109,9 @@ describe("NewBoardDialog", () => {
   it("renders the three-step import wizard from 'Import from file'", async () => {
     render(<NewBoardDialog workspaceId="ws1" />);
     fireEvent.click(screen.getByRole("button", { name: /new board/i }));
-    fireEvent.click(screen.getByRole("button", { name: /import from file/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /import from file/i }),
+    );
 
     // The wizard's step indicator ("Select & map" / "Confirm") is unique to
     // ImportWizard — the retired v1 single-page dialog had no step indicator.

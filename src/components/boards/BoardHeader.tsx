@@ -31,6 +31,7 @@ import {
   PAGE_TITLE_CLASS,
   PAGE_TITLE_INPUT_CLASS,
 } from "@/components/ui/page-header";
+import { once, useEverOpened } from "@/lib/ui/lazy-dialog";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
@@ -43,22 +44,12 @@ import type { Draft } from "@/components/boards/automations/recipes";
 // The four on-demand dialogs are code-split: each chunk is fetched the first
 // time its dialog is opened (or a moment earlier — see the `prefetch*` helpers),
 // so none of them (nor their Server Action / TanStack imports) sit in the board
-// route's first-load JS. Same pattern as AiBoardWizard in NewBoardDialog.tsx.
+// route's first-load JS. Same pattern as AiBoardWizard in NewBoardDialogBody.tsx.
 // No `loading` fallback: a dialog has no in-flow footprint, so there is nothing
 // to reserve space for.
 //
-// Each loader is memoised so the intent-prefetch and the `dynamic` render share
-// ONE in-flight `import()` instead of racing two.
-function once<T>(load: () => Promise<T>): () => Promise<T> {
-  let pending: Promise<T> | undefined;
-  return () =>
-    (pending ??= load().catch((error: unknown) => {
-      // Let a later open retry after a failed (e.g. offline) prefetch.
-      pending = undefined;
-      throw error;
-    }));
-}
-
+// Each loader is memoised (`once`) so the intent-prefetch and the `dynamic`
+// render share ONE in-flight `import()` instead of racing two.
 const loadAutomationsDialog = once(() =>
   import("@/components/boards/automations/AutomationsDialog").then(
     (m) => m.AutomationsDialog,
@@ -94,21 +85,6 @@ function prefetchMenuDialogs() {
   loadAutomationsDialog().catch(ignore);
   loadImportWizard().catch(ignore);
   loadTrashDialog().catch(ignore);
-}
-
-/**
- * True from the first render where `open` is true, forever after. Gates the
- * mount of a lazy dialog: nothing is rendered (and no chunk requested) until
- * the first open, but the dialog then STAYS mounted with its real `open` prop —
- * exactly as before it was lazy — so Radix can play the close animation and the
- * dialog keeps its internal state (loaded rules, wizard step) across reopen.
- */
-function useEverOpened(open: boolean): boolean {
-  const [everOpened, setEverOpened] = useState(open);
-  // Adjusting state during render (not in an effect) is the documented React
-  // pattern for deriving sticky state from a prop — no extra commit.
-  if (open && !everOpened) setEverOpened(true);
-  return open || everOpened;
 }
 
 // Stable empty defaults. A `= []` default parameter allocates a fresh array on
