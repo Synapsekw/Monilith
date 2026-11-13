@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { executeAgentTool } from "@/test/agent-tool-exec";
 import type { StagedCall } from "./staged";

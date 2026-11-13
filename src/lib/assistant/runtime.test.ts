@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import { simulateReadableStream, tool } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import {

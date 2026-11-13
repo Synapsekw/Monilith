@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import { executeAgentTool } from "@/test/agent-tool-exec";
 import { parseToolTrace } from "@/lib/ai/ask/tool-trace";
 import { findDescriptor } from "./catalog";

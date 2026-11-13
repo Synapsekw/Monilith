@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 
 const CONV = "11111111-1111-4111-8111-111111111111";
 const MSG = "22222222-2222-4222-8222-222222222222";

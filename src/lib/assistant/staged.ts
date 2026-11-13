@@ -1,6 +1,6 @@
 // Client-safe (no server-only): imported by the stream protocol, the tool
 // trace schema and the confirm card.
-import { z } from "zod";
+import * as z from "zod";
 
 /** Hard cap on staged changes in one assistant turn. */
 export const MAX_STAGED_CALLS = 50;
