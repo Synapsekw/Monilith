@@ -8,7 +8,6 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 vi.mock("@/components/ai/ask/AskChat", () => ({
   AskChat: (p: {
     surface?: string;
-    onBusyChange?: (b: boolean) => void;
     agentNames?: Readonly<Record<string, string>>;
     agents?: readonly unknown[];
     agentId?: string;
@@ -17,7 +16,6 @@ vi.mock("@/components/ai/ask/AskChat", () => ({
     <div
       data-testid="ask-chat"
       data-surface={p.surface ?? ""}
-      data-busy-wired={p.onBusyChange ? "yes" : "no"}
       data-agent-names={p.agentNames ? JSON.stringify(p.agentNames) : "none"}
       data-agents={p.agents ? String(p.agents.length) : "none"}
       data-agent-id={p.agentId ?? "none"}
@@ -97,7 +95,7 @@ describe("DockBody — band", () => {
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New thread" })).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Close agent dock" }),
+      screen.getByRole("button", { name: "Close assistant dock" }),
     ).toBeInTheDocument();
   });
 
@@ -105,7 +103,7 @@ describe("DockBody — band", () => {
     render(<DockBody {...props({ activeId: "c1", onClose: undefined })} />);
     expect(screen.getByRole("button", { name: "New thread" })).toBeEnabled();
     expect(
-      screen.queryByRole("button", { name: "Close agent dock" }),
+      screen.queryByRole("button", { name: "Close assistant dock" }),
     ).toBeNull();
   });
 
@@ -261,7 +259,6 @@ describe("DockBody — transcript", () => {
     expect(chat).toHaveAttribute("data-agent-names", "none");
     expect(chat).toHaveAttribute("data-agents", "none");
     expect(chat).toHaveAttribute("data-agent-id", "none");
-    expect(chat).toHaveAttribute("data-busy-wired", "no");
   });
 
   // Finding #7: this used to replace `AskChat` wholesale with the sentence, so

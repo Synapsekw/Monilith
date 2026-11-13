@@ -302,9 +302,9 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 </button>
               </div>
               <p className="agent-footnote">
-                External MCP actions follow their authorized permissions.
-                Built-in scheduled board agents use a separate
-                proposal-and-review flow.
+                External MCP actions follow their authorized permissions. The
+                built-in assistant answers from your workspace and proposes
+                changes for your review.
               </p>
             </div>
             <div className="agent-visual spotlight reveal">
@@ -376,8 +376,8 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 <div className="mono">02 / Follow-through</div>
                 <h3>Keep the routine moving.</h3>
                 <p>
-                  Automations help with repeatable steps. Built-in scheduled
-                  board agents propose changes for your review.
+                  Automations help with repeatable steps. The built-in assistant
+                  and board Intelligence help you see what needs attention.
                 </p>
               </article>
               <article className="capability spotlight reveal">
@@ -476,10 +476,10 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 <ul>
                   <li>Everything in Core</li>
                   <li>Ask AI across your workspace</li>
-                  <li>Personal agents and briefings</li>
+                  <li>Board Intelligence</li>
                   <li>AI generation and semantic search</li>
                   <li>500 pooled AI credits per seat</li>
-                  <li>Scheduled agents and proposals</li>
+                  <li>Proposals you review before they apply</li>
                 </ul>
               </article>
               <article className="plan spotlight reveal">
@@ -552,12 +552,14 @@ export function AssemblyLanding({ signedIn = false }: { signedIn?: boolean }) {
                 </p>
               </details>
               <details>
-                <summary>Are built-in and external agents the same?</summary>
+                <summary>
+                  Is the built-in assistant the same as external AI tools?
+                </summary>
                 <p>
-                  No. Built-in scheduled board agents can propose changes for
-                  your review. External tools connect through MCP and take
-                  actions within the permissions you authorize; they do not all
-                  pass through that proposal-review flow.
+                  No. The built-in assistant works inside Monolith and proposes
+                  changes for your review. External tools connect through MCP
+                  and take actions within the permissions you authorize; they do
+                  not all pass through that proposal-review flow.
                 </p>
               </details>
               <details>

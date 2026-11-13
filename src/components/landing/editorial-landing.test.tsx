@@ -187,7 +187,7 @@ describe("EditorialLanding", () => {
     ).toHaveAttribute("href", "/pricing");
   });
 
-  it("keeps the MCP messaging: agents OPERATE the platform, distinct from board agents", () => {
+  it("keeps the MCP messaging: agents OPERATE the platform, distinct from the built-in assistant", () => {
     render(<EditorialLanding />);
     expect(
       screen.getByText(/designed for agents from the start/i),
@@ -196,9 +196,9 @@ describe("EditorialLanding", () => {
       screen.getByText(/Full agent access through MCP/i),
     ).toBeInTheDocument();
     const faq = LANDING_FAQS.find((f) =>
-      /built-in agents different/i.test(f.q),
+      /built-in assistant different/i.test(f.q),
     );
-    expect(faq?.a).toMatch(/propose changes for your review/);
+    expect(faq?.a).toMatch(/proposes changes for your review/);
     expect(faq?.a).toMatch(/operate the platform/);
     for (const f of LANDING_FAQS) {
       expect(screen.getByText(f.q)).toBeInTheDocument();

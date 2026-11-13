@@ -24,9 +24,9 @@ describe("/pricing", () => {
     expect(screen.getAllByText(/no seat minimum/i).length).toBeGreaterThan(0);
   });
 
-  it("marks Core as not including Ask Pulse, in text as well as a glyph", () => {
+  it("marks Core as not including Ask AI, in text as well as a glyph", () => {
     render(<PricingPage />);
-    const row = screen.getByRole("row", { name: /ask pulse/i });
+    const row = screen.getByRole("row", { name: /ask ai/i });
     // Never colour or glyph alone: the sr-only labels carry the meaning.
     expect(within(row).getByText("Not included")).toBeInTheDocument();
     expect(within(row).getAllByText("Included").length).toBe(2);

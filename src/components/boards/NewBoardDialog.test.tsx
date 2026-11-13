@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useUIStore } from "@/stores/ui";
 
@@ -23,6 +23,15 @@ vi.mock("@/lib/boards/spreadsheet-actions", () => ({
 }));
 
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
+
+// The dialog body is a next/dynamic chunk. Its first import() makes vitest
+// transform the body's whole module graph on demand; under a loaded full-suite
+// run that cold transform outlasts findBy's 1s default (and the 5s test
+// timeout) and the first test failed intermittently. Warm the module once,
+// with a generous hook timeout, so every test's dynamic import() is a cache hit.
+beforeAll(async () => {
+  await import("@/components/boards/NewBoardDialogBody");
+}, 60_000);
 
 beforeEach(() => {
   push.mockReset();

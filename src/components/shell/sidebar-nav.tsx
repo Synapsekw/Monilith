@@ -40,7 +40,7 @@ type NavLink = {
 
 const TOP: NavLink[] = [
   { label: "My Work", href: "/my-work", icon: ListTodo },
-  { label: "Agents", href: "/ask", icon: AskAiMark },
+  { label: "Ask", href: "/ask", icon: AskAiMark },
 ];
 const PLANNING: NavLink[] = [
   // The folder gallery. It is the ONLY surface that lists unfiled dashboards,
@@ -101,7 +101,7 @@ function RailLink({
 }
 
 /**
- * Keystone sidebar body. Order: context chip → My Work / Agents → Planning →
+ * Keystone sidebar body. Order: context chip → My Work / Ask → Planning →
  * Boards, all inside ONE scroll region, then a pinned footer with My Time +
  * Trash. No separators: the ledger rules + 14px section rhythm are the
  * structure. Platform admin lives in the header, not here.

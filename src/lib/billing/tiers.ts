@@ -63,13 +63,13 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "pulse",
     name: "Pulse",
-    tagline: "Everything in Core, plus the agents.",
+    tagline: "Everything in Core, plus built-in intelligence.",
     monthly: 29,
     annual: 24,
     features: [
       "Everything in Core",
-      "Ask Pulse across your whole workspace",
-      "Personal agents and daily briefings",
+      "Ask AI across your whole workspace",
+      "Board Intelligence",
       "AI board, dashboard, and automation generation",
       "Semantic search",
       `${CREDITS_PER_SEAT} AI credits per seat per month, pooled org-wide`,

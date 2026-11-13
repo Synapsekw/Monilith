@@ -47,9 +47,9 @@ const GROUPS: { group: string; rows: Row[] }[] = [
   {
     group: "AI",
     rows: [
-      { label: "Ask Pulse", core: false, pulse: true, enterprise: true },
+      { label: "Ask AI", core: false, pulse: true, enterprise: true },
       {
-        label: "Personal agents and daily briefings",
+        label: "Board Intelligence",
         core: false,
         pulse: true,
         enterprise: true,

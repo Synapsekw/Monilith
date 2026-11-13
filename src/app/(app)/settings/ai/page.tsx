@@ -94,8 +94,7 @@ export default async function AiSettingsPage() {
   // `buildModelOptions` returns one flat list, sorted providers-by-label (the
   // order `listEnabledProviders` returns) and cheapest-first within a provider
   // (the order `listActiveModels` returns) — the picker groups it without
-  // re-sorting. Shared with Settings → Agents, which needs the same list for
-  // the per-agent pin. `getUsageSummary` is a bounded, admin-only read folded
+  // re-sorting. `getUsageSummary` is a bounded, admin-only read folded
   // into this page's first-paint data, not a client fetch.
   const showOrgAi = isAdmin && orgAi.ok;
   const [modelOptions, usage]: [ModelOption[], UsageSummary | null] = showOrgAi

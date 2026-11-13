@@ -181,10 +181,10 @@ export async function verifyAllProviders(
  * fetch returned a plausible non-empty parse. A Gateway outage that returns
  * `[]`, a 503, or a malformed body must leave the catalog exactly as it was —
  * mass-retiring on a bad fetch would empty every model picker in the product
- * and orphan every pinned agent at once.
+ * and orphan every pinned model at once.
  *
- * Rows are never deleted: user_agents references model ids, so a delete turns a
- * pinned reference into a dangling one instead of a clean `retired` state.
+ * Rows are never deleted: other tables reference model ids, so a delete turns
+ * a pinned reference into a dangling one instead of a clean `retired` state.
  */
 export async function refreshCatalog(deps: {
   fetchFeed: () => Promise<unknown>;

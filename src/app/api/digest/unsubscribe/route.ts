@@ -62,7 +62,7 @@ export async function GET(req: Request) {
   return new NextResponse(
     page(
       isBriefing
-        ? "You're unsubscribed from your daily agent briefing email. You can turn it back on any time in Settings."
+        ? "You're unsubscribed from the daily briefing email. Briefings are no longer sent, so there is nothing to turn back on."
         : "You're unsubscribed from the weekly digest email. You can turn it back on any time in Settings.",
     ),
     { status: 200, headers: { "Content-Type": "text/html" } },

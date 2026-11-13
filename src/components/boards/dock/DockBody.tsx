@@ -165,7 +165,7 @@ export function DockBody({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Close agent dock"
+            aria-label="Close assistant dock"
             className="text-muted-foreground hover:text-foreground shrink-0"
             onClick={onClose}
           >

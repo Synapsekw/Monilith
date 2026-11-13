@@ -80,7 +80,6 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
       readOnly?: boolean;
       onStarted?: (id: string) => void;
       onTurnComplete?: () => void;
-      onBusyChange?: (busy: boolean) => void;
     }) => {
       const instance = useRef(0);
       if (instance.current === 0) instance.current = ++seq;
@@ -124,12 +123,6 @@ vi.mock("@/components/ai/ask/AskChat", async () => {
           </button>
           <button type="button" onClick={() => p.onTurnComplete?.()}>
             mock complete
-          </button>
-          <button type="button" onClick={() => p.onBusyChange?.(true)}>
-            mock busy
-          </button>
-          <button type="button" onClick={() => p.onBusyChange?.(false)}>
-            mock idle
           </button>
         </div>
       );
@@ -191,7 +184,7 @@ function stubNarrow() {
 }
 
 const aside = () =>
-  document.querySelector<HTMLElement>("aside[aria-label='Agent dock']");
+  document.querySelector<HTMLElement>("aside[aria-label='Assistant dock']");
 
 /** A run with two suggestions still open: one write, one browser-side filter. */
 const intelRun = (): BoardIntelligenceRun => ({
@@ -290,7 +283,7 @@ const mount = (props: MountProps = {}) =>
   );
 
 const openDock = () =>
-  userEvent.click(screen.getByRole("button", { name: /open agent dock/i }));
+  userEvent.click(screen.getByRole("button", { name: /open assistant dock/i }));
 
 const chat = () => screen.getByTestId("ask-chat");
 
@@ -326,7 +319,7 @@ describe("BoardDock", () => {
     await openDock();
     await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
     await userEvent.click(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     );
     await openDock();
     expect(loadDockThreads).toHaveBeenCalledTimes(1);
@@ -515,7 +508,7 @@ describe("BoardDock — restored open", () => {
     await waitFor(() => expect(loadDockThreads).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("About the roadmap")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /open agent dock/i }),
+      screen.queryByRole("button", { name: /open assistant dock/i }),
     ).toBeNull();
   });
 
@@ -1020,7 +1013,7 @@ describe("BoardDock — the strip asks for a brief", () => {
   it("opens on Intelligence and reads the board once", async () => {
     mount();
     expect(
-      screen.getByRole("button", { name: /open agent dock/i }),
+      screen.getByRole("button", { name: /open assistant dock/i }),
     ).toBeInTheDocument();
 
     await act(async () => {
@@ -1042,7 +1035,7 @@ describe("BoardDock — the strip asks for a brief", () => {
       useBoardIntelligenceStore.getState().requestOpen("other", { run: true });
     });
     expect(
-      screen.getByRole("button", { name: /open agent dock/i }),
+      screen.getByRole("button", { name: /open assistant dock/i }),
     ).toBeInTheDocument();
     expect(runBoardIntelligence).not.toHaveBeenCalled();
   });
@@ -1062,7 +1055,7 @@ describe("BoardDock — placement in the shell's dock slot", () => {
     const seamSlot = document.getElementById("card-seam-slot")!;
     expect(
       screen
-        .getByRole("button", { name: /open agent dock/i })
+        .getByRole("button", { name: /open assistant dock/i })
         .closest("#card-seam-slot"),
     ).toBe(seamSlot);
     expect(seamSlot.querySelector('[data-seam="right"]')).not.toBeNull();
@@ -1071,7 +1064,7 @@ describe("BoardDock — placement in the shell's dock slot", () => {
     expect(aside()!.querySelector("[data-layer='full']")).not.toBeNull();
     expect(
       screen
-        .getByRole("button", { name: /close agent dock/i })
+        .getByRole("button", { name: /close assistant dock/i })
         .closest("#card-seam-slot"),
     ).toBe(seamSlot);
   });
@@ -1087,7 +1080,7 @@ describe("BoardDock — placement in the shell's dock slot", () => {
     await act(async () => {});
     expect(aside()).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /open agent dock/i }),
+      screen.queryByRole("button", { name: /open assistant dock/i }),
     ).toBeNull();
     expect(loadDockThreads).not.toHaveBeenCalled();
   });
@@ -1105,13 +1098,15 @@ describe("BoardDock — placement in the shell's dock slot", () => {
   it("keeps the floating trigger and the Sheet below md — no portal there", async () => {
     stubNarrow();
     mount();
-    const trigger = screen.getByRole("button", { name: /open agent dock/i });
+    const trigger = screen.getByRole("button", {
+      name: /open assistant dock/i,
+    });
     expect(trigger.closest("#app-dock-slot")).toBeNull();
     expect(aside()).toBeNull();
     await userEvent.click(trigger);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     ).toBeInTheDocument();
   });
 });
@@ -1160,13 +1155,6 @@ describe("BoardDock — tile selection", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Intelligence" }));
     await waitFor(() => expect(runBoardIntelligence).toHaveBeenCalledTimes(1));
   });
-
-  it("shows no presence dot while a turn streams", async () => {
-    mount();
-    await openDock();
-    await userEvent.click(screen.getByRole("button", { name: /mock busy/i }));
-    expect(document.querySelector("[data-dock-presence]")).toBeNull();
-  });
 });
 
 // Spec §8 + finding #1: the band is a tablist with MANUAL activation, because
@@ -1211,12 +1199,12 @@ describe("BoardDock — focus across a fold", () => {
     await settled();
 
     await userEvent.click(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     );
     await settled();
     expect(document.body).not.toBe(document.activeElement);
     expect(
-      screen.getByRole("button", { name: /open agent dock/i }),
+      screen.getByRole("button", { name: /open assistant dock/i }),
     ).toHaveFocus();
   });
 
@@ -1233,7 +1221,7 @@ describe("BoardDock — focus across a fold", () => {
 
     // And re-opening from the rail's own button does the same.
     await userEvent.click(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     );
     await settled();
     await openDock();
@@ -1267,7 +1255,7 @@ describe("BoardDock — focus across a fold", () => {
     );
 
     await userEvent.click(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     );
     await settled();
     await openDock();
@@ -1343,7 +1331,7 @@ describe("BoardDock — mini rail", () => {
       expect(chat()).toHaveAttribute("data-conversation", "c1"),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: /close agent dock/i }),
+      screen.getByRole("button", { name: /close assistant dock/i }),
     );
     await settled();
     const railChat = screen.getByRole("tab", { name: "Ask" });
@@ -1381,7 +1369,9 @@ describe("BoardDock — motion", () => {
     await settled();
     expect(aside()!.className).not.toContain("transition-[width]");
 
-    const grip = screen.getByRole("separator", { name: /resize agent dock/i });
+    const grip = screen.getByRole("separator", {
+      name: /resize assistant dock/i,
+    });
     grip.focus();
     await userEvent.keyboard("{ArrowLeft}");
     expect(aside()!.style.width).toBe(`${DOCK_MIN_WIDTH + 16}px`);

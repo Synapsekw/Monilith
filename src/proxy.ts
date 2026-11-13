@@ -57,7 +57,7 @@ const PUBLIC_ROUTES = [
 // were missing until 2026-08-01: a cron call carries NO session cookie, so the
 // gate below 307'd each one to /login, and a POST to /login (a page route) answers
 // **405**. pg_net records that in `net._http_response` but nothing surfaces it, so
-// embed-sweep / automation-ai-reconcile / autopilot-sweep / health-digest-ping all
+// embed-sweep / automation-ai-reconcile / health-digest-ping all
 // reported `succeeded` while their work never ran. Every one of these verifies its
 // own HMAC before doing anything (AI_PGNET_HMAC_SECRET via verifyBody; the digest
 // uses DIGEST_SECRET), so exempting them from the cookie gate exposes nothing.

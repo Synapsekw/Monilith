@@ -646,7 +646,7 @@ export function BoardDock({
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Open agent dock"
+            aria-label="Open assistant dock"
             className="bg-surface border-border shadow-panel border"
             // Opening is just state. The fetch hangs off `open` in an effect,
             // so the click and a dock restored open from storage take one path.
@@ -665,7 +665,7 @@ export function BoardDock({
           side="right"
           className="w-full max-w-none gap-0 p-0 [&>button]:hidden"
         >
-          <SheetTitle className="sr-only">Agent dock</SheetTitle>
+          <SheetTitle className="sr-only">Assistant dock</SheetTitle>
           <SheetDescription className="sr-only">
             Conversations about this board.
           </SheetDescription>
@@ -684,7 +684,7 @@ export function BoardDock({
   const aside = createPortal(
     <aside
       ref={asideRef}
-      aria-label="Agent dock"
+      aria-label="Assistant dock"
       data-open={open}
       data-animating={animating || undefined}
       onTransitionEnd={onTransitionEnd}

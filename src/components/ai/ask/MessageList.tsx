@@ -181,7 +181,7 @@ export function MessageList({
             <span className="bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm">
               <AskAiMark className="size-5" />
             </span>
-            <Kicker>Agents</Kicker>
+            <Kicker>Ask</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
               {emptyMessage}
             </p>
