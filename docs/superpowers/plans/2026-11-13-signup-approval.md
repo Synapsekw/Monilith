@@ -148,3 +148,23 @@
 | 6 Gates, review, live run | 2, 3, 4, 5 |
 
 Parallel batches: (1), then (2, 4, 5), then (3), then (6). Critical path: 1 → 2 → 3 → 6. Tasks in one batch run in separate worktrees cut from the task branch; the orchestrator merges them one at a time.
+
+## Live run result (2026-11-13)
+
+Run against `pnpm dev -p 3001` from the task worktree on the DEV database, with two throwaway accounts created through the admin API without `pre_approved` (so they started pending, like a real signup) and deleted afterwards.
+
+| Check                            | Result                                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| New account status               | Both started `pending`.                                                                                                                      |
+| Database rule                    | A direct membership insert for a pending account was refused with `account_not_approved`.                                                    |
+| Sign-in while pending            | Landed on `/pending-approval`, "Your account is waiting for approval".                                                                       |
+| Visiting `/boards` while pending | Sent back to `/pending-approval`.                                                                                                            |
+| "Check again" while pending      | Stayed, showed "Still waiting for approval."                                                                                                 |
+| Admin page                       | Both listed under "Waiting for approval" with the exact count; Approve removed the row; Reject asked for confirmation, then removed the row. |
+| Audit log                        | `platform.user_approved` and `platform.user_rejected` rows written.                                                                          |
+| Approved account                 | Opening `/pending-approval` moved on into the app (`/onboarding`, since the test account had no organisation name).                          |
+| Rejected account                 | Sign-in landed on `/pending-approval`, "Your account was not approved".                                                                      |
+| Existing account                 | The owner's session loaded `/admin/users` and `/my-work` normally.                                                                           |
+| Cleanup                          | Both accounts deleted; no approval rows and no memberships left.                                                                             |
+
+Not covered by the run: a real email-confirmation signup through the form, an invited person, and a password-recovery link for a pending account. These rest on unit tests.
