@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CardSeam, SEAM_CAP, seamHitClasses } from "./card-seam";
+import { PanelGlyph } from "./panel-glyph";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 
 /**
- * The sidebar's collapse control: the card's left hairline.
+ * The sidebar's collapse control: the card's left hairline, with an always-
+ * visible edge nub carrying a panel glyph (see `SEAM_CAP`).
  *
  * It replaced the chevron that used to sit in the brand row. That one was far
  * from the edge it moved, asymmetric with the dock's own control, and stacked
@@ -40,11 +41,7 @@ export function SidebarSeam() {
             "group-focus-visible/hit:ring-ring group-focus-visible/hit:ring-2",
           )}
         >
-          {isCollapsed ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronLeft className="size-3.5" />
-          )}
+          <PanelGlyph side="left" open={!isCollapsed} />
         </span>
       </button>
     </CardSeam>

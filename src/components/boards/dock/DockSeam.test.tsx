@@ -27,6 +27,18 @@ beforeEach(() => {
 });
 
 describe("DockSeam", () => {
+  it("shows a panel glyph for the dock, not a direction arrow", () => {
+    const { cap } = mount(true);
+    const svg = cap.querySelector("svg")!;
+    expect(svg).toHaveAttribute("data-panel-glyph", "right");
+    expect(svg).toHaveAttribute("data-state", "open");
+  });
+
+  it("empties the glyph while the dock is folded", () => {
+    const { cap } = mount(false);
+    expect(cap.querySelector("svg")).toHaveAttribute("data-state", "closed");
+  });
+
   it("renders onto the card, not into the dock", () => {
     mount(false);
     const seam = document.querySelector('[data-seam="right"]');

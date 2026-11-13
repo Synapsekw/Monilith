@@ -1516,20 +1516,27 @@
     stroke-dasharray: var(--seam-len) var(--seam-gap);
     filter: drop-shadow(var(--seam-glow));
   }
+  /* The edge nub: visible at rest, so the control is findable without hunting
+     for a hover target. Approach brightens it the Keystone way — hairline and
+     glyph brighten, the pill grows a touch taller; nothing thickens. The
+     lit values are utilities on SEAM_CAP (this is @layer base, which h-11
+     would out-rank); only the timing lives here. */
   .seam-cap {
+    transition:
+      height 300ms var(--ease-keystone),
+      border-color 200ms var(--ease-keystone),
+      color 200ms var(--ease-keystone);
+  }
+  /* Folding empties the glyph's panel bar (PanelGlyph). */
+  .panel-glyph-bar {
+    transform-box: fill-box;
+    transition:
+      transform 320ms var(--ease-keystone),
+      opacity 320ms var(--ease-keystone);
+  }
+  .panel-glyph[data-state="closed"] .panel-glyph-bar {
+    transform: scaleX(0);
     opacity: 0;
-    transition: opacity 180ms var(--ease-keystone);
-  }
-  .seam-hit:hover .seam-cap,
-  .seam-hit:focus-visible .seam-cap,
-  .seam-hit:has(:focus-visible) .seam-cap {
-    opacity: 1;
-  }
-  /* No hover to reveal it with, so the chevron simply stays. */
-  @media (pointer: coarse) {
-    .seam-cap {
-      opacity: 1;
-    }
   }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {
