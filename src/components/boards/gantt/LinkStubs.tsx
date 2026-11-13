@@ -28,6 +28,66 @@ export type ExternalLinkStub = {
 
 /** Stubs shown inline before the rest collapse into "+N". */
 const MAX_INLINE = 2;
+/** Widest a single chip can grow (its `max-w-36`). */
+const CHIP_MAX_W = 144;
+/** Width of the "+N" overflow chip. */
+const OVERFLOW_W = 32;
+/** `gap-1` between chips. */
+const CHIP_GAP = 4;
+
+/**
+ * Upper bound on the rendered width of a chip row holding `count` stubs —
+ * conservative (every chip at its max width) so a "fits" verdict never clips.
+ */
+export function estimateStubRowW(count: number): number {
+  if (count <= 0) return 0;
+  const chips = Math.min(count, MAX_INLINE);
+  const overflow = count > MAX_INLINE ? 1 : 0;
+  return (
+    chips * CHIP_MAX_W +
+    overflow * OVERFLOW_W +
+    (chips + overflow - 1) * CHIP_GAP
+  );
+}
+
+/**
+ * Where a group of stubs renders relative to its bar: `before` (left of the
+ * bar), `after` (right of it), or `inside` (overlaid at the bar's end, clamped
+ * within the track) when neither side has room.
+ */
+export type StubSide = "before" | "after" | "inside";
+
+/**
+ * Choose a side per stub group so no chip row falls off the clipped track.
+ * Each group prefers its natural side — "waiting on" before the bar,
+ * "blocking" after it — flips to the other side when its own side lacks room
+ * (the earliest bar always sits at x=0; the latest ends at the track edge),
+ * and falls back to `inside` when neither side fits.
+ */
+export function placeLinkStubs(args: {
+  barStartX: number;
+  barEndX: number;
+  trackW: number;
+  gap: number;
+  waitingOnCount: number;
+  blockingCount: number;
+}): { waitingOn: StubSide; blocking: StubSide } {
+  const roomBefore = args.barStartX - args.gap;
+  const roomAfter = args.trackW - args.barEndX - args.gap;
+  const pick = (count: number, prefer: "before" | "after"): StubSide => {
+    const need = estimateStubRowW(count);
+    const fitsBefore = roomBefore >= need;
+    const fitsAfter = roomAfter >= need;
+    if (prefer === "before") {
+      return fitsBefore ? "before" : fitsAfter ? "after" : "inside";
+    }
+    return fitsAfter ? "after" : fitsBefore ? "before" : "inside";
+  };
+  return {
+    waitingOn: pick(args.waitingOnCount, "before"),
+    blocking: pick(args.blockingCount, "after"),
+  };
+}
 
 function stubLabel(stub: ExternalLinkStub): string {
   const verb = stub.direction === "waiting_on" ? "Waiting on" : "Blocking";

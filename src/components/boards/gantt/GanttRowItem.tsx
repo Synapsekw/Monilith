@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
 import {
   LinkStubs,
+  placeLinkStubs,
   type ExternalLinkStub,
+  type StubSide,
 } from "@/components/boards/gantt/LinkStubs";
 import {
   intelRowClasses,
@@ -54,7 +56,7 @@ export function GanttRowItem({
   isExpanded = false,
   onToggleExpand,
   color,
-  linkCandidates,
+  getLinkCandidates,
   dependencies,
   violations,
   onResize,
@@ -79,8 +81,9 @@ export function GanttRowItem({
   isExpanded?: boolean;
   onToggleExpand?: (itemId: string) => void;
   color: string | null;
-  /** Items offered in the "Blocked by…" picker (already excludes this row). */
-  linkCandidates: { itemId: string; name: string }[];
+  /** Items offered in the "Blocked by…" picker (already excludes this row).
+   * Called only while the ⋯ menu is open — never on scroll/re-render. */
+  getLinkCandidates: () => { itemId: string; name: string }[];
   dependencies: readonly GanttDependency[];
   violations: ReadonlySet<string>;
   /** Commit a right-edge resize to a new end date. */
@@ -166,21 +169,37 @@ export function GanttRowItem({
     ? barLeft + dayW / 2 - MILESTONE / 2
     : barLeft;
   const barEndX = row.isMilestone ? barStartX + MILESTONE : barLeft + barWidth;
-  const waitingOn = useMemo(
-    () => stubs.filter((s) => s.direction === "waiting_on"),
-    [stubs],
-  );
-  const blocking = useMemo(
-    () => stubs.filter((s) => s.direction === "blocking"),
-    [stubs],
-  );
+  // Group the stubs by the side they render on. Each direction prefers its
+  // natural side but flips (or overlays the bar end) when the clipped track
+  // has no room there; groups landing on the same side share one chip row,
+  // "waiting on" first.
+  const stubGroups = useMemo(() => {
+    const waitingOn = stubs.filter((s) => s.direction === "waiting_on");
+    const blocking = stubs.filter((s) => s.direction === "blocking");
+    const sides = placeLinkStubs({
+      barStartX,
+      barEndX,
+      trackW: totalW,
+      gap: STUB_GAP,
+      waitingOnCount: waitingOn.length,
+      blockingCount: blocking.length,
+    });
+    const bySide = new Map<StubSide, ExternalLinkStub[]>();
+    for (const [group, side] of [
+      [waitingOn, sides.waitingOn],
+      [blocking, sides.blocking],
+    ] as const) {
+      if (group.length === 0) continue;
+      bySide.set(side, [...(bySide.get(side) ?? []), ...group]);
+    }
+    return [...bySide];
+  }, [stubs, barStartX, barEndX, totalW]);
 
   // Predecessors of this item (items that must finish before this starts)
   const predecessorDeps = useMemo(
     () => dependencies.filter((d) => d.successor_id === row.itemId),
     [dependencies, row.itemId],
   );
-  const otherItems = linkCandidates;
 
   // Resize state. The refs hold the gesture origin; `resizeDeltaRef` mirrors
   // the previewed day delta so pointerup can commit without reading state.
@@ -341,27 +360,13 @@ export function GanttRowItem({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            {otherItems.length > 0 && (
-              <>
-                <div className="px-2 py-1">
-                  <Kicker>Blocked by…</Kicker>
-                </div>
-                {otherItems.map((other) => (
-                  <DropdownMenuItem
-                    key={other.itemId}
-                    onSelect={() =>
-                      onAddDependency({
-                        predecessorId: other.itemId,
-                        successorId: row.itemId,
-                      })
-                    }
-                  >
-                    {other.name}
-                  </DropdownMenuItem>
-                ))}
-                {predecessorDeps.length > 0 && <DropdownMenuSeparator />}
-              </>
-            )}
+            <LinkCandidateItems
+              getCandidates={getLinkCandidates}
+              hasPredecessors={predecessorDeps.length > 0}
+              onPick={(predecessorId) =>
+                onAddDependency({ predecessorId, successorId: row.itemId })
+              }
+            />
             {predecessorDeps.map((dep) => (
               <DropdownMenuItem
                 key={dep.id}
@@ -484,28 +489,62 @@ export function GanttRowItem({
         )}
 
         {/* Cross-board / out-of-view link stubs: "waiting on" chips sit left
-            of the bar, "blocking" chips to its right. */}
-        {row.scheduled && onStubTap && stubs.length > 0 && (
-          <>
-            {waitingOn.length > 0 && (
-              <div
-                className="absolute flex -translate-y-1/2 justify-end"
-                style={{ right: totalW - barStartX + STUB_GAP, top: ROW_H / 2 }}
-              >
-                <LinkStubs stubs={waitingOn} onTap={onStubTap} />
-              </div>
-            )}
-            {blocking.length > 0 && (
-              <div
-                className="absolute flex -translate-y-1/2"
-                style={{ left: barEndX + STUB_GAP, top: ROW_H / 2 }}
-              >
-                <LinkStubs stubs={blocking} onTap={onStubTap} />
-              </div>
-            )}
-          </>
-        )}
+            of the bar, "blocking" chips to its right — flipped or overlaid on
+            the bar end when that side would clip (see placeLinkStubs). */}
+        {row.scheduled &&
+          onStubTap &&
+          stubGroups.map(([side, group]) => (
+            <div
+              key={side}
+              data-stub-side={side}
+              className="absolute z-10 flex -translate-y-1/2"
+              style={{
+                top: ROW_H / 2,
+                ...(side === "before"
+                  ? { right: totalW - barStartX + STUB_GAP }
+                  : side === "after"
+                    ? { left: barEndX + STUB_GAP }
+                    : { right: Math.max(0, totalW - barEndX) + STUB_GAP }),
+              }}
+            >
+              <LinkStubs stubs={group} onTap={onStubTap} />
+            </div>
+          ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * The "Blocked by…" picker entries. Rendered inside DropdownMenuContent, which
+ * Radix mounts only while the menu is open, so the candidate list is computed
+ * lazily on open instead of for every mounted row on every canvas render.
+ */
+function LinkCandidateItems({
+  getCandidates,
+  hasPredecessors,
+  onPick,
+}: {
+  getCandidates: () => { itemId: string; name: string }[];
+  hasPredecessors: boolean;
+  onPick: (predecessorId: string) => void;
+}) {
+  const candidates = getCandidates();
+  if (candidates.length === 0) return null;
+  return (
+    <>
+      <div className="px-2 py-1">
+        <Kicker>Blocked by…</Kicker>
+      </div>
+      {candidates.map((other) => (
+        <DropdownMenuItem
+          key={other.itemId}
+          onSelect={() => onPick(other.itemId)}
+        >
+          {other.name}
+        </DropdownMenuItem>
+      ))}
+      {hasPredecessors && <DropdownMenuSeparator />}
+    </>
   );
 }

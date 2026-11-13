@@ -314,7 +314,7 @@ export function GanttCanvas({
                         isExpanded={isExpanded?.(row.itemId) ?? false}
                         onToggleExpand={onToggleExpand}
                         color={colorFor(row)}
-                        linkCandidates={linkCandidates(row)}
+                        getLinkCandidates={() => linkCandidates(row)}
                         dependencies={dependencies}
                         violations={violations}
                         onResize={onResizeBar}
@@ -420,6 +420,8 @@ function SectionBand({ row, totalW }: { row: GanttRow; totalW: number }) {
         style={{ width: LABEL_W, paddingLeft: isBoard ? 16 : 32 }}
       >
         <span
+          role="heading"
+          aria-level={isBoard ? 3 : 4}
           className={cn(
             "min-w-0 truncate text-xs",
             isBoard
