@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getUser } from "@/lib/auth/session";
@@ -21,6 +21,7 @@ import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { invalidateMyBoards } from "@/lib/boards/actions/internal";
+import { boardsTag } from "@/lib/cache/tags";
 import {
   archiveBoardCore,
   createBoardCore,
@@ -82,15 +83,34 @@ export async function renameBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const result = await renameBoardCore(await createClient(), parsed.data);
+  const supabase = await createClient();
+  // The owner lookup rides alongside the rename (a primary-key point read, in
+  // parallel — no added latency). `created_by` never changes, so reading it
+  // concurrently with the name update is safe.
+  const [result, { data: board }] = await Promise.all([
+    renameBoardCore(supabase, parsed.data),
+    supabase
+      .from("boards")
+      .select("created_by")
+      .eq("id", parsed.data.boardId)
+      .maybeSingle(),
+  ]);
   if (!result.ok) return result;
 
+  // Tags only — deliberately NO revalidatePath(`/boards/<id>`):
+  //  - Nothing server-rendered on the board page needs it. The header reads the
+  //    name from the client BoardCache, which the mutation already patched
+  //    optimistically (gotcha-05), and the route sets no board-name metadata.
+  //  - It was expensive. Expiring a route's implicit tag makes EVERY `use cache`
+  //    read on that route miss (org members, folders, dashboards, workspaces,
+  //    profile, …) — in this action's own re-render and for every other user
+  //    who next opens the board.
+  // What actually shows the name server-side is the sidebar list, served from
+  // tagged caches: mine (invalidateMyBoards), every grantee's shared list
+  // (renameBoardCore), and — when an editor renames someone else's board — the
+  // owner's own list, which the path revalidation used to heal only by accident.
   await invalidateMyBoards();
-
-  // The board name shows on the board page's own (uncached) header; the sidebar
-  // list is served from the `boards:user:<me>` cache invalidateMyBoards expired,
-  // and the recipients' shared-boards tags are expired inside renameBoardCore.
-  revalidatePath(`/boards/${parsed.data.boardId}`);
+  if (board?.created_by) updateTag(boardsTag(board.created_by));
   return { ok: true, data: undefined };
 }
 

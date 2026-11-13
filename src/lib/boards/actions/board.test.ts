@@ -44,11 +44,20 @@ import {
 const WS_ID = "11111111-1111-4111-8111-111111111111";
 const BOARD_ID = "22222222-2222-4222-8222-222222222222";
 
-/** `.from("boards").update({…}).eq("id", …)` resolving to `{ error }`. */
-function updateChain(error: unknown = null) {
+/**
+ * `.from("boards").update({…}).eq("id", …)` resolving to `{ error }`, plus the
+ * owner point read renameBoard issues alongside it:
+ * `.select("created_by").eq("id", …).maybeSingle()`.
+ */
+function updateChain(error: unknown = null, ownerId: string | null = "u1") {
   const eq = vi.fn().mockResolvedValue({ error });
   const update = vi.fn((_patch: Record<string, unknown>) => ({ eq }));
-  return { chain: { update }, update, eq };
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: ownerId ? { created_by: ownerId } : null,
+    error: null,
+  });
+  const select = vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) }));
+  return { chain: { update, select }, update, eq };
 }
 
 /** `.from("x").select("y").eq("z", …)` resolving to `{ data }`. */
@@ -123,12 +132,50 @@ describe("renameBoard", () => {
     const res = await renameBoard({ boardId: BOARD_ID, name: "New" });
     expect(res.ok).toBe(true);
     expect(update).toHaveBeenCalledWith({ name: "New" });
-    // One updateTag per grantee, plus the owner's own boards tag inside
-    // invalidateMyBoards — which is mocked out, so only the fan-out lands here.
-    expect(updateTag).toHaveBeenCalledTimes(2);
+    // One updateTag per grantee, plus the board OWNER's boards tag. (The
+    // actor's own tag is expired inside invalidateMyBoards, mocked out here.)
+    expect(updateTag).toHaveBeenCalledTimes(3);
     expect(updateTag).toHaveBeenCalledWith("shared-boards:user:u2");
     expect(updateTag).toHaveBeenCalledWith("shared-boards:user:u3");
-    expect(revalidatePath).toHaveBeenCalledWith(`/boards/${BOARD_ID}`);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:u1");
+    expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT revalidate the board path — tags only", async () => {
+    // revalidatePath(`/boards/<id>`) expires the route's implicit tag, which
+    // makes every `use cache` read on that board miss (for every user), to
+    // refresh a title the client BoardCache already shows optimistically.
+    const { chain } = updateChain(null);
+    from.mockImplementation((table: string) =>
+      table === "boards" ? chain : selectChain([]),
+    );
+    const res = await renameBoard({ boardId: BOARD_ID, name: "New" });
+    expect(res.ok).toBe(true);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("expires the OWNER's boards tag when an editor renames a shared board", async () => {
+    // The actor is u1 (session mock); the board belongs to u9. Without this the
+    // owner's sidebar kept the old name until the nav cache TTL.
+    const { chain } = updateChain(null, "u9");
+    from.mockImplementation((table: string) =>
+      table === "boards" ? chain : selectChain([{ user_id: "u1" }]),
+    );
+    const res = await renameBoard({ boardId: BOARD_ID, name: "New" });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:u9");
+    expect(updateTag).toHaveBeenCalledWith("shared-boards:user:u1");
+  });
+
+  it("still succeeds when the owner row is not readable", async () => {
+    const { chain } = updateChain(null, null);
+    from.mockImplementation((table: string) =>
+      table === "boards" ? chain : selectChain([]),
+    );
+    const res = await renameBoard({ boardId: BOARD_ID, name: "New" });
+    expect(res.ok).toBe(true);
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
   });
 
   it("propagates an update error before any tag work", async () => {

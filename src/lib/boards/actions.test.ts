@@ -1035,6 +1035,15 @@ describe("board mutation invalidation (boards tag)", () => {
       if (t === "boards")
         return {
           update: () => ({ eq: async () => ({ error: null }) }),
+          // The owner point read renameBoard issues alongside the update.
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { created_by: "owner-1" },
+                error: null,
+              }),
+            }),
+          }),
         } as never;
       if (t === "board_members")
         return {
@@ -1054,6 +1063,15 @@ describe("board mutation invalidation (boards tag)", () => {
       if (t === "boards")
         return {
           update: () => ({ eq: async () => ({ error: null }) }),
+          // The owner point read renameBoard issues alongside the update.
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { created_by: "owner-1" },
+                error: null,
+              }),
+            }),
+          }),
         } as never;
       if (t === "board_members")
         return {
