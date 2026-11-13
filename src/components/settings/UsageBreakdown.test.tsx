@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { UsageBreakdown } from "@/components/settings/UsageBreakdown";
 import type { UsageSummary } from "@/lib/ai/usage-summary";
+
+// The recharts trend is deferred behind next/dynamic (LazyUsageTrendChart).
+// Stub the heavy module so these tests assert the lazy boundary, not recharts
+// (which draws nothing in jsdom anyway).
+vi.mock("@/components/settings/UsageTrendChart", () => ({
+  UsageTrendChart: ({ months }: { months: unknown[] }) => (
+    <div data-testid="usage-trend-chart" data-points={months.length} />
+  ),
+}));
 
 const summary: UsageSummary = {
   entitlement: {
@@ -21,8 +30,28 @@ const summary: UsageSummary = {
 };
 
 describe("UsageBreakdown", () => {
-  it("renders per-feature credits and the 6-month trend by default", () => {
+  // MUST stay the first test in this file: React.lazy caches the resolved
+  // module for the lifetime of the test module, so only the first render ever
+  // sees the pending (skeleton) state.
+  it("shows a fixed-height skeleton first, then swaps in the lazy trend chart", async () => {
     render(<UsageBreakdown summary={summary} />);
+    // The chart module is behind a dynamic import: not there on first render…
+    expect(screen.queryByTestId("usage-trend-chart")).not.toBeInTheDocument();
+    // …a skeleton with the chart's exact box (h-40 w-full) holds the space.
+    expect(screen.getByTestId("usage-trend-skeleton")).toHaveClass(
+      "h-40",
+      "w-full",
+    );
+    const chart = await screen.findByTestId("usage-trend-chart");
+    expect(chart).toHaveAttribute("data-points", "2");
+    expect(
+      screen.queryByTestId("usage-trend-skeleton"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders per-feature credits and the 6-month trend by default", async () => {
+    render(<UsageBreakdown summary={summary} />);
+    expect(await screen.findByTestId("usage-trend-chart")).toBeInTheDocument();
     expect(screen.getByText("ask_pulse")).toBeInTheDocument();
     expect(screen.getByText("item_assist")).toBeInTheDocument();
     // 6-month view is the default range.
@@ -53,5 +82,25 @@ describe("UsageBreakdown", () => {
       />,
     );
     expect(screen.getByText(/unmetered/i)).toBeInTheDocument();
+  });
+
+  it("does not mount the trend chart in the this-month range", async () => {
+    render(<UsageBreakdown summary={summary} />);
+    await screen.findByTestId("usage-trend-chart");
+    fireEvent.click(screen.getByRole("button", { name: /this month/i }));
+    expect(screen.queryByTestId("usage-trend-chart")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("usage-trend-skeleton"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps recharts out of the statically imported module", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(
+      "src/components/settings/UsageBreakdown.tsx",
+      "utf8",
+    );
+    expect(src).not.toMatch(/from "recharts"/);
+    expect(src).not.toMatch(/from "@\/components\/ui\/chart"/);
   });
 });
