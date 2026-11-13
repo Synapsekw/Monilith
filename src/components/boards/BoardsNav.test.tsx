@@ -266,123 +266,100 @@ describe("BoardsNav", () => {
     expect(row.firstElementChild?.className).toContain("size-6");
   });
 
-  it("collapsed: renders each board as an initial with the board name as its accessible label", () => {
+  const railBoards = [
+    {
+      id: "b1",
+      name: "Marketing",
+      workspace_id: "w1",
+      position: 0,
+      shared_out: false,
+    },
+  ];
+  const railShared: SharedBoardEntry[] = [
+    {
+      id: "s1",
+      name: "Roadmap",
+      position: 0,
+      owner_name: "Dana",
+      access_level: "viewer",
+    },
+  ];
+
+  it("collapsed: one Boards tile linking to /boards — no per-board tiles", () => {
     render(
       <TooltipProvider>
         <BoardsNav
           collapsed
-          boards={[
-            {
-              id: "b1",
-              name: "Sprint backlog",
-              workspace_id: "w1",
-              position: 0,
-              shared_out: false,
-            },
-          ]}
-          sharedBoards={[]}
+          boards={railBoards}
+          sharedBoards={railShared}
           activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
 
-    const link = screen.getByRole("link", { name: "Sprint backlog" });
-    expect(link).toHaveAttribute("href", "/boards/b1");
-    expect(link).toHaveTextContent("S");
-    expect(screen.queryByText("Boards")).not.toBeInTheDocument();
+    const tile = screen.getByRole("link", { name: "Boards" });
+    expect(tile).toHaveAttribute("href", "/boards");
+    expect(tile).not.toHaveAttribute("aria-current");
+    // Neither owned nor shared boards get a tile of their own any more.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(
+      screen.queryByRole("link", { name: "Marketing" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Roadmap" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("collapsed + coarse: shows the Boards header + board name as visible captions (gotcha-47)", () => {
+  it("collapsed: the Boards tile is active while a board is open", () => {
+    mockUseParams.mockReturnValue({ boardId: "b1" });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={railBoards}
+          sharedBoards={[]}
+          activeWorkspaceId="w1"
+        />
+      </TooltipProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Boards" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("collapsed + coarse: the Boards tile gains a visible caption (gotcha-47)", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(true);
     render(
       <TooltipProvider>
         <BoardsNav
           collapsed
-          boards={[
-            {
-              id: "b1",
-              name: "Marketing",
-              workspace_id: "w1",
-              position: 0,
-              shared_out: false,
-            },
-          ]}
+          boards={railBoards}
           sharedBoards={[]}
           activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
-    // Header caption now visible (was tooltip-only).
-    expect(
-      screen.getByText("Boards", { selector: "span" }),
-    ).toBeInTheDocument();
-    // …and the head tile stays hoverable so its Radix tooltip still opens: it
-    // is a dead tile, not a dead element. `cursor-default` + a transparent
-    // hover is how it declines the tint — never `pointer-events-none`.
-    const head = screen.getByLabelText("Boards");
-    expect(head.className).not.toContain("pointer-events-none");
-    expect(head.className).toContain("cursor-default");
-    // The letter tile keeps its initial AND gains the full name as a caption.
-    const tile = screen.getByRole("link", { name: "Marketing" });
-    expect(tile).toHaveTextContent("M");
-    expect(tile).toHaveTextContent("Marketing");
+    const tile = screen.getByRole("link", { name: "Boards" });
+    expect(tile).toHaveTextContent("Boards");
     expect(tile.className).toContain("pointer-coarse:min-h-11");
   });
 
-  it("collapsed + fine: stays icon/initial-only, no name caption", () => {
+  it("collapsed + fine: the Boards tile stays icon-only", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(false);
     render(
       <TooltipProvider>
         <BoardsNav
           collapsed
-          boards={[
-            {
-              id: "b1",
-              name: "Marketing",
-              workspace_id: "w1",
-              position: 0,
-              shared_out: false,
-            },
-          ]}
+          boards={railBoards}
           sharedBoards={[]}
           activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
-    expect(
-      screen.queryByText("Boards", { selector: "span" }),
-    ).not.toBeInTheDocument();
-    const tile = screen.getByRole("link", { name: "Marketing" });
-    // Only the initial is on-screen; full name lives in aria-label/tooltip.
-    expect(tile).toHaveTextContent("M");
-    expect(
-      screen.queryByText("Marketing", { selector: "span" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("collapsed + coarse: shared-board tiles also gain a visible name caption", () => {
-    vi.mocked(useCoarsePointer).mockReturnValue(true);
-    render(
-      <TooltipProvider>
-        <BoardsNav
-          collapsed
-          boards={[]}
-          sharedBoards={[
-            {
-              id: "s1",
-              name: "Roadmap",
-              position: 0,
-              owner_name: "Dana",
-              access_level: "viewer",
-            },
-          ]}
-          activeWorkspaceId="w1"
-        />
-      </TooltipProvider>,
+    expect(screen.getByRole("link", { name: "Boards" })).not.toHaveTextContent(
+      "Boards",
     );
-    const tile = screen.getByRole("link", { name: "Roadmap" });
-    expect(tile).toHaveTextContent("R");
-    expect(tile).toHaveTextContent("Roadmap");
   });
 
   it("renders boards with a shared indicator and a Shared with me section", () => {
@@ -768,8 +745,9 @@ describe("BoardsNav folders", () => {
 
     expect(screen.queryByText("Acme Rebrand")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Website revamp" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("link", { name: "Website revamp" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Boards" })).toBeInTheDocument();
   });
 
   it("offers a 'Move to folder' entry on an owned board row", async () => {

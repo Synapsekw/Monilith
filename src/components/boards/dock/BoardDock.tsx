@@ -852,8 +852,15 @@ export function BoardDock({
               // nothing, because no panel is mounted beside it.
               idPrefix={DOCK_RAIL_TILE_ID_PREFIX}
               panelMounted={false}
+              // Two tiles only: Intelligence and the chat. Agents are picked
+              // in the open band, so the rail never grows a tile per agent.
+              compact
               onSelect={(tile) => {
-                selectTile(tile);
+                // The compact chat tile stands for the persona already on
+                // screen — reopen it, never reset it to plain Ask (that would
+                // start a new thread and drop the open one).
+                if (tile.kind === "ask") changeTab("chat");
+                else selectTile(tile);
                 toggleOpen(true);
               }}
             />
