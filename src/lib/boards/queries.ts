@@ -6,8 +6,17 @@ import { getUser } from "@/lib/auth/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 const UUID = z.string().uuid();
+
+/** Most live items (and dependencies) one board read returns. */
+export const BOARD_ITEMS_CAP = 5000;
+/**
+ * Most cell values one board read returns: 5000 items at a dozen filled cells.
+ * Raised from 20000 when imported plans (1,770 items × ~17 columns) overflowed.
+ */
+export const BOARD_CELLS_CAP = 60000;
 
 export type Board = Tables<"boards">;
 export type Group = Tables<"groups">;
@@ -227,32 +236,37 @@ export const getBoardPayload = cache(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
-      // Bounded over the board_id index. 5000 is a non-event for real boards but
-      // caps a pathological one; a server-side aggregate/pagination is the
-      // documented follow-up if a board exceeds this (matches attachments/time_entries).
-      supabase
-        .from("items")
-        .select("*")
-        .eq("board_id", boardId)
-        .is("archived_at", null)
-        .order("position", { ascending: true })
-        .limit(5000),
-      // Bounded over the board_id index. A board of 5000 items × several columns
-      // makes cell_values the widest table; 20000 is generous headroom while
-      // capping the pathological case; server-side pagination is the documented
-      // follow-up if a board exceeds this (matches attachments/time_entries).
-      // Select narrowed to the four columns any consumer reads (see
-      // `BoardCellValue`) — `board_id`/`org_id` are dropped. Ordered by the
-      // `(item_id, column_id)` PRIMARY KEY (`cell_values_pkey`, boards_core
-      // migration) so truncation at the cap is deterministic, not an arbitrary
-      // subset — the same key Postgres already indexes, so the sort is cheap.
-      supabase
-        .from("cell_values")
-        .select("item_id, column_id, value, updated_at")
-        .eq("board_id", boardId)
-        .order("item_id", { ascending: true })
-        .order("column_id", { ascending: true })
-        .limit(20000),
+      // Bounded over the board_id index; BOARD_ITEMS_CAP caps a pathological
+      // board (server-side pagination is the follow-up if one exceeds it).
+      // Paged: PostgREST caps each response at 1000 rows (`fetchAllRows`).
+      // `id` breaks position ties so pages never overlap or skip.
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("items")
+            .select("*")
+            .eq("board_id", boardId)
+            .is("archived_at", null)
+            .order("position", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_ITEMS_CAP },
+      ),
+      // Bounded over the board_id index and capped at BOARD_CELLS_CAP. Select
+      // narrowed to the four columns any consumer reads (see `BoardCellValue`).
+      // Ordered by the `(item_id, column_id)` PRIMARY KEY — a total order, so
+      // paging is stable and truncation at the cap is deterministic.
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("cell_values")
+            .select("item_id, column_id, value, updated_at")
+            .eq("board_id", boardId)
+            .order("item_id", { ascending: true })
+            .order("column_id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_CELLS_CAP },
+      ),
       supabase
         .from("board_views")
         .select("*")
@@ -264,15 +278,23 @@ export const getBoardPayload = cache(
       // read; a server-side follow-up applies if a board ever exceeds this
       // (matches items/cell_values/relation_links). The `.or()` filter string is
       // only built from a validated uuid — boardId is a raw route param here.
-      (UUID.safeParse(boardId).success
-        ? supabase
-            .from("item_dependencies")
-            .select("*")
-            .or(`board_id.eq.${boardId},predecessor_board_id.eq.${boardId}`)
-        : supabase.from("item_dependencies").select("*").eq("board_id", boardId)
-      )
-        .order("created_at", { ascending: true })
-        .limit(5000),
+      fetchAllRows(
+        (from, to) =>
+          (UUID.safeParse(boardId).success
+            ? supabase
+                .from("item_dependencies")
+                .select("*")
+                .or(`board_id.eq.${boardId},predecessor_board_id.eq.${boardId}`)
+            : supabase
+                .from("item_dependencies")
+                .select("*")
+                .eq("board_id", boardId)
+          )
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_ITEMS_CAP },
+      ),
       supabase
         .from("attachments")
         .select("*")
@@ -292,12 +314,17 @@ export const getBoardPayload = cache(
         .limit(1000),
       // Bounded by relation_links_board_idx. Linked-item NAMES are resolved in a
       // second RLS-scoped query below (the targets live on another board).
-      supabase
-        .from("relation_links")
-        .select("*")
-        .eq("board_id", boardId)
-        .order("position", { ascending: true })
-        .limit(2000),
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("relation_links")
+            .select("*")
+            .eq("board_id", boardId)
+            .order("position", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: 2000 },
+      ),
     ]);
 
     // A DB failure is not a 404: throw so the boards error boundary renders
@@ -393,14 +420,18 @@ export const getBoardPayload = cache(
           // reads `item_id`/`column_id`/`value`. Ordered by the same
           // `(item_id, column_id)` PRIMARY KEY for the same reason: this read is
           // capped too, so without it truncation at 4000 is an arbitrary subset.
-          supabase
-            .from("cell_values")
-            .select("item_id, column_id, value, updated_at")
-            .in("item_id", linkedItemIds)
-            .in("column_id", targetColumnIds)
-            .order("item_id", { ascending: true })
-            .order("column_id", { ascending: true })
-            .limit(4000),
+          fetchAllRows(
+            (from, to) =>
+              supabase
+                .from("cell_values")
+                .select("item_id, column_id, value, updated_at")
+                .in("item_id", linkedItemIds)
+                .in("column_id", targetColumnIds)
+                .order("item_id", { ascending: true })
+                .order("column_id", { ascending: true })
+                .range(from, to),
+            { cap: 4000 },
+          ),
           supabase
             .from("columns")
             .select("id, kind, settings")
