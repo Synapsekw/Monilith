@@ -10,6 +10,7 @@ vi.mock("@/lib/mono/session", () => ({
 }));
 
 import { monoSystemLines, resolveMonoTurn } from "./turn";
+import { assistantDescriptors } from "@/lib/assistant/catalog";
 
 const mono = (over: object = {}) => ({
   userId: "m1",
@@ -55,11 +56,35 @@ describe("resolveMonoTurn", () => {
 
 describe("monoSystemLines", () => {
   it("names the Mono, its owner and its own identity", () => {
-    const text = monoSystemLines({ name: "Nova", userId: "m1" }, "Ada");
+    const text = monoSystemLines(
+      { name: "Nova", userId: "m1", ownerId: "u1" },
+      "Ada",
+    );
     expect(text).toContain('"Nova"');
     expect(text).toContain("user id m1");
     expect(text).toContain('"Ada"');
     expect(text).toContain("waits for");
     expect(text).toContain("cannot create boards");
+  });
+
+  // Review I3: on a Mono thread the tools run as the Mono, so "my work" tools
+  // describe the Mono's assignments. The model must be told, and pointed at
+  // the owner's id for the owner's own work.
+  it("says the my-work tools answer for the Mono and how to read the owner's work", () => {
+    const text = monoSystemLines(
+      { name: "Nova", userId: "m1", ownerId: "u1" },
+      "Ada",
+    );
+    const line = text.split("\n").find((l) => l.includes("get_focus_today"));
+    expect(line).toBeDefined();
+    expect(line).toContain("get_my_work");
+    expect(line).toContain('assignee "me"');
+    expect(line).toMatch(/your own|you, the Mono/);
+    expect(line).toContain("query_items");
+    expect(line).toContain('assignee "u1"');
+    // Every tool the line names must exist exactly in the assistant catalog.
+    const names = new Set(assistantDescriptors().map((d) => d.name));
+    for (const tool of ["get_focus_today", "get_my_work", "query_items"])
+      expect(names.has(tool)).toBe(true);
   });
 });
