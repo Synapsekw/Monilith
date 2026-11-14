@@ -63,9 +63,13 @@ export function ShareBoardDialog({
   useEffect(() => {
     if (!open) return;
     let live = true;
-    void loadBoardFolderGrants({ boardId }).then((r) => {
-      if (live && r.ok) setFolderGrants(r.data);
-    });
+    void loadBoardFolderGrants({ boardId })
+      .then((r) => {
+        if (live && r.ok) setFolderGrants(r.data);
+      })
+      // A rejected call (network, server error) leaves the list empty rather
+      // than becoming an unhandled rejection.
+      .catch(() => {});
     return () => {
       live = false;
     };
@@ -93,14 +97,22 @@ export function ShareBoardDialog({
     });
   }
 
-  const sharedCount = members.reduce(
-    (n, m) =>
-      n +
-      ((access.get(m.userId) ?? "none") !== "none" || viaFolder.has(m.userId)
-        ? 1
-        : 0),
-    0,
+  // Folder grantees missing from `members` (the roster is capped at 500 and
+  // omits Monos, and a grantee can have left the org): still show them, with
+  // the identity the grants RPC gives (none) and a fallback label.
+  const memberIds = new Set(members.map((m) => m.userId));
+  const extraFolderGrants = folderGrants.filter(
+    (g) => !memberIds.has(g.userId),
   );
+  const sharedCount =
+    members.reduce(
+      (n, m) =>
+        n +
+        ((access.get(m.userId) ?? "none") !== "none" || viaFolder.has(m.userId)
+          ? 1
+          : 0),
+      0,
+    ) + new Set(extraFolderGrants.map((g) => g.userId)).size;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,7 +125,7 @@ export function ShareBoardDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {members.length === 0 ? (
+        {members.length === 0 && extraFolderGrants.length === 0 ? (
           <div className="bg-surface-muted/40 flex flex-col items-center gap-2 rounded-lg border px-6 py-10 text-center">
             <span className="bg-surface text-muted-foreground flex size-10 items-center justify-center rounded-full border">
               <UsersRound className="size-5" />
@@ -193,12 +205,34 @@ export function ShareBoardDialog({
                 </div>
               );
             })}
+            {extraFolderGrants.map((g) => (
+              <div
+                key={`folder-${g.userId}`}
+                className="flex items-center gap-3 px-3 py-2.5"
+              >
+                <span
+                  aria-hidden
+                  className="bg-surface text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-medium"
+                >
+                  ?
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block truncate text-sm font-medium">
+                    Unknown member
+                  </span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    Through folder {g.folderName} ·{" "}
+                    {g.access === "editor" ? "Editor" : "Viewer"}
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
         {error ? (
           <FieldStatus field={status} />
-        ) : members.length > 0 ? (
+        ) : members.length > 0 || extraFolderGrants.length > 0 ? (
           <p className="text-muted-foreground text-xs">
             {sharedCount === 0
               ? "Private — only you can see this board."

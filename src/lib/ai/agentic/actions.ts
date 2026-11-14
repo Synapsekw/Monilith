@@ -57,6 +57,14 @@ export async function previewAiStep(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, FEATURE);
 
+    // The service client bypasses RLS, so the caller's own access is checked
+    // FIRST, before any service read: this preview reads the board's newest
+    // item and its context. getBoardAccess is null for a missing board, so
+    // "no access" and "no such board" are the same answer and confirm nothing.
+    const access = await getBoardAccess(boardId);
+    if (access !== "owner" && access !== "editor")
+      return fail("Board not found.");
+
     const svc = createServiceClient();
     // Scope the board to the active org (the service client bypasses RLS).
     const { data: board } = await svc
@@ -65,12 +73,6 @@ export async function previewAiStep(input: {
       .eq("id", boardId)
       .maybeSingle();
     if (!board || board.org_id !== org.id) return fail("Board not found.");
-    // The service client bypasses RLS, so the caller's own access is checked
-    // explicitly: this preview reads the board's newest item and its context.
-    // Same answer as a board that does not exist, so it confirms nothing.
-    const access = await getBoardAccess(boardId);
-    if (access !== "owner" && access !== "editor")
-      return fail("Board not found.");
 
     // Sample the board's most recent top-level item to decide against.
     const { data: sample } = await svc

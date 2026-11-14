@@ -176,8 +176,10 @@ describe("deriveBoardAccess", () => {
 function fakeBoardAccessClient(opts: {
   created_by: string | null;
   grant: { role: "editor" | "viewer" } | null;
+  rpc?: ReturnType<typeof vi.fn>;
 }) {
   return {
+    ...(opts.rpc ? { rpc: opts.rpc } : {}),
     from: (table: string) => ({
       select: () => ({
         eq: () => ({
@@ -225,5 +227,87 @@ describe("getBoardAccessCore", () => {
   it("reports null for a board the caller cannot see", async () => {
     const client = fakeBoardAccessClient({ created_by: null, grant: null });
     await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBeNull();
+  });
+
+  describe("through the board's folder", () => {
+    const folderRpc = (access_level: "editor" | "viewer") =>
+      vi.fn(async () => ({
+        data: [{ board_id: "b1", access_level }],
+        error: null,
+      }));
+
+    it("gives a folder-only user (no board_members row) the folder level", async () => {
+      const rpc = folderRpc("editor");
+      const client = fakeBoardAccessClient({
+        created_by: "u2",
+        grant: null,
+        rpc,
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+        "editor",
+      );
+      expect(rpc).toHaveBeenCalledWith("my_folder_board_levels", {
+        p_board_ids: ["b1"],
+      });
+    });
+
+    it("keeps the direct viewer grant when the folder read errors", async () => {
+      const rpc = vi.fn(async () => ({
+        data: null,
+        error: { message: "boom" },
+      }));
+      const client = fakeBoardAccessClient({
+        created_by: "u2",
+        grant: { role: "viewer" },
+        rpc,
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+        "viewer",
+      );
+    });
+
+    it("does not read folder levels for the creator", async () => {
+      const rpc = folderRpc("viewer");
+      const client = fakeBoardAccessClient({
+        created_by: "u1",
+        grant: null,
+        rpc,
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+        "owner",
+      );
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
+    it("takes editor when direct is editor and folder is viewer", async () => {
+      const client = fakeBoardAccessClient({
+        created_by: "u2",
+        grant: { role: "editor" },
+        rpc: folderRpc("viewer"),
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+        "editor",
+      );
+    });
+
+    it("takes editor when direct is viewer and folder is editor", async () => {
+      const client = fakeBoardAccessClient({
+        created_by: "u2",
+        grant: { role: "viewer" },
+        rpc: folderRpc("editor"),
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBe(
+        "editor",
+      );
+    });
+
+    it("reports null when there is no direct grant and no folder row", async () => {
+      const client = fakeBoardAccessClient({
+        created_by: "u2",
+        grant: null,
+        rpc: vi.fn(async () => ({ data: [], error: null })),
+      });
+      await expect(getBoardAccessCore(client, "u1", "b1")).resolves.toBeNull();
+    });
   });
 });

@@ -43,9 +43,13 @@ function fakeClient(opts: {
     error: opts.updateError ?? null,
   });
   const update = vi.fn(() => ({ eq: updateEq }));
-  const rpc = vi
-    .fn()
-    .mockResolvedValue(opts.rpc ?? { data: { id: "dup-1" }, error: null });
+  // Routed by name: the access check also asks for the caller's folder levels,
+  // which for these fixtures is an intended empty result.
+  const rpc = vi.fn(async (name: string) =>
+    name === "my_folder_board_levels"
+      ? { data: [], error: null }
+      : (opts.rpc ?? { data: { id: "dup-1" }, error: null }),
+  );
 
   const leaveCalls: [string, string][] = [];
   const del = vi.fn(() => ({
@@ -181,7 +185,10 @@ describe("duplicateBoardCore", () => {
     const { client, rpc } = fakeClient({ createdBy: OTHER });
     const r = await duplicateBoardCore(client, OWNER, { boardId: BOARD_ID });
     expect(r).toEqual({ ok: false, error: "Board not found." });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith(
+      "duplicate_board_structure",
+      expect.anything(),
+    );
   });
 
   it("allows any member (editor/viewer), not just the owner", async () => {

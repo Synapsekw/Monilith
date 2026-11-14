@@ -67,6 +67,50 @@ describe("ShareBoardDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("leaves the list empty, without an unhandled rejection, when the folder read rejects", async () => {
+    loadBoardFolderGrants.mockRejectedValue(new Error("network"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(loadBoardFolderGrants).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Through folder/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Private — only you can see this board."),
+    ).toBeInTheDocument();
+  });
+
+  it("still shows a folder grantee who is not in the members list", async () => {
+    loadBoardFolderGrants.mockResolvedValue({
+      ok: true,
+      data: [{ userId: "gone-1", access: "viewer", folderName: "DAAS" }],
+    });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByText("Through folder DAAS · Viewer"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unknown member")).toBeInTheDocument();
+    expect(screen.getByText("Shared with 1 person.")).toBeInTheDocument();
+  });
+
   it("does not load folder grants while closed", () => {
     render(
       <ShareBoardDialog

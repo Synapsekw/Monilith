@@ -154,6 +154,11 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
  * so a non-owner's archive would report success while changing nothing. That is
  * the "lying success" the explicit check exists to prevent (spec F4 / decision
  * D5).
+ *
+ * `userId` MUST be the same user as the client's session (`auth.uid()`): the
+ * direct-grant half is read by `userId`, but the folder half
+ * (`my_folder_board_levels`) is resolved by the database from the session, not
+ * from this parameter. Passing a different user's id would mix two identities.
  */
 export async function getBoardAccessCore(
   supabase: SupabaseClient<Database>,

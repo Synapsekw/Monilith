@@ -89,8 +89,12 @@ let ITEM_RESULT: { data: unknown; error: unknown } = {
   error: null,
 };
 
+// Every table the service client was asked for, to prove a refused caller
+// never reaches a service-client read.
+const serviceFromCalls: string[] = [];
 const createServiceClient = vi.fn(() => ({
   from: (table: string) => {
+    serviceFromCalls.push(table);
     if (table === "boards") return { select: () => chain(BOARD_RESULT) };
     if (table === "items") return { select: () => chain(ITEM_RESULT) };
     throw new Error(`unexpected table: ${table}`);
@@ -125,6 +129,7 @@ beforeEach(() => {
   getBoardAccess.mockReset();
   getBoardAccess.mockResolvedValue("owner");
   createServiceClient.mockClear();
+  serviceFromCalls.length = 0;
 
   resolveActiveOrg.mockResolvedValue({ id: ORG_ID, name: "Org" });
   requireUser.mockResolvedValue({ id: "user-1" });
@@ -147,6 +152,9 @@ describe("previewAiStep — the caller must be able to edit the board", () => {
     expect(r).toEqual({ ok: false, error: "Board not found." });
     expect(buildJobContext).not.toHaveBeenCalled();
     expect(decideAction).not.toHaveBeenCalled();
+    // No service-client read of any table ran for a caller without access.
+    expect(serviceFromCalls).toEqual([]);
+    expect(serviceFromCalls).not.toContain("items");
   });
 
   it("refuses a viewer", async () => {
@@ -154,6 +162,7 @@ describe("previewAiStep — the caller must be able to edit the board", () => {
     const { previewAiStep } = await import("./actions");
     const r = await previewAiStep(validInput());
     expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(serviceFromCalls).not.toContain("items");
     expect(decideAction).not.toHaveBeenCalled();
   });
 
