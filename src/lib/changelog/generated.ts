@@ -5,6 +5,34 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-14",
+    kind: "improved",
+    title: "See more of every board",
+    description:
+      "Board rows are more compact, columns size themselves to their content, and one column header stays pinned while you scroll.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Read long item names",
+    description:
+      "Item names get more room, and resting on a shortened name shows it in full.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Timelines open on today",
+    description:
+      "Board and folder timelines now open on the current date, group work under its group, and flag late items with how many days they are late.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Folder timeline starts as a summary",
+    description:
+      "A folder's timeline opens with one row per board showing progress and late work; open a board to see its groups and items.",
+  },
+  {
+    date: "2026-11-14",
     kind: "fixed",
     title: "Large boards show every value",
     description:
