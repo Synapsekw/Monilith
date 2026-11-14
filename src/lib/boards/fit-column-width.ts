@@ -66,6 +66,14 @@ const AGENT_CHIP = 44;
  * reorder grip (left) and menu button (right) — see ColumnHeader.
  */
 const HEADER_CHROME = 48;
+/**
+ * Coarse pointer: ColumnHeader lays the grip and menu in flow, 44px each
+ * (`pointer-coarse:size-11`), with the cell's `pointer-coarse:px-2` (16) and
+ * two `pointer-coarse:gap-1` (8): 44 + 44 + 16 + 8 = 112.
+ */
+const HEADER_CHROME_COARSE = 112;
+/** Coarse floor: the 112 of controls plus ~40px for a truncated label. */
+export const COLUMN_FIT_COARSE_MIN = 152;
 /** The kicker's `tracking-[0.12em]` at 10px, per character. */
 const HEADER_TRACKING = 1.2;
 /** Longer than this cannot fit in COLUMN_FIT_MAX at any font here: skip measuring. */
@@ -118,8 +126,12 @@ function textOf(kind: string, value: Obj, settings: Obj): string | null {
     case "numbers": {
       if (typeof value.n !== "number") return null;
       const n =
-        typeof settings.precision === "number"
-          ? value.n.toFixed(settings.precision)
+        typeof settings.precision === "number" && Number.isFinite(value.n)
+          ? value.n.toFixed(
+              // toFixed throws a RangeError outside 0..100; a malformed legacy
+              // setting must never crash the whole table's hydration fit.
+              Math.min(10, Math.max(0, Math.trunc(settings.precision) || 0)),
+            )
           : String(value.n);
       return typeof settings.unit === "string" && settings.unit
         ? `${n} ${settings.unit}`
@@ -262,11 +274,12 @@ export function fitColumnWidth(
   values: readonly unknown[],
   measure: FitMeasure,
   members: readonly FitMember[] = NO_MEMBERS,
+  coarse = false,
 ): number {
   const header =
     measure(column.name.toUpperCase(), "header") +
     column.name.length * HEADER_TRACKING +
-    HEADER_CHROME;
+    (coarse ? HEADER_CHROME_COARSE : HEADER_CHROME);
   const settings = asObj(column.settings) ?? {};
   const fixed = FIXED_WIDTH.get(column.kind);
 
@@ -282,7 +295,14 @@ export function fitColumnWidth(
   else content = COLUMN_FIT_DEFAULT;
 
   return Math.round(
-    Math.min(COLUMN_FIT_MAX, Math.max(COLUMN_FIT_MIN, content, header)),
+    Math.min(
+      COLUMN_FIT_MAX,
+      Math.max(
+        coarse ? COLUMN_FIT_COARSE_MIN : COLUMN_FIT_MIN,
+        content,
+        header,
+      ),
+    ),
   );
 }
 
@@ -296,6 +316,7 @@ export function fitBoardColumns(
   cellValues: readonly { column_id: string; value: unknown }[],
   measure: FitMeasure,
   members: readonly FitMember[] = NO_MEMBERS,
+  coarse = false,
 ): Record<string, number> {
   const unsaved = columns.filter((c) => c.width == null);
   if (unsaved.length === 0) return {};
@@ -314,6 +335,7 @@ export function fitBoardColumns(
       byColumn.get(column.id) ?? NO_VALUES,
       measure,
       members,
+      coarse,
     );
   }
   return out;

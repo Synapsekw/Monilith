@@ -3,6 +3,7 @@ import { formatCurrency } from "@/lib/boards/currency";
 import {
   COLUMN_FIT_DEFAULT,
   COLUMN_FIT_MAX,
+  COLUMN_FIT_COARSE_MIN,
   COLUMN_FIT_MIN,
   fitBoardColumns,
   fitColumnWidth,
@@ -314,5 +315,63 @@ describe("fitBoardColumns", () => {
 
   it("returns an empty map when every column has a saved width", () => {
     expect(fitBoardColumns([columns[1]], cellValues, measure)).toEqual({});
+  });
+});
+
+describe("fitColumnWidth — coarse pointer header chrome", () => {
+  it("reserves the in-flow 44px grip and menu (112), not the 48 fine chrome", () => {
+    const name = "A very long column header"; // 25 chars: 150 + 30 label
+    const fine = fitColumnWidth(col("text", name), [{ text: "x" }], measure);
+    const coarse = fitColumnWidth(
+      col("text", name),
+      [{ text: "x" }],
+      measure,
+      [],
+      true,
+    );
+    expect(fine).toBe(228);
+    expect(coarse).toBe(228 - 48 + 112);
+  });
+
+  it("floors a short-labelled column so the controls and a minimal label fit", () => {
+    expect(fitColumnWidth(col("text", "P0"), [], measure, [], true)).toBe(
+      COLUMN_FIT_COARSE_MIN,
+    );
+    expect(COLUMN_FIT_COARSE_MIN).toBeGreaterThanOrEqual(112 + 32);
+  });
+
+  it("fitBoardColumns threads the flag", () => {
+    const columns = [
+      { id: "c1", kind: "date", name: "Due", settings: {}, width: null },
+    ];
+    expect(fitBoardColumns(columns, [], measure)).toEqual({ c1: 116 });
+    expect(fitBoardColumns(columns, [], measure, [], true)).toEqual({
+      c1: Math.max(116, COLUMN_FIT_COARSE_MIN),
+    });
+  });
+});
+
+describe("fitColumnWidth — malformed numbers precision", () => {
+  const n = { n: 1.5 };
+  it("clamps an absurd precision instead of throwing", () => {
+    expect(() =>
+      fitColumnWidth(col("numbers", "N", { precision: 999 }), [n], measure),
+    ).not.toThrow();
+  });
+  it("tolerates NaN / fractional / negative precision", () => {
+    for (const precision of [NaN, Infinity, -3, 2.7]) {
+      expect(() =>
+        fitColumnWidth(col("numbers", "N", { precision }), [n], measure),
+      ).not.toThrow();
+    }
+  });
+  it("falls back to String(n) for a non-finite number", () => {
+    const spy = vi.fn(measure);
+    fitColumnWidth(
+      col("numbers", "N", { precision: 2 }),
+      [{ n: Infinity }],
+      spy,
+    );
+    expect(spy).toHaveBeenCalledWith("Infinity", "cell");
   });
 });

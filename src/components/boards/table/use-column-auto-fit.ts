@@ -99,6 +99,7 @@ export function useColumnAutoFit({
   itemCount,
   members,
   enabled,
+  coarse = false,
 }: {
   columns: readonly FitColumn[];
   cellValues: readonly { column_id: string; value: unknown }[];
@@ -108,6 +109,8 @@ export function useColumnAutoFit({
   /** `useHydrated()`: the server has no canvas, and a width computed
    *  differently on the server would stick on the header after hydration. */
   enabled: boolean;
+  /** `useCoarsePointer()`: touch headers carry 44px in-flow controls. */
+  coarse?: boolean;
 }): Record<string, number> {
   // Canvas text measurement is only right once the web fonts have loaded: until
   // then it measures the fallback face and nothing would refit. So the fit is
@@ -117,9 +120,15 @@ export function useColumnAutoFit({
   return useMemo(() => {
     if (!active) return NO_WIDTHS;
     // Built here, on an active run only (never during the hydration render).
-    return fitBoardColumns(columns, cellValues, createCanvasMeasure(), members);
+    return fitBoardColumns(
+      columns,
+      cellValues,
+      createCanvasMeasure(),
+      members,
+      coarse,
+    );
     // `cellValues` deliberately omitted and `itemCount` deliberately present:
     // see the "WHEN it runs" note above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, columns, itemCount, members]);
+  }, [active, columns, itemCount, members, coarse]);
 }

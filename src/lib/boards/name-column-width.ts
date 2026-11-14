@@ -57,6 +57,30 @@ export const SUBITEM_SLOT_CHROME = 48;
 export const SUBITEM_CHROME = 69;
 
 /**
+ * Coarse-pointer (touch) chrome. On a coarse pointer the hover overlay goes
+ * in flow (`pointer-coarse:static`) and every control is 44px
+ * (`pointer-coarse:size-11`), so they take real width from the name.
+ *
+ * Top-level, editor: the cell's `pl-1` (4) + `pointer-coarse:pr-2` (8) + drag
+ * handle (44) + bulk-select checkbox (44) + the name's `pl-1` + `pr-2` (12) +
+ * the 1px freeze rule = 113, plus the in-flow actions: open-panel (44) +
+ * add-subitem (44, childless rows only, reserved on every row as a superset)
+ * + row menu (44) = 132. Total 245.
+ */
+export const COARSE_TOP_LEVEL_CHROME_EDITOR = 245;
+
+/** Same row, for a viewer: no bulk-select checkbox (245 − 44). */
+export const COARSE_TOP_LEVEL_CHROME_VIEWER = 201;
+
+/**
+ * Subitem row on a coarse pointer: cell `pl-1` (4) + `pr-2` (8) + drag handle
+ * (44) + the name's `pl-10` + `pr-2` (48) + 1px rule = 105, plus in-flow
+ * open-panel (44) + row menu (44) = 88. Total 193. (The chevron slot is
+ * `size-5` on every pointer, so `SUBITEM_SLOT_CHROME` is shared.)
+ */
+export const COARSE_SUBITEM_CHROME = 193;
+
+/**
  * Round + clamp a dragged column width to an integer in `[min, max]`. The resize
  * server actions validate `z.number().int()`, so a fractional pointer delta — a
  * sub-pixel `clientX` under browser zoom or fractional display scaling — must be
@@ -89,19 +113,28 @@ export type NameColumnFitItem = {
  * checkbox only renders for editors); it has no effect on subitem rows, which
  * never carry that checkbox either way. A subitem anywhere in `items` adds the
  * chevron-slot reserve to every top-level row (see `SUBITEM_SLOT_CHROME`).
+ * `coarse` (touch pointer, default false) swaps in the in-flow 44px chrome.
  */
 export function fitNameColumnWidth(
   items: readonly NameColumnFitItem[],
   measure: (text: string) => number,
   canEdit: boolean,
+  coarse = false,
 ): number {
   const hasSubitems = items.some((it) => it.indented === true);
+  const editorChrome = coarse
+    ? COARSE_TOP_LEVEL_CHROME_EDITOR
+    : TOP_LEVEL_CHROME_EDITOR;
+  const viewerChrome = coarse
+    ? COARSE_TOP_LEVEL_CHROME_VIEWER
+    : TOP_LEVEL_CHROME_VIEWER;
+  const subitemChrome = coarse ? COARSE_SUBITEM_CHROME : SUBITEM_CHROME;
   const topLevelChrome =
-    (canEdit ? TOP_LEVEL_CHROME_EDITOR : TOP_LEVEL_CHROME_VIEWER) +
+    (canEdit ? editorChrome : viewerChrome) +
     (hasSubitems ? SUBITEM_SLOT_CHROME : 0);
   let widest = 0;
   for (const { name, indented } of items) {
-    const chrome = indented ? SUBITEM_CHROME : topLevelChrome;
+    const chrome = indented ? subitemChrome : topLevelChrome;
     const w = Math.ceil(measure(name)) + chrome;
     if (w > widest) widest = w;
   }

@@ -5,6 +5,9 @@ import {
   NAME_COL_MIN,
   NAME_COL_MAX,
   NAME_COL_AUTOFIT_MAX,
+  COARSE_SUBITEM_CHROME,
+  COARSE_TOP_LEVEL_CHROME_EDITOR,
+  COARSE_TOP_LEVEL_CHROME_VIEWER,
   SUBITEM_CHROME,
   SUBITEM_SLOT_CHROME,
   TOP_LEVEL_CHROME_EDITOR,
@@ -28,7 +31,42 @@ describe("name-cell chrome reserves", () => {
   });
 });
 
+describe("coarse-pointer chrome reserves", () => {
+  it("are the sums of the 44px in-flow controls", () => {
+    // cell pl-1 4 + pr-2 8 + handle 44 + checkbox 44 + name pl-1/pr-2 12
+    // + border 1 = 113, + open/add-subitem/menu in flow 3 x 44 = 245
+    expect(COARSE_TOP_LEVEL_CHROME_EDITOR).toBe(245);
+    expect(COARSE_TOP_LEVEL_CHROME_VIEWER).toBe(201);
+    // 4 + 8 + 44 + name pl-10/pr-2 48 + 1 = 105, + open + menu 88
+    expect(COARSE_SUBITEM_CHROME).toBe(193);
+  });
+});
+
 describe("fitNameColumnWidth", () => {
+  it("coarse reserves the wider in-flow chrome; fine is unchanged", () => {
+    const long = "x".repeat(40); // 280px
+    expect(fitNameColumnWidth([{ name: long }], measure, true)).toBe(333);
+    expect(fitNameColumnWidth([{ name: long }], measure, true, false)).toBe(
+      333,
+    );
+    expect(fitNameColumnWidth([{ name: long }], measure, true, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_EDITOR,
+    );
+    expect(fitNameColumnWidth([{ name: long }], measure, false, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_VIEWER,
+    );
+    expect(
+      fitNameColumnWidth([{ name: long, indented: true }], measure, true, true),
+    ).toBe(280 + COARSE_SUBITEM_CHROME);
+  });
+
+  it("coarse adds the chevron reserve on a board with subitems", () => {
+    const items = [{ name: "x".repeat(40) }, { name: "s", indented: true }];
+    expect(fitNameColumnWidth(items, measure, true, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_EDITOR + SUBITEM_SLOT_CHROME,
+    );
+  });
+
   it("clamps a short subitem name to the floor", () => {
     // "abcdef" → 42px text + 69px subitem chrome = 111 < NAME_COL_MIN (180)
     expect(

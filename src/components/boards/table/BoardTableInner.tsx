@@ -76,6 +76,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useColumnAutoFit } from "./use-column-auto-fit";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
@@ -490,14 +491,18 @@ export function BoardTableInner({
   // name width rendered its headers at the minimum while rows (rendered
   // client-side) auto-fit wider, shifting every header off its column.
   const hydrated = useHydrated();
+  // Once here (not per row): touch controls are in flow and 44px, so both fits
+  // reserve more chrome. False on the server and until hydration.
+  const coarse = useCoarsePointer();
   const autoFitWidth = useMemo(
     () =>
       fitNameColumnWidth(
         items.map((it) => ({ name: it.name, indented: it.parent_id != null })),
         hydrated ? measureName : () => 0,
         access !== "viewer",
+        coarse,
       ),
-    [items, measureName, access, hydrated],
+    [items, measureName, access, hydrated, coarse],
   );
 
   // null = follow board.name_column_width (or auto-fit). Set live during a drag.
@@ -524,6 +529,7 @@ export function BoardTableInner({
     itemCount: items.length,
     members,
     enabled: hydrated,
+    coarse,
   });
   const template = useMemo(
     () => gridTemplate(columns, liveWidths, nameWidth, autoFitWidths),
@@ -858,7 +864,7 @@ export function BoardTableInner({
           // 0 ⇄ >0 boundary (cheap during scroll).
           setScrolledX(next);
         }}
-        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 overflow-auto rounded-lg border transition-colors"
+        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 scroll-pt-[60px] scroll-pb-[38px] overflow-auto rounded-lg border transition-colors pointer-coarse:scroll-pt-[88px]"
       >
         <div ref={contentRef} className="min-w-fit">
           <BoardColumnHeader

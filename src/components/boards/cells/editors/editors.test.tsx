@@ -862,3 +862,82 @@ describe("inline cell editors — dense rows", () => {
     expect(classes).toContain("text-center");
   });
 });
+
+describe("Email / Phone inline editor", () => {
+  const renderEmail = (
+    onCommit = vi.fn(),
+    onCancel = vi.fn(),
+    kind: "email" | "phone" = "email",
+  ) =>
+    render(
+      <CellEditor
+        kind={kind}
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={onCancel}
+      />,
+    );
+
+  it("is a single 24px line: one input, no Save button, no column stack", () => {
+    const { container } = renderEmail();
+    const input = screen.getByLabelText("Email");
+    expect(input.className.split(/\s+/)).toContain("h-6");
+    expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+    expect(container.querySelector(".flex-col")).toBeNull();
+    expect(container.firstElementChild).toBe(input);
+  });
+
+  it("an invalid email shows the linked message and does not commit", async () => {
+    const onCommit = vi.fn();
+    renderEmail(onCommit);
+    const input = screen.getByLabelText("Email");
+    await userEvent.type(input, "nope{Enter}");
+    expect(onCommit).not.toHaveBeenCalled();
+    const msg = await screen.findByText("Enter a valid email");
+    expect(msg.className).toContain("text-destructive");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")).toBe(msg.id);
+    // The hint does not live inside the row's flow.
+    expect(msg.closest("[data-slot='popover-content']")).not.toBeNull();
+    // Typing clears it.
+    await userEvent.type(input, "x");
+    expect(screen.queryByText("Enter a valid email")).toBeNull();
+  });
+
+  it("a valid email commits on Enter, once", async () => {
+    const onCommit = vi.fn();
+    renderEmail(onCommit);
+    await userEvent.type(screen.getByLabelText("Email"), "a@x.io{Enter}");
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith({ email: "a@x.io" });
+  });
+
+  it("commits a valid value on blur", async () => {
+    const onCommit = vi.fn();
+    renderEmail(onCommit);
+    await userEvent.type(screen.getByLabelText("Email"), "a@x.io");
+    await userEvent.tab();
+    expect(onCommit).toHaveBeenCalledWith({ email: "a@x.io" });
+  });
+
+  it("blur with an invalid value cancels instead of committing", async () => {
+    const onCommit = vi.fn();
+    const onCancel = vi.fn();
+    renderEmail(onCommit, onCancel);
+    await userEvent.type(screen.getByLabelText("Email"), "nope");
+    await userEvent.tab();
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("phone commits trimmed on Enter and Escape cancels", async () => {
+    const onCommit = vi.fn();
+    const onCancel = vi.fn();
+    renderEmail(onCommit, onCancel, "phone");
+    await userEvent.type(screen.getByLabelText("Phone"), " 555 {Enter}");
+    expect(onCommit).toHaveBeenCalledWith({ phone: "555" });
+    await userEvent.type(screen.getByLabelText("Phone"), "{Escape}");
+    expect(onCancel).toHaveBeenCalled();
+  });
+});

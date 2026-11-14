@@ -2007,6 +2007,17 @@ describe("BoardTable density", () => {
     );
   });
 
+  it("pads scrolled-to focus below the sticky header + group row and Board Total", () => {
+    // Sticky column header 30 + pinned group row 30 = 60 (44 + 44 = 88 on
+    // coarse); sticky Board Total min-h 38. Without scroll padding, keyboard
+    // focus can land hidden under them.
+    renderBoard();
+    const classes = screen.getByTestId("board-scroll").className.split(/\s+/);
+    expect(classes).toContain("scroll-pt-[60px]");
+    expect(classes).toContain("pointer-coarse:scroll-pt-[88px]");
+    expect(classes).toContain("scroll-pb-[38px]");
+  });
+
   it("renders item rows at 28px on a fine pointer", () => {
     renderTwoItems();
     const row = screen
