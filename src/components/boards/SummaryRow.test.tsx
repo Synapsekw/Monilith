@@ -92,6 +92,18 @@ describe("hasAssignedSummary", () => {
 });
 
 describe("SummaryRow", () => {
+  it("centers each column's summary cell under its column", () => {
+    render(<SummaryRow {...baseProps()} />);
+    const row = screen.getByTestId("group-summary-g1");
+    // children: [name track, colA cell, colB cell, filler, filler, add-col]
+    const colACell = row.children[1] as HTMLElement;
+    expect(colACell.className.split(/\s+/)).toContain("justify-center");
+    // The frozen label track is not a value column.
+    expect(
+      (row.children[0] as HTMLElement).className.split(/\s+/),
+    ).not.toContain("justify-center");
+  });
+
   it("renders the assigned aggregate over exactly the given itemIds", () => {
     render(<SummaryRow {...baseProps()} />);
     // group-scoped: only i1 + i2 → 3, not the board-wide total (6)

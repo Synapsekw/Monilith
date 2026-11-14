@@ -226,6 +226,22 @@ export const ROW_HAIRLINE =
   "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:z-20 before:h-px before:bg-border before:opacity-70 before:content-['']";
 
 /**
+ * Horizontal centering for a VALUE cell's wrapper (never the Name cell).
+ * Append it to the wrapper's own class string.
+ *  - `justify-center` centers the wrapper's flex child (pill, avatars, date...).
+ *  - `text-center` is inherited by a truncating text span: short text is
+ *    centered, overflowing text still fills the cell and ends in an ellipsis.
+ *  - `*:justify-center` centers the content of a child that is itself a
+ *    full-width flex box (PercentBar's `flex w-full`, a wrapped DropdownCell).
+ *
+ * It lives on the table's wrappers, NOT in cells/index.tsx: those renderers
+ * are shared with Kanban cards and the Calendar agenda, which stay as they
+ * are. A literal, never assembled at runtime: Tailwind only emits classes it
+ * can read in source.
+ */
+export const CELL_CENTER = "justify-center text-center *:justify-center";
+
+/**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what
  * NameCell actually renders (`text-item font-medium`) — a drift here mis-sizes
  * the frozen column's auto-fit width, and nothing in typecheck or jsdom

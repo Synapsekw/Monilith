@@ -858,5 +858,7 @@ describe("inline cell editors — dense rows", () => {
     expect(classes).toContain("h-6");
     expect(classes).not.toContain("h-8");
     expect(classes).toContain("pointer-coarse:h-8");
+    // Centered, so the number does not jump sideways when the cell opens.
+    expect(classes).toContain("text-center");
   });
 });

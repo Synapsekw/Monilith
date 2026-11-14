@@ -108,7 +108,7 @@ export function NumbersEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
+      className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -138,7 +138,7 @@ export function PercentEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
+      className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -175,7 +175,7 @@ export function CurrencyEditor({
         onChange={(e) => setRaw(e.target.value)}
         onKeyDown={onKey}
         onBlur={commit}
-        className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
+        className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
       />
     </div>
   );
@@ -511,7 +511,7 @@ function TextLikeEditor({
           setErr(null);
         }}
         onKeyDown={onKey}
-        className="h-6 px-1.5 text-xs md:text-xs pointer-coarse:h-8"
+        className="h-6 px-1.5 text-center text-xs md:text-xs pointer-coarse:h-8"
         {...status.controlProps}
       />
       {status.message && (

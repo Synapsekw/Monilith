@@ -126,7 +126,11 @@ export function ColumnHeader({
       ref={reorder?.setNodeRef}
       style={reorder?.style}
       className={cn(
-        "group/col relative flex h-full min-w-0 items-center gap-1 px-2",
+        // px-6 = the 24px HEADER_CHROME reserves on each side of the label
+        // (fit-column-width.ts): 4px inset + 16px control + 4px gap. The grip
+        // and menu are absolutely pinned inside it, so the label is centered
+        // on the column. Coarse pointers keep the in-flow grip, label, menu.
+        "group/col relative flex h-full min-w-0 items-center justify-center px-6 pointer-coarse:justify-start pointer-coarse:gap-1 pointer-coarse:px-2",
         reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >
@@ -151,14 +155,14 @@ export function ColumnHeader({
               aria-label={`Reorder ${column.name} column`}
               {...reorder.handleAttributes}
               {...(reorder.handleListeners ?? {})}
-              className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/col:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 left-0.5 grid h-6 w-4 -translate-y-1/2 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/col:opacity-100 active:cursor-grabbing pointer-coarse:static pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
             >
               <GripVertical className="size-3.5" />
             </button>
           )}
           <Kicker
             size="xs"
-            className="truncate opacity-[0.74] transition-opacity group-hover/col:opacity-100"
+            className="min-w-0 truncate text-center opacity-[0.74] transition-opacity group-hover/col:opacity-100"
           >
             {column.name}
           </Kicker>
@@ -166,7 +170,7 @@ export function ColumnHeader({
             <DropdownMenuTrigger asChild>
               <button
                 aria-label={`${column.name} column menu`}
-                className="text-muted-foreground hover:text-foreground ml-auto grid place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 grid -translate-y-1/2 place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
               >
                 <MoreHorizontal className="size-4" />
               </button>

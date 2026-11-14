@@ -33,6 +33,7 @@ import {
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
+  CELL_CENTER,
 } from "./shared";
 import { useRowHeight } from "./use-row-height";
 
@@ -347,14 +348,18 @@ export const ItemRow = memo(function ItemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full min-w-0 items-center px-2">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
                 mono={creator?.mono}
               />
             </div>
-            <div className="flex h-full min-w-0 items-center px-2">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>

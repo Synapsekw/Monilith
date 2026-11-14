@@ -2107,3 +2107,35 @@ describe("BoardTable column fit", () => {
     expect(screen.queryByTestId("board-header-fit")).toBeNull();
   });
 });
+
+describe("BoardTable centered value columns", () => {
+  it("centers a value cell", () => {
+    renderBoardWithColumns();
+    const classes = screen
+      .getByLabelText("Item 1 Status")
+      .className.split(/\s+/);
+    expect(classes).toContain("justify-center");
+    expect(classes).toContain("text-center");
+    expect(classes).toContain("*:justify-center");
+  });
+
+  it("centers the Created cells", () => {
+    renderBoardWithColumns();
+    // The fixture item has no creator, so Created by reads "Unknown".
+    const createdBy = screen.getByText("Unknown").parentElement as HTMLElement;
+    expect(createdBy.className.split(/\s+/)).toContain("justify-center");
+  });
+
+  it("leaves the Name column left-aligned", () => {
+    renderBoardWithColumns();
+    const classes = screen.getByLabelText("Item 1 name").className.split(/\s+/);
+    expect(classes).not.toContain("justify-center");
+    expect(classes).not.toContain("text-center");
+  });
+
+  it("centers the Created headers", () => {
+    renderBoardWithColumns();
+    const header = screen.getByText("Created by").parentElement as HTMLElement;
+    expect(header.className.split(/\s+/)).toContain("justify-center");
+  });
+});

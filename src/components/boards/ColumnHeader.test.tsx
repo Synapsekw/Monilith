@@ -273,7 +273,7 @@ describe("ColumnHeader reorder affordances", () => {
 });
 
 describe("ColumnHeader — Quiet Grid", () => {
-  it("paints no vertical rule, pads to 8px and fills the header row's height", () => {
+  it("paints no vertical rule and reserves 24px each side for the pinned grip and menu", () => {
     const { container } = render(
       <ColumnHeader
         column={col()}
@@ -285,11 +285,49 @@ describe("ColumnHeader — Quiet Grid", () => {
       />,
     );
     const header = container.firstElementChild as HTMLElement;
-    expect(header.className).not.toMatch(/\bborder-l\b/);
     const classes = header.className.split(/\s+/);
-    expect(classes).toContain("px-2");
+    expect(header.className).not.toMatch(/\bborder-l\b/);
+    expect(classes).toContain("px-6");
+    expect(classes).toContain("justify-center");
     expect(classes).toContain("h-full");
     expect(classes).not.toContain("pt-3.5");
+    // Coarse pointers keep the in-flow, left-to-right layout.
+    expect(classes).toContain("pointer-coarse:justify-start");
+    expect(classes).toContain("pointer-coarse:px-2");
+  });
+
+  it("centers the label on the column: the grip and the menu are taken out of the flow", () => {
+    render(
+      <ColumnHeader
+        column={col({ name: "Budget" })}
+        width={200}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        reorder={reorder()}
+      />,
+    );
+    const label = screen.getByText("Budget").className.split(/\s+/);
+    expect(label).toContain("text-center");
+    expect(label).toContain("truncate");
+
+    const menu = screen
+      .getByLabelText("Budget column menu")
+      .className.split(/\s+/);
+    expect(menu).toContain("absolute");
+    expect(menu).toContain("right-1");
+    expect(menu).toContain("pointer-coarse:static");
+    expect(menu).toContain("pointer-coarse:size-11");
+    expect(menu).toContain("pointer-coarse:opacity-100");
+
+    const grip = screen
+      .getByRole("button", { name: "Reorder Budget column" })
+      .className.split(/\s+/);
+    expect(grip).toContain("absolute");
+    expect(grip).toContain("left-0.5");
+    expect(grip).toContain("pointer-coarse:static");
+    expect(grip).toContain("pointer-coarse:size-11");
   });
 
   it("dims the column kicker", () => {

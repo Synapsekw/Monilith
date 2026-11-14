@@ -12,7 +12,7 @@ export function CreatedHeaderCell({
   label: string;
 }) {
   return (
-    <div className="text-kicker flex h-full min-w-0 items-center gap-1.5 px-2">
+    <div className="text-kicker flex h-full min-w-0 items-center justify-center gap-1.5 px-2">
       <Icon className="size-3.5" />
       <Kicker size="xs" className="truncate">
         {label}

@@ -15,9 +15,10 @@ import {
 import { relationRollup } from "@/lib/boards/relations";
 import { RollupCell } from "@/components/boards/RollupCell";
 import { CellRenderer } from "@/components/boards/cells";
+import { CELL_CENTER } from "@/components/boards/table/shared";
 import type { ColumnOption } from "@/lib/validations/boards";
 
-const CELL_CLASS = "flex h-full items-center truncate px-2";
+const CELL_CLASS = `flex h-full items-center truncate px-2 ${CELL_CENTER}`;
 
 /**
  * One column's read-only rollup over a set of items — the cell shown for a
