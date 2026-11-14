@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -44,11 +45,24 @@ async function attemptMove(
   request: MoveBoardRequest,
   confirmShared: boolean,
 ): Promise<Question | null> {
-  const res = await moveBoardToFolder(
-    confirmShared
-      ? { boardId: request.boardId, folderId: request.folderId, confirmShared }
-      : { boardId: request.boardId, folderId: request.folderId },
-  );
+  let res: Awaited<ReturnType<typeof moveBoardToFolder>>;
+  try {
+    res = await moveBoardToFolder(
+      confirmShared
+        ? {
+            boardId: request.boardId,
+            folderId: request.folderId,
+            confirmShared,
+          }
+        : { boardId: request.boardId, folderId: request.folderId },
+    );
+  } catch (e) {
+    showMutationError(
+      "Couldn't move the board.",
+      e instanceof Error ? e : new Error("The move did not go through."),
+    );
+    return null;
+  }
   if (!res.ok) {
     showMutationError("Couldn't move the board.", new Error(res.error));
     return null;
@@ -89,9 +103,25 @@ export function MoveBoardToFolderHost({ children }: { children: ReactNode }) {
     ({ request: MoveBoardRequest } & Question) | null
   >(null);
 
+  // One move at a time: from the first attempt until the question is answered
+  // and its confirmed attempt has finished. A second request in that window is
+  // refused out loud rather than replacing the board the user is being asked
+  // about.
+  const busy = useRef(false);
+  const confirming = useRef(false);
+
   const move = useCallback<MoveBoard>((request) => {
+    if (busy.current) {
+      showMutationError(
+        "Couldn't move the board.",
+        new Error("Finish the move in progress first."),
+      );
+      return;
+    }
+    busy.current = true;
     void attemptMove(request, false).then((question) => {
       if (question) setAsking({ request, ...question });
+      else busy.current = false;
     });
   }, []);
 
@@ -101,7 +131,10 @@ export function MoveBoardToFolderHost({ children }: { children: ReactNode }) {
       <AlertDialog
         open={asking !== null}
         onOpenChange={(open) => {
-          if (!open) setAsking(null);
+          if (open) return;
+          setAsking(null);
+          // A confirmed attempt in flight keeps the move busy until it ends.
+          if (!confirming.current) busy.current = false;
         }}
       >
         <AlertDialogContent>
@@ -117,7 +150,12 @@ export function MoveBoardToFolderHost({ children }: { children: ReactNode }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (asking) void attemptMove(asking.request, true);
+                if (!asking) return;
+                confirming.current = true;
+                void attemptMove(asking.request, true).then(() => {
+                  confirming.current = false;
+                  busy.current = false;
+                });
                 setAsking(null);
               }}
             >

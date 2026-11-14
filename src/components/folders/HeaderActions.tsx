@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Printer, Settings2, Sparkles, UserPlus, Users } from "lucide-react";
+import { memberInitials } from "@/components/boards/cells/member-avatar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { FolderAccessHead } from "@/lib/folders/sharing-types";
@@ -23,14 +24,6 @@ type HeaderMember = {
   fullName: string | null;
   avatarUrl: string | null;
 };
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0][0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
-  return (first + last).toUpperCase() || "?";
-}
 
 /** Spec §5.1 header extras. Export prints canvas tabs only. `onCustomize`
  *  enters Customize mode, a client-only draft edit of the layout.
@@ -54,6 +47,7 @@ export function HeaderActions({
   onCustomize?: () => void;
 }) {
   const router = useRouter();
+  const inviteButton = useRef<HTMLButtonElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   // Mounted on first open and kept, so the close animation and focus return run.
   const [shareMounted, setShareMounted] = useState(false);
@@ -81,7 +75,7 @@ export function HeaderActions({
                 />
               ) : null}
               <AvatarFallback className="bg-surface-muted text-muted-foreground text-3xs font-medium">
-                {initials(byId.get(id)?.fullName ?? "?")}
+                {memberInitials(byId.get(id)?.fullName ?? "") || "?"}
               </AvatarFallback>
             </Avatar>
           ))}
@@ -96,6 +90,7 @@ export function HeaderActions({
         </div>
       )}
       <Button
+        ref={inviteButton}
         type="button"
         variant="outline"
         size="sm"
@@ -140,6 +135,7 @@ export function HeaderActions({
           folderName={folderName}
           open={shareOpen}
           onOpenChange={setShareOpen}
+          returnFocusRef={inviteButton}
           // The avatar stack and count come from the page's own payload.
           onChanged={() => router.refresh()}
         />

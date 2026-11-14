@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
@@ -54,6 +54,7 @@ export function BoardFolderMenu({
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   // Mounted on first open and kept, so the close animation and focus return run.
   const [shareMounted, setShareMounted] = useState(false);
@@ -106,6 +107,7 @@ export function BoardFolderMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={menuTrigger}
             type="button"
             variant="ghost"
             size="icon-xs"
@@ -222,6 +224,7 @@ export function BoardFolderMenu({
           folderName={folder.name}
           open={shareOpen}
           onOpenChange={setShareOpen}
+          returnFocusRef={menuTrigger}
         />
       )}
     </>

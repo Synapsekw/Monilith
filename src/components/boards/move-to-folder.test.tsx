@@ -146,4 +146,99 @@ describe("MoveBoardToFolderHost", () => {
     expect(moveBoardToFolder).toHaveBeenCalledTimes(1);
     expect(onMoved).not.toHaveBeenCalled();
   });
+
+  it("ignores a second request while a question is open and says nothing moved", async () => {
+    moveBoardToFolder
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { needsConfirm: 2, truncated: false },
+      })
+      .mockResolvedValueOnce({ ok: true, data: undefined });
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    await screen.findByText("2 people in DAAS will have access to this board.");
+
+    fireEvent.click(screen.getByText("go"));
+    expect(moveBoardToFolder).toHaveBeenCalledTimes(1);
+    expect(showMutationError).toHaveBeenCalledTimes(1);
+    expect(showMutationError.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        message: "Finish the move in progress first.",
+      }),
+    );
+
+    // The question is still about the first board, and answering it moves that one.
+    fireEvent.click(screen.getByRole("button", { name: "Move board" }));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
+    expect(moveBoardToFolder).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a second request while the first attempt is still in flight", async () => {
+    let finish: (v: unknown) => void = () => {};
+    moveBoardToFolder.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    fireEvent.click(screen.getByText("go"));
+    expect(moveBoardToFolder).toHaveBeenCalledTimes(1);
+    expect(showMutationError).toHaveBeenCalledTimes(1);
+    finish({ ok: true, data: undefined });
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
+
+    // Free again afterwards.
+    moveBoardToFolder.mockResolvedValueOnce({ ok: true, data: undefined });
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(2));
+  });
+
+  it("reports a failure after the confirm and does not report the board as moved", async () => {
+    moveBoardToFolder
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { needsConfirm: 2, truncated: false },
+      })
+      .mockResolvedValueOnce({ ok: false, error: "Not allowed." });
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    await screen.findByText("2 people in DAAS will have access to this board.");
+    fireEvent.click(screen.getByRole("button", { name: "Move board" }));
+
+    await waitFor(() => expect(showMutationError).toHaveBeenCalledTimes(1));
+    expect(showMutationError.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ message: "Not allowed." }),
+    );
+    expect(onMoved).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("reports a rejected action instead of leaving the move stuck", async () => {
+    moveBoardToFolder.mockRejectedValueOnce(new Error("network"));
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(showMutationError).toHaveBeenCalledTimes(1));
+    moveBoardToFolder.mockResolvedValueOnce({ ok: true, data: undefined });
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
+  });
 });

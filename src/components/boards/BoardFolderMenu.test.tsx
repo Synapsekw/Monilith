@@ -15,8 +15,21 @@ vi.mock("@/lib/folders/actions", () => ({
 }));
 
 vi.mock("@/components/folders/ShareFolderDialog", () => ({
-  ShareFolderDialog: ({ open }: { open: boolean }) =>
-    open ? <div>share-dialog</div> : null,
+  ShareFolderDialog: ({
+    open,
+    returnFocusRef,
+  }: {
+    open: boolean;
+    returnFocusRef?: { current: HTMLElement | null };
+  }) =>
+    open ? (
+      <div>
+        share-dialog
+        <button type="button" onClick={() => returnFocusRef?.current?.focus()}>
+          return focus
+        </button>
+      </div>
+    ) : null,
 }));
 
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
@@ -45,6 +58,16 @@ describe("BoardFolderMenu", () => {
   it("opens the share dialog from the folder menu", async () => {
     openMenuAndSelect("Share folder…");
     expect(await screen.findByText("share-dialog")).toBeInTheDocument();
+  });
+
+  it("hands the dialog the folder's menu trigger to return focus to", async () => {
+    openMenuAndSelect("Share folder…");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "return focus" }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
+    );
   });
 
   it("renames the folder with the trimmed new name — and leaves the re-render to the action", async () => {

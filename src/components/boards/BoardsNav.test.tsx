@@ -1133,6 +1133,50 @@ describe("BoardsNav folder moves", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the confirm open after the menu closes, and moves on confirm", async () => {
+    vi.mocked(moveBoardToFolder)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { needsConfirm: 3, truncated: true },
+      })
+      .mockResolvedValueOnce({ ok: true, data: undefined });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Q3 Launch" }));
+
+    // The menu (and the submenu inside it) is gone, the question is not.
+    expect(
+      await screen.findByText(
+        "At least 3 people in Q3 Launch will have access to this board.",
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("menuitem", { name: /Move to folder/ }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move board" }));
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenLastCalledWith({
+        boardId: "b1",
+        folderId: "f2",
+        confirmShared: true,
+      }),
+    );
+  });
+
   it("toasts and does not refresh when the move fails", async () => {
     vi.mocked(moveBoardToFolder).mockResolvedValue({
       ok: false,
@@ -1897,6 +1941,72 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
     // differently — and without the guard it is a pointless server write plus a
     // full router.refresh().
     expect(moveBoardToFolder).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("asks before filing into a shared folder and leaves everything as it was on cancel", async () => {
+    vi.mocked(moveBoardToFolder).mockResolvedValueOnce({
+      ok: true,
+      data: { needsConfirm: 2, truncated: false },
+    });
+    useUIStore.setState({ collapsedSections: { "folder:f2": true } });
+    renderNav();
+    await armDragLayer();
+    const before = screen.getByTestId("boards-nav-sortable").innerHTML;
+
+    drop("b1", "folder:f2", { folderId: "f1" });
+    await settleAction();
+
+    expect(
+      await screen.findByText(
+        "2 people in Archive will have access to this board.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    await settleAction();
+
+    // The drop never moved anything and left no optimistic state behind: one
+    // call (the question), the row where it was, the folder still collapsed.
+    expect(moveBoardToFolder).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("boards-nav-sortable").innerHTML).toBe(before);
+    expect(useUIStore.getState().collapsedSections["folder:f2"]).toBe(true);
+    expect(reorderBoard).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("shows the error and no optimistic state when the confirmed drop fails", async () => {
+    vi.mocked(moveBoardToFolder)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { needsConfirm: 1, truncated: false },
+      })
+      .mockResolvedValueOnce({ ok: false, error: "Nope." });
+    useUIStore.setState({ collapsedSections: { "folder:f2": true } });
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f2", { folderId: "f1" });
+    await screen.findByText(
+      "1 person in Archive will have access to this board.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Move board" }));
+
+    await waitFor(() =>
+      expect(showMutationError).toHaveBeenCalledWith(
+        "Couldn't move the board.",
+        expect.objectContaining({ message: "Nope." }),
+      ),
+    );
+    expect(moveBoardToFolder).toHaveBeenLastCalledWith({
+      boardId: "b1",
+      folderId: "f2",
+      confirmShared: true,
+    });
+    // Nothing moved, so nothing is revealed.
+    expect(useUIStore.getState().collapsedSections["folder:f2"]).toBe(true);
     expect(routerRefresh).not.toHaveBeenCalled();
   });
 

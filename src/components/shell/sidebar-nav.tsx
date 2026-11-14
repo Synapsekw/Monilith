@@ -36,17 +36,25 @@ type NavLink = {
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
+  /** Still offered to an org guest. Opt-in: a new link is hidden from guests
+   *  until someone decides it is safe to show them. */
+  guestVisible?: boolean;
 };
 
 const TOP: NavLink[] = [
   { label: "My Work", href: "/my-work", icon: ListTodo },
   { label: "Ask", href: "/ask", icon: AskAiMark },
 ];
-const PLANNING: NavLink[] = [
+export const PLANNING: NavLink[] = [
   // The folder gallery. It is the ONLY surface that lists unfiled dashboards,
   // and deleting `DashboardsNav` left it reachable from nowhere but ⌘K — which
   // mobile has no equivalent of at all.
-  { label: "Folders", href: "/dashboards", icon: FolderKanban },
+  {
+    label: "Folders",
+    href: "/dashboards",
+    icon: FolderKanban,
+    guestVisible: true,
+  },
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },
@@ -147,7 +155,7 @@ export function SidebarNav({
   const coarse = useCoarsePointer();
   const isActive = useActive();
   const planning = isGuest
-    ? PLANNING.filter((item) => item.href === "/dashboards")
+    ? PLANNING.filter((item) => item.guestVisible)
     : PLANNING;
 
   const boardsNav = (

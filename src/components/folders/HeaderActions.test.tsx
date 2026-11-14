@@ -9,13 +9,18 @@ vi.mock("./ShareFolderDialog", () => ({
   ShareFolderDialog: ({
     open,
     onChanged,
+    returnFocusRef,
   }: {
     open: boolean;
     onChanged?: () => void;
+    returnFocusRef?: { current: HTMLElement | null };
   }) =>
     open ? (
       <div>
         share-dialog
+        <button type="button" onClick={() => returnFocusRef?.current?.focus()}>
+          return focus
+        </button>
         <button type="button" onClick={onChanged}>
           changed
         </button>
@@ -54,6 +59,16 @@ describe("HeaderActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
     fireEvent.click(await screen.findByRole("button", { name: "changed" }));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the dialog the Invite button to return focus to", async () => {
+    render(<HeaderActions {...base} canExport />);
+    const invite = screen.getByRole("button", { name: "Invite" });
+    fireEvent.click(invite);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "return focus" }),
+    );
+    expect(document.activeElement).toBe(invite);
   });
 
   it("shows who the folder is shared with and how many more", () => {

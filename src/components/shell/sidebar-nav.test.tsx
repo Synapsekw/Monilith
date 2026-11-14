@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { usePathname } from "next/navigation";
-import { SidebarNav } from "./sidebar-nav";
+import { PLANNING, SidebarNav } from "./sidebar-nav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
@@ -74,6 +74,15 @@ describe("SidebarNav", () => {
     }
     // Their own surfaces stay.
     expect(screen.getByRole("link", { name: "My Work" })).toBeInTheDocument();
+  });
+
+  it("decides guest visibility from an explicit flag, not from the link's address", () => {
+    // Folders is the only Planning link flagged guestVisible; the filter must
+    // follow the flag. Pinning the flagged set here fails if the flag is
+    // removed from Folders, or added to any org-wide surface.
+    expect(
+      PLANNING.filter((item) => item.guestVisible).map((item) => item.label),
+    ).toEqual(["Folders"]);
   });
 
   it("shows a regular member every Planning link", () => {

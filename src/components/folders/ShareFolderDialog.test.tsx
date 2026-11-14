@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { createRef, useState } from "react";
 import { ShareFolderDialog } from "./ShareFolderDialog";
 
 const toast = vi.fn();
@@ -122,7 +129,7 @@ describe("ShareFolderDialog", () => {
     ).toBeInTheDocument();
   });
 
-  it("says so when no email went out because the person already has an account", async () => {
+  it("says what is true when the invitation email could not be delivered", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
       data: { kind: "invited", emailSent: false },
@@ -135,12 +142,13 @@ describe("ShareFolderDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
     expect(
       await screen.findByText(
-        "The invitation is saved, but the email couldn't be sent. Copy the link below and send it to them.",
+        "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/already have an account/),
-    ).not.toBeInTheDocument();
+    // The folder link is useless to someone without an account, and the UI
+    // never claims to know whether the address has one.
+    expect(screen.queryByText(/copy the link/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/account/i)).not.toBeInTheDocument();
   });
 
   it("confirms a direct add when the email belonged to an org member", async () => {
@@ -185,8 +193,22 @@ describe("ShareFolderDialog", () => {
   it("changes a member's level and removes a member", async () => {
     shareFolder.mockResolvedValue({ ok: true, data: undefined });
     unshareFolder.mockResolvedValue({ ok: true, data: undefined });
+    loadFolderAccess
+      .mockResolvedValueOnce({ ok: true, data: managerData })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          ...managerData,
+          members: [{ ...managerData.members[0], level: "editor" }],
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...managerData, members: [] },
+      });
     open();
     await screen.findByText("Dana Lee");
+    expect(screen.getByLabelText("Access for Dana Lee")).toHaveValue("viewer");
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
     });
@@ -197,7 +219,12 @@ describe("ShareFolderDialog", () => {
         level: "editor",
       }),
     );
-    // Controls stay disabled until the reload after the level change lands.
+    // The list shows what the reload returned, not just what was sent.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Access for Dana Lee")).toHaveValue(
+        "editor",
+      ),
+    );
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "Remove Dana Lee" }),
@@ -209,6 +236,9 @@ describe("ShareFolderDialog", () => {
         folderId: "f1",
         userId: "u1",
       }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("Dana Lee")).not.toBeInTheDocument(),
     );
   });
 
@@ -282,5 +312,296 @@ describe("ShareFolderDialog", () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       window.location.href,
     );
+  });
+
+  it("gives the icon-only buttons a coarse-pointer size and a name with the person", async () => {
+    open();
+    await screen.findByText("Dana Lee");
+    for (const name of [
+      "Remove Dana Lee",
+      "Revoke invitation for new@x.com",
+      "Revoke invitation for wait@x.com",
+    ])
+      expect(screen.getByRole("button", { name }).className).toContain(
+        "pointer-coarse:size-11",
+      );
+  });
+});
+
+/** A promise the test settles by hand. */
+function deferred<T>() {
+  let resolve: (v: T) => void = () => {};
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+function Harness({
+  onChanged,
+  initiallyOpen = true,
+}: {
+  onChanged?: () => void;
+  initiallyOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)}>
+        reopen
+      </button>
+      <ShareFolderDialog
+        folderId="f1"
+        folderName="DAAS"
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        onChanged={onChanged}
+      />
+    </>
+  );
+}
+
+describe("ShareFolderDialog concurrency", () => {
+  function typeEmail(value: string) {
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value },
+    });
+  }
+  const form = () => screen.getByLabelText("Name or email").closest("form")!;
+
+  it("submits an invitation once when Invite is triggered twice", async () => {
+    const d = deferred<unknown>();
+    inviteToFolder.mockReturnValue(d.promise);
+    render(<Harness />);
+    await screen.findByText("Dana Lee");
+    typeEmail("pat@x.com");
+    fireEvent.submit(form());
+    fireEvent.submit(form());
+    expect(inviteToFolder).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+    });
+  });
+
+  it("runs one action at a time across different controls", async () => {
+    const d = deferred<unknown>();
+    shareFolder.mockReturnValue(d.promise);
+    unshareFolder.mockResolvedValue({ ok: true, data: undefined });
+    render(<Harness />);
+    await screen.findByText("Dana Lee");
+    fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
+      target: { value: "editor" },
+    });
+    // Remove is clicked through the DOM while the level change is in flight.
+    screen.getByRole("button", { name: "Remove Dana Lee" }).click();
+    expect(unshareFolder).not.toHaveBeenCalled();
+    await act(async () => {
+      d.resolve({ ok: true, data: undefined });
+    });
+  });
+
+  it("ignores a second Revoke while one is in flight", async () => {
+    const rev = deferred<unknown>();
+    revokeFolderInvitation.mockReturnValue(rev.promise);
+    render(<Harness />);
+    await screen.findByText("Invited");
+    const revoke = screen.getByRole("button", {
+      name: "Revoke invitation for new@x.com",
+    });
+    revoke.click();
+    revoke.click();
+    expect(revokeFolderInvitation).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      rev.resolve({ ok: true, data: undefined });
+    });
+  });
+
+  it("ignores a second Leave while the first is in flight", async () => {
+    loadFolderAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        canManage: false,
+        myUserId: "u1",
+        membersTruncated: false,
+        members: managerData.members,
+        invitations: [],
+        candidates: [],
+      },
+    });
+    const d = deferred<unknown>();
+    leaveFolder.mockReturnValue(d.promise);
+    render(<Harness />);
+    await screen.findByText("Dana Lee");
+    const leave = screen.getByRole("button", { name: "Leave folder" });
+    leave.click();
+    leave.click();
+    expect(leaveFolder).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      d.resolve({ ok: true, data: undefined });
+    });
+  });
+
+  it("does not write state or count a change when the response lands after close", async () => {
+    const onChanged = vi.fn();
+    const d = deferred<unknown>();
+    inviteToFolder.mockReturnValue(d.promise);
+    render(<Harness onChanged={onChanged} />);
+    await screen.findByText("Dana Lee");
+    typeEmail("pat@x.com");
+    fireEvent.submit(form());
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+
+    loadFolderAccess.mockClear();
+    await act(async () => {
+      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+    });
+    // No reload for a dialog that is gone, and nothing counted as a change.
+    expect(loadFolderAccess).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("reopen"));
+    await screen.findByText("Dana Lee");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("never lets an older load overwrite a newer one", async () => {
+    const slow = deferred<unknown>();
+    loadFolderAccess.mockReturnValueOnce(slow.promise);
+    render(<Harness />);
+    // First open: the read is still pending. Close, then reopen: a second read.
+    fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    loadFolderAccess.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ...managerData,
+        members: [
+          {
+            userId: "u9",
+            fullName: "Newer Person",
+            avatarUrl: null,
+            level: "viewer",
+          },
+        ],
+      },
+    });
+    fireEvent.click(screen.getByText("reopen"));
+    await screen.findByText("Newer Person");
+
+    await act(async () => {
+      slow.resolve({ ok: true, data: managerData });
+    });
+    expect(screen.getByText("Newer Person")).toBeInTheDocument();
+    expect(screen.queryByText("Dana Lee")).not.toBeInTheDocument();
+  });
+
+  it("shows a failed Leave without marking any field invalid", async () => {
+    loadFolderAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        canManage: false,
+        myUserId: "u1",
+        membersTruncated: false,
+        members: managerData.members,
+        invitations: [],
+        candidates: [],
+      },
+    });
+    leaveFolder.mockResolvedValue({ ok: false, error: "Couldn't leave." });
+    const onOpenChange = vi.fn();
+    render(
+      <ShareFolderDialog
+        folderId="f1"
+        folderName="DAAS"
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    await screen.findByText("Dana Lee");
+    fireEvent.click(screen.getByRole("button", { name: "Leave folder" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't leave.",
+    );
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("ShareFolderDialog onChanged", () => {
+  const close = async () => {
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  };
+
+  it("does not fire when the dialog is opened and closed with no change", async () => {
+    const onChanged = vi.fn();
+    render(<Harness onChanged={onChanged} />);
+    await screen.findByText("Dana Lee");
+    await close();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("does not fire after a failed action", async () => {
+    const onChanged = vi.fn();
+    shareFolder.mockResolvedValue({ ok: false, error: "Nope." });
+    render(<Harness onChanged={onChanged} />);
+    await screen.findByText("Dana Lee");
+    fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
+      target: { value: "editor" },
+    });
+    await screen.findByText("Nope.");
+    await close();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("fires once after a successful action", async () => {
+    const onChanged = vi.fn();
+    shareFolder.mockResolvedValue({ ok: true, data: undefined });
+    render(<Harness onChanged={onChanged} />);
+    await screen.findByText("Dana Lee");
+    fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
+      target: { value: "editor" },
+    });
+    await waitFor(() => expect(loadFolderAccess).toHaveBeenCalledTimes(2));
+    await close();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ShareFolderDialog focus return", () => {
+  it("returns focus to the control that opened it", async () => {
+    const ref = createRef<HTMLButtonElement>();
+    function WithOpener() {
+      const [isOpen, setIsOpen] = useState(false);
+      return (
+        <>
+          <button ref={ref} type="button" onClick={() => setIsOpen(true)}>
+            opener
+          </button>
+          <ShareFolderDialog
+            folderId="f1"
+            folderName="DAAS"
+            open={isOpen}
+            onOpenChange={setIsOpen}
+            returnFocusRef={ref}
+          />
+        </>
+      );
+    }
+    render(<WithOpener />);
+    fireEvent.click(screen.getByText("opener"));
+    await screen.findByText("Dana Lee");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(ref.current));
   });
 });
