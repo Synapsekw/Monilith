@@ -58,6 +58,8 @@ begin
      and m.role in ('owner','admin','member')
      and not exists (select 1 from public.profiles p where p.id = m.user_id and p.is_agent)
      and not exists (select 1 from public.monos mo where mo.user_id = m.user_id)
+     -- gate_notification_by_pref drops on the MERE EXISTENCE of an in_app row
+     -- for the kind (it ignores `enabled`), so any row excludes the user.
      and not exists (select 1 from public.notification_preferences np
                       where np.user_id = m.user_id and np.channel = 'in_app'
                         and np.kind in ('mention','update_on_item'))
