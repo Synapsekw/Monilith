@@ -74,6 +74,7 @@ import {
   buildItemComparator,
 } from "@/lib/boards/board-filter";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
@@ -463,14 +464,20 @@ export function BoardTableInner({
   // AND subitems alike (see useBoardCache / bucketItems, which partitions this
   // same list by `parent_id`) — so a long subitem name is measured too, with
   // its indented row's own (larger) chrome reserve via `indented`.
+  // Measure only after hydration. The server has no canvas (every name
+  // measures 0), and React keeps the server's grid template on the group
+  // headers if the client's first render disagrees — so a board with no saved
+  // name width rendered its headers at the minimum while rows (rendered
+  // client-side) auto-fit wider, shifting every header off its column.
+  const hydrated = useHydrated();
   const autoFitWidth = useMemo(
     () =>
       fitNameColumnWidth(
         items.map((it) => ({ name: it.name, indented: it.parent_id != null })),
-        measureName,
+        hydrated ? measureName : () => 0,
         access !== "viewer",
       ),
-    [items, measureName, access],
+    [items, measureName, access, hydrated],
   );
 
   // null = follow board.name_column_width (or auto-fit). Set live during a drag.
