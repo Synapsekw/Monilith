@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-14 10:36",
+  "updated": "2026-11-14 17:56",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "949cde02",
+        "value": "fd8155c0",
         "tone": "warn",
-        "note": "Ahead of main: edge-nub panel toggles, Leave board, theme-tinted Board Total, personal Monos (Plans 1 and 2A, Mono chat identity), per-section settings skeletons. Awaiting a bundled promotion PR."
+        "note": "Ahead of main: the large-board loading fix, the dense board table (28px rows, one pinned column header, fitted and centered columns, hover peek) and the readable timelines (open on today, grouped board Gantt, roll-up-first folder timeline). Awaiting a promotion PR."
       },
       {
         "name": "main",
-        "value": "db8c0367",
+        "value": "e260a700",
         "tone": "ok",
-        "note": "PR #150 merged 12:43 UTC: signup approval and the rail cleanup. CI green."
+        "note": "PR #151 merged 2026-11-14: personal Monos, cross-board dependencies and the folder Timeline, theme variety. CI green."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel READY on PR #150. Signup approval, the assistant runtime and performance batch 1 are all live."
+        "note": "Vercel success on PR #151. The dense table and timeline rework are not live yet."
       }
     ],
     "gates": [
@@ -196,6 +196,15 @@
         "verify",
         "ai",
         "critical"
+      ]
+    },
+    {
+      "title": "Check the dense table and timelines on touch and in dark theme",
+      "why": "Both were browser-checked on live DAAS data in light theme with a mouse only. Touch rows, the email and phone error popup and keyboard focus near the pinned rows were never seen. Do it before promoting.",
+      "tags": [
+        "boards",
+        "timeline",
+        "before promote"
       ]
     },
     {
@@ -450,16 +459,27 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/command-center-tower",
+      "head": "4d7d68f8",
+      "note": "prototype"
+    },
+    {
+      "branch": "task/folder-invites",
+      "head": "ff30da23",
+      "note": "building"
+    }
+  ],
   "session": {
-    "id": "2026-11-14-1036-settings-section-loading-boundaries",
-    "when": "2026-11-14 10:36",
-    "title": "Settings sections get their own loading boundaries",
+    "id": "2026-11-14-1756-board-table-density-timeline-readability",
+    "when": "2026-11-14 17:56",
+    "title": "Board table density and timeline readability",
     "bullets": [
-      "Every settings page showed a dev-overlay Instant warning: switching sections blocked on the server.",
-      "Cause: settings/loading.tsx never re-suspends between two sections, since its segment does not change (gotcha-110).",
-      "Each of the 11 sections now owns its loading.tsx; the settings-level one is gone so the header and nav paint at once.",
-      "The structure test now requires a sibling loading.tsx for every page. Merged to develop."
+      "On the DAAS boards 32 of 33 visible item names were cut off and both timelines opened nine months away from today.",
+      "Board table: 28px rows, one pinned column header, slim tinted group rows, hover peek, columns fitted to content and centered.",
+      "Timelines open on today; the board Gantt is grouped; the folder timeline opens as one row per board instead of 2,127 items.",
+      "Two branches, 17 tasks, merged to develop. Browser-checked in light theme only; touch and dark theme are owed."
     ]
   }
 }
