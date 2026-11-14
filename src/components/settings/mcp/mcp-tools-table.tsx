@@ -38,6 +38,8 @@ export const TOOL_PROSE: Record<ToolName, string> = {
     "Read one item's fields and cell values, plus what blocks it and what it blocks.",
   get_item_thread:
     "Read one item's comments and field changes as a single timeline.",
+  query_items:
+    "Filter items across a board, a project folder or the whole organization by assignee, state, due date and recent change, or count them.",
   create_item: "Add a new item to a group, optionally setting field values.",
   update_item: "Rename an item and/or change its field values.",
   create_attachment_upload:

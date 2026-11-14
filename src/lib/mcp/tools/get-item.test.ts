@@ -102,12 +102,24 @@ describe("getItemHandler", () => {
     expect(result.content[0].text).toContain("Permission denied");
   });
 
-  it("lists blockers and dependents with board names and counts hidden ones", async () => {
+  it("lists blockers and dependents with board names, status and done flag, and counts hidden ones", async () => {
     const supabase = client({
-      items: [
-        ITEM,
-        { id: "p1", name: "Sign NDA", board_id: "b2" },
-        { id: "s1", name: "Launch", board_id: "b1" },
+      items: [ITEM],
+      item_facts: [
+        {
+          item_id: "p1",
+          name: "Sign NDA",
+          board_id: "b2",
+          status_label: "Working",
+          is_done: false,
+        },
+        {
+          item_id: "s1",
+          name: "Launch",
+          board_id: "b1",
+          status_label: "Done",
+          is_done: true,
+        },
       ],
       boards: [
         { id: "b1", name: "Ops" },
@@ -125,20 +137,33 @@ describe("getItemHandler", () => {
     });
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed.blockedBy).toEqual([
-      { id: "p1", name: "Sign NDA", boardId: "b2", boardName: "Legal" },
+      {
+        id: "p1",
+        name: "Sign NDA",
+        boardId: "b2",
+        boardName: "Legal",
+        status: "Working",
+        done: false,
+      },
     ]);
     expect(parsed.blocking).toEqual([
-      { id: "s1", name: "Launch", boardId: "b1", boardName: "Ops" },
+      {
+        id: "s1",
+        name: "Launch",
+        boardId: "b1",
+        boardName: "Ops",
+        status: "Done",
+        done: true,
+      },
     ]);
     expect(parsed.hiddenDependencies).toBe(1);
   });
 
-  it("leaves archived linked items out and counts them as hidden", async () => {
+  it("reads linked items from item_facts, so an item that view leaves out (archived, or on an archived board or group) counts as hidden", async () => {
     const supabase = client({
-      items: [
-        ITEM,
-        { id: "p1", name: "Gone", board_id: "b1", archived_at: "2026-11-01" },
-      ],
+      // The linked item exists in `items` but not in the live-items view.
+      items: [ITEM, { id: "p1", name: "Gone", board_id: "b1" }],
+      item_facts: [],
       boards: [{ id: "b1", name: "Ops" }],
       item_dependencies: [{ predecessor_id: "p1", successor_id: "i1" }],
     });
@@ -152,15 +177,18 @@ describe("getItemHandler", () => {
 
   it("caps each direction at DEPENDENCY_LIMIT", async () => {
     const preds = Array.from({ length: DEPENDENCY_LIMIT + 5 }, (_, i) => ({
-      id: `p${i}`,
+      item_id: `p${i}`,
       name: `P${i}`,
       board_id: "b1",
+      status_label: null,
+      is_done: false,
     }));
     const supabase = client({
-      items: [ITEM, ...preds],
+      items: [ITEM],
+      item_facts: preds,
       boards: [{ id: "b1", name: "Ops" }],
       item_dependencies: preds.map((p) => ({
-        predecessor_id: p.id,
+        predecessor_id: p.item_id,
         successor_id: "i1",
       })),
     });
@@ -173,14 +201,23 @@ describe("getItemHandler", () => {
 
   describe("dependency read failures are errors, never an empty 'not blocked'", () => {
     const tables = {
-      items: [ITEM, { id: "p1", name: "Sign NDA", board_id: "b1" }],
+      items: [ITEM],
+      item_facts: [
+        {
+          item_id: "p1",
+          name: "Sign NDA",
+          board_id: "b1",
+          status_label: null,
+          is_done: false,
+        },
+      ],
       boards: [{ id: "b1", name: "Ops" }],
       item_dependencies: [{ predecessor_id: "p1", successor_id: "i1" }],
     };
     const cases: [string, Record<string, string>][] = [
       ["predecessor links", { "item_dependencies:successor_id": "pred down" }],
       ["successor links", { "item_dependencies:predecessor_id": "succ down" }],
-      ["linked items", { "items:in": "items down" }],
+      ["linked items", { "item_facts:in": "items down" }],
       ["boards", { boards: "boards down" }],
     ];
     for (const [label, errs] of cases) {

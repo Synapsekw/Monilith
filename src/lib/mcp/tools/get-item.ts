@@ -11,6 +11,8 @@ type DepItem = {
   name: string;
   boardId: string;
   boardName: string;
+  status: string | null;
+  done: boolean;
 };
 
 async function loadDependencies(
@@ -45,13 +47,23 @@ async function loadDependencies(
   if (ids.length === 0)
     return { blockedBy: [], blocking: [], hiddenDependencies: 0 };
 
+  // item_facts holds live items only (no archived item, board or group), so a
+  // link to one of those is counted as hidden below, and "done" means what it
+  // means everywhere else.
   const { data: items, error: itemsErr } = await supabase
-    .from("items")
-    .select("id, name, board_id")
-    .in("id", ids)
-    .is("archived_at", null);
+    .from("item_facts")
+    .select("item_id, name, board_id, status_label, is_done")
+    .in("item_id", ids);
   if (itemsErr) return { error: itemsErr.message };
-  const boardIds = [...new Set((items ?? []).map((i) => i.board_id))];
+  // The view's columns are typed nullable by the generator; a live item always
+  // has an id and a board, so a row without either is dropped (and so counted
+  // as hidden below).
+  const live = (items ?? []).flatMap((i) =>
+    i.item_id !== null && i.board_id !== null
+      ? [{ ...i, item_id: i.item_id, board_id: i.board_id }]
+      : [],
+  );
+  const boardIds = [...new Set(live.map((i) => i.board_id))];
   const { data: boards, error: boardsErr } = await supabase
     .from("boards")
     .select("id, name")
@@ -59,13 +71,15 @@ async function loadDependencies(
   if (boardsErr) return { error: boardsErr.message };
   const boardName = new Map((boards ?? []).map((b) => [b.id, b.name]));
   const byId = new Map(
-    (items ?? []).map((i) => [
-      i.id,
+    live.map((i) => [
+      i.item_id,
       {
-        id: i.id,
+        id: i.item_id,
         name: i.name,
         boardId: i.board_id,
         boardName: boardName.get(i.board_id) ?? "Unknown board",
+        status: i.status_label,
+        done: i.is_done,
       },
     ]),
   );
@@ -139,7 +153,7 @@ export const getItemDescriptor: ToolDescriptor = {
   name: "get_item",
   title: "Get item",
   description:
-    "Get an item's fields and cell values, plus the items it is blocked by and the items it is blocking (at most 20 each). hiddenDependencies counts linked items you cannot see.",
+    "Get an item's fields and cell values, plus the items it is blocked by and the items it is blocking (at most 20 each, each with its status and whether it is done). hiddenDependencies counts linked items you cannot see.",
   inputSchema: getItemInput,
   capability: null,
   scope: "itemId",
