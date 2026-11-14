@@ -24,7 +24,7 @@ import type { StageSummary } from "@/lib/folders/stages";
 import type { FolderBoardRef, RollupRow } from "@/lib/folders/types";
 
 export type BoardSort = "health" | "size" | "name";
-const HEALTH: Record<
+export const HEALTH: Record<
   BoardHealth,
   { label: string; color: StatusPillColor; rank: number }
 > = {
