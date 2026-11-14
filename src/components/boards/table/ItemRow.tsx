@@ -29,11 +29,11 @@ import { RowMenu } from "./RowMenu";
 import { RowSelectCheckbox } from "./RowSelectCheckbox";
 import {
   ROW_HAIRLINE,
-  ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
 } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 type ItemRowProps = {
   item: Item;
@@ -143,6 +143,7 @@ export const ItemRow = memo(function ItemRow({
   // via a lazy initializer (same idiom as TimeTrackingCell): the Σ of a running
   // child's elapsed time is approximate while collapsed — the live tick happens in
   // the expanded child cell — and it refreshes whenever this (virtualized) row remounts.
+  const rowHeight = useRowHeight();
   const [rollupNowMs] = useState(() => Date.now());
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as rollupNowMs; virtualized rows remount as they scroll).
@@ -269,7 +270,7 @@ export const ItemRow = memo(function ItemRow({
       )}
       data-intel-rule="cell"
       style={{
-        height: ROW_HEIGHT,
+        height: rowHeight.item,
         gridTemplateColumns: template,
         transform: CSS.Translate.toString(transform),
         transition,
@@ -336,14 +337,14 @@ export const ItemRow = memo(function ItemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center px-4">
+            <div className="flex h-full min-w-0 items-center px-2">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
                 mono={creator?.mono}
               />
             </div>
-            <div className="flex h-full items-center px-4">
+            <div className="flex h-full min-w-0 items-center px-2">
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>

@@ -171,11 +171,22 @@ export function rowCellsEqual(
   return true;
 }
 
-/** Item-row height. Quiet Grid density (was 36 — "direction C"). */
-export const ROW_HEIGHT = 42;
+/**
+ * Item-row height on a fine pointer (mouse / trackpad). Dense 28 (was 42).
+ * Do not read this in a component: rows and the virtualizer take their height
+ * from `useRowHeight()` (./use-row-height), which returns COARSE_ROW_HEIGHT on
+ * touch. This constant is the fine-pointer value and the SSR / skeleton value.
+ */
+export const ROW_HEIGHT = 28;
 
 /** Subitem rows sit one step tighter than their parent. */
-export const SUBITEM_ROW_HEIGHT = 38;
+export const SUBITEM_ROW_HEIGHT = 26;
+
+/**
+ * Row height on a coarse pointer, for item AND subitem rows: the row controls
+ * are 44px targets there (`pointer-coarse:size-11`) and cannot fit in less.
+ */
+export const COARSE_ROW_HEIGHT = 44;
 
 /**
  * The row separator. Quiet Grid has NO vertical rules, so the horizontal one
@@ -220,7 +231,7 @@ export const ROW_HAIRLINE =
  * catches it.
  */
 export const NAME_MEASURE_FONT_WEIGHT = "500";
-export const NAME_MEASURE_FONT_SIZE = "13.5px";
+export const NAME_MEASURE_FONT_SIZE = "13px";
 
 /** The generic fallback stack `font-sans` itself falls back to. */
 const NAME_MEASURE_FONT_FALLBACK_STACK = "ui-sans-serif, system-ui, sans-serif";

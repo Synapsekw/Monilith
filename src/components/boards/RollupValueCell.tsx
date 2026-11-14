@@ -17,7 +17,7 @@ import { RollupCell } from "@/components/boards/RollupCell";
 import { CellRenderer } from "@/components/boards/cells";
 import type { ColumnOption } from "@/lib/validations/boards";
 
-const CELL_CLASS = "flex h-full items-center truncate px-4";
+const CELL_CLASS = "flex h-full items-center truncate px-2";
 
 /**
  * One column's read-only rollup over a set of items — the cell shown for a

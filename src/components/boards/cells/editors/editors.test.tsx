@@ -842,3 +842,21 @@ describe("commitKeepsEditorOpen", () => {
     );
   });
 });
+
+describe("inline cell editors — dense rows", () => {
+  it("NumbersEditor is 24px so it fits a 28px row, and 32px on coarse", () => {
+    render(
+      <NumbersEditor
+        value={{ n: 3 }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("spinbutton");
+    const classes = input.className.split(/\s+/);
+    expect(classes).toContain("h-6");
+    expect(classes).not.toContain("h-8");
+    expect(classes).toContain("pointer-coarse:h-8");
+  });
+});

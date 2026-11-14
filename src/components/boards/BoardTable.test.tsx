@@ -1790,3 +1790,28 @@ describe("BoardTable saved arrangement", () => {
     expect(screen.getByLabelText("Collapse Group 1")).toBeInTheDocument();
   });
 });
+
+describe("BoardTable density", () => {
+  it("marks the scroller as the dense board table", () => {
+    // globals.css scopes the 12.5px cell size to this attribute.
+    renderBoard();
+    expect(screen.getByTestId("board-scroll")).toHaveAttribute(
+      "data-board-table",
+    );
+  });
+
+  it("renders item rows at 28px on a fine pointer", () => {
+    renderTwoItems();
+    const row = screen
+      .getByRole("button", { name: "Reorder Task One" })
+      .closest("[data-intel-rule='cell']") as HTMLElement;
+    expect(row.style.height).toBe("28px");
+  });
+
+  it("pads value cells to 8px", () => {
+    renderBoardWithColumns();
+    const cell = screen.getByLabelText("Item 1 Status");
+    expect(cell.className).toContain("px-2");
+    expect(cell.className).not.toContain("px-4");
+  });
+});

@@ -108,7 +108,7 @@ export function NumbersEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-8 tabular-nums"
+      className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -138,7 +138,7 @@ export function PercentEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-8 tabular-nums"
+      className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -163,7 +163,7 @@ export function CurrencyEditor({
   }
   const onKey = useCommitKeys(commit, onCancel);
   return (
-    <div className="flex h-8 items-center gap-1.5">
+    <div className="flex h-6 items-center gap-1.5 pointer-coarse:h-8">
       <span className="text-muted-foreground shrink-0 text-xs">
         {dirhamSignEnabled(settings) ? <DirhamSign /> : code}
       </span>
@@ -175,7 +175,7 @@ export function CurrencyEditor({
         onChange={(e) => setRaw(e.target.value)}
         onKeyDown={onKey}
         onBlur={commit}
-        className="h-8 tabular-nums"
+        className="h-6 px-1.5 text-xs tabular-nums md:text-xs pointer-coarse:h-8"
       />
     </div>
   );
@@ -370,7 +370,7 @@ export function CheckboxEditor({
 }: EditorProps<{ checked: boolean }>) {
   const checked = value?.checked ?? false;
   return (
-    <div className="flex h-8 items-center px-1">
+    <div className="flex h-6 items-center px-1 pointer-coarse:h-11">
       {/* The native checkbox stays visually `size-4`; on a coarse pointer the
           surrounding label is a ≥44px tap target so a finger can toggle it. */}
       <label className="grid cursor-pointer place-items-center pointer-coarse:size-11">
@@ -511,7 +511,7 @@ function TextLikeEditor({
           setErr(null);
         }}
         onKeyDown={onKey}
-        className="h-8"
+        className="h-6 px-1.5 text-xs md:text-xs pointer-coarse:h-8"
         {...status.controlProps}
       />
       {status.message && (

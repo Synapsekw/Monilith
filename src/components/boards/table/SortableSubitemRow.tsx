@@ -26,11 +26,11 @@ import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
 import {
   ROW_HAIRLINE,
-  SUBITEM_ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
 } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 type SubitemRowProps = {
   sub: Item;
@@ -100,6 +100,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
 }: SubitemRowProps) {
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
+  const rowHeight = useRowHeight();
   const [todayISO] = useState(() => localTodayISO());
   // Intelligence chip: true → 2px tone rule, false → dimmed, null → no chip.
   // Same context read as ItemRow — see the note there.
@@ -160,7 +161,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         // rows don't stretch/squish during drag (gotcha-20).
         transform: CSS.Translate.toString(transform),
         transition,
-        height: SUBITEM_ROW_HEIGHT,
+        height: rowHeight.subitem,
         gridTemplateColumns: template,
       }}
       className={cn(
@@ -218,14 +219,14 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center px-4">
+            <div className="flex h-full min-w-0 items-center px-2">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
                 mono={creator?.mono}
               />
             </div>
-            <div className="flex h-full items-center px-4">
+            <div className="flex h-full min-w-0 items-center px-2">
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>

@@ -30,12 +30,12 @@ import { GroupSelectAllCheckbox } from "./GroupSelectAllCheckbox";
 import { ItemRow } from "./ItemRow";
 import { SubitemBlock } from "./SubitemBlock";
 import {
-  ROW_HEIGHT,
   type CellControls,
   type ColumnHeaderControls,
   type GroupControls,
   type GroupSummaryControls,
 } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 // useLayoutEffect warns during SSR; this client component still pre-renders on
 // the server, so fall back to useEffect there.
@@ -116,6 +116,7 @@ export const GroupSection = memo(function GroupSection({
   const [name, setName] = useState(group.name);
   const rowAreaRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  const rowHeight = useRowHeight();
   // The shared scroll container is owned by the parent (BoardTable); during this
   // child's first commit the parent's ref isn't attached yet, so the virtualizer
   // reads a null scroll element and yields 0 rows. A passive effect populates the
@@ -189,11 +190,12 @@ export const GroupSection = memo(function GroupSection({
     count: items.length,
     getScrollElement: () => scrollContainerRef.current,
     scrollMargin,
-    estimateSize: () => ROW_HEIGHT,
+    // Same source as the rows' own inline height (see ./use-row-height).
+    estimateSize: () => rowHeight.item,
     overscan: 6,
-    // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_HEIGHT
+    // getBoundingClientRect().height returns 0 in jsdom — fall back to the row height
     // so tests don't collapse all virtual rows to 0px height.
-    measureElement: (el) => el.getBoundingClientRect().height || ROW_HEIGHT,
+    measureElement: (el) => el.getBoundingClientRect().height || rowHeight.item,
   });
 
   const virtualRows = virtualizer.getVirtualItems();
@@ -286,7 +288,7 @@ export const GroupSection = memo(function GroupSection({
           this container as the gap/empty fallback that routes to append. */}
       <div
         ref={setGroupDropRef}
-        style={items.length === 0 ? { minHeight: ROW_HEIGHT } : undefined}
+        style={items.length === 0 ? { minHeight: rowHeight.item } : undefined}
       >
         {collapsed
           ? // Collapsed strip: the user's assigned aggregation wins; the legacy

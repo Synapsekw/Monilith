@@ -809,6 +809,7 @@ export function BoardTableInner({
         ref={scrollContainerRef}
         data-testid="board-scroll"
         data-scroll-container
+        data-board-table
         data-scrolledx={scrolledX}
         onScroll={(e) => {
           const next = e.currentTarget.scrollLeft > 0;
