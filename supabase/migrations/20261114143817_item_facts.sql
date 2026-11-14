@@ -6,9 +6,9 @@ create index cell_values_user_ids_gin_idx
   using gin ((value -> 'userIds') jsonb_path_ops)
   where value ? 'userIds';
 
--- Due windows over one date column. The same-named index already exists from
--- 20260618170000_automations_5b2_schema (non-partial, same key columns, so it
--- covers this need); `if not exists` reuses it rather than dropping a live index.
+-- Due windows over one date column. This index ALREADY EXISTS on DEV, non-partial,
+-- from 20260618170000_automations_5b2_schema. The statement below is a deliberate
+-- no-op kept for the record; it does not create the partial form.
 create index if not exists cell_values_date_idx
   on public.cell_values (column_id, (value ->> 'date'))
   where value ? 'date';
