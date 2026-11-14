@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-14 07:15",
+  "updated": "2026-11-14 10:36",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "32ab938b",
+        "value": "949cde02",
         "tone": "warn",
-        "note": "Ahead of main: edge-nub panel toggles, Leave board, theme-tinted Board Total, personal Monos (Plans 1 and 2A, Mono chat identity, settings loading). Awaiting a bundled promotion PR."
+        "note": "Ahead of main: edge-nub panel toggles, Leave board, theme-tinted Board Total, personal Monos (Plans 1 and 2A, Mono chat identity), per-section settings skeletons. Awaiting a bundled promotion PR."
       },
       {
         "name": "main",
@@ -452,14 +452,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-11-13-2252-personal-monos-retire-and-your-mono",
-    "when": "2026-11-13 22:52",
-    "title": "Personal Monos: old agents retired, your Mono in the app",
+    "id": "2026-11-14-1036-settings-section-loading-boundaries",
+    "when": "2026-11-14 10:36",
+    "title": "Settings sections get their own loading boundaries",
     "bullets": [
-      "The old agent system is retired: 27 agents disabled, Autopilot and agent setup removed, about 160 files deleted.",
-      "Every person can create a Mono: My Mono rail tab, owner-only chat acting as the Mono on their own key, Settings → My Mono.",
-      "Nine Mono migrations are live on DEV; reviews caught an upsert bug and three security holes before merge.",
-      "Merged to develop without a live run; Plan 2B (working on its own, approvals, MCP) not yet written."
+      "Every settings page showed a dev-overlay Instant warning: switching sections blocked on the server.",
+      "Cause: settings/loading.tsx never re-suspends between two sections, since its segment does not change (gotcha-110).",
+      "Each of the 11 sections now owns its loading.tsx; the settings-level one is gone so the header and nav paint at once.",
+      "The structure test now requires a sibling loading.tsx for every page. Merged to develop."
     ]
   }
 }
