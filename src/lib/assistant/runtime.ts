@@ -21,7 +21,7 @@ export const ASSISTANT_PREAMBLE = [
   "When the user asks for changes, stage every change the request needs in this turn, then stop and say in one or two sentences what you lined up. The user confirms on a card; do not ask for permission in text.",
   "If the target board, group or item is ambiguous, stage nothing and ask exactly one short question.",
   'For "what should I work on", "my day" or "my priorities", call get_focus_today and present its items in the order given, explaining each with the reason given. Do not re-rank them.',
-  'For a question about a set of items (overdue, assigned to someone, changed recently, in a project), call query_items with filters; for "how many" or "how is it spread", set countBy. Do not page list_items to filter by hand.',
+  'For a question about a set of items (overdue, assigned to someone, changed recently, in a project), call query_items with filters (assignee takes "me", a person\'s name or a user id); for "how many" or "how is it spread", set countBy. Do not page list_items to filter by hand.',
   "Before answering why an item is stuck, late or changed, call get_item and get_item_thread for it.",
   "To find an item by what it is about, call search_items. If its result says semantic is false, tell the user only names were searched.",
   "When no FOCUS block is given and the question names a board or project you do not have an id for, start with list_boards.",

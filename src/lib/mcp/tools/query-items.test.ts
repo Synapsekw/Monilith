@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 import {
   queryItemsDescriptor,
   queryItemsHandler,
@@ -711,6 +712,117 @@ describe("queryItemsHandler org from scope (review I2)", () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toBe("Folder not found.");
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("queryItemsHandler assignee by name (review I4)", () => {
+  const ANA_LEE_TABLES = {
+    org_members: [
+      { org_id: "o1", user_id: "u1", deactivated_at: null, role: "member" },
+      { org_id: "o1", user_id: "u2", deactivated_at: null, role: "member" },
+      { org_id: "o1", user_id: "u3", deactivated_at: null, role: "member" },
+    ],
+    profiles: [
+      { id: "u2", timezone: null, full_name: "Ana Kovac", avatar_url: null },
+      { id: "u1", timezone: "Asia/Tokyo", full_name: "Me", avatar_url: null },
+      { id: "u3", timezone: null, full_name: "Ana Lee", avatar_url: null },
+    ],
+  };
+  const UUID = "3f2b8c1e-9a4d-4e7b-8c2a-1d5e6f7a8b9c";
+
+  it("passes a user id straight through", async () => {
+    const { rpc, getClient } = fixture();
+    await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: UUID },
+      NOW,
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_assignee: UUID, p_unassigned: false }),
+    );
+  });
+
+  it("resolves an exact full name, ignoring case and spaces", async () => {
+    const { rpc, getClient } = fixture();
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: "  ana KOVAC " },
+      NOW,
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_assignee: "u2" }),
+    );
+    expect(
+      JSON.parse(text(result)).items.map((i: { id: string }) => i.id),
+    ).toEqual(["i1"]);
+  });
+
+  it("resolves a first name when exactly one member has it", async () => {
+    const { rpc, getClient } = fixture();
+    await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: "Ana", countBy: "board" },
+      NOW,
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "count_items",
+      expect.objectContaining({ p_assignee: "u2" }),
+    );
+  });
+
+  it("lists the candidates instead of picking one when a name is ambiguous", async () => {
+    const { rpc, getClient } = fixture({ tables: ANA_LEE_TABLES });
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: "ana" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toMatch(/more than one member/i);
+    expect(text(result)).toContain('"Ana Kovac" (user id u2)');
+    expect(text(result)).toContain('"Ana Lee" (user id u3)');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("says so, with the members it knows, when no member has that name", async () => {
+    const { rpc, getClient } = fixture();
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: "Zoran" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toMatch(/no member .*"Zoran"/i);
+    expect(text(result)).toContain('"Ana Kovac" (user id u2)');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("keeps me and unassigned as keywords, never names", async () => {
+    const { rpc, getClient } = fixture();
+    await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", assignee: "me", countBy: "board" },
+      NOW,
+    );
+    expect(rpc).toHaveBeenLastCalledWith(
+      "count_items",
+      expect.objectContaining({ p_assignee: "u1", p_unassigned: false }),
+    );
+  });
+
+  it("accepts a name in the schema and says so in the description", () => {
+    const schema = z.object(queryItemsDescriptor.inputSchema);
+    expect(schema.safeParse({ assignee: "Ana Kovac" }).success).toBe(true);
+    expect(schema.safeParse({ assignee: "" }).success).toBe(false);
+    expect(queryItemsDescriptor.description).toMatch(/a person's name/);
   });
 });
 

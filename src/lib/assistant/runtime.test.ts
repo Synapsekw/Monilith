@@ -67,6 +67,17 @@ describe("ASSISTANT_PREAMBLE tool references", () => {
     expect(ASSISTANT_PREAMBLE).toContain("query_items");
     expect(ASSISTANT_PREAMBLE).toContain("get_item_thread");
   });
+
+  it("says query_items takes a person's name as assignee (review I4)", () => {
+    const line = ASSISTANT_PREAMBLE.split("\n").find((l) =>
+      l.includes("call query_items"),
+    );
+    expect(line).toMatch(/assignee/);
+    expect(line).toMatch(/person's name/);
+    // The parameter named in the prompt exists on the tool.
+    const tool = ALL_TOOL_DESCRIPTORS.find((d) => d.name === "query_items");
+    expect(Object.keys(tool!.inputSchema)).toContain("assignee");
+  });
 });
 
 describe("runAssistantLoop", () => {
