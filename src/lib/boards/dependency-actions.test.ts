@@ -10,6 +10,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import {
   createDependency,
   deleteDependency,
+  getBoardDependencyContext,
 } from "@/lib/boards/dependency-actions";
 
 const PRED_ID = "11111111-1111-4111-8111-111111111111";
@@ -123,5 +124,40 @@ describe("deleteDependency", () => {
     }));
     const res = await deleteDependency({ dependencyId: DEP_ID });
     expect(res).toEqual({ ok: false, error: "delete failed" });
+  });
+});
+
+describe("getBoardDependencyContext", () => {
+  it("rejects a non-uuid board id", async () => {
+    const res = await getBoardDependencyContext({ boardId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("returns parsed context", async () => {
+    rpc.mockResolvedValueOnce({ data: { boards: [], items: [] }, error: null });
+    const res = await getBoardDependencyContext({
+      boardId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(res).toEqual({ ok: true, data: { boards: [], items: [] } });
+    expect(rpc).toHaveBeenCalledWith("board_dependency_context", {
+      p_board_id: "11111111-1111-4111-8111-111111111111",
+    });
+  });
+  it("maps rpc errors to a failure", async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "board not found", code: "P0002" },
+    });
+    const res = await getBoardDependencyContext({
+      boardId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(res).toEqual({ ok: false, error: "Couldn't load linked items." });
+  });
+  it("fails on a malformed payload", async () => {
+    rpc.mockResolvedValueOnce({ data: { boards: "x" }, error: null });
+    const res = await getBoardDependencyContext({
+      boardId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(res).toEqual({ ok: false, error: "Couldn't load linked items." });
   });
 });

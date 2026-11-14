@@ -216,3 +216,56 @@ describe("getBoardPayload error contract", () => {
     expect(await getBoardPayload("b7")).toBeNull();
   });
 });
+
+describe("getBoardPayload dependencies read", () => {
+  function recordingMock(calls: Record<string, [string, unknown[]][]>) {
+    return (table: string) => {
+      const result: Result =
+        table === "boards"
+          ? { data: BOARD_ROW, error: null }
+          : { data: [], error: null };
+      const chain: Record<string, unknown> = {};
+      for (const m of [
+        "select",
+        "eq",
+        "is",
+        "order",
+        "limit",
+        "not",
+        "in",
+        "or",
+      ])
+        chain[m] = (...args: unknown[]) => {
+          (calls[table] ??= []).push([m, args]);
+          return chain;
+        };
+      chain.maybeSingle = async () => result;
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(result);
+      return chain;
+    };
+  }
+
+  it("loads links where the board is either end (cross-board included)", async () => {
+    const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const calls: Record<string, [string, unknown[]][]> = {};
+    from.mockImplementation(recordingMock(calls));
+    await getBoardPayload(id);
+    const deps = calls["item_dependencies"] ?? [];
+    expect(deps).toContainEqual([
+      "or",
+      [`board_id.eq.${id},predecessor_board_id.eq.${id}`],
+    ]);
+    expect(deps.some(([m]) => m === "eq")).toBe(false);
+    expect(deps).toContainEqual(["limit", [5000]]);
+  });
+
+  it("never interpolates a non-uuid board id into the .or() filter", async () => {
+    const calls: Record<string, [string, unknown[]][]> = {};
+    from.mockImplementation(recordingMock(calls));
+    await getBoardPayload("b10,id.neq.x");
+    const deps = calls["item_dependencies"] ?? [];
+    expect(deps.some(([m]) => m === "or")).toBe(false);
+    expect(deps).toContainEqual(["eq", ["board_id", "b10,id.neq.x"]]);
+  });
+});

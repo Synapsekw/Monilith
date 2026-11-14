@@ -6,10 +6,17 @@ import type { ReactNode } from "react";
 // Capture the postgres_changes handlers the hook registers, keyed by table,
 // plus the status callback passed to subscribe() so tests can drive reconnects.
 const handlers = new Map<string, (p: unknown) => void>();
+// Every registration in order (a table can be subscribed more than once).
+const subs: { table: string; filter?: string; cb: (p: unknown) => void }[] = [];
 let statusCb: ((status: string) => void) | undefined;
 const channel = {
-  on(_event: string, opts: { table: string }, cb: (p: unknown) => void) {
+  on(
+    _event: string,
+    opts: { table: string; filter?: string },
+    cb: (p: unknown) => void,
+  ) {
     handlers.set(opts.table, cb);
+    subs.push({ table: opts.table, filter: opts.filter, cb });
     return channel;
   },
   subscribe(cb?: (status: string) => void) {
@@ -147,5 +154,71 @@ describe("useBoardRealtime reconnect resync", () => {
     act(() => statusCb!("SUBSCRIBED"));
     act(() => statusCb!("SUBSCRIBED")); // a duplicate SUBSCRIBED must not re-fire
     expect(invalidateSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useBoardRealtime cross-board dependencies", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    handlers.clear();
+    subs.length = 0;
+  });
+  afterEach(() => vi.useRealTimers());
+
+  function seed(qc: QueryClient) {
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1" },
+      groups: [],
+      columns: [],
+      items: [],
+      cellValues: [],
+      views: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [],
+      relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
+    });
+  }
+
+  it("subscribes to item_dependencies on both the successor and predecessor end", () => {
+    const qc = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useBoardRealtime("b1"), { wrapper });
+    const filters = subs
+      .filter((s) => s.table === "item_dependencies")
+      .map((s) => s.filter);
+    expect(filters).toEqual(["board_id=eq.b1", "predecessor_board_id=eq.b1"]);
+  });
+
+  it("applies a link arriving on the predecessor listener, deduped across both", () => {
+    const qc = new QueryClient();
+    seed(qc);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useBoardRealtime("b1"), { wrapper });
+    const [succSide, predSide] = subs.filter(
+      (s) => s.table === "item_dependencies",
+    );
+    const row = {
+      id: "d1",
+      board_id: "b2",
+      predecessor_board_id: "b1",
+      predecessor_id: "i1",
+      successor_id: "i9",
+    };
+    act(() => {
+      predSide.cb({ eventType: "INSERT", new: row, old: {} });
+      succSide.cb({ eventType: "INSERT", new: row, old: {} }); // same-row echo
+    });
+    act(() => void vi.advanceTimersToNextFrame());
+    const cache = qc.getQueryData(boardKey("b1")) as {
+      dependencies: { id: string }[];
+    };
+    expect(cache.dependencies.map((d) => d.id)).toEqual(["d1"]);
   });
 });

@@ -1,6 +1,12 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
+import {
+  dependencyContextSchema,
+  type DependencyContext,
+} from "@/lib/boards/timeline-context";
 import {
   createDependencySchema,
   deleteDependencySchema,
@@ -43,4 +49,25 @@ export async function deleteDependency(input: {
     .eq("id", parsed.data.dependencyId);
   if (error) return fail(error.message);
   return { ok: true, data: undefined };
+}
+
+/**
+ * Foreign ends of this board's cross-board links (their boards' schedule config
+ * and the linked items' dates), RLS-scoped. Same-board links need no context.
+ */
+export async function getBoardDependencyContext(input: {
+  boardId: string;
+}): Promise<ActionResult<DependencyContext>> {
+  const parsed = z.string().uuid().safeParse(input.boardId);
+  if (!parsed.success) return fail("Invalid board.");
+  const supabase = await createClient();
+  const { data, error } = await typedRpc(supabase, "board_dependency_context", {
+    p_board_id: parsed.data,
+  });
+  if (error) return fail("Couldn't load linked items.");
+  const ctx = dependencyContextSchema.safeParse(
+    data ?? { boards: [], items: [] },
+  );
+  if (!ctx.success) return fail("Couldn't load linked items.");
+  return { ok: true, data: ctx.data };
 }
