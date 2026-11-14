@@ -38,11 +38,15 @@ declare
     'stalled_old','stalled'];
   exp_tiers constant int[] := array[1,1,2,2,3,3,4,4,5,5];
 begin
-  -- Fixture org: >= 2 active members, a workspace, fewest items (so unscoped
-  -- calls are not drowned in real data).
+  -- Fixture org: >= 2 active members eligible as fixture users (same rules as
+  -- v_user / v_other below, minus the preference filter), a workspace, fewest
+  -- items (so unscoped calls are not drowned in real data).
   select o.org_id into strict v_org
     from (select m.org_id, count(*) c from public.org_members m
-           where m.deactivated_at is null and m.role <> 'agent'
+           where m.deactivated_at is null
+             and m.role in ('owner','admin','member')
+             and not exists (select 1 from public.profiles p where p.id = m.user_id and p.is_agent)
+             and not exists (select 1 from public.monos mo where mo.user_id = m.user_id)
            group by 1 having count(*) >= 2) o
     join public.workspaces w on w.org_id = o.org_id
     order by (select count(*) from public.items i where i.org_id = o.org_id), o.org_id
@@ -379,14 +383,20 @@ $verify$;
 
 rollback;
 
--- Leak checks + visible pass marker (the MCP does not surface RAISE NOTICE; any
--- failure above raises). After rollback: no fixture board, role/claims reset.
-select case
-  when exists (select 1 from public.boards where name like 'verify focus_today%')
-    then 1/0
-  when exists (select 1 from public.folders where name = 'verify focus_today folder')
-    then 1/0
-  when current_user <> session_user and current_user <> 'postgres' then 1/0
-  when coalesce(nullif(current_setting('request.jwt.claims', true), ''), 'unset') <> 'unset' then 1/0
-  else 'verify-focus-today: all checks passed; no leaked fixtures; role ' || current_user || '; claims unset'
-end as result;
+-- Leak checks after the rollback (a CASE with 1/0 is constant-folded and
+-- cannot be used here), then a visible pass marker: the MCP does not surface
+-- RAISE NOTICE, and any failure above raises before this point.
+do $leak$
+begin
+  if exists (select 1 from public.boards where name like 'verify focus_today%') then
+    raise exception 'leaked fixture board'; end if;
+  if exists (select 1 from public.folders where name = 'verify focus_today folder') then
+    raise exception 'leaked fixture folder'; end if;
+  if current_user is distinct from session_user then
+    raise exception 'role not restored: %', current_user; end if;
+  if coalesce(nullif(current_setting('request.jwt.claims', true), ''), 'unset') <> 'unset' then
+    raise exception 'claims not reset'; end if;
+end
+$leak$;
+
+select 'verify-focus-today: all checks passed; no leaked fixtures' as result;
