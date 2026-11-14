@@ -32,6 +32,9 @@ const baseProps = {
   itemName: "Widget",
   orgId: "org1",
   boardId: "board1",
+  boardName: "Board",
+  timelineConfig: null,
+  canEdit: true,
   currentUserId: "self",
   columns: [],
   members: [],
@@ -73,6 +76,9 @@ describe("ItemPanel creation metadata", () => {
             itemName="Design review"
             orgId="org-1"
             boardId="board-1"
+            boardName="Board"
+            timelineConfig={null}
+            canEdit
             currentUserId="u-1"
             columns={[]}
             members={[{ userId: "u-1", fullName: "Danijel Jovanovic" }]}
