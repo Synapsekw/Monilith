@@ -197,7 +197,30 @@ export async function resolveFolderRollup(
   };
 }
 
+/**
+ * ── SEAM: packed burn read ─────────────────────────────────────────────────
+ * Today: the paged dense read below (`resolveFolderBurnPaged`). Once
+ * 20261114145347_folder_tower.sql is applied AND `pnpm db:types` has added
+ * `folder_burn_packed` to database.types.ts, replace ONLY the body of this
+ * function with:
+ *
+ *   const { data, error } = await typedRpc(supabase, "folder_burn_packed", {
+ *     p_folder_id: folderId,
+ *   });
+ *   if (error) return { ok: false, error: mapRpcError(error, "folder_burn_packed") };
+ *   return unpackBurnPacked(data); // ./packed — dense, zero-filled BurnRow[]
+ *
+ * One execution, one jsonb value, no max_rows cap; `resolveFolderBurnPaged`,
+ * BURN_ROW_CAP and the paging tests can then go.
+ */
 export async function resolveFolderBurn(
+  supabase: DB,
+  folderId: string,
+): Promise<Resolved<BurnRow>> {
+  return resolveFolderBurnPaged(supabase, folderId);
+}
+
+async function resolveFolderBurnPaged(
   supabase: DB,
   folderId: string,
 ): Promise<Resolved<BurnRow>> {

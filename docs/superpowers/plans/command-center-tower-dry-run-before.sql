@@ -5,6 +5,9 @@
 --   3. command-center-tower-dry-run.sql                     -- asserts, then RAISEs
 -- No explicit BEGIN/COMMIT: the closing RAISE aborts the implicit transaction,
 -- so nothing persists. This part only records "before" values in a temp table.
+-- (folder_burn_packed and the jsonb folder_load are new in the migration, so
+-- there is no "before" for them; PART 3 checks them against folder_burn and
+-- _folder_item_flags directly.)
 select set_config('lock_timeout', '4s', true), set_config('statement_timeout', '120s', true);
 
 create temp table tower_dry (k text primary key, v jsonb) on commit drop;
