@@ -14,10 +14,16 @@ const db = vi.hoisted(() => ({
     data: { id: "new" } as unknown,
     error: null as null | { code: string; message: string },
   },
-  deleteResult: { error: null as null | { message: string } },
+  // What `.delete().eq().select("id")` resolves to: the deleted rows. RLS
+  // filters a forbidden delete to [] with no error.
+  deleteResult: {
+    data: [{ id: "dep" }] as { id: string }[] | null,
+    error: null as null | { message: string },
+  },
   editableBoards: new Set<string>(),
   rpc: vi.fn(),
   deleteEq: vi.fn(),
+  deleteSelect: vi.fn(),
   searchItems: vi.fn(),
 }));
 
@@ -143,10 +149,11 @@ const createCalls = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   db.createResult = { data: { id: "new" }, error: null };
-  db.deleteResult = { error: null };
+  db.deleteResult = { data: [{ id: "dep" }], error: null };
   db.editableBoards = new Set([BOARD, OTHER_BOARD]);
   db.searchItems.mockResolvedValue([permit]);
-  db.deleteEq.mockImplementation(async () => db.deleteResult);
+  db.deleteEq.mockImplementation(() => ({ select: db.deleteSelect }));
+  db.deleteSelect.mockImplementation(async () => db.deleteResult);
   db.rpc.mockImplementation(
     async (fn: string, args: { p_board_id?: string }) => {
       if (fn === "can_edit_board")
@@ -312,7 +319,7 @@ describe("DependenciesSection", () => {
   });
 
   it("restores the link and toasts when removing fails", async () => {
-    db.deleteResult = { error: { message: "permission denied" } };
+    db.deleteResult = { data: null, error: { message: "permission denied" } };
     const user = userEvent.setup();
     const { qc } = renderSection();
     await user.click(
@@ -330,8 +337,27 @@ describe("DependenciesSection", () => {
     ).toEqual([DEP]);
   });
 
+  it("restores the link and says so when RLS removed nothing", async () => {
+    db.deleteResult = { data: [], error: null };
+    const user = userEvent.setup();
+    const { qc } = renderSection();
+    await user.click(
+      screen.getByRole("button", { name: "Remove link to Design" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You can't remove this dependency.",
+      ),
+    );
+    expect(
+      qc
+        .getQueryData<BoardCache>(boardKey(BOARD))
+        ?.dependencies.map((d) => d.id),
+    ).toEqual([DEP]);
+  });
+
   it("restores the link when the remove request itself throws", async () => {
-    db.deleteEq.mockRejectedValueOnce(new Error("network"));
+    db.deleteSelect.mockRejectedValueOnce(new Error("network"));
     const user = userEvent.setup();
     const { qc } = renderSection();
     await user.click(

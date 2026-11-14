@@ -89,7 +89,10 @@ describe("deleteDependency", () => {
   });
 
   it("reads board_id then deletes and returns ok", async () => {
-    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const deleteSelect = vi
+      .fn()
+      .mockResolvedValue({ data: [{ id: DEP_ID }], error: null });
+    const deleteEq = vi.fn(() => ({ select: deleteSelect }));
     from.mockImplementation((table: string) => {
       if (table === "item_dependencies") {
         return {
@@ -108,7 +111,31 @@ describe("deleteDependency", () => {
     });
     const res = await deleteDependency({ dependencyId: DEP_ID });
     expect(deleteEq).toHaveBeenCalledWith("id", DEP_ID);
+    expect(deleteSelect).toHaveBeenCalledWith("id");
     expect(res).toEqual({ ok: true, data: undefined });
+  });
+
+  it("fails when RLS lets the delete through but removes no row", async () => {
+    from.mockImplementation(() => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: { board_id: BOARD_ID },
+            error: null,
+          }),
+        }),
+      }),
+      delete: () => ({
+        eq: () => ({
+          select: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }),
+    }));
+    const res = await deleteDependency({ dependencyId: DEP_ID });
+    expect(res).toEqual({
+      ok: false,
+      error: "You can't remove this dependency.",
+    });
   });
 
   it("returns ok:false when dependency is not found", async () => {
@@ -135,7 +162,12 @@ describe("deleteDependency", () => {
         }),
       }),
       delete: () => ({
-        eq: vi.fn().mockResolvedValue({ error: { message: "delete failed" } }),
+        eq: () => ({
+          select: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "delete failed" },
+          }),
+        }),
       }),
     }));
     const res = await deleteDependency({ dependencyId: DEP_ID });

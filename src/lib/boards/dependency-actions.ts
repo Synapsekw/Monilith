@@ -43,11 +43,16 @@ export async function deleteDependency(input: {
     .eq("id", parsed.data.dependencyId)
     .maybeSingle();
   if (readErr || !dep) return fail("Dependency not found.");
-  const { error } = await supabase
+  // RLS filters a delete the caller may not make down to 0 rows with no
+  // error, so success is "a row came back", not "no error".
+  const { data: deleted, error } = await supabase
     .from("item_dependencies")
     .delete()
-    .eq("id", parsed.data.dependencyId);
+    .eq("id", parsed.data.dependencyId)
+    .select("id");
   if (error) return fail("Couldn't remove the dependency.");
+  if (!deleted || deleted.length === 0)
+    return fail("You can't remove this dependency.");
   return { ok: true, data: undefined };
 }
 
