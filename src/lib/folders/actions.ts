@@ -14,7 +14,8 @@ import {
   moveBoardToFolderSchema,
   renameFolderSchema,
 } from "@/lib/validations/folders";
-import { resolveFolderWorkload } from "./resolve";
+import { resolveFolderTimeline, resolveFolderWorkload } from "./resolve";
+import type { FolderTimelineData } from "@/lib/boards/timeline-context";
 import {
   FOLDER_GONE_ERROR,
   type FolderSummary,
@@ -224,4 +225,16 @@ export async function getFolderWorkload(input: {
   const res = await resolveFolderWorkload(supabase, parsed.data);
   if (!res.ok) return fail(res.error);
   return { ok: true, data: res.rows };
+}
+
+/** Timeline tab data — fetched once when the tab first mounts (TanStack Query). */
+export async function getFolderTimeline(input: {
+  folderId: string;
+}): Promise<ActionResult<FolderTimelineData>> {
+  const parsed = folderIdSchema.safeParse(input.folderId);
+  if (!parsed.success) return fail("Invalid folder.");
+  const supabase = await createClient();
+  const res = await resolveFolderTimeline(supabase, parsed.data);
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: res.data };
 }

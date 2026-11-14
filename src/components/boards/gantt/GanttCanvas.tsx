@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -52,7 +53,9 @@ export type GanttCanvasProps = {
   colorFor: (row: GanttRow) => string | null;
   criticalLabelFor?: (itemId: string) => string | null;
   canEditItem: (itemId: string) => boolean;
+  /** Expanded parents; for a board band (section level 0), whether it is open. */
   isExpanded?: (itemId: string) => boolean;
+  /** Toggles a parent's sub-items — and, when given, collapses a board band. */
   onToggleExpand?: (itemId: string) => void;
   onMoveBar: (itemId: string, deltaDays: number) => void;
   onResizeBar: (itemId: string, newEndISO: string) => void;
@@ -300,7 +303,12 @@ export function GanttCanvas({
                     }}
                   >
                     {row.kind === "section" ? (
-                      <SectionBand row={row} totalW={totalW} />
+                      <SectionBand
+                        row={row}
+                        totalW={totalW}
+                        expanded={isExpanded?.(row.itemId) ?? true}
+                        onToggle={onToggleExpand}
+                      />
                     ) : (
                       <GanttRowItem
                         row={row}
@@ -399,10 +407,35 @@ export function GanttCanvas({
 /**
  * A label band spanning the whole row — a board (level 0, the stronger surface
  * step) or a group (level 1, lighter, indented). No bar, no picker; the name
- * stays pinned to the rail while the track scrolls sideways.
+ * stays pinned to the rail while the track scrolls sideways. A board band
+ * becomes a collapse toggle when the canvas is given `onToggleExpand`.
  */
-function SectionBand({ row, totalW }: { row: GanttRow; totalW: number }) {
+function SectionBand({
+  row,
+  totalW,
+  expanded,
+  onToggle,
+}: {
+  row: GanttRow;
+  totalW: number;
+  expanded: boolean;
+  onToggle?: (itemId: string) => void;
+}) {
   const isBoard = (row.level ?? 0) === 0;
+  const label = (
+    <span
+      role="heading"
+      aria-level={isBoard ? 3 : 4}
+      className={cn(
+        "min-w-0 truncate text-xs",
+        isBoard
+          ? "text-foreground font-semibold"
+          : "text-muted-foreground font-medium",
+      )}
+    >
+      {row.name}
+    </span>
+  );
   return (
     <div
       data-testid="gantt-section"
@@ -417,20 +450,35 @@ function SectionBand({ row, totalW }: { row: GanttRow; totalW: number }) {
           "sticky left-0 z-10 flex min-w-0 items-center pr-2",
           isBoard ? "bg-surface-muted" : "bg-surface",
         )}
-        style={{ width: LABEL_W, paddingLeft: isBoard ? 16 : 32 }}
+        style={{
+          width: LABEL_W,
+          paddingLeft: isBoard && onToggle ? 8 : isBoard ? 16 : 32,
+        }}
       >
-        <span
-          role="heading"
-          aria-level={isBoard ? 3 : 4}
-          className={cn(
-            "min-w-0 truncate text-xs",
-            isBoard
-              ? "text-foreground font-semibold"
-              : "text-muted-foreground font-medium",
-          )}
-        >
-          {row.name}
-        </span>
+        {isBoard && onToggle ? (
+          <button
+            type="button"
+            onClick={() => onToggle(row.itemId)}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${row.name}`}
+            className="hover:bg-state-hover focus-visible:ring-ring flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
+          >
+            {expanded ? (
+              <ChevronDown
+                className="text-muted-foreground size-3.5 shrink-0"
+                aria-hidden
+              />
+            ) : (
+              <ChevronRight
+                className="text-muted-foreground size-3.5 shrink-0"
+                aria-hidden
+              />
+            )}
+            {label}
+          </button>
+        ) : (
+          label
+        )}
       </div>
     </div>
   );

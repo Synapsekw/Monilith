@@ -28,6 +28,7 @@ type Action =
   | { type: "renameTab"; id: string; label: string }
   | { type: "hideTab"; id: string }
   | { type: "moveTab"; id: string; dir: MoveDirection }
+  | { type: "addTab"; kind: "timeline" }
   | { type: "reset"; preset: PresetKey }
   | { type: "revert"; config: FolderLayoutConfig };
 
@@ -196,6 +197,19 @@ function layoutReducer(state: State, action: Action): State {
       if (!moved) return state;
       return { config: { ...state.config, tabs: moved }, dirty: true };
     }
+    case "addTab": {
+      // Singleton kind, so add it once; and never past the schema's 6-tab cap.
+      if (state.config.tabs.some((t) => t.kind === action.kind)) return state;
+      if (state.config.tabs.length >= 6) return state;
+      const id = state.config.tabs.some((t) => t.id === "timeline")
+        ? "timeline-2"
+        : "timeline";
+      const tabs = [
+        ...state.config.tabs,
+        { id, label: "Timeline", kind: "timeline" as const },
+      ];
+      return { config: { ...state.config, tabs }, dirty: true };
+    }
     case "reset":
       // Whole-config replacement — always dirty, even if it happens to equal
       // what's already on screen: nothing has been saved yet.
@@ -270,6 +284,10 @@ export function useLayoutDraft(initial: FolderLayoutConfig, version = 0) {
     (id: string, dir: MoveDirection) => dispatch({ type: "moveTab", id, dir }),
     [],
   );
+  const addTab = useCallback(
+    (kind: "timeline") => dispatch({ type: "addTab", kind }),
+    [],
+  );
   const reset = useCallback(
     (preset: PresetKey) => dispatch({ type: "reset", preset }),
     [],
@@ -291,6 +309,7 @@ export function useLayoutDraft(initial: FolderLayoutConfig, version = 0) {
     renameTab,
     hideTab,
     moveTab,
+    addTab,
     reset,
     revert,
   };

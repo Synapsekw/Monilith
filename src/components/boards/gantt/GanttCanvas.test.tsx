@@ -268,4 +268,22 @@ describe("GanttCanvas callbacks", () => {
       screen.getByRole("heading", { level: 3, name: "Procurement" }),
     ).toBeInTheDocument();
   });
+
+  it("makes a board band a collapse toggle only when onToggleExpand is given", () => {
+    const { unmount } = render(<GanttCanvas {...props()} />);
+    expect(
+      screen.queryByRole("button", { name: /Collapse Procurement/ }),
+    ).not.toBeInTheDocument();
+    unmount();
+    const onToggleExpand = vi.fn();
+    render(
+      <GanttCanvas
+        {...props({ onToggleExpand, isExpanded: (id) => id !== "sec-b1" })}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: "Expand Procurement" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(onToggleExpand).toHaveBeenCalledWith("sec-b1");
+  });
 });

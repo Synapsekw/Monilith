@@ -109,6 +109,7 @@ export function SectionsSheet({
   onRenameTab,
   onHideTab,
   onMoveTab,
+  onAddTimelineTab,
 }: {
   /** The active canvas tab's current sections — panels already present are
    *  left off the "add back" list. */
@@ -118,11 +119,15 @@ export function SectionsSheet({
   onRenameTab: (id: string, label: string) => void;
   onHideTab: (id: string) => void;
   onMoveTab: (id: string, dir: "up" | "down") => void;
+  onAddTimelineTab: () => void;
 }) {
   const present = new Set(
     sections.filter((s) => s.type === "builtin").map((s) => s.panel),
   );
   const hidden = BUILTIN_PANELS.filter((p) => !present.has(p));
+  // Timeline is a singleton tab kind; the schema caps the strip at 6 tabs.
+  const canAddTimeline =
+    !tabs.some((t) => t.kind === "timeline") && tabs.length < 6;
 
   return (
     <Sheet>
@@ -180,6 +185,17 @@ export function SectionsSheet({
                 />
               ))}
             </ul>
+            {canAddTimeline ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={onAddTimelineTab}
+              >
+                <Plus className="size-4" /> Add Timeline tab
+              </Button>
+            ) : null}
           </section>
         </div>
       </SheetContent>

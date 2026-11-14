@@ -3,6 +3,10 @@ import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import type { Database } from "@/types/database.types";
+import {
+  folderTimelineSchema,
+  type FolderTimelineData,
+} from "@/lib/boards/timeline-context";
 import type {
   AttentionRow,
   BurnRow,
@@ -272,4 +276,26 @@ export async function resolveFolderGallery(
       attention: r.attention_count,
     })),
   };
+}
+
+/**
+ * Folder Timeline tab data — every in-folder item's date cells, the folder's
+ * boards (+ their date columns, timeline config and groups) and the links
+ * between them. One jsonb payload, parsed whole: a shape drift fails the tab
+ * loudly instead of drawing half a chart.
+ */
+export async function resolveFolderTimeline(
+  supabase: DB,
+  folderId: string,
+): Promise<
+  { ok: true; data: FolderTimelineData } | { ok: false; error: string }
+> {
+  const { data, error } = await typedRpc(supabase, "folder_timeline", {
+    p_folder_id: folderId,
+  });
+  if (error) return { ok: false, error: mapRpcError(error, "folder_timeline") };
+  const parsed = folderTimelineSchema.safeParse(data);
+  if (!parsed.success)
+    return { ok: false, error: mapZodError(parsed.error, "folder_timeline") };
+  return { ok: true, data: parsed.data };
 }

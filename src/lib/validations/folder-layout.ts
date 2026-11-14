@@ -24,12 +24,18 @@ export const BUILTIN_PANELS = [
 export const builtinPanelSchema = z.enum(BUILTIN_PANELS);
 export type BuiltinPanel = z.infer<typeof builtinPanelSchema>;
 
-export const TAB_KINDS = ["canvas", "stages", "boards", "people"] as const;
+export const TAB_KINDS = [
+  "canvas",
+  "stages",
+  "boards",
+  "people",
+  "timeline",
+] as const;
 export const tabKindSchema = z.enum(TAB_KINDS);
 export type TabKind = z.infer<typeof tabKindSchema>;
 
 /** Singleton tabs: hideable, never duplicated. */
-const SINGLETON_KINDS = ["stages", "boards", "people"] as const;
+const SINGLETON_KINDS = ["stages", "boards", "people", "timeline"] as const;
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
 const label = z.string().trim().min(1).max(24);
