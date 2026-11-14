@@ -215,6 +215,10 @@ export type Forecast = {
    *  (before the folder_tower migration): `importedDone` is then 0 because
    *  it is unknown, not because nothing was imported. */
   importedKnown?: boolean;
+  /** Full weeks in the pace window (0 to 4): the weeks before the current one. */
+  windowWeeks?: number;
+  /** Completions in weeks before the pace window. */
+  completedBeforeWindow?: number;
 };
 
 export function burnForecast(
@@ -265,6 +269,13 @@ export function burnForecast(
     completedThisWeek: here.completed,
     completedCum: here.completedCum,
     importedKnown: opts.importedKnown ?? true,
+    windowWeeks: window.length,
+    completedBeforeWindow: Math.max(
+      0,
+      here.completedCum -
+        here.completed -
+        window.reduce((s, p) => s + p.completed, 0),
+    ),
   };
 }
 
@@ -289,18 +300,26 @@ export function forecastReading(f: Forecast): string {
     // No pace. Say WHY, truthfully for what this data can know:
     //  - imported_done known and every completion so far arrived done: there
     //    never was any organic completion to pace on;
-    //  - completions this week (the pace window is the four FULL weeks before
-    //    it): "none in the last four weeks" would read as false, so name the
-    //    window and this week's count. With the pre-migration folder_burn we
-    //    cannot tell whether those were imported, so we do not claim either;
-    //  - otherwise the plain sentence is true.
+    //  - otherwise name the REAL window ("the N full weeks before this one",
+    //    N = windowWeeks, 2 to 4, always written as a numeral), then
+    //    "no recent pace" when completions exist before the window and
+    //    "no pace yet" when none do, then this week's count if any. With the
+    //    pre-migration folder_burn we cannot tell whether those were imported,
+    //    so we claim neither.
     const cum = f.completedCum ?? 0;
     const thisWeek = f.completedThisWeek ?? 0;
     if (f.importedKnown !== false && cum > 0 && f.importedDone >= cum)
       return "Everything completed so far arrived already done, so there is no pace to forecast from.";
-    if (thisWeek > 0)
-      return `No items were completed in the four weeks before this one, so there is no pace yet; ${thisWeek} ${thisWeek === 1 ? "was" : "were"} completed this week.${imported}`;
-    return `No items completed in the last four weeks.${imported}`;
+    const n = f.windowWeeks ?? 4;
+    const why =
+      (f.completedBeforeWindow ?? 0) > 0
+        ? "so there is no recent pace"
+        : "so there is no pace yet";
+    const now =
+      thisWeek > 0
+        ? `; ${thisWeek} ${thisWeek === 1 ? "was" : "were"} completed this week`
+        : "";
+    return `No items were completed in the ${n} full ${n === 1 ? "week" : "weeks"} before this one, ${why}${now}.${imported}`;
   }
   const pace =
     f.pace >= 10

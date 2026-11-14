@@ -124,20 +124,39 @@ function pagedClient(all: unknown[] | { error: { message: string } }) {
       ? { data: all.slice(from, to + 1), error: null }
       : { data: null, error: all.error },
   );
+  const order = vi.fn();
+  const builder = { order, range };
+  order.mockImplementation(() => builder);
   const client = {
-    rpc: vi.fn(() => ({ range })),
+    rpc: vi.fn(() => builder),
   } as unknown as SupabaseClient<Database>;
-  return { client, range };
+  return { client, range, order };
 }
 
 const burnRow = (i: number) => ({
   stage_key: `s${String(Math.floor(i / 73)).padStart(2, "0")}`,
-  week_start: "2026-09-07",
+  week_start: new Date(Date.UTC(2026, 0, 5) + (i % 73) * 7 * 864e5)
+    .toISOString()
+    .slice(0, 10),
   planned: 1,
   completed: i % 3 === 0 ? 1 : 0,
 });
 
 describe("resolveFolderBurn", () => {
+  it("orders every page by stage_key, then week_start, so pages are stable", async () => {
+    const { client, order } = pagedClient([burnRow(0)]);
+    await resolveFolderBurn(client, "f1");
+    expect(order.mock.calls).toEqual([["stage_key"], ["week_start"]]);
+  });
+
+  it("fails rather than chart a series with a repeated (stage, week)", async () => {
+    const { client } = pagedClient([burnRow(0), burnRow(1), burnRow(0)]);
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_DATA_ERROR,
+    });
+  });
+
   it("calls folder_burn and camel-cases the row", async () => {
     const { client, range } = pagedClient([
       {

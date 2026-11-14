@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
 import { computeKpis } from "@/lib/folders/rollup";
@@ -31,6 +31,7 @@ function renderOverview(
     stage?: string | null;
     board?: string | null;
     editing?: boolean;
+    onMoveSection?: (id: string, dir: "up" | "down") => void;
   } = {},
 ) {
   const payload = { ...folderFixture(), ...patch };
@@ -48,6 +49,7 @@ function renderOverview(
         sections={canvasSections(payload.layout.config, "overview")}
         onRetry={onRetry}
         editing={opts.editing ?? false}
+        onMoveSection={opts.onMoveSection}
       />
     </TooltipProvider>,
   );
@@ -138,6 +140,46 @@ describe("OverviewTab", () => {
     const note = screen.getByTestId("burn-scope-note");
     expect(note).toHaveTextContent("All boards");
     expect(note).toHaveTextContent(/folder-wide/i);
+  });
+
+  it("states no gap in the burn reading while a board filter is set", () => {
+    renderOverview();
+    // Sanity: without the filter the fixture's reading does state a gap.
+    expect(screen.getByTestId("burn-reading").textContent).toMatch(
+      /plan today/,
+    );
+    cleanup();
+    renderOverview({}, { board: "b1" });
+    expect(screen.getByTestId("burn-reading").textContent).not.toMatch(
+      /plan today/,
+    );
+  });
+
+  it("numbers and moves Customize sections over the ones that draw", () => {
+    const onMoveSection = vi.fn();
+    // Tower order: kpis, burn, load (absent), board-status, people, …
+    renderOverview({ load: null }, { editing: true, onMoveSection });
+    const ups = screen.getAllByRole("button", { name: "Move up" });
+    const downs = screen.getAllByRole("button", { name: "Move down" });
+    // kpis, burn, board-status, people, attention, intelligence, milestones
+    expect(ups).toHaveLength(7);
+    expect(ups[0]).toBeDisabled();
+    expect(downs[6]).toBeDisabled();
+    // board-status up passes the absent load section AND burn: two swaps.
+    fireEvent.click(ups[2]!);
+    expect(onMoveSection.mock.calls).toEqual([
+      ["board-status", "up"],
+      ["board-status", "up"],
+    ]);
+    onMoveSection.mockClear();
+    fireEvent.click(downs[1]!); // burn down past load and board-status
+    expect(onMoveSection.mock.calls).toEqual([
+      ["burn", "down"],
+      ["burn", "down"],
+    ]);
+    onMoveSection.mockClear();
+    fireEvent.click(downs[2]!); // board-status down: people is adjacent
+    expect(onMoveSection.mock.calls).toEqual([["board-status", "down"]]);
   });
 
   it("shows no scope caption when no board filter is set", () => {

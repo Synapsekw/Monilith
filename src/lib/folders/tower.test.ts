@@ -241,23 +241,63 @@ describe("burnForecast", () => {
     expect(burnForecast(first(4), 24)!.pace).toBeCloseTo(8 / 3);
   });
 
+  /** Re-derive completedCum after editing `completed`. */
+  const recum = (ps: BurnPoint[]): BurnPoint[] => {
+    let c = 0;
+    return ps.map((p) => ({ ...p, completedCum: (c += p.completed) }));
+  };
+
   it("reports a zero pace instead of a date", () => {
-    const flat = points.map((p) => ({
-      ...p,
-      completed: p.isPast && p.weekStart !== "2026-09-14" ? 0 : p.completed,
-    }));
+    const flat = recum(
+      points.map((p) => ({
+        ...p,
+        completed: p.isPast && p.weekStart !== "2026-09-14" ? 0 : p.completed,
+      })),
+    );
     const f = burnForecast(flat, 24)!;
     expect(f.pace).toBe(0);
     expect(f.finishWeek).toBeNull();
+    expect(f.windowWeeks).toBe(4);
     // The one completion is in the current week, outside the pace window.
     expect(forecastReading(f)).toBe(
-      "No items were completed in the four weeks before this one, so there is no pace yet; 1 was completed this week.",
+      "No items were completed in the 4 full weeks before this one, so there is no pace yet; 1 was completed this week.",
     );
-    const none = flat.map((p) =>
-      p.weekStart === "2026-09-14" ? { ...p, completed: 0 } : p,
+    const none = recum(
+      flat.map((p) =>
+        p.weekStart === "2026-09-14" ? { ...p, completed: 0 } : p,
+      ),
     );
     expect(forecastReading(burnForecast(none, 24)!)).toBe(
-      "No items completed in the last four weeks.",
+      "No items were completed in the 4 full weeks before this one, so there is no pace yet.",
+    );
+  });
+
+  it("names the real window when only two full weeks precede this one", () => {
+    const short = recum([
+      pt("2026-08-31", 4, 0, 4, 0, true),
+      pt("2026-09-07", 4, 0, 8, 0, true),
+      pt("2026-09-14", 4, 2, 12, 0, true),
+      pt("2026-09-21", 4, 0, 16, 0, false),
+    ]);
+    const f = burnForecast(short, 16)!;
+    expect(f.windowWeeks).toBe(2);
+    expect(forecastReading(f)).toBe(
+      "No items were completed in the 2 full weeks before this one, so there is no pace yet; 2 were completed this week.",
+    );
+  });
+
+  it("says there is no recent pace when completions predate the window", () => {
+    const old = recum([
+      pt("2026-08-10", 4, 3, 4, 0, true),
+      ...points.map((p) => ({
+        ...p,
+        completed: p.weekStart === "2026-08-10" || !p.isPast ? p.completed : 0,
+      })),
+    ]);
+    const f = burnForecast(old, 24)!;
+    expect(f.completedBeforeWindow).toBe(3);
+    expect(forecastReading(f)).toBe(
+      "No items were completed in the 4 full weeks before this one, so there is no recent pace.",
     );
   });
 
@@ -371,7 +411,7 @@ describe("a DAAS-shaped folder", () => {
     const f = burnForecast(pts, 1953, { importedKnown: false })!;
     expect(f.pace).toBe(0);
     expect(forecastReading(f)).toBe(
-      "No items were completed in the four weeks before this one, so there is no pace yet; 663 were completed this week.",
+      "No items were completed in the 4 full weeks before this one, so there is no pace yet; 663 were completed this week.",
     );
   });
 

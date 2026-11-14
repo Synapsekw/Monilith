@@ -59,6 +59,20 @@ describe("WorkloadBars", () => {
     expect(screen.getAllByText("over 15")).toHaveLength(1);
   });
 
+  it("reserves the late and overload columns only when someone needs them", () => {
+    const { container, unmount } = render(
+      <WorkloadBars people={[{ ...ada, open: 8, overdue: 0 }, grace]} />,
+    );
+    expect(container.querySelectorAll("[data-col='late']")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-col='over']")).toHaveLength(0);
+    unmount();
+    // Ada is late (and over 15): both columns exist on every row, so the
+    // figures line up; Grace gets empty cells.
+    const { container: c2 } = render(<WorkloadBars people={[ada, grace]} />);
+    expect(c2.querySelectorAll("[data-col='late']")).toHaveLength(2);
+    expect(c2.querySelectorAll("[data-col='over']")).toHaveLength(2);
+  });
+
   it("renders the empty state without people", () => {
     render(<WorkloadBars people={[]} />);
     expect(screen.getByText("No open items are assigned.")).toBeInTheDocument();

@@ -52,6 +52,8 @@ function isEmpty(node: ReactNode): boolean {
  *     survivor's start (the last one to the row's end, the first one from the
  *     row's start), so neighbours fill the row;
  *   - a row with every cell present keeps its saved columns exactly.
+ * Note: a lazily loaded neighbour that appears later (e.g. load rows arriving)
+ * shrinks its row-mate back to the saved width on that re-render.
  */
 export function fillRows<T extends { x: number; w: number }>(
   cells: { cell: T; present: boolean }[],

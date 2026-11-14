@@ -221,11 +221,17 @@ describe("KpisPanel", () => {
         />,
       );
       const grid = container.querySelector("[data-testid='kpi-cards']")!;
-      // auto-fit collapses empty tracks, so live cards stretch to fill.
-      expect(grid.className).toContain(
-        "grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]",
-      );
-      expect(grid.className).not.toMatch(/(^|\s)(md|xl):grid-cols-\d/);
+      // One row of equal columns at lg+, whatever the count; 2-up on phones.
+      // (Real geometry is measured in Chromium, see the browser-fix report.)
+      for (const c of [
+        "grid-cols-2",
+        "sm:grid-cols-3",
+        "lg:grid-cols-none",
+        "lg:grid-flow-col",
+        "lg:auto-cols-fr",
+      ])
+        expect(grid).toHaveClass(c);
+      expect(grid.className).not.toMatch(/auto-fit|(md|xl):grid-cols-\d/);
       unmount();
     }
   });

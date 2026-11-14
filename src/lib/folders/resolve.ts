@@ -203,10 +203,13 @@ export async function resolveFolderBurn(
 ): Promise<Resolved<BurnRow>> {
   const { data, error } = await fetchAllRows<unknown>(
     (from, to) =>
-      typedRpc(supabase, "folder_burn", { p_folder_id: folderId }).range(
-        from,
-        to,
-      ),
+      typedRpc(supabase, "folder_burn", { p_folder_id: folderId })
+        // Explicit total order for offset paging: (stage_key, week_start) is
+        // unique per folder_burn row, so no row repeats or vanishes between
+        // pages (the function's own ORDER BY is not a PostgREST guarantee).
+        .order("stage_key")
+        .order("week_start")
+        .range(from, to),
     // Every page re-runs the whole function (~650 ms on DAAS), so pages go
     // four at a time, not the helper's default eight: DAAS costs five runs.
     { cap: BURN_ROW_CAP + 1, wave: 4 },
@@ -221,6 +224,20 @@ export async function resolveFolderBurn(
   const parsed = z.array(burnRowSchema).safeParse(data ?? []);
   if (!parsed.success)
     return { ok: false, error: mapZodError(parsed.error, "folder_burn") };
+  // Pages are separate executions; a write between them can shift offsets.
+  // A repeated (stage, week) means the pages overlapped: fail (Retry) rather
+  // than double-count it.
+  const seen = new Set<string>();
+  for (const r of parsed.data) {
+    const k = `${r.stage_key}\u0000${r.week_start}`;
+    if (seen.has(k)) {
+      console.error(
+        "[folders] folder_burn pages overlapped (repeated stage/week)",
+      );
+      return { ok: false, error: FOLDER_DATA_ERROR };
+    }
+    seen.add(k);
+  }
   return {
     ok: true,
     rows: parsed.data.map((r) => ({

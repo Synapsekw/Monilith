@@ -66,8 +66,12 @@ describe("KpiCard", () => {
     );
     const pill = screen.getByText("+34 pts this week");
     expect(pill).not.toHaveClass("truncate");
-    expect(pill).not.toHaveClass("max-w-full");
-    expect(pill).toHaveClass("shrink-0", "whitespace-nowrap");
+    // Never clipped, never wider than the card: on a card too narrow for one
+    // line the pill wraps its words; the sparkline wraps below it.
+    expect(pill).toHaveClass("text-clip", "whitespace-normal", "max-w-full");
+    expect(pill).not.toHaveClass("whitespace-nowrap");
     expect(pill.parentElement).toHaveClass("flex-wrap");
+    // The card may shrink to its grid track instead of overflowing it.
+    expect(pill.closest("[data-testid='kpi-card']")).toHaveClass("min-w-0");
   });
 });

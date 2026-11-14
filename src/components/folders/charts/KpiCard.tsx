@@ -36,8 +36,9 @@ export function KpiCard({
   const pct = progress === null ? null : Math.max(0, Math.min(100, progress));
   return (
     <div
+      data-testid="kpi-card"
       className={cn(
-        "bg-surface hover:border-border-hover flex flex-col gap-2 rounded-lg border p-4",
+        "bg-surface hover:border-border-hover flex min-w-0 flex-col gap-2 rounded-lg border p-4",
         className,
       )}
     >
@@ -57,13 +58,15 @@ export function KpiCard({
       ) : null}
       {trend ? (
         // The pill states the change in words, so it must never be clipped
-        // ("+5 pts this wee"): it keeps its full width and, when the card is
-        // too narrow for both, the fixed-width sparkline wraps to a new line.
+        // ("+5 pts this wee"). When the card is too narrow for pill and
+        // sparkline, the sparkline wraps to the next line; on a card narrower
+        // than the pill itself, the pill wraps its words instead of
+        // overflowing (StatusPill's `truncate` is cancelled by `text-clip`).
         <div className="flex flex-wrap items-end justify-between gap-2">
           <StatusPill
             color={trend.change.color}
             variant="soft"
-            className="max-w-none shrink-0 text-clip whitespace-nowrap"
+            className="max-w-full text-clip whitespace-normal"
           >
             {trend.change.text}
           </StatusPill>

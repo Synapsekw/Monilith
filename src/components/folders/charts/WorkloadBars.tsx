@@ -48,6 +48,10 @@ export function WorkloadBars({
       </EmptyState>
     );
   const max = Math.max(1, ...people.map((p) => p.open));
+  // A column is reserved on every row only when some row fills it, so the
+  // figures align without spending ~48px per empty column in narrow panels.
+  const anyLate = people.some((p) => p.overdue > 0);
+  const anyOver = people.some((p) => p.open > threshold);
   return (
     <ul className="flex flex-col gap-2">
       {people.map((p) => {
@@ -86,20 +90,22 @@ export function WorkloadBars({
             <span className="w-8 text-right font-mono tabular-nums">
               {p.open}
             </span>
-            {p.overdue > 0 ? (
-              <span className="text-status-red text-2xs min-w-12 font-mono whitespace-nowrap">
-                {p.overdue} late
+            {anyLate ? (
+              <span
+                data-col="late"
+                className="text-status-red text-2xs min-w-12 font-mono whitespace-nowrap"
+              >
+                {p.overdue > 0 ? `${p.overdue} late` : null}
               </span>
-            ) : (
-              <span className="min-w-12" />
-            )}
-            {overloaded ? (
-              <span className="text-muted-foreground text-2xs min-w-12 font-mono whitespace-nowrap">
-                over {threshold}
+            ) : null}
+            {anyOver ? (
+              <span
+                data-col="over"
+                className="text-muted-foreground text-2xs min-w-12 font-mono whitespace-nowrap"
+              >
+                {overloaded ? `over ${threshold}` : null}
               </span>
-            ) : (
-              <span className="min-w-12" />
-            )}
+            ) : null}
           </li>
         );
       })}

@@ -192,13 +192,13 @@ export function KpisPanel({
   return (
     <div className="flex flex-col gap-3">
       {live.length > 0 ? (
-        // auto-fit, not a fixed column count: empty tracks collapse, so 1 to
-        // 6 live cards always fill the row (a card that became a chip used
-        // to leave a hole in a 6-column grid), and narrow screens wrap at the
-        // 10rem minimum (two per row on a phone).
+        // At lg and up the cards flow into ONE row of equal implicit columns,
+        // so any count from 1 to 6 fills it (a card that became a chip used to
+        // leave a hole in a fixed 6-column grid; auto-fit wrapped 5 + 1 below
+        // ~1,020px). Below lg: 3-up from sm, 2-up on phones.
         <div
           data-testid="kpi-cards"
-          className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:auto-cols-fr lg:grid-flow-col lg:grid-cols-none"
         >
           {live.map((key) => (
             <Fragment key={key}>

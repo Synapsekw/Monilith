@@ -137,125 +137,143 @@ export function OverviewTab({
     3,
   );
 
+  const panelFor = (s: LayoutSection): ReactNode => {
+    if (s.type !== "builtin") return null; // widget sections: spec 2
+    const kicker = kickerFor(sections, s.id);
+    switch (s.panel) {
+      case "kpis":
+        return (
+          <KpisPanel
+            cards={s.props?.cards ?? []}
+            rows={rows}
+            todayISO={payload.todayISO}
+            failed={payload.rollup === null}
+            onRetry={onRetry}
+            burn={payload.burn}
+            stage={stage}
+            board={board}
+          />
+        );
+      case "burn":
+        return (
+          <BurnPanel
+            kicker={kicker}
+            title={s.title}
+            board={board}
+            burn={burn}
+            anyDue={anyDue}
+            onRetry={onRetry}
+            forecast={forecast}
+            // With a board filter the Gap card is board-scoped but
+            // this chart is folder-wide: state no gap at all then.
+            gap={board === null ? burnScope.gap : null}
+            stageBars={stageBars(stages)}
+          />
+        );
+      case "boardStatus":
+        return (
+          <BoardStatusPanel
+            kicker={kicker}
+            title={s.title}
+            boards={boards}
+            failed={payload.rollup === null}
+            onRetry={onRetry}
+          />
+        );
+      case "attention":
+        return (
+          <AttentionPanel
+            kicker={kicker}
+            title={s.title}
+            attention={attentionInScope}
+            caption={attentionCaption}
+            groups={groups}
+            onRetry={onRetry}
+          />
+        );
+      case "intelligence":
+        return payload.briefs.length > 0 ? (
+          <IntelligencePanel
+            kicker={kicker}
+            title={s.title}
+            briefs={payload.briefs}
+          />
+        ) : null;
+      case "milestones":
+        return (
+          <MilestonesPanel
+            kicker={kicker}
+            title={s.title}
+            milestones={milestones}
+          />
+        );
+      case "load":
+        // No dates or no load rows: nothing to plot, so the section is
+        // not drawn at all.
+        return anyDue && payload.load !== null ? (
+          <LoadPanel
+            kicker={kicker}
+            title={s.title}
+            grid={loadGrid(
+              payload.load,
+              payload.boards,
+              { stageKey: stage, boardId: board },
+              payload.todayISO,
+            )}
+            failed={false}
+            onRetry={onRetry}
+          />
+        ) : null;
+      case "people":
+        return (
+          <PeoplePanel
+            kicker={kicker}
+            title={s.title}
+            folderId={payload.folder.id}
+            stage={stage}
+            members={payload.members}
+            onSeeAll={onSeeAllPeople}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+  // Sections that actually draw this render. Customize mode numbers and moves
+  // over THESE, so Move up/down never lands next to an absent section.
+  const drawn = sections.filter((s) => panelFor(s) !== null);
+  // A move in the saved config swaps ADJACENT sections; to pass the absent
+  // ones between `s` and its drawn neighbour, repeat it that many times.
+  const move = (id: string, dir: "up" | "down") => {
+    const at = drawn.findIndex((x) => x.id === id);
+    const to = drawn[dir === "up" ? at - 1 : at + 1];
+    if (at === -1 || to === undefined) return;
+    const steps = Math.abs(
+      sections.findIndex((x) => x.id === to.id) -
+        sections.findIndex((x) => x.id === id),
+    );
+    for (let i = 0; i < steps; i++) onMoveSection?.(id, dir);
+  };
+
   return (
     <div className="flex flex-col gap-4" data-print-root>
       <SectionGrid
         sections={sections}
         render={(s) => {
-          if (s.type !== "builtin") return null; // widget sections: spec 2
-          const kicker = kickerFor(sections, s.id);
-          const node = (() => {
-            switch (s.panel) {
-              case "kpis":
-                return (
-                  <KpisPanel
-                    cards={s.props?.cards ?? []}
-                    rows={rows}
-                    todayISO={payload.todayISO}
-                    failed={payload.rollup === null}
-                    onRetry={onRetry}
-                    burn={payload.burn}
-                    stage={stage}
-                    board={board}
-                  />
-                );
-              case "burn":
-                return (
-                  <BurnPanel
-                    kicker={kicker}
-                    title={s.title}
-                    board={board}
-                    burn={burn}
-                    anyDue={anyDue}
-                    onRetry={onRetry}
-                    forecast={forecast}
-                    gap={burnScope.gap}
-                    stageBars={stageBars(stages)}
-                  />
-                );
-              case "boardStatus":
-                return (
-                  <BoardStatusPanel
-                    kicker={kicker}
-                    title={s.title}
-                    boards={boards}
-                    failed={payload.rollup === null}
-                    onRetry={onRetry}
-                  />
-                );
-              case "attention":
-                return (
-                  <AttentionPanel
-                    kicker={kicker}
-                    title={s.title}
-                    attention={attentionInScope}
-                    caption={attentionCaption}
-                    groups={groups}
-                    onRetry={onRetry}
-                  />
-                );
-              case "intelligence":
-                return payload.briefs.length > 0 ? (
-                  <IntelligencePanel
-                    kicker={kicker}
-                    title={s.title}
-                    briefs={payload.briefs}
-                  />
-                ) : null;
-              case "milestones":
-                return (
-                  <MilestonesPanel
-                    kicker={kicker}
-                    title={s.title}
-                    milestones={milestones}
-                  />
-                );
-              case "load":
-                // No dates or no load rows: nothing to plot, so the section is
-                // not drawn at all.
-                return anyDue && payload.load !== null ? (
-                  <LoadPanel
-                    kicker={kicker}
-                    title={s.title}
-                    grid={loadGrid(
-                      payload.load,
-                      payload.boards,
-                      { stageKey: stage, boardId: board },
-                      payload.todayISO,
-                    )}
-                    failed={false}
-                    onRetry={onRetry}
-                  />
-                ) : null;
-              case "people":
-                return (
-                  <PeoplePanel
-                    kicker={kicker}
-                    title={s.title}
-                    folderId={payload.folder.id}
-                    stage={stage}
-                    members={payload.members}
-                    onSeeAll={onSeeAllPeople}
-                  />
-                );
-              default:
-                return null;
-            }
-          })();
+          const node = panelFor(s);
           // An absent section (node null) stays absent in Customize mode too:
           // no empty chrome box, and SectionGrid lets its neighbour fill the row.
-          if (!editing || node === null) return node;
-          const index = sections.findIndex((x) => x.id === s.id);
+          if (!editing || node === null || s.type !== "builtin") return node;
           return (
             <SectionChrome
               panel={s.panel}
               title={s.title}
               cards={s.panel === "kpis" ? (s.props?.cards ?? []) : undefined}
-              index={index}
-              count={sections.length}
+              index={drawn.findIndex((x) => x.id === s.id)}
+              count={drawn.length}
               onHide={() => onHideSection?.(s.id)}
-              onMoveUp={() => onMoveSection?.(s.id, "up")}
-              onMoveDown={() => onMoveSection?.(s.id, "down")}
+              onMoveUp={() => move(s.id, "up")}
+              onMoveDown={() => move(s.id, "down")}
               onSetWidth={(w) => onSetSectionWidth?.(s.id, w)}
               onRename={(label) => onRenameSection?.(s.id, label)}
               onSetCards={
