@@ -27,4 +27,26 @@ describe("KpiCard", () => {
     render(<KpiCard label="Gap to plan" value="—" progress={null} />);
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
+
+  it("shows a change pill and a sparkline instead of the bar when a trend is given", () => {
+    render(
+      <KpiCard
+        label="Overdue"
+        value="601"
+        progress={30}
+        trend={{
+          points: [540, 564, 601],
+          kind: "line",
+          color: "red",
+          label: "Overdue, last 3 weeks",
+          change: { text: "+37 this week", color: "red" },
+        }}
+      />,
+    );
+    expect(screen.getByText("+37 this week")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Overdue, last 3 weeks" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
 });

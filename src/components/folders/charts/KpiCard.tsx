@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Sparkline } from "@/components/folders/charts/Sparkline";
 import { Kicker } from "@/components/ui/kicker";
 import {
   STATUS_BG,
@@ -6,7 +7,7 @@ import {
   type StatusColor,
 } from "@/components/ui/status-pill";
 
-/** One dense KPI card (spec §5.2.1): value, badge, one sub-fact, thin bar. Colour only on badge + bar. */
+/** One dense KPI card: value, badge, one sub-fact, then either a trend row (change pill + sparkline) or a thin progress bar. */
 export function KpiCard({
   label,
   value,
@@ -14,6 +15,7 @@ export function KpiCard({
   subFact,
   progress = null,
   barColor = "blue",
+  trend,
   className,
 }: {
   label: string;
@@ -22,6 +24,13 @@ export function KpiCard({
   subFact?: string;
   progress?: number | null;
   barColor?: StatusColor;
+  trend?: {
+    points: number[];
+    kind: "line" | "bars";
+    color: StatusColor;
+    label: string;
+    change: { text: string; color: StatusColor };
+  };
   className?: string;
 }) {
   const pct = progress === null ? null : Math.max(0, Math.min(100, progress));
@@ -46,7 +55,19 @@ export function KpiCard({
       {subFact ? (
         <p className="text-muted-foreground text-xs">{subFact}</p>
       ) : null}
-      {pct === null ? null : (
+      {trend ? (
+        <div className="flex items-end justify-between gap-2">
+          <StatusPill color={trend.change.color} variant="soft">
+            {trend.change.text}
+          </StatusPill>
+          <Sparkline
+            points={trend.points}
+            kind={trend.kind}
+            color={trend.color}
+            label={trend.label}
+          />
+        </div>
+      ) : pct === null ? null : (
         <div
           role="progressbar"
           aria-valuemin={0}
