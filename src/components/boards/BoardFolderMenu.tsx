@@ -7,6 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 
 import { deleteFolder, renameFolder } from "@/lib/folders/actions";
 import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,9 @@ export function BoardFolderMenu({
   folder: { id: string; name: string };
 }) {
   const router = useRouter();
+  // A guest keeps "Share folder…" (it opens read-only for them) but cannot
+  // rename or delete a folder, so those are not offered (see nav-guest).
+  const isGuest = useNavIsGuest();
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -126,25 +130,29 @@ export function BoardFolderMenu({
           >
             Share folder…
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              setName(folder.name);
-              setError(null);
-              setRenameOpen(true);
-            }}
-          >
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => {
-              setError(null);
-              setDeleteOpen(true);
-            }}
-          >
-            Delete
-          </DropdownMenuItem>
+          {isGuest ? null : (
+            <>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setName(folder.name);
+                  setError(null);
+                  setRenameOpen(true);
+                }}
+              >
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => {
+                  setError(null);
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

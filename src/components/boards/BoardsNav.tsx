@@ -29,6 +29,7 @@ import { useUIStore } from "@/stores/ui";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { NavGuestProvider } from "@/components/boards/nav-guest";
 import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
 // Type-only: erased at compile time, so naming the lazy module here does NOT
 // pull @dnd-kit into the shell bundle.
@@ -83,6 +84,7 @@ export function BoardsNav({
   placements = NO_PLACEMENTS,
   activeWorkspaceId,
   collapsed = false,
+  isGuest = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
@@ -90,6 +92,9 @@ export function BoardsNav({
   placements?: FolderPlacement[];
   activeWorkspaceId?: string;
   collapsed?: boolean;
+  /** A guest of the active org: no create, rename, delete or filing controls
+   *  (they would fail), and no drag layer (dragging files a board). */
+  isGuest?: boolean;
 }) {
   const { boardId: activeBoardId } = useParams<{ boardId: string }>();
   const pathname = usePathname();
@@ -113,6 +118,8 @@ export function BoardsNav({
   );
 
   function armDnd(focusTarget?: Element | null) {
+    // A guest cannot file or reorder boards, so the drag layer never arms.
+    if (isGuest) return;
     // Board rows AND folder headers both carry an anchor — every focusable
     // thing in this region belongs to one of them.
     if (focusTarget) setRestoreFocus(focusAnchorFrom(focusTarget));
@@ -228,80 +235,86 @@ export function BoardsNav({
       </Tooltip>
       {/* Triggerless: keeps the dialog mounted so the ⌘K "New board"
           command can open it even while the sidebar is collapsed. */}
-      <NewBoardDialog workspaceId={activeWorkspaceId} collapsed />
+      {isGuest ? null : (
+        <NewBoardDialog workspaceId={activeWorkspaceId} collapsed />
+      )}
     </div>
   ) : (
-    <MoveBoardToFolderHost>
-      <NavSection
-        storageKey="boards"
-        title="Boards"
-        action={
-          <>
-            <NewFolderDialog workspaceId={activeWorkspaceId} />
-            <NewBoardDialog workspaceId={activeWorkspaceId} />
-          </>
-        }
-      >
-        {grouped.unfiledOwned.length === 0 &&
-        folderSections.length === 0 &&
-        grouped.unfiledShared.length === 0 ? (
-          <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
-            No boards yet
-          </p>
-        ) : dndReady ? (
-          <BoardsNavSortable
-            boards={grouped.unfiledOwned}
-            sharedBoards={grouped.unfiledShared}
-            folderSections={folderSections}
-            activeBoardId={activeBoardId}
-            folders={folders}
-            restoreFocus={restoreFocus}
-          />
-        ) : (
-          // Everything that can be dragged, or dragged onto, lives in here — so
-          // this is also the region that arms the lazy drag layer.
-          <div
-            data-testid="boards-nav-body"
-            className="flex flex-col gap-0.5"
-            onPointerEnter={() => armDnd()}
-            // React routes portal events up the COMPONENT tree, so focus landing
-            // inside a row's portaled dropdown would otherwise read as "focus
-            // entered the board list" and swap this subtree for the lazy sortable
-            // one — tearing down the row and closing the menu the user just
-            // opened. Only a focus on a real DOM descendant is a genuine
-            // interaction with the list.
-            onFocus={(e) => {
-              if (e.currentTarget.contains(e.target)) armDnd(e.target);
-            }}
-          >
-            {folderSections.map((section) => (
-              <BoardFolderRow
-                key={section.folder.id}
-                folder={section.folder}
-                count={section.entries.length}
-              >
-                {section.entries.map((entry) =>
-                  renderPlainRow(entry, section.folder.id),
-                )}
-              </BoardFolderRow>
-            ))}
-            {grouped.unfiledOwned.map((b) => (
-              <PlainBoardRow
-                key={b.id}
-                board={b}
-                isActive={b.id === activeBoardId}
-                folders={folders}
-                currentFolderId={null}
-              />
-            ))}
-            <SharedBoardsSection
-              boards={grouped.unfiledShared}
-              folders={folders}
+    <NavGuestProvider value={isGuest}>
+      <MoveBoardToFolderHost>
+        <NavSection
+          storageKey="boards"
+          title="Boards"
+          action={
+            isGuest ? undefined : (
+              <>
+                <NewFolderDialog workspaceId={activeWorkspaceId} />
+                <NewBoardDialog workspaceId={activeWorkspaceId} />
+              </>
+            )
+          }
+        >
+          {grouped.unfiledOwned.length === 0 &&
+          folderSections.length === 0 &&
+          grouped.unfiledShared.length === 0 ? (
+            <p className="text-muted-foreground py-1 pr-3 pl-7 text-xs">
+              No boards yet
+            </p>
+          ) : dndReady ? (
+            <BoardsNavSortable
+              boards={grouped.unfiledOwned}
+              sharedBoards={grouped.unfiledShared}
+              folderSections={folderSections}
               activeBoardId={activeBoardId}
+              folders={folders}
+              restoreFocus={restoreFocus}
             />
-          </div>
-        )}
-      </NavSection>
-    </MoveBoardToFolderHost>
+          ) : (
+            // Everything that can be dragged, or dragged onto, lives in here — so
+            // this is also the region that arms the lazy drag layer.
+            <div
+              data-testid="boards-nav-body"
+              className="flex flex-col gap-0.5"
+              onPointerEnter={() => armDnd()}
+              // React routes portal events up the COMPONENT tree, so focus landing
+              // inside a row's portaled dropdown would otherwise read as "focus
+              // entered the board list" and swap this subtree for the lazy sortable
+              // one — tearing down the row and closing the menu the user just
+              // opened. Only a focus on a real DOM descendant is a genuine
+              // interaction with the list.
+              onFocus={(e) => {
+                if (e.currentTarget.contains(e.target)) armDnd(e.target);
+              }}
+            >
+              {folderSections.map((section) => (
+                <BoardFolderRow
+                  key={section.folder.id}
+                  folder={section.folder}
+                  count={section.entries.length}
+                >
+                  {section.entries.map((entry) =>
+                    renderPlainRow(entry, section.folder.id),
+                  )}
+                </BoardFolderRow>
+              ))}
+              {grouped.unfiledOwned.map((b) => (
+                <PlainBoardRow
+                  key={b.id}
+                  board={b}
+                  isActive={b.id === activeBoardId}
+                  folders={folders}
+                  currentFolderId={null}
+                />
+              ))}
+              <SharedBoardsSection
+                boards={grouped.unfiledShared}
+                folders={folders}
+                activeBoardId={activeBoardId}
+              />
+            </div>
+          )}
+        </NavSection>
+      </MoveBoardToFolderHost>
+    </NavGuestProvider>
   );
 }

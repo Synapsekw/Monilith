@@ -22,7 +22,7 @@ import type {
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
-import { memberInitials } from "@/components/boards/cells/member-avatar";
+import { memberInitials } from "@/lib/ui/initials";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -126,13 +126,23 @@ export function ShareFolderDialog({
 
   // Disabling the control that has focus while an action runs drops focus to
   // <body>; when the action ends, put it back on the control that started it.
+  // A Remove or Revoke takes its row (and its button) away: fall back to the
+  // name/email field (rendered only for managers), else the dialog itself.
+  // (The dialog's focus trap may already have parked focus on the dialog.)
+  // Re-checked when the list reloads too: the row can leave in a later commit
+  // than the one that ends `pending`.
   useEffect(() => {
     if (pending || !activeKey.current) return;
-    if (document.activeElement !== document.body) return;
-    content.current
-      ?.querySelector<HTMLElement>(`[data-focus-key="${activeKey.current}"]`)
-      ?.focus();
-  }, [pending]);
+    const root = content.current;
+    if (!root) return;
+    const active = document.activeElement;
+    if (active !== document.body && active !== root) return;
+    const target =
+      root.querySelector<HTMLElement>(
+        `[data-focus-key="${activeKey.current}"]`,
+      ) ?? root.querySelector<HTMLElement>('[data-focus-key="invite"]');
+    (target ?? root).focus();
+  }, [pending, data]);
 
   async function reload(e: number) {
     const seq = ++loadSeq.current;
@@ -147,6 +157,7 @@ export function ShareFolderDialog({
     const e = ++epoch.current;
     busy.current = false;
     changed.current = false;
+    activeKey.current = null;
     start(() => reload(e));
     const orphan = epoch;
     const unbusy = busy;
@@ -166,6 +177,7 @@ export function ShareFolderDialog({
       setFieldInvalid(false);
       setNotice(null);
       setQuery("");
+      activeKey.current = null;
       if (changed.current) {
         changed.current = false;
         onChanged?.();

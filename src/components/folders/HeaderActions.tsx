@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Printer, Settings2, Sparkles, UserPlus, Users } from "lucide-react";
-import { memberInitials } from "@/components/boards/cells/member-avatar";
+import { memberInitials } from "@/lib/ui/initials";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { FolderAccessHead } from "@/lib/folders/sharing-types";

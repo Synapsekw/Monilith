@@ -119,10 +119,19 @@ export function MoveBoardToFolderHost({ children }: { children: ReactNode }) {
       return;
     }
     busy.current = true;
-    void attemptMove(request, false).then((question) => {
-      if (question) setAsking({ request, ...question });
-      else busy.current = false;
-    });
+    void (async () => {
+      let question: Question | null = null;
+      try {
+        question = await attemptMove(request, false);
+      } catch (e) {
+        // Only a throwing `onMoved` lands here: the move itself was reported.
+        console.error(e);
+      } finally {
+        // Release the guard whatever happened, unless a question is now open.
+        if (question) setAsking({ request, ...question });
+        else busy.current = false;
+      }
+    })();
   }, []);
 
   return (
@@ -152,10 +161,12 @@ export function MoveBoardToFolderHost({ children }: { children: ReactNode }) {
               onClick={() => {
                 if (!asking) return;
                 confirming.current = true;
-                void attemptMove(asking.request, true).then(() => {
-                  confirming.current = false;
-                  busy.current = false;
-                });
+                void attemptMove(asking.request, true)
+                  .catch((e: unknown) => console.error(e))
+                  .finally(() => {
+                    confirming.current = false;
+                    busy.current = false;
+                  });
                 setAsking(null);
               }}
             >

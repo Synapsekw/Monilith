@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { FolderSummary } from "@/lib/folders/types";
 import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 
 export function BoardItemMenu({
   board,
@@ -56,6 +57,8 @@ export function BoardItemMenu({
   currentFolderId?: string | null;
 }) {
   const router = useRouter();
+  // A guest cannot file boards: no Move to folder (see nav-guest).
+  const isGuest = useNavIsGuest();
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -160,12 +163,16 @@ export function BoardItemMenu({
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={doDuplicate}>Duplicate</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <MoveToFolderMenu
-            boardId={board.id}
-            folders={folders}
-            currentFolderId={currentFolderId}
-          />
+          {isGuest ? null : (
+            <>
+              <DropdownMenuSeparator />
+              <MoveToFolderMenu
+                boardId={board.id}
+                folders={folders}
+                currentFolderId={currentFolderId}
+              />
+            </>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"

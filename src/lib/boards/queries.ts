@@ -80,6 +80,10 @@ export type SharedBoardEntry = {
   position: number;
   owner_name: string | null;
   access_level: "viewer" | "editor";
+  /** How the board reached the user: a direct board grant (which "Leave
+   *  board" can remove) or only through a folder they are on. A board granted
+   *  both ways is "direct". */
+  via: "direct" | "folder";
 };
 
 // Defensive cap on the sidebar board lists (hot path — runs on ~every nav via
@@ -200,6 +204,7 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
       position: r.boards.position,
       owner_name: nameById.get(r.boards.created_by) ?? null,
       access_level: r.access_level,
+      via: "direct" as const,
     })),
     folderRows.map((r) => ({
       id: r.boards.id,
@@ -207,6 +212,7 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
       position: r.boards.position,
       owner_name: nameById.get(r.boards.created_by) ?? null,
       access_level: levelByFolder.get(r.folder_id)!,
+      via: "folder" as const,
     })),
   );
 }

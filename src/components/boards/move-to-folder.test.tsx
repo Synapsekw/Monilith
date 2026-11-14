@@ -241,4 +241,52 @@ describe("MoveBoardToFolderHost", () => {
     fireEvent.click(screen.getByText("go"));
     await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
   });
+
+  it("releases the guard when the onMoved callback throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    moveBoardToFolder.mockResolvedValue({ ok: true, data: undefined });
+    onMoved.mockImplementationOnce(() => {
+      throw new Error("callback broke");
+    });
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(2));
+    expect(showMutationError).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
+
+  it("releases the guard when the confirmed move's callback throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    moveBoardToFolder
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { needsConfirm: 2, truncated: false },
+      })
+      .mockResolvedValue({ ok: true, data: undefined });
+    onMoved.mockImplementationOnce(() => {
+      throw new Error("callback broke");
+    });
+    render(
+      <MoveBoardToFolderHost>
+        <Probe />
+      </MoveBoardToFolderHost>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    await screen.findByText("2 people in DAAS will have access to this board.");
+    fireEvent.click(screen.getByRole("button", { name: "Move board" }));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(onMoved).toHaveBeenCalledTimes(2));
+    expect(showMutationError).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
 });

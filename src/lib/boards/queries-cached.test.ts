@@ -136,6 +136,7 @@ describe("listSharedBoardsCached", () => {
         position: 0,
         owner_name: "Sam Roe",
         access_level: "editor",
+        via: "folder",
       },
     ]);
     // Every per-user read is keyed by the id passed in (the tenant boundary).
@@ -193,6 +194,8 @@ describe("listSharedBoardsCached", () => {
     const out = await listSharedBoardsCached("u1");
     expect(out).toHaveLength(1);
     expect(out[0].access_level).toBe("editor");
+    // The direct grant is what "Leave board" can remove.
+    expect(out[0].via).toBe("direct");
   });
 
   it("leaves out a board the user created, even inside their folder", async () => {

@@ -181,6 +181,7 @@ export async function listSharedBoardsCached(
       position: r.boards.position,
       owner_name: nameById.get(r.boards.created_by) ?? null,
       access_level: r.access_level,
+      via: "direct" as const,
     })),
     folderRows.map((r) => ({
       id: r.boards.id,
@@ -189,6 +190,7 @@ export async function listSharedBoardsCached(
       owner_name: nameById.get(r.boards.created_by) ?? null,
       // The filter above kept only rows whose folder has a grant.
       access_level: folderGrants.get(r.folder_id)!.access_level,
+      via: "folder" as const,
     })),
   );
 }

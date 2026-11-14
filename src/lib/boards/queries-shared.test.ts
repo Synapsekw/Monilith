@@ -60,6 +60,7 @@ describe("listSharedBoards folder path", () => {
         position: 0,
         owner_name: "Sam Roe",
         access_level: "editor",
+        via: "folder",
       },
     ]);
   });
@@ -85,6 +86,8 @@ describe("listSharedBoards folder path", () => {
     const out = await listSharedBoards();
     expect(out).toHaveLength(1);
     expect(out[0].access_level).toBe("editor");
+    // The direct grant is what "Leave board" can remove.
+    expect(out[0].via).toBe("direct");
   });
 
   it("leaves out a board the user created", async () => {

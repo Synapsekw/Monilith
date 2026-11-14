@@ -605,3 +605,52 @@ describe("ShareFolderDialog focus return", () => {
     await waitFor(() => expect(document.activeElement).toBe(ref.current));
   });
 });
+
+describe("ShareFolderDialog focus after a row goes away", () => {
+  it("moves focus to the name or email field after Remove", async () => {
+    unshareFolder.mockResolvedValue({ ok: true, data: undefined });
+    loadFolderAccess
+      .mockResolvedValueOnce({ ok: true, data: managerData })
+      .mockResolvedValue({ ok: true, data: { ...managerData, members: [] } });
+    open();
+    await screen.findByText("Dana Lee");
+    const remove = screen.getByRole("button", { name: "Remove Dana Lee" });
+    remove.focus();
+    fireEvent.click(remove);
+    await waitFor(() =>
+      expect(screen.queryByText("Dana Lee")).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByLabelText("Name or email"),
+      ),
+    );
+  });
+
+  it("moves focus to the dialog when the viewer cannot manage", async () => {
+    revokeFolderInvitation.mockResolvedValue({ ok: true, data: undefined });
+    const viewerData = {
+      ...managerData,
+      canManage: false,
+      invitations: [managerData.invitations[0]],
+    };
+    loadFolderAccess
+      .mockResolvedValueOnce({ ok: true, data: viewerData })
+      .mockResolvedValue({
+        ok: true,
+        data: { ...viewerData, invitations: [] },
+      });
+    open();
+    const revoke = await screen.findByRole("button", {
+      name: "Revoke invitation for new@x.com",
+    });
+    revoke.focus();
+    fireEvent.click(revoke);
+    await waitFor(() =>
+      expect(screen.queryByText("new@x.com")).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("dialog")),
+    );
+  });
+});

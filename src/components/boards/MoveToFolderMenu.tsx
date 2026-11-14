@@ -3,6 +3,7 @@
 import { FolderInput } from "lucide-react";
 
 import { useMoveBoardToFolder } from "@/components/boards/move-to-folder";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 import type { FolderSummary } from "@/lib/folders/types";
 import {
   DropdownMenuItem,
@@ -20,6 +21,8 @@ import {
  * The move itself, its error toast and the "this folder is shared" question
  * belong to `MoveBoardToFolderHost` in `BoardsNav`: this submenu lives inside
  * another menu's content and is gone the moment an item is picked.
+ *
+ * A guest cannot file boards, so for them the submenu is not rendered.
  */
 export function MoveToFolderMenu({
   boardId,
@@ -31,6 +34,8 @@ export function MoveToFolderMenu({
   currentFolderId: string | null;
 }) {
   const move = useMoveBoardToFolder();
+  const isGuest = useNavIsGuest();
+  if (isGuest) return null;
 
   return (
     <DropdownMenuSub>

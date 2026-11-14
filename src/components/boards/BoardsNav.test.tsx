@@ -282,6 +282,7 @@ describe("BoardsNav", () => {
       position: 0,
       owner_name: "Dana",
       access_level: "viewer",
+      via: "direct" as const,
     },
   ];
 
@@ -389,6 +390,7 @@ describe("BoardsNav", () => {
               position: 0,
               owner_name: "Dana",
               access_level: "viewer",
+              via: "direct" as const,
             },
             {
               id: "b4",
@@ -396,6 +398,7 @@ describe("BoardsNav", () => {
               position: 1,
               owner_name: "Mo",
               access_level: "editor",
+              via: "direct" as const,
             },
           ]}
           activeWorkspaceId="w"
@@ -453,6 +456,7 @@ describe("BoardsNav", () => {
               position: 0,
               owner_name: "Dana",
               access_level: "editor",
+              via: "direct" as const,
             },
           ]}
           activeWorkspaceId="w"
@@ -561,6 +565,7 @@ describe("BoardsNav drag-reorder", () => {
               position: 0,
               owner_name: "Dana",
               access_level: "editor",
+              via: "direct" as const,
             },
           ]}
         />
@@ -609,6 +614,7 @@ describe("BoardsNav folders", () => {
     position: 0,
     owner_name: "Ada",
     access_level: "editor" as const,
+    via: "direct" as const,
   };
 
   it("renders a folder containing both an owned and a shared board", () => {
@@ -981,6 +987,7 @@ describe("BoardsNav folder moves", () => {
     position: 0,
     owner_name: "Ada",
     access_level: "editor" as const,
+    via: "direct" as const,
   };
   const folders = [
     {
@@ -1657,6 +1664,7 @@ describe("BoardsNav dragging a shared board", () => {
     position: 0,
     owner_name: "Ada",
     access_level: "editor" as const,
+    via: "direct" as const,
   };
   const folders = [
     {
@@ -1811,6 +1819,7 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
     position: 0,
     owner_name: "Ada",
     access_level: "editor" as const,
+    via: "direct" as const,
   };
   const folders = [
     {
@@ -2448,6 +2457,7 @@ describe("BoardsNav folder row alignment", () => {
               name: "Their board",
               position: 0,
               access_level: "viewer",
+              via: "direct" as const,
               owner_name: "Dana",
             },
           ]}
@@ -2509,5 +2519,128 @@ describe("BoardsNav folder row alignment", () => {
     expect(row.className).toContain("before:bg-brand-gradient");
     expect(row.className).toContain("before:-left-5");
     expect(row.className).not.toContain("bg-primary/80");
+  });
+});
+
+describe("BoardsNav for a guest", () => {
+  const folder = {
+    id: "f1",
+    name: "Acme Rebrand",
+    workspaceId: "w1",
+    orgId: "o1",
+    position: 0,
+  };
+  const ownedBoard = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const sharedBoard = {
+    id: "s1",
+    name: "Design tasks",
+    position: 0,
+    owner_name: "Ada",
+    access_level: "editor" as const,
+    via: "folder" as const,
+  };
+
+  function renderAs(isGuest: boolean) {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[sharedBoard]}
+          folders={[folder]}
+          placements={[{ boardId: "s1", folderId: "f1", position: 0 }]}
+          isGuest={isGuest}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  it("offers no New folder or New board button to a guest", () => {
+    renderAs(true);
+    expect(
+      screen.queryByRole("button", { name: "New folder" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "New board" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers New folder and New board to a member", () => {
+    renderAs(false);
+    expect(
+      screen.getByRole("button", { name: "New folder" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New board" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Share folder but drops Rename and Delete for a guest", async () => {
+    renderAs(true);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Share folder…" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Rename" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Rename and Delete on a folder to a member", async () => {
+    renderAs(false);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Rename" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no Move to folder on a guest's shared board row", async () => {
+    renderAs(true);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Board actions for Design tasks" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /Leave board/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Move to folder")).not.toBeInTheDocument();
+  });
+
+  it("offers no Move to folder on a guest's owned board row", async () => {
+    renderAs(true);
+    fireEvent.click(screen.getByRole("button", { name: "Board actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Rename" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Move to folder")).not.toBeInTheDocument();
+  });
+
+  it("offers Move to folder on a member's board rows", async () => {
+    renderAs(false);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Board actions for Design tasks" }),
+    );
+    expect(await screen.findByText("Move to folder")).toBeInTheDocument();
+  });
+
+  it("never arms the drag layer for a guest", async () => {
+    renderAs(true);
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await settleAction();
+    expect(screen.queryByTestId("boards-nav-sortable")).not.toBeInTheDocument();
   });
 });

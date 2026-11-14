@@ -166,6 +166,7 @@ export function SidebarNav({
       placements={placements}
       activeWorkspaceId={activeWorkspaceId}
       collapsed={isCollapsed}
+      isGuest={isGuest}
     />
   );
 

@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { mergeSharedBoards } from "./shared-merge";
 
-const entry = (id: string, level: "viewer" | "editor", position = 0) => ({
+const entry = (
+  id: string,
+  level: "viewer" | "editor",
+  via: "direct" | "folder" = "direct",
+) => ({
   id,
   name: `Board ${id}`,
-  position,
+  position: 0,
   owner_name: "Owner",
   access_level: level,
+  via,
 });
 
 describe("mergeSharedBoards", () => {
@@ -39,5 +44,15 @@ describe("mergeSharedBoards", () => {
     );
     expect(out).toHaveLength(1);
     expect(out[0].access_level).toBe("editor");
+  });
+  it("keeps a board granted both ways as direct, so it can be left", () => {
+    const out = mergeSharedBoards(
+      [entry("a", "viewer", "direct")],
+      [entry("a", "editor", "folder"), entry("b", "viewer", "folder")],
+    );
+    expect(out.map((b) => [b.id, b.via, b.access_level])).toEqual([
+      ["a", "direct", "editor"],
+      ["b", "folder", "viewer"],
+    ]);
   });
 });

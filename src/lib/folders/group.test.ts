@@ -16,6 +16,7 @@ const shared = (id: string, name = id): SharedBoardEntry => ({
   position: 0,
   owner_name: "Ada",
   access_level: "editor",
+  via: "direct",
 });
 
 describe("groupBoardsByFolder", () => {

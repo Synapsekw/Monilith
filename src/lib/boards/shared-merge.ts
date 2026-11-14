@@ -5,7 +5,8 @@ import type { SharedBoardEntry } from "@/lib/boards/queries";
  * One "Shared with me" list out of boards granted directly and boards reached
  * through a folder. A board appears once, at the higher level (the same
  * higher-of rule the board page uses); direct grants keep their order and
- * folder-only boards follow.
+ * folder-only boards follow. A board granted both ways keeps `via: "direct"`,
+ * so "Leave board" stays available for its direct grant.
  */
 export function mergeSharedBoards(
   direct: SharedBoardEntry[],
