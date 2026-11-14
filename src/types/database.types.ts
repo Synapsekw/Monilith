@@ -4666,6 +4666,26 @@ export type Database = {
         Args: { p_column_id: string; p_org_id: string };
         Returns: boolean;
       };
+      count_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_count_by: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          item_count: number;
+          key: string;
+          label: string;
+        }[];
+      };
       create_board: {
         Args: { p_name: string; p_workspace_id: string };
         Returns: {
@@ -5120,6 +5140,31 @@ export type Database = {
           user_id: string;
         }[];
       };
+      get_focus_today: {
+        Args: {
+          p_folder_id?: string;
+          p_limit?: number;
+          p_org_id: string;
+          p_stall_days?: number;
+          p_today: string;
+        };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          days_overdue: number;
+          days_quiet: number;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_label: string;
+          tier: number;
+          tier_total: number;
+          unread_count: number;
+          waiting: Json;
+          waiting_count: number;
+        }[];
+      };
       get_my_agent_last_runs: {
         Args: never;
         Returns: {
@@ -5141,6 +5186,19 @@ export type Database = {
           org_id: string;
           owner_id: string;
           user_id: string;
+        }[];
+      };
+      get_my_open_work: {
+        Args: { p_limit?: number; p_org_id: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_color: string;
+          status_label: string;
         }[];
       };
       get_my_work_items: {
@@ -5373,6 +5431,60 @@ export type Database = {
         };
       };
       prune_mono_sessions: { Args: never; Returns: number };
+      query_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_org_id: string;
+          p_sort?: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          assignee_ids: Json;
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          is_done: boolean;
+          item_id: string;
+          item_name: string;
+          last_change: string;
+          status_label: string;
+          total: number;
+        }[];
+      };
+      query_items_base: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          board_id: string;
+          due_date: string;
+          group_id: string;
+          is_done: boolean;
+          item_id: string;
+          last_change: string;
+          name: string;
+          status_label: string;
+        }[];
+      };
       reactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
