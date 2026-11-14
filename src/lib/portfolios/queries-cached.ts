@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { boardsTag, folderMembersTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { READABLE_BOARDS_LIMIT } from "@/lib/portfolios/queries";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
 
 const FOLDER_MEMBERSHIPS_LIMIT = 500;
 
@@ -51,19 +52,42 @@ export async function listReadableBoardsCached(
       .select("id, name, workspace_id")
       .eq("created_by", userId)
       .in("org_id", orgIds)
+      // Every capped read has a total order: the cut past the cap must be the
+      // same on every cache refresh.
+      .order("id", { ascending: true })
       .limit(READABLE_BOARDS_LIMIT),
     supabase
       .from("board_members")
       .select("boards!inner(id, name, workspace_id, org_id)")
       .eq("user_id", userId)
+      .order("board_id", { ascending: true })
       .limit(READABLE_BOARDS_LIMIT),
     supabase
       .from("folder_members")
       .select("folder_id, org_id")
       .eq("user_id", userId)
       .in("org_id", orgIds)
+      .order("folder_id", { ascending: true })
       .limit(FOLDER_MEMBERSHIPS_LIMIT),
   ]);
+  warnIfAtCap(
+    "listReadableBoardsCached",
+    "boards",
+    own.data,
+    READABLE_BOARDS_LIMIT,
+  );
+  warnIfAtCap(
+    "listReadableBoardsCached",
+    "board_members",
+    shared.data,
+    READABLE_BOARDS_LIMIT,
+  );
+  warnIfAtCap(
+    "listReadableBoardsCached",
+    "folder_members",
+    memberships.data,
+    FOLDER_MEMBERSHIPS_LIMIT,
+  );
 
   // Folder grants in orgs where the membership is active (re-checked here as
   // well as in the query: the service client has no policy to lean on).
@@ -78,8 +102,19 @@ export async function listReadableBoardsCached(
           .from("folder_boards")
           .select("folder_id, boards!inner(id, name, workspace_id, org_id)")
           .in("folder_id", [...orgByFolder.keys()])
+          // folder_boards_folder_position_idx order, board_id (primary key)
+          // as the tie-break.
+          .order("folder_id", { ascending: true })
+          .order("position", { ascending: true })
+          .order("board_id", { ascending: true })
           .limit(READABLE_BOARDS_LIMIT)
       : { data: [] };
+  warnIfAtCap(
+    "listReadableBoardsCached",
+    "folder_boards",
+    viaFolder.data,
+    READABLE_BOARDS_LIMIT,
+  );
 
   const byId = new Map<string, ReadableBoard>();
   for (const b of own.data ?? []) {

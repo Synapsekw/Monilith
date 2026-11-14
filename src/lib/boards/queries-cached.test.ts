@@ -86,12 +86,16 @@ describe("listMyBoardsCached workspace scoping", () => {
 function makeTableClient(tables: Record<string, unknown[]>) {
   const seen: string[] = [];
   const eqs: Array<[string, string, unknown]> = [];
+  const ops: Array<[table: string, method: string, ...args: unknown[]]> = [];
   const from = (table: string) => {
     seen.push(table);
     const result = { data: tables[table] ?? [], error: null };
     const qb: Record<string, unknown> = {};
     for (const m of ["select", "is", "in", "limit", "order"]) {
-      qb[m] = () => qb;
+      qb[m] = (...args: unknown[]) => {
+        ops.push([table, m, ...args]);
+        return qb;
+      };
     }
     qb.eq = (col: string, val: unknown) => {
       eqs.push([table, col, val]);
@@ -101,7 +105,7 @@ function makeTableClient(tables: Record<string, unknown[]>) {
       Promise.resolve(result).then(onFulfilled);
     return qb;
   };
-  return { client: { from }, seen, eqs };
+  return { client: { from }, seen, eqs, ops };
 }
 
 describe("listSharedBoardsCached", () => {
@@ -201,6 +205,90 @@ describe("listSharedBoardsCached", () => {
     vi.mocked(createServiceClient).mockReturnValue(client as never);
 
     expect(await listSharedBoardsCached("u1")).toEqual([]);
+  });
+
+  it("drops a folder_boards row for a folder the user has no grant on", async () => {
+    const { client } = makeTableClient({
+      board_members: [],
+      org_members: [{ org_id: "o1" }],
+      folder_members: [editorOfF1],
+      folder_boards: [
+        folderBoard,
+        { folder_id: "f-other", boards: board("b-other") },
+      ],
+    });
+    vi.mocked(createServiceClient).mockReturnValue(client as never);
+
+    const out = await listSharedBoardsCached("u1");
+    expect(out.map((b) => b.id)).toEqual(["b9"]);
+  });
+
+  it("bounds every list read and gives it a stable, indexed order", async () => {
+    const { client, ops } = makeTableClient({
+      board_members: [],
+      org_members: [{ org_id: "o1" }],
+      folder_members: [editorOfF1],
+      folder_boards: [folderBoard],
+    });
+    vi.mocked(createServiceClient).mockReturnValue(client as never);
+
+    await listSharedBoardsCached("u1");
+
+    expect(ops).toContainEqual(["board_members", "limit", 500]);
+    expect(ops).toContainEqual([
+      "board_members",
+      "order",
+      "created_at",
+      { ascending: true },
+    ]);
+    expect(ops).toContainEqual([
+      "board_members",
+      "order",
+      "board_id",
+      { ascending: true },
+    ]);
+    expect(ops).toContainEqual(["folder_members", "limit", 500]);
+    expect(ops).toContainEqual([
+      "folder_members",
+      "order",
+      "folder_id",
+      { ascending: true },
+    ]);
+    expect(ops).toContainEqual(["folder_boards", "limit", 500]);
+    expect(ops).toContainEqual([
+      "folder_boards",
+      "order",
+      "folder_id",
+      { ascending: true },
+    ]);
+    expect(ops).toContainEqual([
+      "folder_boards",
+      "order",
+      "position",
+      { ascending: true },
+    ]);
+  });
+
+  it("warns, without user data, when a read returns exactly its cap", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { client } = makeTableClient({
+      board_members: [],
+      org_members: [{ org_id: "o1" }],
+      folder_members: Array.from({ length: 500 }, (_, i) => ({
+        folder_id: `f${i}`,
+        org_id: "o1",
+        access_level: "viewer",
+      })),
+      folder_boards: [],
+    });
+    vi.mocked(createServiceClient).mockReturnValue(client as never);
+
+    await listSharedBoardsCached("u1");
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("listSharedBoardsCached");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("u1");
+    warn.mockRestore();
   });
 
   it("is tagged so share, unshare and org removal all invalidate it", async () => {

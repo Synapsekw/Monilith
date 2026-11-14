@@ -8,6 +8,7 @@ import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 import { mergeSharedBoards } from "@/lib/boards/shared-merge";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
 import {
   higherAccess,
   listMyFolderBoardLevels,
@@ -120,26 +121,38 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
   const user = await getUser();
   if (!user) return [];
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("board_members")
-    .select("access_level, boards!inner(id, name, position, created_by)")
-    .eq("user_id", user.id)
-    .is("boards.archived_at", null)
-    .limit(MY_BOARDS_LIMIT)
-    .order("created_at", { ascending: true });
+  // The two grant reads are independent: one round trip, not two.
+  const [{ data, error }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level, boards!inner(id, name, position, created_by)")
+      .eq("user_id", user.id)
+      .is("boards.archived_at", null)
+      .order("created_at", { ascending: true })
+      .order("board_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+    // Folder path. A failed read here degrades to "direct grants only" rather
+    // than failing a list that is otherwise correct.
+    supabase
+      .from("folder_members")
+      .select("folder_id, access_level")
+      .eq("user_id", user.id)
+      .order("folder_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+  ]);
   // Same fail-loud policy as listMyBoards: an error is not an empty list.
   if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
+  warnIfAtCap("listSharedBoards", "board_members", data, MY_BOARDS_LIMIT);
+  warnIfAtCap(
+    "listSharedBoards",
+    "folder_members",
+    memberships,
+    MY_BOARDS_LIMIT,
+  );
   const rows = (data ?? []).filter(
     (r) => r.boards && r.boards.created_by !== user.id,
   );
 
-  // Folder path. A failed read here degrades to "direct grants only" rather
-  // than failing a list that is otherwise correct.
-  const { data: memberships } = await supabase
-    .from("folder_members")
-    .select("folder_id, access_level")
-    .eq("user_id", user.id)
-    .limit(MY_BOARDS_LIMIT);
   const levelByFolder = new Map(
     (memberships ?? []).map((r) => [r.folder_id, r.access_level] as const),
   );
@@ -153,9 +166,18 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
       .select("folder_id, boards!inner(id, name, position, created_by)")
       .in("folder_id", [...levelByFolder.keys()])
       .is("boards.archived_at", null)
+      .order("folder_id", { ascending: true })
+      .order("position", { ascending: true })
+      .order("board_id", { ascending: true })
       .limit(MY_BOARDS_LIMIT);
+    warnIfAtCap("listSharedBoards", "folder_boards", placed, MY_BOARDS_LIMIT);
+    // Keep only rows whose folder the user holds a grant on (belt and braces:
+    // the `in` filter already says so, and a row without a level has none).
     folderRows = (placed ?? []).filter(
-      (r) => r.boards && r.boards.created_by !== user.id,
+      (r) =>
+        r.boards &&
+        r.boards.created_by !== user.id &&
+        levelByFolder.has(r.folder_id),
     );
   }
 

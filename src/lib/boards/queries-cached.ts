@@ -3,11 +3,13 @@ import { cacheLife, cacheTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { boardsTag, folderMembersTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { mergeSharedBoards } from "@/lib/boards/shared-merge";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 // Bounds on the folder path (hot path: runs on ~every navigation).
 const FOLDER_MEMBERSHIPS_LIMIT = 500;
 const FOLDER_BOARDS_LIMIT = 500;
+const DIRECT_BOARDS_LIMIT = 500;
 
 /**
  * Cached `listMyBoards`. `userId` is read OUTSIDE this scope (in the shell server
@@ -72,7 +74,11 @@ export async function listSharedBoardsCached(
       )
       .eq("user_id", userId)
       .is("boards.archived_at", null)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      // Total order (board_id breaks created_at ties) so the cut past the cap
+      // is the same on every cache refresh; same cap as the uncached twin.
+      .order("board_id", { ascending: true })
+      .limit(DIRECT_BOARDS_LIMIT),
     // Active memberships only: a grant left behind after someone is removed
     // from the org must show nothing (the service client bypasses the
     // is_org_member check the SQL policy makes).
@@ -85,9 +91,23 @@ export async function listSharedBoardsCached(
       .from("folder_members")
       .select("folder_id, org_id, access_level")
       .eq("user_id", userId)
+      // (user_id, folder_id) index order: a stable cut past the cap.
+      .order("folder_id", { ascending: true })
       .limit(FOLDER_MEMBERSHIPS_LIMIT),
   ]);
   if (directRes.error || !directRes.data) return [];
+  warnIfAtCap(
+    "listSharedBoardsCached",
+    "board_members",
+    directRes.data,
+    DIRECT_BOARDS_LIMIT,
+  );
+  warnIfAtCap(
+    "listSharedBoardsCached",
+    "folder_members",
+    folderRes.data,
+    FOLDER_MEMBERSHIPS_LIMIT,
+  );
 
   const activeOrgs = new Set((orgRes.data ?? []).map((r) => r.org_id));
   const folderGrants = new Map(
@@ -112,7 +132,18 @@ export async function listSharedBoardsCached(
       .select("folder_id, boards!inner(id, name, position, created_by, org_id)")
       .in("folder_id", [...folderGrants.keys()])
       .is("boards.archived_at", null)
+      // folder_boards_folder_position_idx order; board_id (the primary key)
+      // breaks position ties so the cut past the cap is deterministic.
+      .order("folder_id", { ascending: true })
+      .order("position", { ascending: true })
+      .order("board_id", { ascending: true })
       .limit(FOLDER_BOARDS_LIMIT);
+    warnIfAtCap(
+      "listSharedBoardsCached",
+      "folder_boards",
+      data,
+      FOLDER_BOARDS_LIMIT,
+    );
     folderRows = (data ?? []).filter(
       (r) =>
         r.boards &&

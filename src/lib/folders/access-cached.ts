@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { folderMembersTag, orgAdminTag } from "@/lib/cache/tags";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
 
 const FOLDER_MEMBERSHIPS_LIMIT = 500;
 
@@ -39,8 +40,17 @@ export async function getFolderAccessForUserCached(
       .select("folder_id")
       .eq("org_id", orgId)
       .eq("user_id", userId)
+      // Stable order over the (user_id, folder_id) index: past the cap the same
+      // folders are kept on every cache refresh.
+      .order("folder_id", { ascending: true })
       .limit(FOLDER_MEMBERSHIPS_LIMIT),
   ]);
+  warnIfAtCap(
+    "getFolderAccessForUserCached",
+    "folder_members",
+    foldersRes.data,
+    FOLDER_MEMBERSHIPS_LIMIT,
+  );
   if (roleRes.error || !roleRes.data) return { isGuest: true, folderIds: [] };
   return {
     isGuest: roleRes.data.role === "guest",

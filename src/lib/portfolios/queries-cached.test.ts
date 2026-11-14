@@ -134,6 +134,53 @@ describe("listReadableBoardsCached", () => {
     expect(await listReadableBoardsCached("u1")).toEqual([]);
   });
 
+  it("drops a folder_boards row for a folder the user has no grant on", async () => {
+    tables = {
+      org_members: [{ org_id: "org-1" }],
+      folder_members: [{ folder_id: "f1", org_id: "org-1" }],
+      folder_boards: [
+        { folder_id: "f1", boards: gb("b9", "Plan", "ws1", "org-1") },
+        { folder_id: "f-other", boards: gb("b8", "Nope", "ws1", "org-1") },
+      ],
+    };
+
+    expect((await listReadableBoardsCached("u1")).map((b) => b.id)).toEqual([
+      "b9",
+    ]);
+  });
+
+  it("gives every capped read a stable order, folder_boards on its position index", async () => {
+    tables = {
+      org_members: [{ org_id: "org-1" }],
+      folder_members: [{ folder_id: "f1", org_id: "org-1" }],
+      folder_boards: [],
+    };
+    await listReadableBoardsCached("u1");
+    const asc = { ascending: true };
+    expect(calls).toContainEqual(["boards", "order", "id", asc]);
+    expect(calls).toContainEqual(["board_members", "order", "board_id", asc]);
+    expect(calls).toContainEqual(["folder_members", "order", "folder_id", asc]);
+    expect(calls).toContainEqual(["folder_boards", "order", "folder_id", asc]);
+    expect(calls).toContainEqual(["folder_boards", "order", "position", asc]);
+  });
+
+  it("warns, without user data, when a read returns exactly its cap", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    tables = {
+      org_members: [{ org_id: "org-1" }],
+      folder_members: Array.from({ length: 500 }, (_, i) => ({
+        folder_id: `f${i}`,
+        org_id: "org-1",
+      })),
+      folder_boards: [],
+    };
+    await listReadableBoardsCached("u1");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("listReadableBoardsCached");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("u1");
+    warn.mockRestore();
+  });
+
   it("is tagged with every invalidation that changes the set", async () => {
     await listReadableBoardsCached("u1");
     expect(cacheTag).toHaveBeenCalledWith(

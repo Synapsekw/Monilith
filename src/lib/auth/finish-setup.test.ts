@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
-const { redeemInvitationsForUser, provisionAccountForUser, requestClient } =
-  vi.hoisted(() => ({
-    redeemInvitationsForUser: vi.fn(),
-    provisionAccountForUser: vi.fn(),
-    requestClient: { tag: "request-client" },
-  }));
+const {
+  redeemInvitationsForUser,
+  provisionAccountForUser,
+  requestClient,
+  revalidateTag,
+} = vi.hoisted(() => ({
+  redeemInvitationsForUser: vi.fn(),
+  provisionAccountForUser: vi.fn(),
+  requestClient: { tag: "request-client" },
+  revalidateTag: vi.fn(),
+}));
 
+vi.mock("next/cache", () => ({ revalidateTag }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => requestClient,
 }));
@@ -29,6 +35,7 @@ const user = {
 };
 
 beforeEach(() => {
+  revalidateTag.mockReset();
   redeemInvitationsForUser.mockReset().mockResolvedValue(0);
   provisionAccountForUser.mockReset().mockResolvedValue({ error: null });
 });
@@ -60,6 +67,29 @@ describe("finishAccountSetup", () => {
 
     await finishAccountSetup(user);
     expect(order).toEqual(["redeem", "provision"]);
+  });
+
+  it("expires the user's access caches whether or not an org membership was counted", async () => {
+    for (const count of [0, 1]) {
+      revalidateTag.mockClear();
+      redeemInvitationsForUser.mockResolvedValue(count);
+      await finishAccountSetup(user);
+      expect(revalidateTag.mock.calls.map((c) => c[0]).sort()).toEqual([
+        "folder-members:user:u1",
+        "shared-boards:user:u1",
+      ]);
+      expect(revalidateTag).toHaveBeenCalledWith(expect.any(String), {
+        expire: 0,
+      });
+    }
+  });
+
+  it("still finishes setup when revalidation is not allowed (render phase)", async () => {
+    revalidateTag.mockImplementation(() => {
+      throw new Error("revalidateTag during render");
+    });
+    redeemInvitationsForUser.mockResolvedValue(1);
+    expect(await finishAccountSetup(user)).toEqual({ ok: true });
   });
 
   it("reports a provisioning failure", async () => {
