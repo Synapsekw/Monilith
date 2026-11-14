@@ -230,13 +230,29 @@ describe("TimelineInner", () => {
 
   it("adds and removes a link in the cached payload", async () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    const row = {
+      id: "33333333-3333-4333-8333-333333333333",
+      org_id: "o1",
+      board_id: A,
+      predecessor_board_id: A,
+      predecessor_id: I1,
+      successor_id: I2,
+      type: "finish_to_start",
+      created_at: "2026-11-14T00:00:00Z",
+    };
     m.createDependency.mockResolvedValue({
       ok: true,
-      data: { dependencyId: "33333333-3333-4333-8333-333333333333" },
+      data: { dependency: row },
     });
     m.deleteDependency.mockResolvedValue({ ok: false, error: "Nope." });
     const client = renderTab();
+    // A board cache already loaded this session gets the row too.
+    client.setQueryData(["board", A], { dependencies: [] });
     await screen.findByTestId("canvas");
+    await act(async () =>
+      canvas().onAddDependency({ predecessorId: I1, successorId: I2 }),
+    );
+    // Adding the same row again (e.g. a duplicate response) never doubles it.
     await act(async () =>
       canvas().onAddDependency({ predecessorId: I1, successorId: I2 }),
     );
@@ -248,6 +264,10 @@ describe("TimelineInner", () => {
         successor_id: I2,
       },
     ]);
+    expect(
+      client.getQueryData<{ dependencies: unknown[] }>(["board", A])
+        ?.dependencies,
+    ).toEqual([row]);
     // A failed removal restores the link.
     await act(async () =>
       canvas().onRemoveDependency({

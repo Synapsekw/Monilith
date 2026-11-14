@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,11 @@ import {
   removeDependency,
   type BoardCache,
 } from "@/lib/boards/cache";
-import { boardKey } from "@/lib/boards/use-board-cache";
+import {
+  addDependencyToBoardCaches,
+  boardKey,
+  useLoadedBoardCache,
+} from "@/lib/boards/use-board-cache";
 import { useDependencyContext } from "@/lib/boards/use-dependency-context";
 import {
   createDependency,
@@ -53,10 +57,10 @@ const MIN_QUERY = 2;
  * "Waiting on / Blocking" item-panel section. Reads the live board cache (no
  * fetch of its own — the board already hydrated it) plus the foreign ends of
  * cross-board links via `useDependencyContext`, which only round-trips when
- * such a link exists. Adding searches the whole org (RLS-scoped); the realtime
- * echo puts the new row into the board cache, and a new cross-board row bumps
- * `useDependencyContext`'s key so the foreign end loads once — no manual
- * invalidate. Removing is optimistic with a rollback on error.
+ * such a link exists. Adding searches the whole org (RLS-scoped); the created
+ * row goes straight into the loaded board caches (no realtime echo exists for
+ * `item_dependencies`), and a new cross-board row bumps `useDependencyContext`'s
+ * key so the foreign end loads once — no manual invalidate. Removing is optimistic with a rollback on error.
  */
 export function DependenciesSection({
   itemId,
@@ -73,10 +77,7 @@ export function DependenciesSection({
 }) {
   const qc = useQueryClient();
   // Subscribe to the board cache without ever fetching it from here.
-  const { data: cache } = useQuery<BoardCache>({
-    queryKey: boardKey(boardId),
-    enabled: false,
-  });
+  const { data: cache } = useLoadedBoardCache(boardId);
   const dependencies = cache?.dependencies ?? [];
   const ctx = useDependencyContext(boardId, dependencies);
 
@@ -404,6 +405,7 @@ function AddDependency({
   // The term `results` belong to — "No items found." only once it matches.
   const [resolvedTerm, setResolvedTerm] = useState("");
   const [pending, setPending] = useState(false);
+  const qc = useQueryClient();
   // Only the latest issued search may commit its results.
   const requestId = useRef(0);
   const editability = useBoardEditability();
@@ -465,6 +467,7 @@ function AddDependency({
         toast.error(res.error);
         return;
       }
+      addDependencyToBoardCaches(qc, res.data.dependency);
       onOpenChange(false);
     } catch {
       toast.error("Couldn't add the dependency. Check your connection.");

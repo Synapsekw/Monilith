@@ -34,11 +34,18 @@ describe("createDependency", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("calls create_item_dependency rpc with correct args on success", async () => {
-    rpc.mockResolvedValue({
-      data: { id: DEP_ID, board_id: BOARD_ID },
-      error: null,
-    });
+  it("calls create_item_dependency rpc and returns the created row", async () => {
+    const row = {
+      id: DEP_ID,
+      org_id: "55555555-5555-4555-8555-555555555555",
+      board_id: BOARD_ID,
+      predecessor_board_id: BOARD_ID,
+      predecessor_id: PRED_ID,
+      successor_id: SUCC_ID,
+      type: "finish_to_start",
+      created_at: "2026-11-14T00:00:00Z",
+    };
+    rpc.mockResolvedValue({ data: row, error: null });
     const res = await createDependency({
       predecessorId: PRED_ID,
       successorId: SUCC_ID,
@@ -47,7 +54,7 @@ describe("createDependency", () => {
       p_predecessor: PRED_ID,
       p_successor: SUCC_ID,
     });
-    expect(res).toEqual({ ok: true, data: { dependencyId: DEP_ID } });
+    expect(res).toEqual({ ok: true, data: { dependency: row } });
   });
 
   it("returns ok:false on rpc error, mapped to user copy", async () => {

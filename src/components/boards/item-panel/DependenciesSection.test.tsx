@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { BoardCache } from "@/lib/boards/cache";
+import { addDependency, type BoardCache } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
 import { toast } from "sonner";
 import { DependenciesSection } from "./DependenciesSection";
@@ -113,11 +113,36 @@ function makeCache(): BoardCache {
   } as unknown as BoardCache;
 }
 
-function renderSection(canEdit = true) {
+function createdRow(predecessorId: string, successorId: string) {
+  const onOther = (id: string) => (id === PERMIT ? OTHER_BOARD : BOARD);
+  return {
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    org_id: "0a0a0a0a-0000-4000-8000-000000000000",
+    board_id: onOther(successorId),
+    predecessor_board_id: onOther(predecessorId),
+    predecessor_id: predecessorId,
+    successor_id: successorId,
+    type: "finish_to_start",
+    created_at: "2026-11-14T00:00:00Z",
+  };
+}
+
+function otherBoardCache(): BoardCache {
+  return {
+    ...makeCache(),
+    board: { id: OTHER_BOARD, name: "Regulatory" },
+    items: [{ id: PERMIT, name: "Permit" }],
+    cellValues: [],
+    dependencies: [],
+  } as unknown as BoardCache;
+}
+
+function renderSection(canEdit = true, seed?: (qc: QueryClient) => void) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   qc.setQueryData(boardKey(BOARD), makeCache());
+  seed?.(qc);
   const utils = render(
     <QueryClientProvider client={qc}>
       <DependenciesSection
@@ -194,6 +219,66 @@ describe("DependenciesSection", () => {
         ["create_item_dependency", { p_predecessor: PERMIT, p_successor: ME }],
       ]),
     );
+  });
+
+  it("shows a new link at once, without a realtime echo", async () => {
+    const row = createdRow(PERMIT, ME);
+    db.createResult = { data: row, error: null };
+    const { qc } = renderSection(true, (c) =>
+      c.setQueryData(boardKey(OTHER_BOARD), otherBoardCache()),
+    );
+    const user = await openSearch("Waiting on");
+    await user.click(
+      await screen.findByRole("button", { name: "Permit · Regulatory" }),
+    );
+    // Both loaded ends get the row: this board and the predecessor's board.
+    await waitFor(() =>
+      expect(
+        qc.getQueryData<BoardCache>(boardKey(BOARD))?.dependencies,
+      ).toContainEqual(row),
+    );
+    expect(
+      qc.getQueryData<BoardCache>(boardKey(OTHER_BOARD))?.dependencies,
+    ).toEqual([row]);
+    // The picker now excludes the just-linked item.
+    await openSearch("Waiting on");
+    await screen.findByText("No items found.");
+  });
+
+  it("does not double-insert when the realtime echo lands too", async () => {
+    const row = createdRow(ME, PERMIT);
+    db.createResult = { data: row, error: null };
+    const { qc } = renderSection();
+    const user = await openSearch("Blocking");
+    await user.click(
+      await screen.findByRole("button", { name: "Permit · Regulatory" }),
+    );
+    await waitFor(() =>
+      expect(
+        qc.getQueryData<BoardCache>(boardKey(BOARD))?.dependencies,
+      ).toHaveLength(2),
+    );
+    act(() => {
+      qc.setQueryData<BoardCache>(boardKey(BOARD), (prev) =>
+        prev ? addDependency(prev, row) : prev,
+      );
+    });
+    expect(
+      qc.getQueryData<BoardCache>(boardKey(BOARD))?.dependencies,
+    ).toHaveLength(2);
+    // The predecessor's board cache isn't loaded, so nothing is created there.
+    expect(qc.getQueryData(boardKey(OTHER_BOARD))).toBeUndefined();
+  });
+
+  it("subscribes to the board cache without logging a TanStack error", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderSection();
+      expect(screen.getByRole("region", { name: "Waiting on" })).toBeVisible();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("adds a blocking link with this item as the predecessor", async () => {

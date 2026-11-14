@@ -11,7 +11,9 @@ import {
   removeDependency,
   setRelationLinksForCell,
   type BoardCache,
+  type CacheDependency,
 } from "@/lib/boards/cache";
+import { addDependencyToBoardCaches } from "@/lib/boards/use-board-cache";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type {
   AddDependencyVars,
@@ -27,17 +29,23 @@ export function useRelationMutations(ctx: BoardMutationCtx) {
   const { qc, key, rollback } = ctx;
 
   /**
-   * Add a dependency. Non-optimistic: we do NOT insert into the cache here.
-   * The Realtime INSERT echo will arrive in ms and `addDependency` is idempotent,
-   * so we let realtime own the cache update. This avoids needing to reconstruct
-   * the full CacheDependency row client-side (the server assigns id/org_id/etc).
+   * Add a dependency. Non-optimistic (the server assigns id/org_id/etc), but
+   * on success the returned row goes straight into the loaded board caches:
+   * `item_dependencies` isn't in the realtime publication, so no echo comes.
+   * The merge is idempotent on id, so an echo (if ever published) is harmless.
    */
-  const addDependencyMutation = useMutation<void, Error, AddDependencyVars>({
+  const addDependencyMutation = useMutation<
+    CacheDependency,
+    Error,
+    AddDependencyVars
+  >({
     mutationFn: async (vars) => {
       assertOnline();
       const res = await createDependency(vars);
       if (!res.ok) throw new Error(res.error);
+      return res.data.dependency;
     },
+    onSuccess: (dep) => addDependencyToBoardCaches(qc, dep),
   });
 
   /**

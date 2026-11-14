@@ -13,11 +13,18 @@ import {
 } from "@/lib/validations/dependency-actions";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { dependencyErrorMessage } from "@/lib/boards/dependency-errors";
+import type { Tables } from "@/types/database.types";
+
+/**
+ * The created row comes back whole so every add path can put it straight into
+ * its client cache: `item_dependencies` is not in the realtime publication, so
+ * no echo will ever deliver it.
+ */
 
 export async function createDependency(input: {
   predecessorId: string;
   successorId: string;
-}): Promise<ActionResult<{ dependencyId: string }>> {
+}): Promise<ActionResult<{ dependency: Tables<"item_dependencies"> }>> {
   const parsed = createDependencySchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -27,7 +34,7 @@ export async function createDependency(input: {
     p_successor: parsed.data.successorId,
   });
   if (error || !data) return fail(dependencyErrorMessage(error));
-  return { ok: true, data: { dependencyId: data.id } };
+  return { ok: true, data: { dependency: data } };
 }
 
 export async function deleteDependency(input: {

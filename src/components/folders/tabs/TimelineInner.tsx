@@ -18,6 +18,7 @@ import {
   deleteDependency,
 } from "@/lib/boards/dependency-actions";
 import { itemDateRange } from "@/lib/boards/dates";
+import { addDependencyToBoardCaches } from "@/lib/boards/use-board-cache";
 import { onBarMoved, onBarResized, type SetCellArg } from "@/lib/boards/gantt";
 import {
   boardScheduleOf,
@@ -279,17 +280,25 @@ function FolderTimelineChart({
       toast.error(res.error);
       return;
     }
-    patchData(queryClient, folderId, (d) => ({
-      ...d,
-      dependencies: [
-        ...d.dependencies,
-        {
-          id: res.data.dependencyId,
-          predecessor_id: vars.predecessorId,
-          successor_id: vars.successorId,
-        },
-      ],
-    }));
+    const dep = res.data.dependency;
+    // No realtime echo exists for links, so the row goes in here — deduped by
+    // id — and into any board cache already loaded this session.
+    patchData(queryClient, folderId, (d) =>
+      d.dependencies.some((x) => x.id === dep.id)
+        ? d
+        : {
+            ...d,
+            dependencies: [
+              ...d.dependencies,
+              {
+                id: dep.id,
+                predecessor_id: dep.predecessor_id,
+                successor_id: dep.successor_id,
+              },
+            ],
+          },
+    );
+    addDependencyToBoardCaches(queryClient, dep);
   }
 
   async function handleRemoveDependency({

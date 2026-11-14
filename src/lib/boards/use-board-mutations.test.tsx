@@ -76,7 +76,7 @@ import {
   pickFields,
 } from "./use-board-mutations";
 import { boardKey } from "./use-board-cache";
-import { upsertCellValue } from "./cache";
+import { addDependency, upsertCellValue } from "./cache";
 import { boardMembershipKey, useMyMonoStore } from "@/stores/my-mono";
 import type {
   BoardCache,
@@ -303,13 +303,20 @@ describe("useBoardMutations.addDependency", () => {
     createDependency.mockReset();
   });
 
-  it("calls createDependency action (no optimistic insert)", async () => {
+  it("inserts the created row into the board cache without a realtime echo", async () => {
     const qc = new QueryClient();
     seedCache(qc);
-    createDependency.mockResolvedValue({
-      ok: true,
-      data: { dependencyId: "new-dep" },
-    });
+    const row = {
+      id: "new-dep",
+      org_id: "o1",
+      board_id: "b1",
+      predecessor_board_id: "b1",
+      predecessor_id: PRED_ID,
+      successor_id: SUCC_ID,
+      type: "finish_to_start",
+      created_at: "2026-11-14T00:00:00Z",
+    };
+    createDependency.mockResolvedValue({ ok: true, data: { dependency: row } });
 
     const { result } = renderHook(() => useBoardMutations("b1"), {
       wrapper: wrapper(qc),
@@ -328,10 +335,20 @@ describe("useBoardMutations.addDependency", () => {
         successorId: SUCC_ID,
       });
     });
-
-    // Cache is NOT updated (realtime handles it)
-    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
-    expect(cache.dependencies).toHaveLength(1); // unchanged from seed
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.dependencies).toHaveLength(2);
+      expect(cache.dependencies.at(-1)).toEqual(row);
+    });
+    // A later realtime echo of the same row must not double-insert.
+    act(() => {
+      qc.setQueryData<BoardCache>(boardKey("b1"), (prev) =>
+        prev ? addDependency(prev, row) : prev,
+      );
+    });
+    expect(
+      qc.getQueryData<BoardCache>(boardKey("b1"))!.dependencies,
+    ).toHaveLength(2);
   });
 
   it("surfaces errors via onError callback", async () => {
