@@ -16,6 +16,7 @@ import {
 import { AI_STEP_ALLOWED_ACTIONS } from "@/lib/validations/automations";
 import type { AutomationAction } from "@/lib/validations/automations";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { getBoardAccess } from "@/lib/boards/queries";
 import { buildJobContext } from "./context";
 import { decideAction } from "./decide";
 
@@ -64,6 +65,12 @@ export async function previewAiStep(input: {
       .eq("id", boardId)
       .maybeSingle();
     if (!board || board.org_id !== org.id) return fail("Board not found.");
+    // The service client bypasses RLS, so the caller's own access is checked
+    // explicitly: this preview reads the board's newest item and its context.
+    // Same answer as a board that does not exist, so it confirms nothing.
+    const access = await getBoardAccess(boardId);
+    if (access !== "owner" && access !== "editor")
+      return fail("Board not found.");
 
     // Sample the board's most recent top-level item to decide against.
     const { data: sample } = await svc

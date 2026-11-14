@@ -7,6 +7,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 import { fetchAllRows } from "@/lib/supabase/paginate";
+import {
+  higherAccess,
+  listMyFolderBoardLevels,
+  type FolderLevel,
+} from "@/lib/boards/folder-levels";
 
 const UUID = z.string().uuid();
 
@@ -162,13 +167,21 @@ export async function getBoardAccessCore(
     .maybeSingle();
   if (!board) return null;
   if (board.created_by === userId) return "owner";
-  const { data: grant } = await supabase
-    .from("board_members")
-    .select("access_level")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return grant?.access_level ?? null;
+  const [{ data: grant }, folderLevels] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level")
+      .eq("board_id", boardId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // Resolved from auth.uid() by the RPC: `supabase` is the caller's own
+    // client on both the cookie path and the bridged MCP path.
+    listMyFolderBoardLevels(supabase, [boardId]),
+  ]);
+  return higherAccess(
+    grant?.access_level ?? null,
+    folderLevels.get(boardId) ?? null,
+  );
 }
 
 /** The current user's effective access to a board (or null if none). */
@@ -185,14 +198,20 @@ export async function getBoardAccess(
  * on the board page — same decision order as {@link getBoardAccess} (creator
  * check first, then the all-grants `board_members` lookup) so the two stay
  * behaviorally identical without re-querying `boards`/`board_members`.
+ * The optional `folderLevel` is the caller's level through the board's folder
+ * (`listMyFolderBoardLevels`); the result is the higher of the two.
  */
 export function deriveBoardAccess(
   board: Pick<Board, "created_by">,
   grants: { userId: string; access: "editor" | "viewer" }[],
   userId: string,
+  folderLevel: FolderLevel | null = null,
 ): "owner" | "editor" | "viewer" | null {
   if (board.created_by === userId) return "owner";
-  return grants.find((g) => g.userId === userId)?.access ?? null;
+  return higherAccess(
+    grants.find((g) => g.userId === userId)?.access ?? null,
+    folderLevel,
+  );
 }
 
 /**

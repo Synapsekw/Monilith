@@ -141,6 +141,26 @@ describe("deriveBoardAccess", () => {
       "owner",
     );
   });
+
+  it("gives a folder member with no direct grant their folder level", () => {
+    expect(deriveBoardAccess({ created_by: "owner" }, [], "u1", "viewer")).toBe(
+      "viewer",
+    );
+  });
+  it("takes the higher of a direct grant and a folder grant", () => {
+    const direct = [{ userId: "u1", access: "viewer" as const }];
+    expect(
+      deriveBoardAccess({ created_by: "owner" }, direct, "u1", "editor"),
+    ).toBe("editor");
+  });
+  it("still reports the creator as owner whatever the folder level", () => {
+    expect(deriveBoardAccess({ created_by: "u1" }, [], "u1", "viewer")).toBe(
+      "owner",
+    );
+  });
+  it("is unchanged when no folder level is passed", () => {
+    expect(deriveBoardAccess({ created_by: "owner" }, [], "u1")).toBeNull();
+  });
 });
 
 /**

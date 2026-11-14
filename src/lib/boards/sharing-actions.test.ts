@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { shareBoard, unshareBoard } from "./sharing-actions";
+import {
+  loadBoardFolderGrants,
+  shareBoard,
+  unshareBoard,
+} from "./sharing-actions";
 
 const rpc = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
@@ -109,5 +113,38 @@ describe("unshareBoard", () => {
     );
     expect(invalidateMyBoards).toHaveBeenCalledTimes(1);
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadBoardFolderGrants", () => {
+  it("rejects a malformed board id without calling the database", async () => {
+    const r = await loadBoardFolderGrants({ boardId: "nope" });
+    expect(r.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("maps the rpc rows to folder grants", async () => {
+    rpc.mockResolvedValue({
+      data: [{ user_id: "u2", access_level: "editor", folder_name: "DAAS" }],
+      error: null,
+    });
+    const boardId = crypto.randomUUID();
+    const r = await loadBoardFolderGrants({ boardId });
+    expect(rpc).toHaveBeenCalledWith("board_folder_grants", {
+      p_board_id: boardId,
+    });
+    expect(r).toEqual({
+      ok: true,
+      data: [{ userId: "u2", access: "editor", folderName: "DAAS" }],
+    });
+  });
+
+  it("does not pass a database message through", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "relation x" } });
+    const r = await loadBoardFolderGrants({ boardId: crypto.randomUUID() });
+    expect(r).toEqual({
+      ok: false,
+      error: "Something went wrong. Please try again.",
+    });
   });
 });

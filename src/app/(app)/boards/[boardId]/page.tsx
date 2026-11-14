@@ -4,6 +4,7 @@ import { BoardViews } from "@/components/boards/BoardViews";
 import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner";
 import { BoardDock } from "@/components/boards/dock/BoardDock";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
+import { listMyFolderBoardLevels } from "@/lib/boards/folder-levels";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { BOARD_ENTRY_COOKIE } from "@/lib/boards/last-board";
 import { resolveSelectedView } from "@/lib/boards/views";
@@ -38,6 +39,7 @@ export default async function BoardPage({
     lastSeenAt,
     latestRun,
     activeRoster,
+    folderLevels,
   ] = await Promise.all([
     getBoardPayload(boardId),
     supabase
@@ -73,6 +75,10 @@ export default async function BoardPage({
     resolveActiveOrg()
       .then((org) => (org ? loadBoardRoster(supabase, org.id) : null))
       .catch(() => null),
+    // The caller's level through the board's folder. One more read in the
+    // wave that already exists; primary-key lookups on folder_boards and
+    // folder_members.
+    listMyFolderBoardLevels(supabase, [boardId]),
   ]);
   // Opening the app (`/`) lands here straight from the proxy on the strength
   // of the last-board cookie, which the proxy cannot check against the DB. If
@@ -114,7 +120,12 @@ export default async function BoardPage({
   const grants = (grantRows ?? [])
     .filter((g) => !monoIds.has(g.user_id))
     .map((g) => ({ userId: g.user_id, access: g.access_level }));
-  const access = deriveBoardAccess(payload.board, grants, user.id);
+  const access = deriveBoardAccess(
+    payload.board,
+    grants,
+    user.id,
+    folderLevels.get(boardId) ?? null,
+  );
 
   return (
     <div className="flex h-full min-h-0">

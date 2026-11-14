@@ -60,6 +60,12 @@ vi.mock("./context", () => ({
   buildJobContext: (...args: unknown[]) => buildJobContext(...args),
 }));
 
+// The caller's own access to the board (the service client bypasses RLS).
+const getBoardAccess = vi.fn();
+vi.mock("@/lib/boards/queries", () => ({
+  getBoardAccess: (...args: unknown[]) => getBoardAccess(...args),
+}));
+
 // Minimal chainable fake for the two reads the action issues:
 //   .from("boards").select().eq().maybeSingle()
 //   .from("items").select().eq().is().order().limit().maybeSingle()
@@ -116,6 +122,8 @@ beforeEach(() => {
   requireUser.mockReset();
   decideAction.mockReset();
   buildJobContext.mockReset();
+  getBoardAccess.mockReset();
+  getBoardAccess.mockResolvedValue("owner");
   createServiceClient.mockClear();
 
   resolveActiveOrg.mockResolvedValue({ id: ORG_ID, name: "Org" });
@@ -129,6 +137,33 @@ beforeEach(() => {
 
   BOARD_RESULT = { data: { id: BOARD_ID, org_id: ORG_ID }, error: null };
   ITEM_RESULT = { data: { id: ITEM_ID, name: "Widget A" }, error: null };
+});
+
+describe("previewAiStep — the caller must be able to edit the board", () => {
+  it("refuses someone with no access to the board, before any item or model work", async () => {
+    getBoardAccess.mockResolvedValue(null);
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(buildJobContext).not.toHaveBeenCalled();
+    expect(decideAction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a viewer", async () => {
+    getBoardAccess.mockResolvedValue("viewer");
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(decideAction).not.toHaveBeenCalled();
+  });
+
+  it("lets an editor through", async () => {
+    getBoardAccess.mockResolvedValue("editor");
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r.ok).toBe(true);
+    expect(getBoardAccess).toHaveBeenCalledWith(BOARD_ID);
+  });
 });
 
 describe("previewAiStep — input validation", () => {

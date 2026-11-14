@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ChevronDown, UsersRound } from "lucide-react";
-import { shareBoard, unshareBoard } from "@/lib/boards/sharing-actions";
+import {
+  loadBoardFolderGrants,
+  shareBoard,
+  unshareBoard,
+} from "@/lib/boards/sharing-actions";
+import type { FolderGrant } from "@/lib/boards/folder-levels";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +55,22 @@ export function ShareBoardDialog({
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const status = useFieldStatus(error);
+
+  // People who reach this board through its folder. Read when the dialog
+  // opens (owners only ever open it), never on the board's first paint. A
+  // failed read leaves the list empty; the direct grants above still work.
+  const [folderGrants, setFolderGrants] = useState<FolderGrant[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    void loadBoardFolderGrants({ boardId }).then((r) => {
+      if (live && r.ok) setFolderGrants(r.data);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, boardId]);
+  const viaFolder = new Map(folderGrants.map((g) => [g.userId, g]));
   const activeSelectRef =
     useRestoreFocusAfterPending<HTMLSelectElement>(pending);
 
@@ -73,7 +94,11 @@ export function ShareBoardDialog({
   }
 
   const sharedCount = members.reduce(
-    (n, m) => n + ((access.get(m.userId) ?? "none") !== "none" ? 1 : 0),
+    (n, m) =>
+      n +
+      ((access.get(m.userId) ?? "none") !== "none" || viaFolder.has(m.userId)
+        ? 1
+        : 0),
     0,
   );
 
@@ -107,6 +132,7 @@ export function ShareBoardDialog({
               const name = m.fullName ?? m.email ?? "Unknown member";
               const current = access.get(m.userId) ?? "none";
               const secondary = m.fullName ? m.email : null;
+              const folder = viaFolder.get(m.userId);
               return (
                 <div
                   key={m.userId}
@@ -125,6 +151,12 @@ export function ShareBoardDialog({
                     {secondary && (
                       <span className="text-muted-foreground block truncate text-xs">
                         {secondary}
+                      </span>
+                    )}
+                    {folder && (
+                      <span className="text-muted-foreground block truncate text-xs">
+                        Through folder {folder.folderName} ·{" "}
+                        {folder.access === "editor" ? "Editor" : "Viewer"}
                       </span>
                     )}
                   </span>

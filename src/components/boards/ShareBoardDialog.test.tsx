@@ -4,9 +4,11 @@ import { ShareBoardDialog } from "./ShareBoardDialog";
 
 const shareBoard = vi.fn();
 const unshareBoard = vi.fn();
+const loadBoardFolderGrants = vi.fn();
 vi.mock("@/lib/boards/sharing-actions", () => ({
   shareBoard: (...a: unknown[]) => shareBoard(...a),
   unshareBoard: (...a: unknown[]) => unshareBoard(...a),
+  loadBoardFolderGrants: (...a: unknown[]) => loadBoardFolderGrants(...a),
 }));
 
 const members = [
@@ -17,9 +19,67 @@ const members = [
 beforeEach(() => {
   shareBoard.mockReset();
   unshareBoard.mockReset();
+  loadBoardFolderGrants.mockReset();
+  // The dialog reads folder grants on open; default to "none" so every
+  // existing test sees the dialog exactly as before.
+  loadBoardFolderGrants.mockResolvedValue({ ok: true, data: [] });
 });
 
 describe("ShareBoardDialog", () => {
+  it("shows who reaches the board through its folder, read-only", async () => {
+    loadBoardFolderGrants.mockResolvedValue({
+      ok: true,
+      data: [{ userId: "u2", access: "editor", folderName: "DAAS" }],
+    });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByText("Through folder DAAS · Editor"),
+    ).toBeInTheDocument();
+    expect(loadBoardFolderGrants).toHaveBeenCalledWith({ boardId: "b1" });
+    // The direct-grant control for that person is still there, still "No access".
+    expect(screen.getByLabelText("Access for Sam Roe")).toHaveValue("none");
+  });
+
+  it("counts a folder-only person as someone the board is shared with", async () => {
+    loadBoardFolderGrants.mockResolvedValue({
+      ok: true,
+      data: [{ userId: "u2", access: "viewer", folderName: "DAAS" }],
+    });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByText("Shared with 1 person."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not load folder grants while closed", () => {
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open={false}
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(loadBoardFolderGrants).not.toHaveBeenCalled();
+  });
+
   it("lists org members with an access control each", () => {
     render(
       <ShareBoardDialog
