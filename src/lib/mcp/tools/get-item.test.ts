@@ -1,20 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { getItemHandler } from "./get-item";
+import { DEPENDENCY_LIMIT, getItemHandler } from "./get-item";
 
 type Row = Record<string, unknown>;
 
-/** Minimal PostgREST double: rows per table, filtered by `.eq()` / `.in()`. */
+/**
+ * PostgREST double modelling `.eq`, `.in`, `.is(col, null)` and `.limit`.
+ * `errors` is keyed by table, `table:eqColumn` to fail only the read that
+ * filters on that column (the two item_dependencies reads differ that way), or
+ * `table:in` for a read that uses `.in()`.
+ */
 function client(
   tables: Record<string, Row[]>,
   errors: Record<string, string> = {},
 ) {
   const from = (table: string) => {
     const eq: Record<string, unknown> = {};
+    const isNull: string[] = [];
     let inFilter: { k: string; vs: unknown[] } | null = null;
+    let max = Infinity;
     const rows = () =>
       (tables[table] ?? [])
         .filter((r) => Object.entries(eq).every(([k, v]) => r[k] === v))
-        .filter((r) => !inFilter || inFilter.vs.includes(r[inFilter.k]));
+        .filter((r) => isNull.every((k) => r[k] == null))
+        .filter((r) => !inFilter || inFilter.vs.includes(r[inFilter.k]))
+        .slice(0, max);
+    const failure = () =>
+      errors[table] ??
+      (inFilter ? errors[`${table}:in`] : undefined) ??
+      Object.keys(eq)
+        .map((k) => errors[`${table}:${k}`])
+        .find(Boolean);
     const q: Record<string, unknown> = {
       select: () => q,
       eq: (k: string, v: unknown) => {
@@ -25,13 +40,19 @@ function client(
         inFilter = { k, vs };
         return q;
       },
-      is: () => q,
-      limit: () => q,
+      is: (k: string) => {
+        isNull.push(k);
+        return q;
+      },
+      limit: (n: number) => {
+        max = n;
+        return q;
+      },
       maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
       then: (resolve: (v: { data: Row[] | null; error: unknown }) => unknown) =>
         resolve(
-          errors[table]
-            ? { data: null, error: { message: errors[table] } }
+          failure()
+            ? { data: null, error: { message: failure() } }
             : { data: rows(), error: null },
         ),
     };
@@ -110,5 +131,80 @@ describe("getItemHandler", () => {
       { id: "s1", name: "Launch", boardId: "b1", boardName: "Ops" },
     ]);
     expect(parsed.hiddenDependencies).toBe(1);
+  });
+
+  it("leaves archived linked items out and counts them as hidden", async () => {
+    const supabase = client({
+      items: [
+        ITEM,
+        { id: "p1", name: "Gone", board_id: "b1", archived_at: "2026-11-01" },
+      ],
+      boards: [{ id: "b1", name: "Ops" }],
+      item_dependencies: [{ predecessor_id: "p1", successor_id: "i1" }],
+    });
+    const result = await getItemHandler(async () => supabase, {
+      itemId: "i1",
+    });
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.blockedBy).toEqual([]);
+    expect(parsed.hiddenDependencies).toBe(1);
+  });
+
+  it("caps each direction at DEPENDENCY_LIMIT", async () => {
+    const preds = Array.from({ length: DEPENDENCY_LIMIT + 5 }, (_, i) => ({
+      id: `p${i}`,
+      name: `P${i}`,
+      board_id: "b1",
+    }));
+    const supabase = client({
+      items: [ITEM, ...preds],
+      boards: [{ id: "b1", name: "Ops" }],
+      item_dependencies: preds.map((p) => ({
+        predecessor_id: p.id,
+        successor_id: "i1",
+      })),
+    });
+    const result = await getItemHandler(async () => supabase, {
+      itemId: "i1",
+    });
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed.blockedBy).toHaveLength(DEPENDENCY_LIMIT);
+  });
+
+  describe("dependency read failures are errors, never an empty 'not blocked'", () => {
+    const tables = {
+      items: [ITEM, { id: "p1", name: "Sign NDA", board_id: "b1" }],
+      boards: [{ id: "b1", name: "Ops" }],
+      item_dependencies: [{ predecessor_id: "p1", successor_id: "i1" }],
+    };
+    const cases: [string, Record<string, string>][] = [
+      ["predecessor links", { "item_dependencies:successor_id": "pred down" }],
+      ["successor links", { "item_dependencies:predecessor_id": "succ down" }],
+      ["linked items", { "items:in": "items down" }],
+      ["boards", { boards: "boards down" }],
+    ];
+    for (const [label, errs] of cases) {
+      it(`returns isError when the ${label} read fails`, async () => {
+        const result = await getItemHandler(async () => client(tables, errs), {
+          itemId: "i1",
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain(Object.values(errs)[0]);
+      });
+    }
+  });
+
+  it("returns empty lists and no error when the item has no dependencies", async () => {
+    const result = await getItemHandler(
+      async () => client({ items: [ITEM], item_dependencies: [] }),
+      { itemId: "i1" },
+    );
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(result.content[0].text as string);
+    expect(parsed).toMatchObject({
+      blockedBy: [],
+      blocking: [],
+      hiddenDependencies: 0,
+    });
   });
 });

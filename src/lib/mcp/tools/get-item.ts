@@ -16,11 +16,14 @@ type DepItem = {
 async function loadDependencies(
   supabase: Awaited<ReturnType<GetClient>>,
   itemId: string,
-): Promise<{
-  blockedBy: DepItem[];
-  blocking: DepItem[];
-  hiddenDependencies: number;
-}> {
+): Promise<
+  | {
+      blockedBy: DepItem[];
+      blocking: DepItem[];
+      hiddenDependencies: number;
+    }
+  | { error: string }
+> {
   const [pred, succ] = await Promise.all([
     supabase
       .from("item_dependencies")
@@ -33,22 +36,27 @@ async function loadDependencies(
       .eq("predecessor_id", itemId)
       .limit(DEPENDENCY_LIMIT),
   ]);
+  // A failed read must never look like "nothing blocks this item".
+  if (pred.error) return { error: pred.error.message };
+  if (succ.error) return { error: succ.error.message };
   const predIds = (pred.data ?? []).map((r) => r.predecessor_id);
   const succIds = (succ.data ?? []).map((r) => r.successor_id);
   const ids = [...new Set([...predIds, ...succIds])];
   if (ids.length === 0)
     return { blockedBy: [], blocking: [], hiddenDependencies: 0 };
 
-  const { data: items } = await supabase
+  const { data: items, error: itemsErr } = await supabase
     .from("items")
     .select("id, name, board_id")
     .in("id", ids)
     .is("archived_at", null);
+  if (itemsErr) return { error: itemsErr.message };
   const boardIds = [...new Set((items ?? []).map((i) => i.board_id))];
-  const { data: boards } = await supabase
+  const { data: boards, error: boardsErr } = await supabase
     .from("boards")
     .select("id, name")
     .in("id", boardIds);
+  if (boardsErr) return { error: boardsErr.message };
   const boardName = new Map((boards ?? []).map((b) => [b.id, b.name]));
   const byId = new Map(
     (items ?? []).map((i) => [
@@ -106,6 +114,17 @@ export async function getItemHandler(
     value: c.value,
   }));
   const deps = await loadDependencies(supabase, input.itemId);
+  if ("error" in deps) {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Failed to fetch dependencies: ${deps.error}`,
+        },
+      ],
+      isError: true,
+    };
+  }
   return {
     content: [
       {

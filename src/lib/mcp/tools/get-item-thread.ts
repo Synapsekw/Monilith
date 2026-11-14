@@ -43,11 +43,12 @@ export async function getItemThreadHandler(
   const limit = args.limit ?? THREAD_LIMIT;
   const supabase = await getClient();
 
-  const { data: item } = await supabase
+  const { data: item, error: itemErr } = await supabase
     .from("items")
     .select("id, name, board_id, org_id")
     .eq("id", args.itemId)
     .maybeSingle();
+  if (itemErr) return err(itemErr.message);
   if (!item) return err("Item not found.");
 
   let updatesQ = supabase
@@ -80,6 +81,7 @@ export async function getItemThreadHandler(
     ]);
     if (updates.error) return err(updates.error.message);
     if (activity.error) return err(activity.error.message);
+    if (columns.error) return err(columns.error.message);
 
     const names = nameMap(profiles);
     const cols = new Map((columns.data ?? []).map((c) => [c.id, c]));
