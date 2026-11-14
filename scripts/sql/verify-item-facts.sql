@@ -3,6 +3,8 @@
 -- Every read is `into strict` and every check is `is distinct from`, so a
 -- missing/duplicated row or a NULL result raises instead of passing silently.
 begin;
+set local statement_timeout = '15s';
+set local lock_timeout = '3s';
 
 do $verify$
 declare
@@ -34,6 +36,7 @@ declare
   r record;
   n int;
   ids uuid[];
+  ok boolean;
 begin
   select w.org_id, w.id into strict v_org, v_ws from public.workspaces w limit 1;
   select m.user_id into strict v_user from public.org_members m
@@ -184,6 +187,24 @@ begin
     raise exception 'item without people cell must be []: %', public.item_assignee_ids(v_done); end if;
   if public.item_assignee_ids(v_nullppl) is distinct from jsonb_build_array(v_user::text) then
     raise exception 'JSON null must be excluded: %', public.item_assignee_ids(v_nullppl); end if;
+
+  -- Stale done list (review I1): deleting the configured status column nulls
+  -- work_status_column_id through its FK but leaves work_done_option_ids. The
+  -- dead list must not apply; the guess takes over (lowest remaining status
+  -- column = Review, where 'Completed' matches the done label).
+  delete from public.columns where id = v_status;
+  select b.work_status_column_id is null and b.work_done_option_ids = array['c']
+    into strict ok from public.boards b where b.id = v_board;
+  if ok is distinct from true then
+    raise exception 'fixture: FK should null the column and keep the done list'; end if;
+  select * into strict r from public.item_facts where item_id = v_shipped;
+  if r.status_column_id is distinct from v_status2
+     or r.status_label is distinct from 'Completed'
+     or r.is_done is distinct from true then
+    raise exception 'stale done list must fall back to the guess: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_open;
+  if r.status_label is distinct from 'Approved' or r.is_done is distinct from false then
+    raise exception 'stale done list: open item wrong: %', row_to_json(r); end if;
 
   -- RLS (negative only): a member of ANOTHER org sees none of the fixture board.
   -- The positive case is skipped: it needs board/workspace visibility rows for
