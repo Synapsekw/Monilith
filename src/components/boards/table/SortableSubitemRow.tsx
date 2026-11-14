@@ -133,7 +133,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
       aria-label={`Reorder ${sub.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+      className="text-muted-foreground hover:text-foreground grid h-6 w-4 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -177,6 +177,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         controls={controls}
         leading={threadedLeading}
         indented
+        peekDisabled={isDragging}
         intelMatch={intelMatch}
         autoFocusRename={sub.id === renamingItemId}
         onRenameSettled={onRenameSettled}

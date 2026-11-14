@@ -16,6 +16,7 @@ import {
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
+import { boardHasSubitems } from "@/lib/boards/item-tree";
 import {
   intelRowClasses,
   useIntelMatch,
@@ -188,6 +189,10 @@ export const ItemRow = memo(function ItemRow({
     data: { type: "item", groupId: item.group_id },
   });
 
+  // No row reserves the chevron slot on a board without subitems, so names
+  // start further left and still line up with each other.
+  const reserveChevron = boardHasSubitems(controls.cache.items);
+
   const dragHandle = (
     <button
       type="button"
@@ -195,7 +200,7 @@ export const ItemRow = memo(function ItemRow({
       aria-label={`Reorder ${item.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+      className="text-muted-foreground hover:text-foreground grid h-6 w-4 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -209,7 +214,7 @@ export const ItemRow = memo(function ItemRow({
           aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
           aria-expanded={isExpanded}
           onClick={() => onToggleExpand(item.id)}
-          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
+          className="text-muted-foreground hover:text-foreground grid size-5 shrink-0 place-items-center rounded"
         >
           {isExpanded ? (
             <ChevronDown className="size-3.5" />
@@ -221,10 +226,14 @@ export const ItemRow = memo(function ItemRow({
           ({childCount})
         </span>
       </>
-    ) : (
-      // Spacer to keep name text aligned
-      <span className="inline-block size-6 shrink-0" aria-hidden />
-    );
+    ) : reserveChevron ? (
+      // Spacer: keeps this childless row's name aligned with the parents'.
+      <span
+        data-chevron-slot=""
+        className="inline-block size-5 shrink-0"
+        aria-hidden
+      />
+    ) : null;
 
   const trailing = (
     <>
@@ -244,7 +253,7 @@ export const ItemRow = memo(function ItemRow({
               onSuccess: (id) => onSubitemAdded?.(id),
             });
           }}
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
+          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 group-data-[peek=true]/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <Plus className="size-3.5" />
         </button>
@@ -281,12 +290,13 @@ export const ItemRow = memo(function ItemRow({
         controls={controls}
         selected={selected}
         intelMatch={intelMatch}
+        peekDisabled={isDragging}
         leading={
           <>
+            {dragHandle}
             {selectable && (
               <RowSelectCheckbox itemId={item.id} name={item.name} />
             )}
-            {dragHandle}
             {chevron}
           </>
         }

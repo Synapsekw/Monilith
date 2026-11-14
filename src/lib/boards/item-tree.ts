@@ -51,3 +51,26 @@ export function withSubitems(
   for (const id of itemIds) visit(id);
   return out;
 }
+
+const hasSubitemsByItems = new WeakMap<object, boolean>();
+
+/**
+ * True when at least one item on the board is a subitem. Rows ask this to
+ * decide whether to reserve the expand-chevron slot: on a board with no
+ * subitems no row reserves it, so names start further left and still line up
+ * with each other.
+ *
+ * Called from every visible row on every render, so the answer is memoized on
+ * the items array's identity (the board cache replaces the array whenever an
+ * item is added, removed or re-parented). Pure for a given array.
+ */
+export function boardHasSubitems(
+  items: readonly { parent_id: string | null }[],
+): boolean {
+  let known = hasSubitemsByItems.get(items);
+  if (known === undefined) {
+    known = items.some((it) => it.parent_id != null);
+    hasSubitemsByItems.set(items, known);
+  }
+  return known;
+}
