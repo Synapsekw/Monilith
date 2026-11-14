@@ -241,6 +241,7 @@ export function folderFixture(): FolderPayload {
       { userId: "u1", fullName: "Ada Lovelace", avatarUrl: null },
       { userId: "u2", fullName: "Grace Hopper", avatarUrl: null },
     ],
+    access: { count: 0, memberIds: [], canManage: true },
     layout: resolveLayout(null),
     generatedAt: "2026-09-15T09:00:00.000Z",
     todayISO: FIXTURE_TODAY,

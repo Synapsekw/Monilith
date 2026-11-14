@@ -1,4 +1,5 @@
 import type { ResolvedLayout } from "./layout";
+import type { FolderAccessHead } from "./sharing-types";
 
 /**
  * Shared, pure data contract for the folder command center. No DB, no React.
@@ -130,6 +131,8 @@ export type FolderPayload = {
   attention: AttentionRow[] | null;
   briefs: IntelligenceBrief[];
   members: FolderMember[];
+  /** Who the folder is shared with (avatar stack) and whether the caller may manage it. */
+  access: FolderAccessHead;
   /** Resolved per-folder command center layout. Absent row = project preset. */
   layout: ResolvedLayout;
   generatedAt: string;

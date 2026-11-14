@@ -14,6 +14,9 @@ export const deleteFolderSchema = z.object({ folderId: uuid });
 export const moveBoardToFolderSchema = z.object({
   boardId: uuid,
   folderId: uuid.nullable(),
+  // Set by the confirm step when the target folder has members (the move
+  // gives those people access to the board).
+  confirmShared: z.boolean().optional(),
 });
 export const attachDashboardSchema = z.object({
   dashboardId: uuid,

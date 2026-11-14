@@ -31,10 +31,14 @@ const state: {
   insertError: unknown;
   maxPosition: number | null;
   affectedRows: number;
+  currentFolderId: string | null;
+  folderMemberRows: { folder_id: string; user_id: string }[];
 } = {
   insertError: null,
   maxPosition: null,
   affectedRows: 1,
+  currentFolderId: null,
+  folderMemberRows: [],
 };
 
 // Every write the mocked client actually received, keyed by operation — this is
@@ -62,7 +66,21 @@ const calls: {
  */
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
-    from: () => {
+    from: (table: string) => {
+      // The members of the folders a placement change touches. Read before
+      // the write, so it is its own tiny chain rather than part of `qb`.
+      if (table === "folder_members") {
+        return {
+          select: () => ({
+            in: () => ({
+              limit: async () => ({
+                data: state.folderMemberRows,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       const eqLog: EqCall[] = [];
       let mode: "update" | "delete" | null = null;
       let updatePayload: unknown = null;
@@ -107,6 +125,16 @@ vi.mock("@/lib/supabase/server", () => ({
         });
       qb.maybeSingle = () => {
         logOperation();
+        // `folder_boards.select("folder_id").eq("board_id", …)`: where the
+        // board is filed today. `mode` is null because it is a plain read.
+        if (table === "folder_boards" && mode === null) {
+          return Promise.resolve({
+            data: state.currentFolderId
+              ? { folder_id: state.currentFolderId }
+              : null,
+            error: null,
+          });
+        }
         return Promise.resolve({
           data:
             state.affectedRows > 0
@@ -163,6 +191,8 @@ describe("folder actions", () => {
     state.insertError = null;
     state.maxPosition = null;
     state.affectedRows = 1;
+    state.currentFolderId = null;
+    state.folderMemberRows = [];
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];
@@ -344,6 +374,8 @@ describe("folder actions — a 0-row match", () => {
     state.insertError = null;
     state.maxPosition = null;
     state.affectedRows = 1;
+    state.currentFolderId = null;
+    state.folderMemberRows = [];
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];
@@ -382,5 +414,82 @@ describe("folder actions — a 0-row match", () => {
     const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
     expect(res.ok).toBe(true);
     expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
+  });
+});
+
+describe("moveBoardToFolder into a shared folder", () => {
+  const B = "44444444-4444-4444-8444-444444444444";
+  const F2 = "55555555-5555-4555-8555-555555555555";
+
+  beforeEach(() => {
+    updateTag.mockClear();
+    state.insertError = null;
+    state.maxPosition = null;
+    state.affectedRows = 1;
+    state.currentFolderId = null;
+    state.folderMemberRows = [];
+    calls.inserts = [];
+    calls.updates = [];
+    calls.deletes = [];
+    calls.upserts = [];
+  });
+
+  it("asks for confirmation instead of moving when the target folder has members", async () => {
+    state.folderMemberRows = [
+      { folder_id: F2, user_id: "m1" },
+      { folder_id: F2, user_id: "m2" },
+    ];
+    const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
+    expect(r).toEqual({ ok: true, data: { needsConfirm: 2 } });
+    expect(calls.upserts).toHaveLength(0);
+  });
+
+  it("moves once confirmed and invalidates every member's shared list", async () => {
+    state.folderMemberRows = [
+      { folder_id: F2, user_id: "m1" },
+      { folder_id: F2, user_id: "m2" },
+    ];
+    const r = await moveBoardToFolder({
+      boardId: B,
+      folderId: F2,
+      confirmShared: true,
+    });
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(calls.upserts).toHaveLength(1);
+    expect(updateTag).toHaveBeenCalledWith("shared-boards:user:m1");
+    expect(updateTag).toHaveBeenCalledWith("shared-boards:user:m2");
+  });
+
+  it("moves straight away when the target folder has no members", async () => {
+    const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(calls.upserts).toHaveLength(1);
+  });
+
+  it("invalidates the old folder's members when a board is taken out", async () => {
+    state.currentFolderId = F2;
+    state.folderMemberRows = [{ folder_id: F2, user_id: "m1" }];
+    await moveBoardToFolder({ boardId: B, folderId: null });
+    expect(updateTag).toHaveBeenCalledWith("shared-boards:user:m1");
+  });
+
+  it("explains the owner-or-admin rule when the database refuses the move", async () => {
+    state.insertError = {
+      message:
+        "only the board owner or an admin can move a board into or out of a shared folder",
+      code: "42501",
+    };
+    const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "Only the board's owner or an admin can move a board into or out of a shared folder.",
+    });
+  });
+
+  it("invalidates the members of a folder that is deleted", async () => {
+    state.folderMemberRows = [{ folder_id: F2, user_id: "m9" }];
+    await deleteFolder({ folderId: F2 });
+    expect(updateTag).toHaveBeenCalledWith("shared-boards:user:m9");
   });
 });
