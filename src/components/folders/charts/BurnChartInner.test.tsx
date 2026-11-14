@@ -72,4 +72,17 @@ describe("BurnChartInner", () => {
     expect(container.querySelector(".recharts-bar")).not.toBeNull();
     expect(container.querySelector(".recharts-area")).toBeNull();
   });
+  it("draws a second, dotted line for the forecast in cumulative mode", () => {
+    const { container } = render(
+      <BurnChartInner
+        points={points}
+        mode="cumulative"
+        forecast={[
+          { weekStart: points[points.length - 2]!.weekStart, value: 3 },
+          { weekStart: points[points.length - 1]!.weekStart, value: 5 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll(".recharts-line").length).toBe(2);
+  });
 });
