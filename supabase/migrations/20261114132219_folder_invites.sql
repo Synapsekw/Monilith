@@ -599,6 +599,9 @@ begin
     raise exception 'invalid email' using errcode = '22023';
   end if;
   select org_id into v_org from public.folders where id = p_folder_id;
+  -- Serialize invites and revokes for one (org, email) so the shared guest org
+  -- invitation is created, adopted and revoked consistently.
+  perform pg_advisory_xact_lock(hashtextextended(v_org::text || ':' || v_email, 0));
 
   select u.id into v_user
     from auth.users u
@@ -616,6 +619,17 @@ begin
   values (v_org, v_email, 'guest'::public.org_role, v_uid)
   on conflict (org_id, lower(email)) where status = 'pending' do nothing
   returning id into v_org_inv;
+  if v_org_inv is null then
+    -- A pending one exists. Adopt it only if another folder invitation already
+    -- rides on it (a folder invite made it); an admin-made one stays unowned.
+    select oi.id into v_org_inv
+      from public.org_invitations oi
+     where oi.org_id = v_org and lower(oi.email) = v_email and oi.status = 'pending'
+       and exists (
+         select 1 from public.folder_invitations fi
+         where fi.org_invitation_id = oi.id and fi.status = 'pending'
+       );
+  end if;
 
   insert into public.folder_invitations (folder_id, org_id, email, access_level, invited_by, org_invitation_id)
   values (p_folder_id, v_org, v_email, p_level, v_uid, v_org_inv)
@@ -628,8 +642,14 @@ end $$;
 
 create function public.revoke_folder_invitation(p_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare v_folder uuid; v_org_inv uuid;
+declare v_folder uuid; v_org_inv uuid; v_org uuid; v_email text;
 begin
+  select org_id, lower(email) into v_org, v_email
+    from public.folder_invitations where id = p_id and status = 'pending';
+  if v_org is null then
+    raise exception 'invitation not found' using errcode = 'P0002';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(v_org::text || ':' || v_email, 0));
   select folder_id, org_invitation_id into v_folder, v_org_inv
     from public.folder_invitations where id = p_id and status = 'pending';
   if v_folder is null then
@@ -639,8 +659,8 @@ begin
     raise exception 'not allowed to manage this folder' using errcode = '42501';
   end if;
   update public.folder_invitations set status = 'revoked' where id = p_id;
-  -- Only an org invitation this feature created, and only once no other
-  -- pending folder invitation still rides on it.
+  -- Only an org invitation a folder invite created, and only once no other
+  -- pending folder invitation for this email in this org still needs it.
   if v_org_inv is not null then
     update public.org_invitations oi
        set status = 'revoked'
@@ -648,7 +668,7 @@ begin
        and oi.status = 'pending' and oi.role = 'guest'
        and not exists (
          select 1 from public.folder_invitations fi
-         where fi.org_invitation_id = v_org_inv and fi.status = 'pending'
+         where fi.org_id = v_org and lower(fi.email) = v_email and fi.status = 'pending'
        );
   end if;
 end $$;

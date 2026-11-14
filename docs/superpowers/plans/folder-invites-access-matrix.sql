@@ -1,21 +1,22 @@
 -- Folder invites access matrix. Run AFTER the migration SQL, in the same
 -- execute_sql call. The script opens its own transaction and ends with
 -- ROLLBACK, so nothing it (or the migration before it) does is kept.
--- Output: one row per check, (name, value). A check passes when value = true.
+-- Output: one row per check, (name, value, note). A check passes when value = true.
 -- Names starting with t_ are timings in ms; 'fixture' = NO_FIXTURE means no
--- usable data. It prints only check names and booleans/numbers, never ids,
+-- usable data. ALL_PASSED is true only when every check value is true; a check
+-- whose fixture could not be built is false with note 'fixture missing'. It prints only check names and booleans/numbers, never ids,
 -- names or emails.
 begin;
 
-create temp table matrix_results (name text primary key, value jsonb);
+create temp table matrix_results (name text primary key, value jsonb, note text);
 
 do $matrix$
 declare
   v_org uuid; v_owner uuid; v_other uuid; v_board uuid; v_ws uuid;
-  v_board2 uuid; v_third uuid;
+  v_board2 uuid; v_third uuid; v_folder2 uuid;
   v_folder uuid; v_tmp_folder uuid;
   v_email text; v_org_inv uuid;
-  r jsonb := '{}'::jsonb;
+  r jsonb := '{}'::jsonb; nt jsonb := '{}'::jsonb;
   v_raised boolean; v_n int; v_m int;
   v_plan json; v_ms numeric; v_best numeric; i int;
 begin
@@ -36,12 +37,28 @@ begin
     return;
   end if;
 
-  select b2.id into v_board2 from public.boards b2
-   where b2.org_id = v_org and b2.id <> v_board limit 1;
+  -- Own fixtures: a second board, and a third plain member (an existing
+  -- approved auth user added to the org; no auth users are created).
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.boards (org_id, workspace_id, name, created_by)
+  values (v_org, v_ws, 'matrix-board2', v_owner)
+  returning id into v_board2;
   select om.user_id into v_third from public.org_members om
    where om.org_id = v_org and om.role = 'member' and om.deactivated_at is null
      and om.user_id <> v_other
    order by (om.user_id = v_owner) limit 1;
+  if v_third is null then
+    begin
+      insert into public.org_members (org_id, user_id, role)
+      select v_org, u.id, 'member'
+        from auth.users u
+        join public.account_approvals a on a.user_id = u.id and a.status = 'approved'
+       where not exists (select 1 from public.org_members x where x.org_id = v_org and x.user_id = u.id)
+       limit 1
+      returning user_id into v_third;
+    exception when others then v_third := null;
+    end;
+  end if;
 
   -- V starts with no access: drop any direct grant, take the board out of any
   -- folder, then file it in a fresh folder created by U. (All rolled back.)
@@ -144,7 +161,8 @@ begin
         select 1 from public.folder_boards where folder_id = v_folder and board_id = v_board)
     );
   else
-    r := r || jsonb_build_object('28_board_id_swap_refused', null);
+    r := r || jsonb_build_object('28_board_id_swap_refused', false);
+    nt := nt || jsonb_build_object('28_board_id_swap_refused', 'fixture missing');
   end if;
 
   -- Deactivated org member with the folder row still present: no access.
@@ -195,17 +213,23 @@ begin
 
   -- A guest who reaches the board through a direct grant, but is not in the
   -- folder, must learn nothing about the folder from board_folder_grants.
+  -- The folder has another member, so the result would be non-empty without
+  -- the can_see_folder predicate.
   perform set_config('request.jwt.claims', '', true);
   insert into public.board_members (org_id, board_id, user_id, access_level, granted_by)
   values (v_org, v_board, v_other, 'viewer', v_owner);
+  insert into public.folder_members (folder_id, org_id, user_id, access_level, granted_by)
+  values (v_folder, v_org, v_owner, 'viewer', v_owner);
   perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
   select count(*) into v_n from public.board_folder_grants(v_board);
   r := r || jsonb_build_object(
     '29_guest_board_read_ok', public.can_read_board(v_board),
-    '29b_guest_non_member_gets_no_grants', v_n = 0
+    '29b_guest_non_member_gets_no_grants', v_n = 0 and exists (
+      select 1 from public.folder_members where folder_id = v_folder)
   );
   perform set_config('request.jwt.claims', '', true);
   delete from public.board_members where board_id = v_board and user_id = v_other;
+  delete from public.folder_members where folder_id = v_folder and user_id = v_owner;
   update public.org_members set role = 'member' where org_id = v_org and user_id = v_other;
 
   -- Pending invitation grants nothing; the creator can invite; revoke clears both rows.
@@ -225,11 +249,11 @@ begin
   r := r || jsonb_build_object('23_revoke_clears_guest_org_invite', v_n = 0);
 
   -- Revoking a folder invitation must leave an org invitation it did not
-  -- create (here: a pre-existing member invitation) pending.
+  -- create (here: a pre-existing guest invitation made by an admin) pending.
   v_email := 'matrix-' || gen_random_uuid()::text || '@example.com';
   perform set_config('request.jwt.claims', '', true);
   insert into public.org_invitations (org_id, email, role, invited_by)
-  values (v_org, v_email, 'member', v_owner)
+  values (v_org, v_email, 'guest', v_owner)
   returning id into v_org_inv;
   perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
   perform public.invite_to_folder(v_folder, v_email, 'viewer');
@@ -238,6 +262,35 @@ begin
       where folder_id = v_folder and lower(email) = v_email and status = 'pending'));
   r := r || jsonb_build_object('30_revoke_keeps_foreign_org_invite',
     exists (select 1 from public.org_invitations where id = v_org_inv and status = 'pending'));
+
+  -- Two folders invite the same new email (the second finds the guest org
+  -- invitation the first created). Revoking the first must keep both the org
+  -- invitation and the second folder invitation; revoking the second ends it.
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.folders (org_id, workspace_id, name, created_by)
+  values (v_org, v_ws, 'matrix-' || gen_random_uuid()::text, v_owner)
+  returning id into v_folder2;
+  v_email := 'matrix-' || gen_random_uuid()::text || '@example.com';
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+  perform public.invite_to_folder(v_folder, v_email, 'viewer');
+  perform public.invite_to_folder(v_folder2, v_email, 'viewer');
+  perform public.revoke_folder_invitation(
+    (select id from public.folder_invitations
+      where folder_id = v_folder and lower(email) = v_email and status = 'pending'));
+  r := r || jsonb_build_object(
+    '30b_first_revoke_keeps_org_invite', exists (
+      select 1 from public.org_invitations
+       where org_id = v_org and lower(email) = v_email and status = 'pending'),
+    '30c_first_revoke_keeps_second_folder_invite', exists (
+      select 1 from public.folder_invitations
+       where folder_id = v_folder2 and lower(email) = v_email and status = 'pending')
+  );
+  perform public.revoke_folder_invitation(
+    (select id from public.folder_invitations
+      where folder_id = v_folder2 and lower(email) = v_email and status = 'pending'));
+  r := r || jsonb_build_object('30d_last_revoke_revokes_org_invite', not exists (
+    select 1 from public.org_invitations
+     where org_id = v_org and lower(email) = v_email and status = 'pending'));
 
   -- Redemption: accepting the org invitation turns the pending folder
   -- invitation into a folder_members row.
@@ -285,7 +338,8 @@ begin
         and exists (select 1 from public.folders where id = v_tmp_folder)
     );
   else
-    r := r || jsonb_build_object('24a_non_manager_delete_refused', null);
+    r := r || jsonb_build_object('24a_non_manager_delete_refused', false);
+    nt := nt || jsonb_build_object('24a_non_manager_delete_refused', 'fixture missing');
   end if;
 
   perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
@@ -331,10 +385,15 @@ begin
   end if;
   r := r || jsonb_build_object('t_folder_rollup_ms', v_best);
 
-  insert into matrix_results select key, value from jsonb_each(r);
+  insert into matrix_results select key, value, nt ->> key from jsonb_each(r);
 end
 $matrix$;
 
-select name, value from matrix_results order by name;
+insert into matrix_results (name, value)
+select 'ALL_PASSED', to_jsonb(not exists (
+  select 1 from matrix_results m
+   where m.name !~ '^t_' and m.value is distinct from 'true'::jsonb));
+
+select name, value, note from matrix_results order by name;
 
 rollback;
