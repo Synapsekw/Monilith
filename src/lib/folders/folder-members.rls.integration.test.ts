@@ -197,6 +197,88 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
     return data ?? [];
   }
 
+  // Board content written with the service role: a group, a text column and
+  // two items; the first item carries a cell value, an update, an attachment
+  // and an activity row.
+  async function seedContent(boardId: string, label: string) {
+    const { data: group, error: groupErr } = await admin
+      .from("groups")
+      .insert({ org_id: a.orgId, board_id: boardId, name: `G ${label}` })
+      .select("id")
+      .single();
+    expect(groupErr, `group(${label})`).toBeNull();
+    const groupId = (group as { id: string }).id;
+
+    const { data: column, error: colErr } = await admin
+      .from("columns")
+      .insert({
+        org_id: a.orgId,
+        board_id: boardId,
+        kind: "text",
+        name: `Notes ${label}`,
+      })
+      .select("id")
+      .single();
+    expect(colErr, `column(${label})`).toBeNull();
+    const columnId = (column as { id: string }).id;
+
+    const itemIds: string[] = [];
+    for (const n of [1, 2]) {
+      const { data: item, error: itemErr } = await admin
+        .from("items")
+        .insert({
+          org_id: a.orgId,
+          board_id: boardId,
+          group_id: groupId,
+          name: `Item ${n} ${label}`,
+          created_by: a.id,
+        })
+        .select("id")
+        .single();
+      expect(itemErr, `item(${label})`).toBeNull();
+      itemIds.push((item as { id: string }).id);
+    }
+    const itemId = itemIds[0];
+
+    const { error: cellErr } = await admin.from("cell_values").insert({
+      org_id: a.orgId,
+      board_id: boardId,
+      item_id: itemId,
+      column_id: columnId,
+      value: `seed ${label}`,
+    });
+    expect(cellErr, `cell_value(${label})`).toBeNull();
+    const { error: updErr } = await admin.from("item_updates").insert({
+      org_id: a.orgId,
+      board_id: boardId,
+      item_id: itemId,
+      author_id: a.id,
+      body: {},
+      body_text: `update ${label}`,
+    });
+    expect(updErr, `item_update(${label})`).toBeNull();
+    const { error: attErr } = await admin.from("attachments").insert({
+      org_id: a.orgId,
+      board_id: boardId,
+      item_id: itemId,
+      file_name: `file-${label}.txt`,
+      mime_type: "text/plain",
+      size_bytes: 10,
+      storage_path: `${a.orgId}/${boardId}/${randomUUID()}.txt`,
+      uploaded_by: a.id,
+    });
+    expect(attErr, `attachment(${label})`).toBeNull();
+    const { error: actErr } = await admin.from("item_activities").insert({
+      org_id: a.orgId,
+      board_id: boardId,
+      item_id: itemId,
+      actor_id: a.id,
+      action: "item_created",
+    });
+    expect(actErr, `item_activity(${label})`).toBeNull();
+    return { groupId, columnId, itemId, itemIds };
+  }
+
   beforeAll(async () => {
     admin = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -498,6 +580,209 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
     });
   });
 
+  // ───────────────────── board content reached through a folder grant
+  describe("board content through a folder grant", () => {
+    let viewer: TestUser;
+    let folder: string;
+    let inA: string;
+    let inB: string;
+    let outside: string;
+    const content: Record<string, Awaited<ReturnType<typeof seedContent>>> = {};
+
+    const sorted = (ids: (string | null)[]) => ids.slice().sort();
+
+    // Everything the service role sees on the given boards, by table.
+    async function adminView(boardIds: string[]) {
+      const [items, cells, updates, attachments, activities] =
+        await Promise.all([
+          admin.from("items").select("id").in("board_id", boardIds),
+          admin.from("cell_values").select("item_id").in("board_id", boardIds),
+          admin.from("item_updates").select("id").in("board_id", boardIds),
+          admin.from("attachments").select("id").in("board_id", boardIds),
+          admin.from("item_activities").select("id").in("board_id", boardIds),
+        ]);
+      return {
+        items: sorted((items.data ?? []).map((r) => r.id)),
+        cells: sorted((cells.data ?? []).map((r) => r.item_id)),
+        updates: sorted((updates.data ?? []).map((r) => r.id)),
+        attachments: sorted((attachments.data ?? []).map((r) => r.id)),
+        activities: sorted((activities.data ?? []).map((r) => r.id)),
+      };
+    }
+
+    // The same, as a user.
+    async function userView(anon: Client, boardIds: string[]) {
+      const [items, cells, updates, attachments, activities] =
+        await Promise.all([
+          anon.from("items").select("id").in("board_id", boardIds),
+          anon.from("cell_values").select("item_id").in("board_id", boardIds),
+          anon.from("item_updates").select("id").in("board_id", boardIds),
+          anon.from("attachments").select("id").in("board_id", boardIds),
+          anon.from("item_activities").select("id").in("board_id", boardIds),
+        ]);
+      for (const r of [items, cells, updates, attachments, activities]) {
+        expect(r.error).toBeNull();
+      }
+      return {
+        items: sorted((items.data ?? []).map((r) => r.id)),
+        cells: sorted((cells.data ?? []).map((r) => r.item_id)),
+        updates: sorted((updates.data ?? []).map((r) => r.id)),
+        attachments: sorted((attachments.data ?? []).map((r) => r.id)),
+        activities: sorted((activities.data ?? []).map((r) => r.id)),
+      };
+    }
+
+    beforeAll(async () => {
+      viewer = await newUser("viewer");
+      await addToOrg(a.orgId, viewer.id, "member");
+      folder = await newFolder(a.anon, a.orgId, ws, a.id);
+      inA = await newBoard(a.anon, ws, "content-a");
+      inB = await newBoard(a.anon, ws, "content-b");
+      outside = await newBoard(a.anon, ws, "content-out");
+      for (const board of [inA, inB]) {
+        const { error } = await a.anon
+          .from("folder_boards")
+          .insert({ folder_id: folder, board_id: board, position: 0 });
+        expect(error, "placement").toBeNull();
+      }
+      for (const board of [inA, inB, outside]) {
+        content[board] = await seedContent(board, board.slice(0, 6));
+      }
+      await share(folder, viewer.id, "viewer");
+    }, 120_000);
+
+    it("shows a folder viewer every row on every folder board, and none outside it", async () => {
+      // Fixtures first, as the service role: every table has rows on all three
+      // boards, so equality below is not an empty-equals-empty pass.
+      for (const board of [inA, inB, outside]) {
+        const seen = await adminView([board]);
+        expect(seen.items.length).toBeGreaterThanOrEqual(2);
+        expect(seen.cells.length).toBeGreaterThanOrEqual(1);
+        expect(seen.updates.length).toBeGreaterThanOrEqual(1);
+        expect(seen.attachments.length).toBeGreaterThanOrEqual(1);
+        expect(seen.activities.length).toBeGreaterThanOrEqual(1);
+      }
+      const expected = await adminView([inA, inB]);
+      expect(await userView(viewer.anon, [inA, inB])).toEqual(expected);
+
+      const none = await userView(viewer.anon, [outside]);
+      expect(none).toEqual({
+        items: [],
+        cells: [],
+        updates: [],
+        attachments: [],
+        activities: [],
+      });
+    });
+
+    it("refuses a folder viewer's writes and leaves the rows unchanged", async () => {
+      const first = content[inA];
+      const { error: insertErr } = await viewer.anon.from("items").insert({
+        org_id: a.orgId,
+        board_id: inA,
+        group_id: first.groupId,
+        name: "Viewer item",
+        created_by: viewer.id,
+      });
+      expect(insertErr).not.toBeNull();
+      const { data: created } = await admin
+        .from("items")
+        .select("id")
+        .eq("board_id", inA)
+        .eq("name", "Viewer item");
+      expect(created ?? []).toHaveLength(0);
+
+      const { data: renamed } = await viewer.anon
+        .from("items")
+        .update({ name: "Viewer rename" })
+        .eq("id", first.itemId)
+        .select("id");
+      expect(renamed ?? []).toHaveLength(0);
+      const { data: item } = await admin
+        .from("items")
+        .select("name")
+        .eq("id", first.itemId)
+        .single();
+      expect(item?.name).not.toBe("Viewer rename");
+
+      const { data: cellWrite } = await viewer.anon
+        .from("cell_values")
+        .update({ value: "viewer value" })
+        .eq("item_id", first.itemId)
+        .eq("column_id", first.columnId)
+        .select("item_id");
+      expect(cellWrite ?? []).toHaveLength(0);
+      const { data: cell } = await admin
+        .from("cell_values")
+        .select("value")
+        .eq("item_id", first.itemId)
+        .eq("column_id", first.columnId)
+        .single();
+      expect(cell?.value).not.toBe("viewer value");
+
+      const { error: cellInsertErr } = await viewer.anon
+        .from("cell_values")
+        .insert({
+          org_id: a.orgId,
+          board_id: inA,
+          item_id: content[inA].itemIds[1],
+          column_id: first.columnId,
+          value: "viewer value",
+        });
+      expect(cellInsertErr).not.toBeNull();
+    });
+
+    it("lets a folder editor write", async () => {
+      await share(folder, viewer.id, "editor");
+      const first = content[inB];
+      const { data: renamed, error } = await viewer.anon
+        .from("items")
+        .update({ name: "Editor rename" })
+        .eq("id", first.itemId)
+        .select("id");
+      expect(error).toBeNull();
+      expect(renamed ?? []).toHaveLength(1);
+      const { data: item } = await admin
+        .from("items")
+        .select("name")
+        .eq("id", first.itemId)
+        .single();
+      expect(item?.name).toBe("Editor rename");
+
+      const { data: cellWrite, error: cellErr } = await viewer.anon
+        .from("cell_values")
+        .update({ value: "editor value" })
+        .eq("item_id", first.itemId)
+        .eq("column_id", first.columnId)
+        .select("item_id");
+      expect(cellErr).toBeNull();
+      expect(cellWrite ?? []).toHaveLength(1);
+      const { data: cell } = await admin
+        .from("cell_values")
+        .select("value")
+        .eq("item_id", first.itemId)
+        .eq("column_id", first.columnId)
+        .single();
+      expect(cell?.value).toBe("editor value");
+
+      const { error: insertErr } = await viewer.anon.from("items").insert({
+        org_id: a.orgId,
+        board_id: inB,
+        group_id: first.groupId,
+        name: "Editor item",
+        created_by: viewer.id,
+      });
+      expect(insertErr).toBeNull();
+      // Still nothing outside the folder.
+      const { data: outsideWrite } = await viewer.anon
+        .from("items")
+        .update({ name: "Editor outside" })
+        .eq("id", content[outside].itemId)
+        .select("id");
+      expect(outsideWrite ?? []).toHaveLength(0);
+    });
+  });
+
   // ───────────────────────────────────────── review-driven integrity rules
   describe("folder integrity rules", () => {
     it("refuses a client that changes folders.created_by", async () => {
@@ -505,12 +790,19 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         .from("folders")
         .update({ created_by: c.id })
         .eq("id", folderId);
+      // The update policy lets a non-guest member through; the trigger refuses.
       expect(byMember?.code).toBe("42501");
+      expect(byMember?.message).toMatch(
+        /creator of a folder cannot be changed/i,
+      );
       const { error: byCreator } = await a.anon
         .from("folders")
         .update({ created_by: d.id })
         .eq("id", folderId);
       expect(byCreator?.code).toBe("42501");
+      expect(byCreator?.message).toMatch(
+        /creator of a folder cannot be changed/i,
+      );
       const { data } = await admin
         .from("folders")
         .select("created_by")
@@ -526,7 +818,9 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         .update({ board_id: spare })
         .eq("folder_id", folderId)
         .eq("board_id", board1);
+      // The trigger runs before the update policy's check, so its message shows.
       expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/cannot be re-pointed/i);
       const { data } = await admin
         .from("folder_boards")
         .select("board_id")
@@ -686,6 +980,117 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
       expect(after.map((r) => r.status)).toEqual(["revoked"]);
       const folderInv = await folderInvitationFor(f, email);
       expect(folderInv.map((r) => r.status)).toEqual(["revoked"]);
+    });
+
+    it("refuses a non-manager who tries to invite", async () => {
+      const { folderId: f } = await freshFolderWithBoard("invite-denied");
+      await share(f, c.id, "editor");
+      const email = `fm-noinvite-${randomUUID()}@example.com`;
+      // C is an editor of the folder but neither its creator nor an admin.
+      const { error } = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: f,
+        p_email: email,
+        p_level: "viewer",
+      });
+      expect(error?.code).toBe("42501");
+      expect(await folderInvitationFor(f, email)).toHaveLength(0);
+      expect(await orgInvitationFor(a.orgId, email)).toHaveLength(0);
+    });
+
+    it("lets an org admin who did not create the folder unshare and revoke", async () => {
+      const { folderId: f, boardId } = await freshFolderWithBoard("adm-revoke");
+      await share(f, d.id, "viewer");
+      expect(await canRead(d.anon, boardId)).toBe(true);
+      const { error: unshareErr } = await adm.anon.rpc("unshare_folder", {
+        p_folder_id: f,
+        p_user_id: d.id,
+      });
+      expect(unshareErr).toBeNull();
+      expect(await folderMemberRows(f, d.id)).toHaveLength(0);
+      expect(await canRead(d.anon, boardId)).toBe(false);
+
+      const email = `fm-admrevoke-${randomUUID()}@example.com`;
+      const { error: inviteErr } = await a.anon.rpc("invite_to_folder", {
+        p_folder_id: f,
+        p_email: email,
+        p_level: "viewer",
+      });
+      expect(inviteErr).toBeNull();
+      const inv = await folderInvitationFor(f, email);
+      expect(inv).toHaveLength(1);
+      const { error: revokeErr } = await adm.anon.rpc(
+        "revoke_folder_invitation",
+        { p_id: inv[0].id },
+      );
+      expect(revokeErr).toBeNull();
+      expect((await folderInvitationFor(f, email))[0].status).toBe("revoked");
+    });
+
+    it("does not let an account that is not approved redeem an invitation", async () => {
+      const { folderId: f, boardId } = await freshFolderWithBoard("unapproved");
+      // No pre_approved flag: handle_new_user records the account as pending.
+      const email = `fm-unapproved-${randomUUID()}@example.com`;
+      const { data: created, error: createErr } =
+        await admin.auth.admin.createUser({
+          email,
+          password: PASSWORD,
+          email_confirm: true,
+        });
+      expect(createErr, "createUser(unapproved)").toBeNull();
+      const userId = created.user!.id;
+      createdUserIds.push(userId);
+      const anon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      await signInWithRetry(anon, { email, password: PASSWORD });
+      const { data: approval } = await admin
+        .from("account_approvals")
+        .select("status")
+        .eq("user_id", userId)
+        .single();
+      expect(approval?.status).toBe("pending");
+
+      const { error: inviteErr } = await a.anon.rpc("invite_to_folder", {
+        p_folder_id: f,
+        p_email: email,
+        p_level: "editor",
+      });
+      expect(inviteErr).toBeNull();
+      const orgInv = await orgInvitationFor(a.orgId, email);
+      expect(orgInv).toHaveLength(1);
+      const { data: states } = await a.anon.rpc("folder_invitation_states", {
+        p_folder_id: f,
+      });
+      expect((states ?? []).map((r) => r.state)).toEqual(["awaiting_approval"]);
+
+      const redeem = await anon.rpc("redeem_invitations");
+      expect(redeem.error).not.toBeNull();
+      const accept = await anon.rpc("accept_invitation", {
+        p_invite_id: orgInv[0].id,
+      });
+      expect(accept.error).not.toBeNull();
+
+      const { data: membership } = await admin
+        .from("org_members")
+        .select("role")
+        .eq("org_id", a.orgId)
+        .eq("user_id", userId);
+      expect(membership ?? []).toHaveLength(0);
+      expect(await folderMemberRows(f, userId)).toHaveLength(0);
+      expect((await folderInvitationFor(f, email))[0].status).toBe("pending");
+      expect(await canRead(anon, boardId)).toBe(false);
+
+      // Once approved, the same invitation redeems.
+      const { error: approveErr } = await admin
+        .from("account_approvals")
+        .update({ status: "approved", decided_at: new Date().toISOString() })
+        .eq("user_id", userId);
+      expect(approveErr).toBeNull();
+      const { error: okErr } = await anon.rpc("redeem_invitations");
+      expect(okErr).toBeNull();
+      expect(await folderMemberRows(f, userId)).toEqual([
+        { access_level: "editor" },
+      ]);
     });
 
     it("refuses a non-manager who tries to revoke an invitation", async () => {
@@ -914,6 +1319,10 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
     let portfolioG: string;
     let portfolioC: string;
     let reportId: string;
+    let goalLinkId: string;
+    let portfolioBoardId: string;
+    let gc1: Awaited<ReturnType<typeof seedContent>>;
+    let gc2: Awaited<ReturnType<typeof seedContent>>;
 
     async function visibleFolderIds(anon: Client) {
       const { data, error } = await anon
@@ -1011,7 +1420,13 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
       portfolioC = await mkPortfolio(c.id);
       const { data: report, error: reportErr } = await admin
         .from("reports")
-        .insert({ org_id: a.orgId, created_by: a.id, name: "Org report" })
+        .insert({
+          org_id: a.orgId,
+          created_by: a.id,
+          name: "Org report",
+          // reports_scope_binding_ck: 'boards' needs no board and no portfolio.
+          scope: "boards",
+        })
         .select("id")
         .single();
       expect(reportErr, "report").toBeNull();
@@ -1022,6 +1437,25 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         created_by: a.id,
       });
       expect(capErr, "member_capacity").toBeNull();
+
+      const { data: link, error: linkErr } = await admin
+        .from("goal_links")
+        .insert({ org_id: a.orgId, goal_id: goalC, board_id: gb1 })
+        .select("id")
+        .single();
+      expect(linkErr, "goal_link").toBeNull();
+      goalLinkId = (link as { id: string }).id;
+      const { data: pb, error: pbErr } = await admin
+        .from("portfolio_boards")
+        .insert({ org_id: a.orgId, portfolio_id: portfolioC, board_id: gb1 })
+        .select("id")
+        .single();
+      expect(pbErr, "portfolio_board").toBeNull();
+      portfolioBoardId = (pb as { id: string }).id;
+
+      // Items for the time-allocation checks.
+      gc1 = await seedContent(gb1, "gc1");
+      gc2 = await seedContent(gb2, "gc2");
     }, 240_000);
 
     it("shows a guest only the folders they are a member of", async () => {
@@ -1160,7 +1594,36 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
       expect((guestW.data ?? []).map((r) => r.id)).toEqual([wAttached]);
     });
 
+    it("cannot read goal_links or portfolio_boards", async () => {
+      const guestLinks = await g.anon
+        .from("goal_links")
+        .select("id")
+        .eq("id", goalLinkId);
+      expect(guestLinks.error).toBeNull();
+      expect(guestLinks.data ?? []).toHaveLength(0);
+      const memberLinks = await c.anon
+        .from("goal_links")
+        .select("id")
+        .eq("id", goalLinkId);
+      expect(memberLinks.data ?? []).toHaveLength(1);
+
+      const guestPortfolioBoards = await g.anon
+        .from("portfolio_boards")
+        .select("id")
+        .eq("id", portfolioBoardId);
+      expect(guestPortfolioBoards.error).toBeNull();
+      expect(guestPortfolioBoards.data ?? []).toHaveLength(0);
+      const memberPortfolioBoards = await c.anon
+        .from("portfolio_boards")
+        .select("id")
+        .eq("id", portfolioBoardId);
+      expect(memberPortfolioBoards.data ?? []).toHaveLength(1);
+    });
+
     it("cannot create folders, workspaces, boards, dashboards, goals, portfolios or reports", async () => {
+      const guestTrigger = /guests cannot create/i;
+
+      // folders has no guest trigger: the insert policy is what refuses.
       const folder = await g.anon.from("folders").insert({
         org_id: a.orgId,
         workspace_id: ws,
@@ -1168,23 +1631,46 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         created_by: g.id,
       });
       expect(folder.error?.code).toBe("42501");
+      expect(folder.error?.message).toMatch(/row-level security/i);
+      const { data: folderRows } = await admin
+        .from("folders")
+        .select("id")
+        .eq("name", "Guest folder");
+      expect(folderRows ?? []).toHaveLength(0);
 
+      // The tg_block_guest_insert BEFORE INSERT trigger fires ahead of the
+      // policy's WITH CHECK, so these all fail with the trigger's message.
       const workspace = await g.anon
         .from("workspaces")
         .insert({ org_id: a.orgId, name: "Guest WS", created_by: g.id });
       expect(workspace.error?.code).toBe("42501");
+      expect(workspace.error?.message).toMatch(guestTrigger);
+      const { data: wsRows } = await admin
+        .from("workspaces")
+        .select("id")
+        .eq("name", "Guest WS");
+      expect(wsRows ?? []).toHaveLength(0);
 
+      // create_board / create_dashboard are security definer and check only
+      // membership, then insert: the trigger refuses the insert.
       const board = await g.anon.rpc("create_board", {
         p_workspace_id: ws,
         p_name: "Guest board",
       });
-      expect(board.error).not.toBeNull();
+      expect(board.error?.code).toBe("42501");
+      expect(board.error?.message).toMatch(guestTrigger);
+      const { data: boardRows } = await admin
+        .from("boards")
+        .select("id")
+        .eq("created_by", g.id);
+      expect(boardRows ?? []).toHaveLength(0);
 
       const dashboardRpc = await g.anon.rpc("create_dashboard", {
         p_workspace_id: ws,
-        p_name: "Guest dashboard",
+        p_name: "Guest dashboard rpc",
       });
-      expect(dashboardRpc.error).not.toBeNull();
+      expect(dashboardRpc.error?.code).toBe("42501");
+      expect(dashboardRpc.error?.message).toMatch(guestTrigger);
       const dashboard = await g.anon.from("dashboards").insert({
         org_id: a.orgId,
         workspace_id: ws,
@@ -1192,6 +1678,12 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         created_by: g.id,
       });
       expect(dashboard.error?.code).toBe("42501");
+      expect(dashboard.error?.message).toMatch(guestTrigger);
+      const { data: dashRows } = await admin
+        .from("dashboards")
+        .select("id")
+        .eq("created_by", g.id);
+      expect(dashRows ?? []).toHaveLength(0);
 
       const goal = await g.anon.from("goals").insert({
         org_id: a.orgId,
@@ -1201,6 +1693,12 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         progress_mode: "manual_number",
       });
       expect(goal.error?.code).toBe("42501");
+      expect(goal.error?.message).toMatch(guestTrigger);
+      const { data: goalRows } = await admin
+        .from("goals")
+        .select("id")
+        .eq("name", "Guest goal");
+      expect(goalRows ?? []).toHaveLength(0);
 
       const portfolio = await g.anon.from("portfolios").insert({
         org_id: a.orgId,
@@ -1208,29 +1706,39 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         name: "Guest portfolio",
       });
       expect(portfolio.error?.code).toBe("42501");
+      expect(portfolio.error?.message).toMatch(guestTrigger);
+      const { data: portfolioRows } = await admin
+        .from("portfolios")
+        .select("id")
+        .eq("name", "Guest portfolio");
+      expect(portfolioRows ?? []).toHaveLength(0);
 
       const report = await g.anon.from("reports").insert({
         org_id: a.orgId,
         created_by: g.id,
         name: "Guest report",
+        scope: "boards",
       });
       expect(report.error?.code).toBe("42501");
-
-      // Nothing leaked in through any of those paths.
-      const { data: created } = await admin
-        .from("boards")
+      expect(report.error?.message).toMatch(guestTrigger);
+      const { data: reportRows } = await admin
+        .from("reports")
         .select("id")
-        .eq("created_by", g.id);
-      expect(created ?? []).toHaveLength(0);
+        .eq("name", "Guest report");
+      expect(reportRows ?? []).toHaveLength(0);
     });
 
-    it("cannot reorder a placement or rename a folder", async () => {
-      const { error } = await g.anon
+    it("silently filters a guest's reorder and rename (0 rows affected) while an authorized user can make the same updates", async () => {
+      // The update policies exclude guests, so the rows are filtered out of
+      // the statement: no error, no rows.
+      const reorder = await g.anon
         .from("folder_boards")
         .update({ position: 9 })
         .eq("folder_id", gf1)
-        .eq("board_id", gb1);
-      expect(error).toBeNull();
+        .eq("board_id", gb1)
+        .select("position");
+      expect(reorder.error).toBeNull();
+      expect(reorder.data ?? []).toHaveLength(0);
       const { data: placement } = await admin
         .from("folder_boards")
         .select("position")
@@ -1239,16 +1747,59 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         .single();
       expect(placement?.position).toBe(0);
 
-      await g.anon.from("folders").update({ name: "Renamed" }).eq("id", gf1);
-      const { data: folder } = await admin
+      const rename = await g.anon
+        .from("folders")
+        .update({ name: "Guest rename" })
+        .eq("id", gf1)
+        .select("id");
+      expect(rename.error).toBeNull();
+      expect(rename.data ?? []).toHaveLength(0);
+      const { data: folderBefore } = await admin
         .from("folders")
         .select("name")
         .eq("id", gf1)
         .single();
-      expect(folder?.name).not.toBe("Renamed");
+      expect(folderBefore?.name).not.toBe("Guest rename");
+
+      // Control: a non-guest member makes the same updates and they land.
+      const controlReorder = await a.anon
+        .from("folder_boards")
+        .update({ position: 9 })
+        .eq("folder_id", gf1)
+        .eq("board_id", gb1)
+        .select("position");
+      expect(controlReorder.error).toBeNull();
+      expect(controlReorder.data).toEqual([{ position: 9 }]);
+      const controlRename = await a.anon
+        .from("folders")
+        .update({ name: `Control rename ${randomUUID()}` })
+        .eq("id", gf1)
+        .select("id");
+      expect(controlRename.error).toBeNull();
+      expect(controlRename.data ?? []).toHaveLength(1);
     });
 
     it("raises for create_dashboard_widget and set_widget_layouts", async () => {
+      const layoutOf = async () => {
+        const { data, error } = await admin
+          .from("dashboard_widgets")
+          .select("layout")
+          .eq("id", wAttached)
+          .single();
+        expect(error).toBeNull();
+        return data?.layout;
+      };
+      const widgetCount = async () => {
+        const { data } = await admin
+          .from("dashboard_widgets")
+          .select("id")
+          .eq("dashboard_id", dAttached);
+        return (data ?? []).length;
+      };
+      const layoutBefore = await layoutOf();
+      const countBefore = await widgetCount();
+      expect(countBefore).toBe(1);
+
       const create = await g.anon.rpc("create_dashboard_widget", {
         p_dashboard_id: dAttached,
         p_kind: "number",
@@ -1265,18 +1816,16 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
       expect(layouts.error?.message).toMatch(
         /guests cannot change dashboards/i,
       );
+      expect(await layoutOf()).toEqual(layoutBefore);
+      expect(await widgetCount()).toBe(countBefore);
 
-      // The same calls work for a full member, and nothing changed for the guest.
+      // Control: the same call works for a full member and changes the layout.
       const ownerLayouts = await a.anon.rpc("set_widget_layouts", {
         p_dashboard_id: dAttached,
         p_layouts: [{ id: wAttached, x: 1, y: 1, w: 2, h: 2 }],
       });
       expect(ownerLayouts.error).toBeNull();
-      const { data: widgets } = await admin
-        .from("dashboard_widgets")
-        .select("id")
-        .eq("dashboard_id", dAttached);
-      expect(widgets ?? []).toHaveLength(1);
+      expect(await layoutOf()).toEqual({ x: 1, y: 1, w: 2, h: 2 });
     });
 
     it("has can_edit_goal and can_edit_portfolio false for a guest owner or creator", async () => {
@@ -1307,10 +1856,12 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
     });
 
     it("returns only the guest's own rows from workload_actuals_rollup", async () => {
+      // Item rows carry item_id (+ board_id); category rows carry no board
+      // (constraints time_allocations_item_xor_category / _category_no_board).
       const rows = [
-        { user_id: g.id, board_id: gb1, category: null },
-        { user_id: c.id, board_id: null, category: "Admin" },
-        { user_id: a.id, board_id: null, category: "Planning" },
+        { user_id: g.id, item_id: gc1.itemIds[0], board_id: gb1 },
+        { user_id: c.id, category: "Admin" },
+        { user_id: a.id, category: "Planning" },
       ];
       for (const row of rows) {
         const { error } = await admin.from("time_allocations").insert({
@@ -1327,8 +1878,9 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         p_to: TODAY,
       });
       expect(owner.error).toBeNull();
-      const ownerUsers = new Set((owner.data ?? []).map((r) => r.user_id));
-      expect(ownerUsers).toEqual(new Set([g.id, c.id, a.id]));
+      expect((owner.data ?? []).map((r) => r.user_id)).toEqual(
+        expect.arrayContaining([g.id, c.id, a.id]),
+      );
 
       const guest = await g.anon.rpc("workload_actuals_rollup", {
         p_from: TODAY,
@@ -1348,22 +1900,26 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
       };
       const readable = await g.anon
         .from("time_allocations")
-        .insert({ ...own, board_id: gb1 });
+        .insert({ ...own, item_id: gc1.itemIds[1], board_id: gb1 });
       expect(readable.error).toBeNull();
 
       const unreadable = await g.anon
         .from("time_allocations")
-        .insert({ ...own, board_id: gb2 });
+        .insert({ ...own, item_id: gc2.itemIds[0], board_id: gb2 });
       expect(unreadable.error?.code).toBe("42501");
 
+      // A category row has no board, which a guest may not log.
       const noBoard = await g.anon
         .from("time_allocations")
-        .insert({ ...own, board_id: null, category: "Admin" });
+        .insert({ ...own, category: "Admin" });
       expect(noBoard.error?.code).toBe("42501");
 
-      const forSomeoneElse = await g.anon
-        .from("time_allocations")
-        .insert({ ...own, user_id: a.id, board_id: gb1 });
+      const forSomeoneElse = await g.anon.from("time_allocations").insert({
+        ...own,
+        user_id: a.id,
+        item_id: gc1.itemIds[1],
+        board_id: gb1,
+      });
       expect(forSomeoneElse.error?.code).toBe("42501");
 
       const { data: leaked } = await admin
