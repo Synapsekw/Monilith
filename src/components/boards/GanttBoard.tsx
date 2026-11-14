@@ -19,12 +19,14 @@ import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import { useIntelItemIds } from "@/lib/boards/intelligence/context";
 import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
+  UNGROUPED_GROUP_ID,
   buildGanttRows,
   detectViolations,
+  groupTimelineRows,
   onBarMoved,
   onBarResized,
+  rangeIncludingToday,
   timelineDayCount,
-  visibleRows,
 } from "@/lib/boards/gantt";
 import {
   itemDateRange,
@@ -35,6 +37,8 @@ import {
   UPDATED_AT_SOURCE,
 } from "@/lib/boards/dates";
 import { colorForItem } from "@/lib/boards/timeline-color";
+import { localTodayISO } from "@/lib/boards/overdue";
+import { buildTimelineLate } from "@/lib/boards/timeline-late";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
@@ -60,6 +64,9 @@ import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection
 // real cache changes via its own useBoardCache subscription, and every prop
 // BoardViews passes is referentially stable, so it can skip the parent
 // re-renders driven by presence heartbeats.
+/** `groupTimelineRows` ids a group band `group:<groupId>`. */
+const GROUP_ROW_PREFIX = "group:";
+
 export const GanttBoard = memo(GanttBoardInner);
 
 function GanttBoardInner({
@@ -153,25 +160,24 @@ function GanttBoardInner({
     ];
   }, [cache.cellValues, cache.items, startSourceId, endSourceId]);
 
-  // Earliest scheduled item start date for range anchoring.
-  // Guard: returns "" when no dateColumn (we'll be in the early-return path).
-  const rangeStartISO = useMemo(() => {
+  // Viewer-local today: the clock the overdue rule and the canvas's today line
+  // both use.
+  const today = localTodayISO();
+
+  // Earliest scheduled start, or "" when nothing is dated.
+  const dataStartISO = useMemo(() => {
     if (!dateColumn || !startSourceId) return "";
-    const sorted = effectiveCellValues
-      .filter(
-        (cv) =>
-          cv.column_id === startSourceId &&
-          typeof (cv.value as Record<string, unknown>)?.date === "string",
-      )
-      .map((cv) => (cv.value as { date: string }).date)
-      .sort();
-    if (sorted.length > 0) return sorted[0];
-    const t = new Date();
-    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
+    let min = "";
+    for (const cv of effectiveCellValues) {
+      if (cv.column_id !== startSourceId) continue;
+      const d = (cv.value as { date?: unknown } | null)?.date;
+      if (typeof d === "string" && (min === "" || d < min)) min = d;
+    }
+    return min;
   }, [startSourceId, effectiveCellValues, dateColumn]);
 
   // Latest date across the start and end sources — how far the last bar reaches.
-  const rangeEndISO = useMemo(() => {
+  const dataEndISO = useMemo(() => {
     let max = "";
     for (const cv of effectiveCellValues) {
       if (cv.column_id !== startSourceId && cv.column_id !== endSourceId)
@@ -182,11 +188,20 @@ function GanttBoardInner({
     return max;
   }, [startSourceId, endSourceId, effectiveCellValues]);
 
-  // Grid width in days: the zoom window, extended to fit the full data range so
+  // The grid's range: the data range, widened so today - 14 ... today + 30 is
+  // always on it. "" (no grid) when the board has no date column; that is the
+  // early-return path below.
+  const range =
+    dateColumn && startSourceId
+      ? rangeIncludingToday(dataStartISO || null, dataEndISO || null, today)
+      : null;
+  const rangeStartISO = range?.startISO ?? "";
+
+  // Grid width in days: the zoom window, extended to fit the full range so
   // bars beyond the window aren't clipped off-screen.
   const dayCount = timelineDayCount(
     rangeStartISO,
-    rangeEndISO,
+    range?.endISO ?? "",
     ZOOM_DAY_COUNT[zoom],
   );
 
@@ -291,20 +306,21 @@ function GanttBoardInner({
 
   // Sub-item nesting: parents collapsed by default so the timeline opens as a
   // compact top-level overview; expand a parent to reveal its scheduled
-  // sub-items.
+  // sub-items. Group bands collapse through `collapsedGroups`.
   //
-  // Shared with the table view through the view-prefs provider: expanding a row
-  // here and switching to Table shows it expanded there too, and both survive a
-  // reload. (This replaces the local, deliberately-unpersisted copy.)
-  const { expandedItems: expanded, toggleItemExpanded: toggleExpand } =
-    useBoardViewPrefs();
-  // The rows actually drawn on the timeline: every top-level row (incl. parent
-  // headers), plus the sub-items of expanded parents. Virtualization, the
-  // rows-area height, and dependency-arrow indexing all key off this list.
-  const visibleTimelineRows = useMemo(
-    () => visibleRows(timelineRows, expanded),
-    [timelineRows, expanded],
-  );
+  // Both sets are shared with the table view through the view-prefs provider:
+  // collapsing a group (or expanding a row) here and switching to Table shows
+  // the same thing there, and both survive a reload.
+  const {
+    collapsedGroups,
+    toggleGroupCollapsed,
+    expandedItems: expanded,
+    toggleItemExpanded: toggleExpand,
+  } = useBoardViewPrefs();
+  // The trailing "Other items" band (rows whose group is not on the board) is
+  // not a real group: its id is not a uuid, and the saved prefs accept only
+  // uuids, so its collapse lives here, never in the shared set.
+  const [otherCollapsed, setOtherCollapsed] = useState(false);
 
   const rowColors = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -331,6 +347,47 @@ function GanttBoardInner({
     () => buildCellMap(cache.cellValues),
     [cache.cellValues],
   );
+  // Late + done by the Board Intelligence overdue rule (see timeline-late.ts),
+  // so a bar's "Nd late" and the overdue chip can never disagree.
+  const late = useMemo(
+    () =>
+      buildTimelineLate({
+        items: cache.items,
+        columns: cache.columns,
+        cellMap,
+        todayISO: today,
+      }),
+    [cache.items, cache.columns, cellMap, today],
+  );
+  const groupOfItem = useMemo(
+    () => new Map(cache.items.map((i) => [i.id, i.group_id])),
+    [cache.items],
+  );
+  // The rows actually drawn on the timeline: a band per group (position
+  // order, skipped when empty), then, unless the group is collapsed, its
+  // top-level rows plus the sub-items of expanded parents. Virtualization,
+  // the rows-area height, and dependency-arrow indexing all key off this list.
+  const visibleTimelineRows = useMemo(
+    () =>
+      groupTimelineRows(timelineRows, groupOfItem, cache.groups, {
+        collapsedGroups: otherCollapsed
+          ? new Set([...collapsedGroups, UNGROUPED_GROUP_ID])
+          : collapsedGroups,
+        expanded,
+        isDone: late.isDone,
+        lateFor: (row) => late.lateDays.get(row.itemId) ?? null,
+      }),
+    [
+      timelineRows,
+      groupOfItem,
+      cache.groups,
+      collapsedGroups,
+      otherCollapsed,
+      expanded,
+      late,
+    ],
+  );
+
   // Name-rail critical dot: direct-dependent counts (O(E), memoized) + the
   // board's first priority column feed effectivePriority per row. The dot also
   // renders on boards with no priority column for auto (>= 2 dependents) items
@@ -394,6 +451,24 @@ function GanttBoardInner({
    * the board has a status or percent column to edit; otherwise fall back to
    * the ItemPanel so the peek never renders empty.
    */
+  // A canvas row id is an item id (a parent: its sub-items) or `group:<id>`.
+  function isRowExpanded(id: string): boolean {
+    if (!id.startsWith(GROUP_ROW_PREFIX)) return expanded.has(id);
+    const groupId = id.slice(GROUP_ROW_PREFIX.length);
+    return groupId === UNGROUPED_GROUP_ID
+      ? !otherCollapsed
+      : !collapsedGroups.has(groupId);
+  }
+  function toggleRow(id: string) {
+    if (!id.startsWith(GROUP_ROW_PREFIX)) {
+      toggleExpand(id);
+      return;
+    }
+    const groupId = id.slice(GROUP_ROW_PREFIX.length);
+    if (groupId === UNGROUPED_GROUP_ID) setOtherCollapsed((c) => !c);
+    else toggleGroupCollapsed(groupId);
+  }
+
   function handleItemTap(itemId: string, anchorRect: DOMRect) {
     if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
     else openItemPanel(itemId);
@@ -596,8 +671,9 @@ function GanttBoardInner({
           )
         }
         canEditItem={() => !readOnly}
-        isExpanded={(itemId) => expanded.has(itemId)}
-        onToggleExpand={toggleExpand}
+        lateFor={(row) => late.lateDays.get(row.itemId) ?? null}
+        isExpanded={isRowExpanded}
+        onToggleExpand={toggleRow}
         onMoveBar={handleMoveBar}
         onResizeBar={handleResizeBar}
         onAddDependency={(vars) =>

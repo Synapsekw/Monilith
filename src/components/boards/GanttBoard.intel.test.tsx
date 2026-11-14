@@ -56,7 +56,15 @@ const nextWeek = localTodayISO(new Date(Date.now() + 7 * 86_400_000));
 function payload() {
   return {
     board: { id: "b1", org_id: "o1", name: "My Board" },
-    groups: [{ id: "g1", board_id: "b1" }],
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        name: "Group One",
+        position: 0,
+        color: "#579bfc",
+      },
+    ],
     columns: [
       {
         id: DATE_COL_ID,
@@ -148,5 +156,7 @@ describe("GanttBoard with an active intelligence chip", () => {
     expect(rows[0]).toHaveClass("intel-match");
     expect(rows[0]).toHaveAttribute("data-intel-rule", "cell");
     expect(within(rows[0]).getByTestId("intel-rule")).toBeInTheDocument();
+    // The narrowed row's group band is still drawn; an emptied group is not.
+    expect(screen.getAllByTestId("gantt-section")).toHaveLength(1);
   });
 });
