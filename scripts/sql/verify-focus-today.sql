@@ -7,6 +7,8 @@
 -- The function reads auth.uid(): we impersonate via request.jwt.claims, and
 -- call it both as the table owner and under `set local role authenticated`.
 begin;
+set local statement_timeout = '15s';
+set local lock_timeout = '3s';
 
 do $verify$
 declare
