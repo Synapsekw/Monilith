@@ -14,6 +14,7 @@ import {
   removeGroup,
   removeItem,
   replaceColumn,
+  clearColumnWidths,
   replaceGroup,
   replaceItem,
   replaceItemId,
@@ -600,6 +601,26 @@ describe("removeItem", () => {
     const next = removeItem(cache, "i1");
     expect(next.items.some((i) => i.id === "sub1")).toBe(false);
     expect(next.cellValues.some((c) => c.item_id === "sub1")).toBe(false);
+  });
+
+  it("clearColumnWidths nulls every saved width and the Name width", () => {
+    const untouched = col("b", 1);
+    const start: BoardCache = {
+      ...cache([col("a", 0, { width: 300 }), untouched]),
+      board: {
+        id: "b",
+        org_id: "o",
+        name_column_width: 420,
+      } as BoardCache["board"],
+    };
+    const next = clearColumnWidths(start);
+    expect(next.columns.map((c) => c.width)).toEqual([null, null]);
+    expect(next.board.name_column_width).toBeNull();
+    // A column that was already auto keeps its identity (no needless churn).
+    expect(next.columns[1]).toBe(untouched);
+    // Immutable.
+    expect(start.columns[0].width).toBe(300);
+    expect(start.board.name_column_width).toBe(420);
   });
 });
 

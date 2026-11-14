@@ -12,6 +12,7 @@ import {
   resizeColumn,
   reorderColumn,
   resizeNameColumn,
+  resetColumnWidths,
   updateColumnSettings,
   removeColumnOption,
   deleteColumn,
@@ -267,6 +268,17 @@ describe("resizeColumn", () => {
     const res = await resizeColumn({ columnId: COLUMN_ID, width: 200 });
     expect(res).toEqual({ ok: false, error: "rls" });
   });
+
+  it("clears the saved width with null (back to auto-fit)", async () => {
+    const onUpdate = vi.fn();
+    let call = 0;
+    from.mockImplementation(() =>
+      ++call === 1 ? boardIdLookup(BOARD_ID) : updateTable({ onUpdate }),
+    );
+    const res = await resizeColumn({ columnId: COLUMN_ID, width: null });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({ width: null });
+  });
 });
 
 describe("reorderColumn", () => {
@@ -486,5 +498,101 @@ describe("deleteColumn", () => {
     );
     const res = await deleteColumn({ columnId: COLUMN_ID });
     expect(res).toEqual({ ok: false, error: "rls" });
+  });
+});
+
+describe("resetColumnWidths", () => {
+  type Seen = { patch?: unknown; eq?: unknown[] };
+
+  /** boards: `.update(patch).eq("id", …).select("id").maybeSingle()` */
+  function boardsTable(
+    result: { data: unknown; error: unknown },
+    seen: Seen = {},
+  ) {
+    return {
+      update: (patch: unknown) => {
+        seen.patch = patch;
+        return {
+          eq: (...args: unknown[]) => {
+            seen.eq = args;
+            return {
+              select: () => ({
+                maybeSingle: vi.fn().mockResolvedValue(result),
+              }),
+            };
+          },
+        };
+      },
+    };
+  }
+
+  /** columns: `.update(patch).eq("board_id", …)` */
+  function columnsTable(result: { error: unknown }, seen: Seen = {}) {
+    return {
+      update: (patch: unknown) => {
+        seen.patch = patch;
+        return {
+          eq: async (...args: unknown[]) => {
+            seen.eq = args;
+            return result;
+          },
+        };
+      },
+    };
+  }
+
+  function route(tables: Record<string, unknown>) {
+    from.mockImplementation((name: string) => tables[name]);
+  }
+
+  it("rejects an invalid board id before touching the database", async () => {
+    const res = await resetColumnWidths({ boardId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("clears the Name width and every column width, scoped to the board", async () => {
+    const board: Seen = {};
+    const columns: Seen = {};
+    route({
+      boards: boardsTable({ data: { id: BOARD_ID }, error: null }, board),
+      columns: columnsTable({ error: null }, columns),
+    });
+    const res = await resetColumnWidths({ boardId: BOARD_ID });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(board.patch).toEqual({ name_column_width: null });
+    expect(board.eq).toEqual(["id", BOARD_ID]);
+    expect(columns.patch).toEqual({ width: null });
+    expect(columns.eq).toEqual(["board_id", BOARD_ID]);
+  });
+
+  it("fails closed, and leaves the columns alone, when the board write matched no row (a viewer, or another tenant, under RLS)", async () => {
+    const columns: Seen = {};
+    route({
+      boards: boardsTable({ data: null, error: null }),
+      columns: columnsTable({ error: null }, columns),
+    });
+    const res = await resetColumnWidths({ boardId: BOARD_ID });
+    expect(res).toEqual({ ok: false, error: "Board not found." });
+    expect(from).not.toHaveBeenCalledWith("columns");
+    expect(columns.patch).toBeUndefined();
+  });
+
+  it("propagates a board update error", async () => {
+    route({
+      boards: boardsTable({ data: null, error: { message: "rls" } }),
+      columns: columnsTable({ error: null }),
+    });
+    const res = await resetColumnWidths({ boardId: BOARD_ID });
+    expect(res).toEqual({ ok: false, error: "rls" });
+  });
+
+  it("propagates a columns update error", async () => {
+    route({
+      boards: boardsTable({ data: { id: BOARD_ID }, error: null }),
+      columns: columnsTable({ error: { message: "boom" } }),
+    });
+    const res = await resetColumnWidths({ boardId: BOARD_ID });
+    expect(res).toEqual({ ok: false, error: "boom" });
   });
 });

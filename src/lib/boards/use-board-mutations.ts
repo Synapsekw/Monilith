@@ -53,6 +53,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
     updateColumnSettingsMutation,
     removeColumnOptionMutation,
     resizeColumnMutation,
+    resetColumnWidthsMutation,
     reorderColumnMutation,
     deleteColumnMutation,
   } = useColumnMutations(ctx);
@@ -184,8 +185,9 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
       ),
     renameColumn: (columnId: string, name: string) =>
       renameColumnMutation.mutate({ columnId, name }),
-    resizeColumn: (columnId: string, width: number) =>
+    resizeColumn: (columnId: string, width: number | null) =>
       resizeColumnMutation.mutate({ columnId, width }),
+    resetColumnWidths: () => resetColumnWidthsMutation.mutate(),
     reorderColumn: (columnId: string, position: number) =>
       reorderColumnMutation.mutate({ columnId, position }),
     deleteColumn: (columnId: string) =>

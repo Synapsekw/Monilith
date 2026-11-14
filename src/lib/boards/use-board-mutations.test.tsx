@@ -13,6 +13,8 @@ const createColumn = vi.fn();
 const createItem = vi.fn();
 const addSubitemFn = vi.fn();
 const reorderColumn = vi.fn();
+const resizeColumn = vi.fn();
+const resetColumnWidths = vi.fn();
 const deleteItem = vi.fn();
 const renameItem = vi.fn();
 const moveItem = vi.fn();
@@ -31,6 +33,8 @@ vi.mock("@/lib/boards/actions", () => ({
   createItem: (...a: unknown[]) => createItem(...a),
   addSubitem: (...a: unknown[]) => addSubitemFn(...a),
   reorderColumn: (...a: unknown[]) => reorderColumn(...a),
+  resizeColumn: (...a: unknown[]) => resizeColumn(...a),
+  resetColumnWidths: (...a: unknown[]) => resetColumnWidths(...a),
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   renameItem: (...a: unknown[]) => renameItem(...a),
   moveItem: (...a: unknown[]) => moveItem(...a),
@@ -721,6 +725,90 @@ describe("useBoardMutations.reorderColumn", () => {
     await waitFor(() => {
       const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
       expect(cache.columns.map((c) => c.id)).toEqual(["c1", "c2"]);
+    });
+  });
+});
+
+/** seedColumns, then give c1 a saved width and the board a saved Name width. */
+function seedSavedWidths(qc: QueryClient): void {
+  seedColumns(qc);
+  const key = boardKey("b1");
+  const cache = qc.getQueryData<BoardCache>(key)!;
+  qc.setQueryData<BoardCache>(key, {
+    ...cache,
+    board: { ...cache.board, name_column_width: 420 },
+    columns: cache.columns.map((c) =>
+      c.id === "c1" ? { ...c, width: 300 } : c,
+    ),
+  });
+}
+
+describe("useBoardMutations.resizeColumn(null)", () => {
+  beforeEach(() => resizeColumn.mockReset());
+
+  it("optimistically clears one column's saved width and sends null", async () => {
+    const qc = new QueryClient();
+    seedSavedWidths(qc);
+    resizeColumn.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.resizeColumn("c1", null);
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.columns.find((c) => c.id === "c1")!.width).toBeNull();
+    await waitFor(() =>
+      expect(resizeColumn).toHaveBeenCalledWith({
+        columnId: "c1",
+        width: null,
+      }),
+    );
+  });
+});
+
+describe("useBoardMutations.resetColumnWidths", () => {
+  beforeEach(() => resetColumnWidths.mockReset());
+
+  it("optimistically clears every saved width and the Name width, in one action", async () => {
+    const qc = new QueryClient();
+    seedSavedWidths(qc);
+    resetColumnWidths.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.resetColumnWidths();
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.columns.map((c) => c.width)).toEqual([null, null]);
+    expect(cache.board.name_column_width).toBeNull();
+    await waitFor(() =>
+      expect(resetColumnWidths).toHaveBeenCalledWith({ boardId: "b1" }),
+    );
+    expect(resetColumnWidths).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the widths back when the action fails", async () => {
+    const qc = new QueryClient();
+    seedSavedWidths(qc);
+    resetColumnWidths.mockResolvedValue({ ok: false, error: "nope" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.resetColumnWidths();
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.columns.find((c) => c.id === "c1")!.width).toBe(300);
+      expect(cache.board.name_column_width).toBe(420);
     });
   });
 });

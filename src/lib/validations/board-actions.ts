@@ -101,9 +101,12 @@ export const createColumnSchema = z.object({
 });
 export const renameColumnSchema = z.object({ columnId: uuid, name });
 export const deleteColumnSchema = z.object({ columnId: uuid });
+// NULL = no saved width: the client auto-fits the column to its content (see
+// @/lib/boards/fit-column-width). An integer is a user-dragged width. Bounds
+// mirror the DB check constraint (`width is null or width between 80 and 1200`).
 export const resizeColumnSchema = z.object({
   columnId: uuid,
-  width: z.number().int().min(80).max(1200),
+  width: z.number().int().min(80).max(1200).nullable(),
 });
 export const reorderColumnSchema = z.object({
   columnId: uuid,
@@ -115,6 +118,8 @@ export const resizeNameColumnSchema = z.object({
   boardId: uuid,
   width: z.number().int().min(80).max(1200).nullable(),
 });
+// "Fit all columns": clears every saved column width and the saved Name width.
+export const resetColumnWidthsSchema = z.object({ boardId: uuid });
 
 // Settings validated structurally here; kind-specific shape enforced server-side
 // via columnSettingsSchema(kind).
