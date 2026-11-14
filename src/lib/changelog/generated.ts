@@ -5,6 +5,20 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-14",
+    kind: "fixed",
+    title: "Large boards show every value",
+    description:
+      "Boards with hundreds of items no longer show blank rows; every cell loads, however big the board.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "fixed",
+    title: "Column headers line up",
+    description:
+      "Column headers now sit directly above their values on boards that size the name column automatically.",
+  },
+  {
+    date: "2026-11-14",
     kind: "new",
     title: "Twelve new colour themes and a bolder light mode",
     description:
