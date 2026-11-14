@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   Eye,
   FileText,
+  ListChecks,
   MoreHorizontal,
   MoveHorizontal,
   Trash2,
@@ -36,7 +37,8 @@ import { peopleOnly } from "@/lib/monos/people";
 import { once, useEverOpened } from "@/lib/ui/lazy-dialog";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
-import type { CacheColumn } from "@/lib/boards/cache";
+import type { CacheBoard, CacheColumn } from "@/lib/boards/cache";
+import type { WorkTrackingSettings } from "@/components/boards/WorkTrackingDialog";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
@@ -58,6 +60,11 @@ const loadAutomationsDialog = once(() =>
     (m) => m.AutomationsDialog,
   ),
 );
+const loadWorkTrackingDialog = once(() =>
+  import("@/components/boards/WorkTrackingDialog").then(
+    (m) => m.WorkTrackingDialog,
+  ),
+);
 const loadShareDialog = once(() =>
   import("@/components/boards/ShareBoardDialog").then(
     (m) => m.ShareBoardDialog,
@@ -73,6 +80,7 @@ const loadImportWizard = once(() =>
 );
 
 const AutomationsDialog = dynamic(loadAutomationsDialog, { ssr: false });
+const WorkTrackingDialog = dynamic(loadWorkTrackingDialog, { ssr: false });
 const ShareBoardDialog = dynamic(loadShareDialog, { ssr: false });
 const BoardTrashDialog = dynamic(loadTrashDialog, { ssr: false });
 const ImportWizard = dynamic(loadImportWizard, { ssr: false });
@@ -112,6 +120,7 @@ export type BoardAccess = "owner" | "editor" | "viewer";
 export function BoardHeader({
   boardId,
   boardName,
+  board,
   views,
   selectedViewId,
   columns = EMPTY,
@@ -125,6 +134,11 @@ export function BoardHeader({
 }: {
   boardId: string;
   boardName: string;
+  /** The board row from the shared cache; only its work-tracking settings are read. */
+  board?: Pick<
+    CacheBoard,
+    "work_status_column_id" | "work_done_option_ids" | "work_due_column_id"
+  >;
   views: BoardView[];
   selectedViewId: string;
   columns?: CacheColumn[];
@@ -151,11 +165,21 @@ export function BoardHeader({
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [workTrackingOpen, setWorkTrackingOpen] = useState(false);
+  // Values just saved from the dialog. The board cache is hydrated once and
+  // not refetched (gotcha-09), so the prop alone would go stale until reload.
+  const [savedWork, setSavedWork] = useState<WorkTrackingSettings | null>(null);
   const [seedDraft, setSeedDraft] = useState<Draft | undefined>();
   const automationsMounted = useEverOpened(automationsOpen);
   const shareMounted = useEverOpened(shareOpen);
   const importMounted = useEverOpened(importOpen);
   const trashMounted = useEverOpened(trashOpen);
+  const workTrackingMounted = useEverOpened(workTrackingOpen);
+  const workSettings: WorkTrackingSettings = savedWork ?? {
+    statusColumnId: board?.work_status_column_id ?? null,
+    doneOptionIds: board?.work_done_option_ids ?? null,
+    dueColumnId: board?.work_due_column_id ?? null,
+  };
 
   // Board Intelligence (spec §2.3): "Always do this" hands the header a
   // prefilled automation draft, opening straight into the builder.
@@ -328,6 +352,13 @@ export function BoardHeader({
               <DropdownMenuItem onSelect={() => setAutomationsOpen(true)}>
                 <Zap className="size-3.5" /> Automations
               </DropdownMenuItem>
+              {/* Work tracking is a board write (RLS: can_edit_board) — hidden
+                from viewers like Import and Trash. */}
+              {!isViewer ? (
+                <DropdownMenuItem onSelect={() => setWorkTrackingOpen(true)}>
+                  <ListChecks className="size-3.5" /> Work tracking
+                </DropdownMenuItem>
+              ) : null}
               {/* Import/Trash are board writes — hidden from viewers (the RPCs
                 also reject them server-side). */}
               {!isViewer ? (
@@ -363,6 +394,16 @@ export function BoardHeader({
               if (!next) setSeedDraft(undefined);
             }}
             seedDraft={seedDraft}
+          />
+        ) : null}
+        {!isViewer && workTrackingMounted ? (
+          <WorkTrackingDialog
+            boardId={boardId}
+            columns={columns}
+            current={workSettings}
+            onSaved={setSavedWork}
+            open={workTrackingOpen}
+            onOpenChange={setWorkTrackingOpen}
           />
         ) : null}
         {importMounted ? (

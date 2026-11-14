@@ -61,6 +61,35 @@ vi.mock("@/components/boards/trash/BoardTrashDialog", () => ({
   ),
 }));
 
+// The work tracking dialog calls a Server Action on save; stub it to a probe
+// that exposes what the header hands it and can report a save.
+vi.mock("@/components/boards/WorkTrackingDialog", () => ({
+  WorkTrackingDialog: ({
+    open,
+    current,
+    onSaved,
+  }: {
+    open: boolean;
+    current: { statusColumnId: string | null; dueColumnId: string | null };
+    onSaved: (s: unknown) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="work-dialog"
+      data-open={String(open)}
+      data-status={String(current.statusColumnId)}
+      data-due={String(current.dueColumnId)}
+      onClick={() =>
+        onSaved({
+          statusColumnId: "saved-status",
+          doneOptionIds: null,
+          dueColumnId: null,
+        })
+      }
+    />
+  ),
+}));
+
 // ShareBoardDialog transitively imports the sharing Server Actions module; stub
 // the dialog (we assert on the header's Share trigger, not the dialog body).
 vi.mock("@/components/boards/ShareBoardDialog", () => ({
@@ -487,5 +516,80 @@ describe("BoardHeader — Fit all columns", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Fit all columns" }),
     ).not.toBeInTheDocument();
+  });
+  describe("work tracking", () => {
+    const board = {
+      work_status_column_id: "s1",
+      work_done_option_ids: ["o2"],
+      work_due_column_id: "d1",
+    };
+
+    it("opens the dialog from the overflow menu with the board's saved settings", async () => {
+      renderHeader(
+        <BoardHeader
+          boardId="b1"
+          boardName="Sprint backlog"
+          board={board}
+          views={views}
+          selectedViewId="v1"
+          access="editor"
+        />,
+      );
+      expect(screen.queryByTestId("work-dialog")).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("button", { name: "More board actions" }),
+      );
+      await userEvent.click(
+        await screen.findByRole("menuitem", { name: "Work tracking" }),
+      );
+      const dialog = await screen.findByTestId("work-dialog");
+      expect(dialog).toHaveAttribute("data-open", "true");
+      expect(dialog).toHaveAttribute("data-status", "s1");
+      expect(dialog).toHaveAttribute("data-due", "d1");
+    });
+
+    it("shows the just-saved values on reopen without a refetch", async () => {
+      renderHeader(
+        <BoardHeader
+          boardId="b1"
+          boardName="Sprint backlog"
+          board={board}
+          views={views}
+          selectedViewId="v1"
+          access="owner"
+        />,
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "More board actions" }),
+      );
+      await userEvent.click(
+        await screen.findByRole("menuitem", { name: "Work tracking" }),
+      );
+      await userEvent.click(await screen.findByTestId("work-dialog"));
+      expect(screen.getByTestId("work-dialog")).toHaveAttribute(
+        "data-status",
+        "saved-status",
+      );
+    });
+
+    it("is hidden from viewers", async () => {
+      renderHeader(
+        <BoardHeader
+          boardId="b1"
+          boardName="Sprint backlog"
+          board={board}
+          views={views}
+          selectedViewId="v1"
+          access="viewer"
+        />,
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "More board actions" }),
+      );
+      await screen.findByRole("menuitem", { name: "Automations" });
+      expect(
+        screen.queryByRole("menuitem", { name: "Work tracking" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
