@@ -1,18 +1,134 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { useId, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { StageSummary } from "@/lib/folders/stages";
 import type { FolderBoardRef } from "@/lib/folders/types";
 import { cn } from "@/lib/utils";
 
-/** Stage segmented control + board dropdown + mono hint (spec §5.1). Hidden stage control when ≤ 1 stage (spec §8). */
+/** Up to this many stages render as chips; above it, one searchable menu. A
+ * folder with dozens of stages would otherwise spend several rows of every
+ * Command Center tab on chips. */
+export const STAGE_CHIP_LIMIT = 8;
+
+/**
+ * The stage filter for a folder with many stages: one button showing the
+ * selected stage (name + colour dot), opening a searchable list. The trigger's
+ * accessible NAME stays "Stage"; the selection is its description — the same
+ * split `TimezonePicker` uses, so a screen reader hears what the field is.
+ */
+function StageMenu({
+  stages,
+  stage,
+  onStage,
+}: {
+  stages: StageSummary[];
+  stage: string | null;
+  onStage: (k: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const valueId = useId();
+  const selected = stages.find((s) => s.key === stage) ?? null;
+  function pick(k: string | null) {
+    onStage(k);
+    setOpen(false);
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-label="Stage"
+          aria-describedby={valueId}
+          aria-expanded={open}
+          className="gap-1.5 text-xs"
+        >
+          {selected ? (
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: selected.color }}
+            />
+          ) : null}
+          <span id={valueId} className="max-w-48 truncate">
+            {selected ? selected.name : "All stages"}
+          </span>
+          <ChevronDown className="size-3.5" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-0">
+        <Command>
+          <CommandInput placeholder="Search stages…" />
+          <CommandList className="max-h-72">
+            <CommandEmpty>No stage found.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="__all__"
+                keywords={["All stages"]}
+                onSelect={() => pick(null)}
+              >
+                <Check
+                  className={cn(
+                    "size-4",
+                    stage === null ? "opacity-100" : "opacity-0",
+                  )}
+                  aria-hidden
+                />
+                All stages
+              </CommandItem>
+              {stages.map((s) => (
+                <CommandItem
+                  key={s.key}
+                  value={s.name}
+                  onSelect={() => pick(s.key)}
+                >
+                  <Check
+                    className={cn(
+                      "size-4",
+                      stage === s.key ? "opacity-100" : "opacity-0",
+                    )}
+                    aria-hidden
+                  />
+                  <span
+                    aria-hidden
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  <span className="truncate">{s.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Stage control (chips, or a menu above STAGE_CHIP_LIMIT) + board dropdown + mono hint (spec §5.1). Hidden stage control when ≤ 1 stage (spec §8). */
 export function FilterBar({
   stages,
   boards,
@@ -50,7 +166,9 @@ export function FilterBar({
     );
   return (
     <div data-print-hide className="flex flex-wrap items-center gap-2 py-3">
-      {stages.length > 1 ? (
+      {stages.length > STAGE_CHIP_LIMIT ? (
+        <StageMenu stages={stages} stage={stage} onStage={onStage} />
+      ) : stages.length > 1 ? (
         <div role="group" aria-label="Stage" className="flex flex-wrap gap-1">
           <button
             type="button"

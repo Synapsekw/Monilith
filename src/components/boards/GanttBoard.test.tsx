@@ -8,7 +8,14 @@ import {
   afterEach,
 } from "vitest";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -17,6 +24,9 @@ import {
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
+import { BoardViewPrefsProvider } from "@/lib/boards/view-prefs-context";
+import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
+import { localTodayISO } from "@/lib/boards/overdue";
 
 vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
@@ -87,6 +97,18 @@ vi.mock("@/lib/boards/use-dependency-context", () => ({
   useDependencyContext: () => depContext.value,
 }));
 
+const { updateBoardView } = vi.hoisted(() => ({
+  updateBoardView: vi.fn(async (_input: unknown) => ({
+    ok: true as const,
+    data: undefined,
+  })),
+}));
+vi.mock("@/lib/boards/view-actions", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/boards/view-actions")>();
+  return { ...actual, updateBoardView };
+});
+
 const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -104,7 +126,15 @@ const DEP_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 function payloadFixture() {
   return {
     board: { id: "b1", org_id: "o1", name: "My Board" },
-    groups: [{ id: "g1", board_id: "b1" }],
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        name: "Group One",
+        position: 0,
+        color: "#579bfc",
+      },
+    ],
     columns: [
       {
         id: DATE_COL_ID,
@@ -164,6 +194,16 @@ function payloadFixture() {
       },
     ],
   } as never;
+}
+
+/**
+ * A bar's accessible name: "Name", or "Name, Nd late" once the item is open and
+ * past due. Fixture dates are all in the past against the real clock, so most
+ * bars are late; match either form so these tests do not depend on the date.
+ */
+function barLabel(name: string): RegExp {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}(, \\d+d late)?$`);
 }
 
 function renderGantt(payload = payloadFixture()) {
@@ -331,7 +371,15 @@ const PERCENT_COL = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 function twoColPayload() {
   return {
     board: { id: "b1", org_id: "o1", name: "My Board" },
-    groups: [{ id: "g1", board_id: "b1" }],
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        name: "Group One",
+        position: 0,
+        color: "#579bfc",
+      },
+    ],
     columns: [
       {
         id: START_COL,
@@ -544,7 +592,7 @@ describe("GanttBoard — quick-edit peek", () => {
   it("opens the peek from a milestone diamond", () => {
     renderBoard(twoColPayload());
     // "DotOnly" has a start but no end → milestone diamond with an aria-label.
-    fireEvent.click(screen.getByLabelText("DotOnly"));
+    fireEvent.click(screen.getByLabelText(barLabel("DotOnly")));
     expect(
       screen.getByRole("dialog", { name: "Edit DotOnly" }),
     ).toBeInTheDocument();
@@ -691,7 +739,7 @@ describe("GanttBoard — touch ergonomics (Batch 2)", () => {
 
   it("gives the bar resize handle a coarse hit area and touch-none", () => {
     renderGantt();
-    const handle = screen.getAllByLabelText(/^resize /i)[0];
+    const handle = screen.getAllByLabelText(/^resize (?!name rail)/i)[0];
     expect(handle.className).toContain("touch-none");
     expect(handle.className).toContain("pointer-coarse:w-11");
   });
@@ -789,10 +837,10 @@ describe("GanttBoard — sub-item nesting", () => {
       screen.getByRole("button", { name: /expand sub-items of Parent/i }),
     ).toBeInTheDocument();
     // The child's bar (aria-label = its name) is not mounted while collapsed.
-    expect(screen.queryByLabelText("Child")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(barLabel("Child"))).not.toBeInTheDocument();
     // Top-level rows are still shown.
-    expect(screen.getByLabelText("Parent")).toBeInTheDocument();
-    expect(screen.getByLabelText("TopTwo")).toBeInTheDocument();
+    expect(screen.getByLabelText(barLabel("Parent"))).toBeInTheDocument();
+    expect(screen.getByLabelText(barLabel("TopTwo"))).toBeInTheDocument();
   });
 
   it("reveals the sub-item when its parent is expanded", () => {
@@ -800,7 +848,7 @@ describe("GanttBoard — sub-item nesting", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /expand sub-items of Parent/i }),
     );
-    expect(screen.getByLabelText("Child")).toBeInTheDocument();
+    expect(screen.getByLabelText(barLabel("Child"))).toBeInTheDocument();
     // The toggle flips to a collapse affordance.
     expect(
       screen.getByRole("button", { name: /collapse sub-items of Parent/i }),
@@ -835,11 +883,11 @@ describe("GanttBoard — sub-item nesting", () => {
       screen.getByRole("button", { name: /expand sub-items of Epic/i }),
     ).toBeInTheDocument();
     // …its scheduled child is hidden until expanded (not stranded/unreachable).
-    expect(screen.queryByLabelText("Task")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(barLabel("Task"))).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: /expand sub-items of Epic/i }),
     );
-    expect(screen.getByLabelText("Task")).toBeInTheDocument();
+    expect(screen.getByLabelText(barLabel("Task"))).toBeInTheDocument();
   });
 });
 
@@ -877,12 +925,16 @@ describe("GanttBoard — timestamp date sources", () => {
   it("makes bars read-only (no resize handle) when start is a timestamp source", () => {
     renderGantt(datedPayload());
     // A real date column → bars are resizable.
-    expect(screen.getAllByLabelText(/^resize /i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByLabelText(/^resize (?!name rail)/i).length,
+    ).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Start date column"), {
       target: { value: "__created_at__" },
     });
     // Timestamp-sourced bars can't be resized — the handle is gone.
-    expect(screen.queryByLabelText(/^resize /i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/^resize (?!name rail)/i),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1028,5 +1080,382 @@ describe("GanttBoard — cross-board links", () => {
     });
     fireEvent.click(chip);
     expect(push).toHaveBeenCalledWith(`/boards/${OTHER}?item=ext-1`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Grouped Gantt — a band per board group, shared collapse, late bars
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — grouped rows", () => {
+  function groupedPayload() {
+    const base = payloadFixture() as unknown as {
+      groups: Array<Record<string, unknown>>;
+      items: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    // Listed out of order on purpose: position decides.
+    base.groups = [
+      {
+        id: "g2",
+        board_id: "b1",
+        name: "Build",
+        position: 1,
+        color: "#888888",
+      },
+      {
+        id: "g1",
+        board_id: "b1",
+        name: "Discovery",
+        position: 0,
+        color: "#579bfc",
+      },
+      {
+        id: "g3",
+        board_id: "b1",
+        name: "Launch",
+        position: 2,
+        color: "#888888",
+      },
+    ];
+    base.items = [
+      // i1 is dated 2026-06-02 → 06-04, i2 2026-06-10 → 06-12 (payloadFixture).
+      {
+        id: "i1",
+        name: "Item Alpha",
+        group_id: "g2",
+        position: 0,
+        parent_id: null,
+      },
+      {
+        id: "i2",
+        name: "Item Beta",
+        group_id: "g1",
+        position: 0,
+        parent_id: null,
+      },
+      // The only item in Launch has no dates.
+      {
+        id: "i3",
+        name: "Unscheduled Item",
+        group_id: "g3",
+        position: 0,
+        parent_id: null,
+      },
+    ];
+    base.dependencies = [];
+    return base as never;
+  }
+  /** Bands and rows in DOM order, by the full name on their rail label. */
+  const railOrder = () =>
+    screen
+      .getAllByTestId(/^gantt-(section|row)$/)
+      .map((el) => el.querySelector("[title]")?.getAttribute("title"));
+
+  it("draws a band per group in position order with its rows under it", () => {
+    renderGantt(groupedPayload());
+    expect(railOrder()).toEqual([
+      "Discovery",
+      "Item Beta",
+      "Build",
+      "Item Alpha",
+    ]);
+  });
+
+  it("skips a group with nothing on the timeline", () => {
+    renderGantt(groupedPayload());
+    expect(
+      screen.queryByRole("heading", { name: "Launch" }),
+    ).not.toBeInTheDocument();
+    // Its undated item is still reachable in the Unscheduled section.
+    expect(screen.getByText(/Unscheduled \(1\)/)).toBeInTheDocument();
+  });
+
+  it("collapsing a group hides its rows and keeps its band", () => {
+    renderGantt(groupedPayload());
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Discovery" }));
+    expect(railOrder()).toEqual(["Discovery", "Build", "Item Alpha"]);
+    expect(
+      screen.getByRole("button", { name: "Expand Discovery" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("reads and writes the same collapsed set the table uses", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardViewPrefsProvider
+          boardId="b1"
+          initial={{ ...EMPTY_BOARD_VIEW_PREFS, collapsedGroupIds: ["g1"] }}
+        >
+          <GanttBoard
+            payload={groupedPayload()}
+            members={[]}
+            selectedViewId={VIEW_ID}
+          />
+        </BoardViewPrefsProvider>
+      </QueryClientProvider>,
+    );
+    // A group collapsed in the table opens collapsed here.
+    expect(railOrder()).toEqual(["Discovery", "Build", "Item Alpha"]);
+    fireEvent.click(screen.getByRole("button", { name: "Expand Discovery" }));
+    expect(railOrder()).toEqual([
+      "Discovery",
+      "Item Beta",
+      "Build",
+      "Item Alpha",
+    ]);
+  });
+
+  it("summarises each group on its band", () => {
+    renderGantt(groupedPayload());
+    const band = screen
+      .getByRole("heading", { name: "Discovery" })
+      .closest('[data-testid="gantt-section"]') as HTMLElement;
+    // One scheduled item, not done, due in June 2026 → late.
+    expect(within(band).getByTestId("gantt-section-meta")).toHaveTextContent(
+      "0% · 1 late",
+    );
+    expect(within(band).getByTestId("gantt-summary")).toBeInTheDocument();
+  });
+
+  it("keeps sub-items nested under their parent inside the group", () => {
+    const base = groupedPayload() as unknown as {
+      items: Array<Record<string, unknown>>;
+      cellValues: Array<Record<string, unknown>>;
+    };
+    base.items.push({
+      id: "c1",
+      name: "Child",
+      group_id: "g1",
+      position: 0,
+      parent_id: "i2",
+    });
+    base.cellValues.push({
+      item_id: "c1",
+      column_id: DATE_COL_ID,
+      value: { date: "2026-06-11" },
+      board_id: "b1",
+      org_id: "o1",
+      updated_at: "2026-06-01T00:00:00Z",
+    });
+    renderGantt(base as never);
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand sub-items of Item Beta/i }),
+    );
+    expect(railOrder()).toEqual([
+      "Discovery",
+      "Item Beta",
+      "Child",
+      "Build",
+      "Item Alpha",
+    ]);
+  });
+});
+
+describe("GanttBoard — late bars and range", () => {
+  it("marks an open, past-due item late and leaves a done one alone", () => {
+    // twoColPayload: "Spanned" is Done; "DotOnly" (2026-06-03) has no status.
+    renderBoard(twoColPayload());
+    expect(screen.getByLabelText(barLabel("DotOnly"))).toHaveClass(
+      "border-destructive",
+    );
+    expect(screen.getByLabelText("Spanned").parentElement).not.toHaveClass(
+      "border-destructive",
+    );
+    expect(screen.getByText(/^\d+d late$/)).toBeInTheDocument();
+  });
+
+  it("widens the range so today is on the grid even when all dates are old", () => {
+    const base = payloadFixture() as unknown as {
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    // One item, 200 days ago. The month window alone is 90 days.
+    base.cellValues = [
+      {
+        item_id: "i1",
+        column_id: DATE_COL_ID,
+        value: { date: localTodayISO(new Date(Date.now() - 200 * 86_400_000)) },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ];
+    base.dependencies = [];
+    const { container } = renderGantt(base as never);
+    // The header's today line renders only when today is inside the range.
+    expect(container.querySelector('[aria-label="Today"]')).not.toBeNull();
+  });
+
+  it("puts today on the grid when every date is in the future", () => {
+    const base = payloadFixture() as unknown as {
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    base.cellValues = [
+      {
+        item_id: "i1",
+        column_id: DATE_COL_ID,
+        value: { date: localTodayISO(new Date(Date.now() + 120 * 86_400_000)) },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ];
+    base.dependencies = [];
+    const { container } = renderGantt(base as never);
+    expect(container.querySelector('[aria-label="Today"]')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Today button + persisted name-rail width
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — Today and the name rail", () => {
+  beforeEach(() => {
+    updateBoardView.mockClear();
+    refresh.mockReset();
+    push.mockReset();
+  });
+
+  const railHeader = () => screen.getByTestId("gantt-rail-header");
+  const railHandle = () =>
+    screen.getByRole("separator", { name: /Resize name rail/ });
+
+  it("scrolls the canvas to today from the Today button, with no navigation", () => {
+    const { container } = renderGantt();
+    const scroller = container.querySelector(
+      "[data-scroll-container]",
+    ) as HTMLElement;
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as typeof scroller.scrollTo;
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    const arg = scrollTo.mock.calls[0]![0] as {
+      left: number;
+      behavior: string;
+    };
+    expect(arg.behavior).toBe("smooth");
+    // The fixture starts in June 2026, so today is well to the right of x = 0.
+    expect(arg.left).toBeGreaterThan(0);
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("gives the Today button a coarse-pointer target through the Button primitive", () => {
+    renderGantt();
+    // size="sm" of the app Button: 28px on a mouse, 44px on a finger.
+    expect(screen.getByRole("button", { name: "Today" }).className).toContain(
+      "pointer-coarse:h-11",
+    );
+  });
+
+  it("opens the rail at 300px, or at the width saved in the view config", () => {
+    const { unmount } = renderGantt();
+    expect(railHeader()).toHaveStyle({ width: "300px" });
+    unmount();
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 220,
+    };
+    renderGantt(base as never);
+    expect(railHeader()).toHaveStyle({ width: "220px" });
+  });
+
+  it("makes no server write for a click or double-click on the rail handle", async () => {
+    renderGantt();
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.doubleClick(railHandle());
+    // Let any (wrongly) queued save flush before asserting there was none.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("saves the rail width once, on drag end, with the rest of the config", async () => {
+    renderGantt();
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 340 });
+    fireEvent.pointerMove(window, { clientX: 380 });
+    expect(updateBoardView).not.toHaveBeenCalled();
+    fireEvent.pointerUp(window);
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({
+        date_column_id: DATE_COL_ID,
+        zoom: "month",
+        label_width: 380,
+      }),
+    });
+    expect(railHeader()).toHaveStyle({ width: "380px" });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps the saved width when another setting is saved", async () => {
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 220,
+    };
+    renderGantt(base as never);
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({ zoom: "week", label_width: 220 }),
+    });
+  });
+
+  it("lets a viewer resize for the session without writing", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <GanttBoard
+          payload={payloadFixture()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+          access="viewer"
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 400 });
+    fireEvent.pointerUp(window);
+    expect(railHeader()).toHaveStyle({ width: "400px" });
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("renders an out-of-range stored width clamped and writes it back clamped", async () => {
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 9999,
+    };
+    renderGantt(base as never);
+    expect(railHeader()).toHaveStyle({ width: "520px" });
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({ zoom: "week", label_width: 520 }),
+    });
   });
 });

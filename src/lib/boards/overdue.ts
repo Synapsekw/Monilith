@@ -84,14 +84,22 @@ export function isItemComplete(
 }
 
 /**
+ * The due date a date cell carries (`end ?? date`), or null when it is missing
+ * or malformed. The one place that reads a cell's due date — `isOverdue` and
+ * the timeline's "Nd late" label both go through it.
+ */
+export function dueISO(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { date, end } = value as { date?: unknown; end?: unknown };
+  return typeof end === "string" ? end : typeof date === "string" ? date : null;
+}
+
+/**
  * Overdue ⇔ due (`end ?? date`) is strictly before `todayISO`. ISO `YYYY-MM-DD`
  * strings compare correctly as strings; missing/malformed values are never
  * overdue.
  */
 export function isOverdue(value: unknown, todayISO: string): boolean {
-  if (typeof value !== "object" || value === null) return false;
-  const { date, end } = value as { date?: unknown; end?: unknown };
-  const due =
-    typeof end === "string" ? end : typeof date === "string" ? date : null;
+  const due = dueISO(value);
   return due !== null && due < todayISO;
 }

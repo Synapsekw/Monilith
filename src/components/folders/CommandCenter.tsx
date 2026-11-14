@@ -212,6 +212,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               folderId={payload.folder.id}
               stage={stage}
               board={board}
+              rollup={rows}
             />
           ) : activeTab?.kind === "people" ? (
             <PeopleTab
