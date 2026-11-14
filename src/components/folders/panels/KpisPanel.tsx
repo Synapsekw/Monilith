@@ -26,7 +26,7 @@ const TREND_COLOR: Partial<Record<KpiKey, StatusColor>> = {
 };
 
 function trendProp(key: KpiKey, t: Trend | undefined): TrendProp {
-  if (!t) return undefined;
+  if (!t || t.points.length < 2) return undefined;
   const change = trendChange(key, t);
   const span =
     t.kind === "bars"
@@ -201,6 +201,7 @@ export function KpisPanel({
               className="inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 font-mono"
             >
               <span>{LABEL[key]}</span>
+              <span className="sr-only">: </span>
               <span className="tabular-nums">{CHIP_VALUE[key](k)}</span>
             </li>
           ))}

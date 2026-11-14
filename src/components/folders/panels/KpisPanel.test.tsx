@@ -1,7 +1,55 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { statusToneClasses } from "@/components/ui/status-pill";
+import type { BurnRow } from "@/lib/folders/types";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
 import { KpisPanel } from "./KpisPanel";
+
+const mockTrends = vi.hoisted(() => ({ short: false }));
+vi.mock("@/lib/folders/tower", async (orig) => {
+  const real = await orig<typeof import("@/lib/folders/tower")>();
+  return {
+    ...real,
+    kpiTrends: (...a: Parameters<typeof real.kpiTrends>) => {
+      const out = real.kpiTrends(...a);
+      if (!mockTrends.short) return out;
+      return Object.fromEntries(
+        Object.entries(out).map(([k, t]) => [
+          k,
+          { ...t, points: t!.points.slice(0, 1) },
+        ]),
+      );
+    },
+  };
+});
+
+/** Weeks start on Mondays; FIXTURE_TODAY (Tue 2026-09-15) sits in 09-14. */
+function burnRows(weeks: [string, number, number, number][]): BurnRow[] {
+  return weeks.map(([weekStart, planned, completed, overdueOpen]) => ({
+    stageKey: "s",
+    weekStart,
+    planned,
+    completed,
+    overdueOpen,
+  }));
+}
+const COVERS_TODAY = burnRows([
+  ["2026-08-24", 2, 2, 0],
+  ["2026-08-31", 3, 2, 1],
+  ["2026-09-07", 3, 3, 2],
+  ["2026-09-14", 4, 4, 3],
+  ["2026-09-21", 5, 0, 0],
+  ["2026-09-28", 1, 0, 0],
+]);
+const ENDS_BEFORE_TODAY = COVERS_TODAY.slice(0, 3);
+
+function pill(text: string) {
+  return screen.getByText(text);
+}
+function expectTone(el: HTMLElement, color: "green" | "red" | "blue" | "gray") {
+  for (const c of statusToneClasses(color, "soft").split(" ").filter(Boolean))
+    expect(el).toHaveClass(c);
+}
 
 const fx = folderFixture();
 const all = [
@@ -27,22 +75,78 @@ function renderPanel(patch: Partial<Parameters<typeof KpisPanel>[0]> = {}) {
 }
 
 describe("KpisPanel", () => {
-  it("draws sparklines from the burn rows when no board filter is set", () => {
-    renderPanel({ burn: fx.burn, stage: null, board: null });
-    expect(screen.getAllByRole("img").length).toBeGreaterThanOrEqual(2);
+  it("draws four sparklines for a normal folder", () => {
+    renderPanel({ burn: COVERS_TODAY, stage: null, board: null });
+    expect(screen.getAllByRole("img")).toHaveLength(4);
+  });
+
+  it("states more overdue as a red pill and more complete as a green one", () => {
+    renderPanel({ burn: COVERS_TODAY, stage: null, board: null });
+    expectTone(pill("+1 this week"), "red");
+    expectTone(pill("+15 pts this week"), "green");
+    expectTone(pill("flat"), "gray");
+    expectTone(pill("5 next week"), "blue");
+  });
+
+  it("states fewer overdue as a green pill", () => {
+    const burn = burnRows([
+      ["2026-08-31", 3, 2, 1],
+      ["2026-09-07", 3, 3, 3],
+      ["2026-09-14", 4, 4, 2],
+    ]);
+    renderPanel({ burn });
+    expectTone(pill("−1 this week"), "green");
+  });
+
+  it("draws no sparklines and no pills when burn is null", () => {
+    renderPanel({ burn: null });
+    expect(screen.queryAllByRole("img")).toHaveLength(0);
+    expect(screen.queryByText(/^[+−]\d+ this week$/)).toBeNull();
+    expect(screen.queryByText("flat")).toBeNull();
+    expect(screen.queryByText(/next week/)).toBeNull();
+  });
+
+  it("keeps the due card without a sparkline when burn stops before today", () => {
+    renderPanel({ burn: ENDS_BEFORE_TODAY });
+    expect(screen.getAllByRole("img")).toHaveLength(3);
+    expect(screen.queryByRole("img", { name: /Due this week/ })).toBeNull();
+    const labels = screen.getAllByTestId("kpi-label").map((n) => n.textContent);
+    expect(labels).toContain("Due this week");
+    expect(screen.queryByText(/next week/)).toBeNull();
+  });
+
+  it("omits a trend with fewer than two points and falls back to the bar", () => {
+    mockTrends.short = true;
+    try {
+      renderPanel({ burn: COVERS_TODAY });
+      expect(screen.queryAllByRole("img")).toHaveLength(0);
+      expect(screen.queryByText("+1 this week")).toBeNull();
+      expect(screen.queryByText("flat")).toBeNull();
+      expect(screen.getAllByRole("progressbar").length).toBeGreaterThan(0);
+    } finally {
+      mockTrends.short = false;
+    }
   });
 
   it("draws no sparkline while a board filter is set or burn is missing", () => {
-    renderPanel({ burn: fx.burn, stage: null, board: "b1" });
+    renderPanel({ burn: COVERS_TODAY, stage: null, board: "b1" });
     expect(screen.queryAllByRole("img")).toHaveLength(0);
+    expect(screen.queryByText("+1 this week")).toBeNull();
   });
 
   it("collapses zero cards into chips and keeps their labels findable", () => {
     const rows = fx.rollup!.map((r) => ({ ...r, blocked: 0, stale: 0 }));
     renderPanel({ rows });
     const chips = screen.getAllByTestId("kpi-chip").map((c) => c.textContent);
-    expect(chips).toEqual(expect.arrayContaining(["Blocked0", "Stale0"]));
+    expect(chips).toEqual(expect.arrayContaining(["Blocked: 0", "Stale: 0"]));
     expect(screen.getByText("Blocked")).toBeInTheDocument();
+    const blocked = screen
+      .getAllByTestId("kpi-chip")
+      .find((c) => c.textContent?.startsWith("Blocked"))!;
+    expect(blocked).toHaveTextContent("Blocked: 0");
+    expect(within(blocked).getByText(":", { exact: false })).toHaveClass(
+      "sr-only",
+    );
     const cardLabels = screen
       .getAllByTestId("kpi-label")
       .map((n) => n.textContent);

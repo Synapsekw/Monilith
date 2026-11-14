@@ -40,4 +40,26 @@ describe("Sparkline", () => {
       container.querySelector("polyline")?.getAttribute("points"),
     ).not.toContain("NaN");
   });
+
+  it.each(["line", "bars"] as const)(
+    "never emits NaN for negative or all-equal values (%s)",
+    (kind) => {
+      for (const points of [
+        [-5, -2, -8],
+        [-3, -3, -3],
+        [0, 0],
+        [2, 2, 2],
+      ]) {
+        const { container, unmount } = render(
+          <Sparkline kind={kind} points={points} color="red" label="x" />,
+        );
+        const attrs = [...container.querySelectorAll("*")].flatMap((el) =>
+          [...el.attributes].map((a) => a.value),
+        );
+        expect(attrs.length).toBeGreaterThan(0);
+        for (const v of attrs) expect(v).not.toContain("NaN");
+        unmount();
+      }
+    },
+  );
 });
