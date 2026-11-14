@@ -8,7 +8,10 @@
 -- Each assertion block runs twice: pass 1 as the table owner with the JWT claims
 -- set (get_my_open_work reads auth.uid()), pass 2 under `set local role
 -- authenticated` so RLS applies to the fixture user.
--- Afterwards run scripts/sql/verify-query-items-leak.sql (separate call).
+-- Afterwards run scripts/sql/verify-query-items-leak.sql (separate call): it
+-- proves nothing leaked out of the rolled-back transaction.
+-- Section 14 (org 3) pins query_items / count_items assignee handling to
+-- public.item_assignee_ids, including malformed and null people cells.
 begin;
 
 do $verify$
@@ -18,6 +21,19 @@ declare
   v_outsider uuid;
   v_org uuid := gen_random_uuid();
   v_org2 uuid := gen_random_uuid();
+  v_org3 uuid := gen_random_uuid();
+  v_ws3 uuid := gen_random_uuid();
+  v_bc uuid := gen_random_uuid();
+  v_gc uuid := gen_random_uuid();
+  v_pc1 uuid := gen_random_uuid();
+  v_pc2 uuid := gen_random_uuid();
+  v_e1 uuid := gen_random_uuid();
+  v_e2 uuid := gen_random_uuid();
+  v_e3 uuid := gen_random_uuid();
+  v_e4 uuid := gen_random_uuid();
+  v_e5 uuid := gen_random_uuid();
+  v_e6 uuid := gen_random_uuid();
+  v_e7 uuid := gen_random_uuid();
   v_ws uuid := gen_random_uuid();
   v_ws2 uuid := gen_random_uuid();
   v_folder uuid := gen_random_uuid();
@@ -138,6 +154,36 @@ begin
 
   -- Every fixture timestamp so far is the transaction start. Comments dated in
   -- the future make last_change distinct and exactly known.
+  -- Org 3: assignee-shape fixtures kept apart so the org 1 counts stay exact.
+  insert into public.organizations (id, name, slug, created_by) values
+    (v_org3, 'verify query_items org3', 'verify-query-items-' || v_org3, v_user);
+  insert into public.org_members (org_id, user_id) values (v_org3, v_user);
+  insert into public.workspaces (id, org_id, name, created_by) values
+    (v_ws3, v_org3, 'verify query_items ws3', v_user);
+  insert into public.boards (id, org_id, workspace_id, name, created_by, position) values
+    (v_bc, v_org3, v_ws3, 'verify query_items C', v_user, 0);
+  insert into public.groups (id, org_id, board_id, name, position) values
+    (v_gc, v_org3, v_bc, 'GC', 0);
+  insert into public.columns (id, org_id, board_id, name, kind, position, settings) values
+    (v_pc1, v_org3, v_bc, 'Owner', 'people', 1, '{}'),
+    (v_pc2, v_org3, v_bc, 'Reviewer', 'people', 2, '{}');
+  insert into public.items (id, org_id, board_id, group_id, name, position, created_by) values
+    (v_e1, v_org3, v_bc, v_gc, 'eq two columns', 1, v_user),
+    (v_e2, v_org3, v_bc, v_gc, 'eq empty array', 2, v_user),
+    (v_e3, v_org3, v_bc, v_gc, 'eq no cell', 3, v_user),
+    (v_e4, v_org3, v_bc, v_gc, 'eq json null only', 4, v_user),
+    (v_e5, v_org3, v_bc, v_gc, 'eq null and person', 5, v_user),
+    (v_e6, v_org3, v_bc, v_gc, 'eq not an array', 6, v_user),
+    (v_e7, v_org3, v_bc, v_gc, 'eq duplicate person', 7, v_user);
+  insert into public.cell_values (org_id, board_id, item_id, column_id, value) values
+    (v_org3, v_bc, v_e1, v_pc1, jsonb_build_object('userIds', jsonb_build_array(v_user::text))),
+    (v_org3, v_bc, v_e1, v_pc2, jsonb_build_object('userIds', jsonb_build_array(v_other::text, v_user::text))),
+    (v_org3, v_bc, v_e2, v_pc1, '{"userIds":[]}'),
+    (v_org3, v_bc, v_e4, v_pc1, '{"userIds":[null]}'),
+    (v_org3, v_bc, v_e5, v_pc1, jsonb_build_object('userIds', jsonb_build_array(null, v_other::text))),
+    (v_org3, v_bc, v_e6, v_pc1, '{"userIds":"abc"}'),
+    (v_org3, v_bc, v_e7, v_pc1, jsonb_build_object('userIds', jsonb_build_array(v_user::text, v_user::text)));
+
   insert into public.item_updates (org_id, board_id, item_id, author_id, body, body_text, created_at) values
     (v_org, v_bb, v_nodate, v_user, '{}', 'c3', v_base + interval '3 hours'),
     (v_org, v_ba, v_later, v_user, '{}', 'c2', v_base + interval '2 hours'),
@@ -380,6 +426,57 @@ begin
     if n is distinct from 0 then raise exception '[pass %] 13e. cross-org board leaked: %', v_pass, n; end if;
     select count(*) into n from public.count_items(v_org, 'board', p_board_id => v_b2, p_state => 'any');
     if n is distinct from 0 then raise exception '[pass %] 13f. cross-org board counted: %', v_pass, n; end if;
+
+    -- 14. assignee handling must equal public.item_assignee_ids, shape by shape.
+    select count(*), count(*) filter (
+             where q.assignee_ids is distinct from public.item_assignee_ids(q.item_id))
+      into n, tmax from public.query_items(v_org3, p_state => 'any') q;
+    if n is distinct from 7 or tmax is distinct from 0 then
+      raise exception '[pass %] 14. assignee_ids differ from item_assignee_ids: % rows, % differ',
+        v_pass, n, tmax; end if;
+    -- and the shapes are what we think they are (guards against both sides being wrong)
+    select * into strict r from public.query_items(v_org3, p_state => 'any') q
+     where q.item_id = v_e1;
+    if r.assignee_ids is distinct from (select jsonb_agg(x order by x) from unnest(array[v_user::text, v_other::text]) x) then
+      raise exception '[pass %] 14b. two people columns: %', v_pass, r.assignee_ids; end if;
+    select * into strict r from public.query_items(v_org3, p_state => 'any') q
+     where q.item_id = v_e5;
+    if r.assignee_ids is distinct from jsonb_build_array(v_other::text) then
+      raise exception '[pass %] 14c. null element excluded: %', v_pass, r.assignee_ids; end if;
+    select * into strict r from public.query_items(v_org3, p_state => 'any') q
+     where q.item_id = v_e7;
+    if r.assignee_ids is distinct from jsonb_build_array(v_user::text) then
+      raise exception '[pass %] 14d. duplicate collapsed: %', v_pass, r.assignee_ids; end if;
+    select count(*) into n from public.query_items(v_org3, p_state => 'any') q
+     where q.item_id in (v_e2, v_e3, v_e4, v_e6) and q.assignee_ids is distinct from '[]'::jsonb;
+    if n is distinct from 0 then raise exception '[pass %] 14e. empty shapes not []: %', v_pass, n; end if;
+
+    -- unassigned: [] / no cell / only JSON null / not an array are all unassigned
+    select array_agg(t.item_name order by t.item_name), min(t.total), max(t.total)
+      into nm, tmin, tmax from public.query_items(v_org3, p_unassigned => true, p_state => 'any') t;
+    if nm is distinct from array['eq empty array','eq json null only','eq no cell','eq not an array']
+       or tmin is distinct from 4 or tmax is distinct from 4 then
+      raise exception '[pass %] 14f. unassigned set: % total %', v_pass, nm, tmin; end if;
+    -- the same set the old per-row definition gives
+    select array_agg(i.name order by i.name) into nm2 from public.items i
+     where i.org_id = v_org3 and public.item_assignee_ids(i.id) = '[]'::jsonb;
+    if nm2 is distinct from nm then
+      raise exception '[pass %] 14g. unassigned differs from item_assignee_ids = []: % vs %', v_pass, nm, nm2; end if;
+    -- an item with a person next to a JSON null is NOT unassigned
+    select count(*) into n from public.query_items(v_org3, p_unassigned => true, p_state => 'any') t
+     where t.item_id = v_e5;
+    if n is distinct from 0 then raise exception '[pass %] 14h. null+person counted unassigned', v_pass; end if;
+
+    -- assignee counts: '' once per unassigned item, a person once per item they
+    -- appear on, ties broken by key.
+    select array_agg(k.key || '=' || k.n order by k.n desc, k.key) into nm2
+      from (values ('', 4), (v_user::text, 2), (v_other::text, 2)) k(key, n);
+    select array_agg(t.key || '=' || t.item_count order by t.ordinality) into nm
+      from public.count_items(v_org3, 'assignee', p_state => 'any') with ordinality t;
+    if nm is distinct from nm2 then
+      raise exception '[pass %] 14i. assignee counts (in returned order): % want %', v_pass, nm, nm2; end if;
+    select count(*) into n from public.query_items(v_org3, p_assignee => v_other, p_state => 'any');
+    if n is distinct from 2 then raise exception '[pass %] 14k. assignee filter: %', v_pass, n; end if;
 
     if v_pass = 2 then
       -- 13g (RLS only): org 2 holds an item assigned to v_user, but v_user is not
