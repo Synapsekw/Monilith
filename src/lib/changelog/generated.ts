@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-14",
+    kind: "new",
+    title: "Dependencies across boards",
+    description:
+      "Link an item to work on any board in your organisation from the item panel's new Waiting on / Blocking section, with a Late marker when the dates clash.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "new",
+    title: "Folder Timeline",
+    description:
+      "A Timeline tab on every folder shows all its boards on one Gantt, with links drawn between them; drag bars to reschedule.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "fixed",
+    title: "Timeline arrows",
+    description:
+      "Dependency arrows between items now draw on the board Timeline view.",
+  },
+  {
     date: "2026-11-13",
     kind: "improved",
     title: "Faster settings navigation",
