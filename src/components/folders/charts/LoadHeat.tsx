@@ -1,10 +1,14 @@
 import Link from "next/link";
 import type { LoadGrid } from "@/lib/folders/tower";
 
-function weekWords(index: number, total: number): string {
+/** The first column holds its own week and everything older (the RPC folds
+ *  older weeks into it), so it is described by the start of the next week. */
+function weekWords(grid: LoadGrid, index: number): string {
+  const total = grid.weeks.length;
   const back = Math.floor(total / 2);
   const o = index - back;
-  if (index === 0) return `${back} weeks ago or earlier`;
+  if (index === 0)
+    return `before ${(grid.weeks[1] ?? grid.weeks[0])?.weekStart ?? ""}`;
   if (o < 0) return o === -1 ? "last week" : `${-o} weeks ago`;
   if (o === 0) return "this week";
   return o === 1 ? "next week" : `in ${o} weeks`;
@@ -33,7 +37,7 @@ export function LoadHeat({ grid }: { grid: LoadGrid }) {
               <th
                 key={w.weekStart}
                 scope="col"
-                className="text-kicker font-mono text-[10px] font-medium"
+                className="text-kicker text-2xs font-mono font-medium"
               >
                 {w.label}
               </th>
@@ -53,15 +57,20 @@ export function LoadHeat({ grid }: { grid: LoadGrid }) {
               {r.cells.map((n, i) => {
                 const week = grid.weeks[i];
                 const past = week?.past ?? false;
-                if (n === 0)
+                const when = weekWords(grid, i);
+                if (n === 0) {
+                  const none = `${r.name}, ${when}: none open`;
                   return (
                     <td
                       key={i}
+                      title={none}
                       className="bg-surface-muted text-muted-foreground h-6 rounded-sm text-center"
                     >
-                      ·
+                      <span aria-hidden="true">·</span>
+                      <span className="sr-only">{none}</span>
                     </td>
                   );
+                }
                 const mix = Math.round(14 + 36 * (n / max));
                 const verb = past ? "still open" : "due";
                 return (
@@ -69,8 +78,8 @@ export function LoadHeat({ grid }: { grid: LoadGrid }) {
                     <Link
                       href={`/boards/${r.boardId}`}
                       data-tone={past ? "late" : "ahead"}
-                      aria-label={`${r.name}, ${weekWords(i, grid.weeks.length)}: ${n} ${verb}`}
-                      title={`${r.name}, week of ${week?.weekStart ?? ""}: ${n} ${verb}`}
+                      aria-label={`${r.name}, ${when}: ${n} ${verb}`}
+                      title={`${r.name}, ${i === 0 ? when : `week of ${week?.weekStart ?? ""}`}: ${n} ${verb}`}
                       className="text-foreground hover:ring-border-bright focus-visible:ring-ring flex h-6 items-center justify-center rounded-sm font-mono tabular-nums outline-none hover:ring-1 focus-visible:ring-2"
                       style={{
                         backgroundColor: `color-mix(in oklab, var(${past ? "--status-red" : "--primary"}) ${mix}%, transparent)`,

@@ -32,8 +32,12 @@ describe("LoadHeat", () => {
   it("links a filled cell to its board and describes it in words", () => {
     render(<LoadHeat grid={grid} />);
     const cell = screen.getByRole("link", {
-      name: "Backend, 3 weeks ago or earlier: 7 still open",
+      name: "Backend, before 2026-08-31: 7 still open",
     });
+    expect(cell).toHaveAttribute(
+      "title",
+      "Backend, before 2026-08-31: 7 still open",
+    );
     expect(cell).toHaveAttribute("href", "/boards/b1");
     expect(cell).toHaveAttribute("data-tone", "late");
     expect(
@@ -44,9 +48,47 @@ describe("LoadHeat", () => {
     ).toHaveAttribute("data-tone", "ahead");
   });
 
-  it("draws an empty cell as a dot with no link", () => {
+  it("draws an empty cell as a dot with no link, named in words", () => {
     render(<LoadHeat grid={grid} />);
     expect(screen.getAllByText("·").length).toBe(14 - 3);
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByText("Backend, last week: none open")).toHaveClass(
+      "sr-only",
+    );
+    expect(screen.getAllByText(/: none open$/)).toHaveLength(11);
+  });
+
+  it("only the first column is described as before a date", () => {
+    render(<LoadHeat grid={grid} />);
+    expect(
+      screen.getByText("Mobile, before 2026-08-31: none open"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Backend, this week/ }),
+    ).toHaveAttribute("title", "Backend, week of 2026-09-14: 3 due");
+  });
+
+  it("tints the largest cell more strongly than a smaller one", () => {
+    render(<LoadHeat grid={grid} />);
+    const pct = (name: RegExp) =>
+      Number(
+        /(\d+)%/.exec(
+          screen.getByRole("link", { name }).getAttribute("style") ?? "",
+        )?.[1],
+      );
+    expect(pct(/7 still open/)).toBeGreaterThan(pct(/3 due/));
+  });
+
+  it("renders an all-zero grid without NaN or links", () => {
+    const zero = {
+      ...grid,
+      max: 0,
+      rows: grid.rows.map((r) => ({ ...r, cells: r.cells.map(() => 0) })),
+    };
+    const { container } = render(<LoadHeat grid={zero} />);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(container.innerHTML).not.toContain("NaN");
+    expect(screen.getAllByText("·")).toHaveLength(14);
   });
 });
 
