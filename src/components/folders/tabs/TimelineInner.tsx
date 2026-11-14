@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getFolderTimeline } from "@/lib/folders/actions";
+import { assertOnline } from "@/lib/offline/online-status";
 import { upsertCell } from "@/lib/boards/actions";
 import {
   createDependency,
@@ -176,6 +177,7 @@ function FolderTimelineChart({
 
   const cellMutation = useMutation({
     mutationFn: async (v: SetCellArg) => {
+      assertOnline();
       const res = await upsertCell(v);
       if (!res.ok) throw new Error(res.error);
     },
@@ -216,6 +218,21 @@ function FolderTimelineChart({
     const b = boards.get(view.boardOfItem.get(itemId) ?? "");
     return b ? boardScheduleOf(b) : null;
   };
+
+  // Every payload item (in view or not) → its board, for link permissions.
+  const boardOfAnyItem = useMemo(
+    () => new Map(data.items.map((i) => [i.id, i.board_id])),
+    [data.items],
+  );
+  // The DB lets a link be deleted with edit on EITHER end's board.
+  function canRemoveDependency(dep: {
+    predecessor_id: string;
+    successor_id: string;
+  }): boolean {
+    return [dep.predecessor_id, dep.successor_id].some(
+      (id) => !!boards.get(boardOfAnyItem.get(id) ?? "")?.can_edit,
+    );
+  }
 
   function canEditItem(itemId: string): boolean {
     const b = boards.get(view.boardOfItem.get(itemId) ?? "");
@@ -342,8 +359,7 @@ function FolderTimelineChart({
     else setExpanded((s) => flip(s, id));
   }
 
-  const boardCount = new Set(view.boardOfItem.values()).size;
-  const itemCount = view.boardOfItem.size;
+  const { boards: boardCount, items: itemCount } = view.totals;
 
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -409,6 +425,7 @@ function FolderTimelineChart({
             onResizeBar={handleResizeBar}
             onAddDependency={(v) => void handleAddDependency(v)}
             onRemoveDependency={(v) => void handleRemoveDependency(v)}
+            canRemoveDependency={canRemoveDependency}
             linkCandidates={linkCandidates}
             onItemTap={(itemId) =>
               openItem(view.boardOfItem.get(itemId), itemId)

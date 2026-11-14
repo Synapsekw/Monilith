@@ -27,7 +27,7 @@ import {
   type FolderTimelineData,
   type TimelineItem,
 } from "@/lib/boards/timeline-context";
-import { stageKey } from "@/lib/folders/stages";
+import { ALL_ITEMS_KEY, stageKey } from "@/lib/folders/stages";
 
 /** TanStack Query key for the folder Timeline tab's one payload. */
 export const folderTimelineKey = (folderId: string) =>
@@ -44,6 +44,9 @@ export type FolderTimelineView = {
   boardOfItem: Map<string, string>;
   /** Boards shown as a band with nothing dated under it. */
   noDateBoards: Set<string>;
+  /** Boards / items on the chart under the current filters — independent of
+   * which boards or parents are collapsed, so the header doesn't jump. */
+  totals: { boards: number; items: number };
 };
 
 /**
@@ -95,20 +98,21 @@ export function buildFolderTimeline(
     else byGroup.set(k, [it]);
   }
 
+  const stageFilter = opts.stageKey === ALL_ITEMS_KEY ? null : opts.stageKey;
   const rows: GanttRow[] = [];
+  let totalBoards = 0;
+  let totalItems = 0;
   const boardOfItem = new Map<string, string>();
   const noDateBoards = new Set<string>();
   for (const boardId of data.board_order) {
     if (opts.boardId && boardId !== opts.boardId) continue;
     const board = boards.get(boardId);
     if (!board) continue;
-    // Stage keys are group names. The synthetic ALL_ITEMS_KEY ("__all__")
-    // never matches a group, which is fine: the RPC inner-joins groups, so an
-    // ungrouped item never reaches this builder.
+    // Stage keys are group names. The synthetic ALL_ITEMS_KEY ("__all__") is
+    // the folder's one stage when nothing is grouped — i.e. "everything",
+    // the same as no stage filter.
     const groups = board.groups
-      .filter(
-        (g) => opts.stageKey === null || stageKey(g.name) === opts.stageKey,
-      )
+      .filter((g) => stageFilter === null || stageKey(g.name) === stageFilter)
       .sort((a, b) => a.position - b.position);
     if (groups.length === 0) continue;
     rows.push({
@@ -118,7 +122,10 @@ export function buildFolderTimeline(
       kind: "section",
       level: 0,
     });
-    if (opts.collapsedBoards.has(boardId)) continue;
+    totalBoards++;
+    // A collapsed board is still laid out (for the totals and its "no dates"
+    // note), its rows just aren't emitted.
+    const collapsed = opts.collapsedBoards.has(boardId);
     const schedule = boardScheduleOf(board);
     if (!schedule.startSourceId) {
       noDateBoards.add(boardId);
@@ -154,6 +161,8 @@ export function buildFolderTimeline(
       const onTimeline = built.filter((r) => r.scheduled || r.hasChildren);
       if (onTimeline.length === 0) continue;
       dated = true;
+      totalItems += onTimeline.length;
+      if (collapsed) continue;
       rows.push({
         itemId: `group:${g.id}`,
         name: g.name,
@@ -194,5 +203,6 @@ export function buildFolderTimeline(
     dayCount,
     boardOfItem,
     noDateBoards,
+    totals: { boards: totalBoards, items: totalItems },
   };
 }

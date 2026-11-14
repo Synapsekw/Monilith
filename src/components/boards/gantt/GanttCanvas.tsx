@@ -64,6 +64,9 @@ export type GanttCanvasProps = {
     successorId: string;
   }) => void;
   onRemoveDependency: (vars: { dependencyId: string }) => void;
+  /** Whether the viewer may remove this link (edit on either end's board).
+   * False hides the row's "Remove dep" entries. */
+  canRemoveDependency: (dep: GanttDependency) => boolean;
   /** Items offered in a row's "Blocked by…" picker. */
   linkCandidates: (row: GanttRow) => { itemId: string; name: string }[];
   onItemTap: (itemId: string, anchorRect: DOMRect) => void;
@@ -96,6 +99,7 @@ export function GanttCanvas({
   onResizeBar,
   onAddDependency,
   onRemoveDependency,
+  canRemoveDependency,
   linkCandidates,
   onItemTap,
   onStubTap,
@@ -328,6 +332,7 @@ export function GanttCanvas({
                         onResize={onResizeBar}
                         onAddDependency={onAddDependency}
                         onRemoveDependency={onRemoveDependency}
+                        canRemoveDependency={canRemoveDependency}
                         onItemTap={onItemTap}
                         stubs={externalLinks?.get(row.itemId)}
                         onStubTap={onStubTap}

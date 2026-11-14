@@ -602,10 +602,13 @@ function GanttBoardInner({
         onResizeBar={handleResizeBar}
         onAddDependency={(vars) =>
           mutations.addDependency(vars, {
-            onError: (err) => console.error(err),
+            onError: (err) => toast.error(err.message),
           })
         }
         onRemoveDependency={mutations.removeDependency}
+        // Arrows here are same-board links only (cross-board ones are stubs),
+        // so removal follows this board's access.
+        canRemoveDependency={() => access !== "viewer"}
         linkCandidates={(row) =>
           scheduledRows
             .filter((o) => o.itemId !== row.itemId)

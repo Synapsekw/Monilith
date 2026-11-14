@@ -174,6 +174,7 @@ describe("TimelineInner", () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
     renderTab();
     await screen.findByTestId("canvas");
+    expect(screen.getByText(/2 boards · 2 items/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
     expect(canvas().zoom).toBe("week");
     expect(canvas().isExpanded?.(`board:${A}`)).toBe(true);
@@ -182,6 +183,8 @@ describe("TimelineInner", () => {
       "Platform|Sites · No dates on this board",
     );
     expect(canvas().isExpanded?.(`board:${A}`)).toBe(false);
+    // The header counts the data, not the rows left visible by a collapse.
+    expect(screen.getByText(/2 boards · 2 items/)).toBeInTheDocument();
     expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
   });
 
@@ -299,6 +302,15 @@ describe("TimelineInner", () => {
     const row = canvas().rows.find((r) => r.itemId === I3)!;
     expect(canvas().canEditItem(I3)).toBe(false);
     expect(canvas().linkCandidates(row)).toEqual([]);
+    // A link is removable with edit on EITHER end's board — never with neither.
+    const dep = (pred: string, succ: string) => ({
+      id: "d",
+      predecessor_id: pred,
+      successor_id: succ,
+    });
+    expect(canvas().canRemoveDependency(dep(I3, I3))).toBe(false);
+    expect(canvas().canRemoveDependency(dep(I1, I3))).toBe(true);
+    expect(canvas().canRemoveDependency(dep(I3, I1))).toBe(true);
     // The editable board still offers the read-only board's items as predecessors.
     const editable = canvas().rows.find((r) => r.itemId === I1)!;
     expect(

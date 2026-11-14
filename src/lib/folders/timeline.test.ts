@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildFolderTimeline } from "@/lib/folders/timeline";
+import { ALL_ITEMS_KEY } from "@/lib/folders/stages";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -115,6 +116,37 @@ describe("buildFolderTimeline", () => {
         (r) => r.name,
       ),
     ).toEqual(["Platform", "MVP", "QCC build"]);
+  });
+  it("treats the all-items stage as no stage filter", () => {
+    expect(
+      buildFolderTimeline(data, { ...opts, stageKey: ALL_ITEMS_KEY }).rows,
+    ).toEqual(buildFolderTimeline(data, opts).rows);
+  });
+  it("counts boards and items independently of collapse", () => {
+    const open = buildFolderTimeline(data, opts);
+    const closed = buildFolderTimeline(data, {
+      ...opts,
+      collapsedBoards: new Set([A, B]),
+    });
+    expect(open.totals).toEqual({ boards: 2, items: 2 });
+    expect(closed.totals).toEqual({ boards: 2, items: 2 });
+    expect(buildFolderTimeline(data, { ...opts, boardId: A }).totals).toEqual({
+      boards: 1,
+      items: 1,
+    });
+  });
+  it("still notes a collapsed board with no dates", () => {
+    const undated = {
+      ...data,
+      items: data.items.map((i) =>
+        i.board_id === B ? { ...i, dates: {} } : i,
+      ),
+    };
+    const v = buildFolderTimeline(undated, {
+      ...opts,
+      collapsedBoards: new Set([B]),
+    });
+    expect(v.noDateBoards.has(B)).toBe(true);
   });
   it("collapses a board band to its header", () => {
     expect(

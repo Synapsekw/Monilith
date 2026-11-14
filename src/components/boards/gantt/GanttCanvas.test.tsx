@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   GanttCanvas,
   type GanttCanvasProps,
@@ -65,6 +66,7 @@ function props(over: Partial<GanttCanvasProps> = {}): GanttCanvasProps {
     onResizeBar: vi.fn(),
     onAddDependency: vi.fn(),
     onRemoveDependency: vi.fn(),
+    canRemoveDependency: () => true,
     linkCandidates: () => [],
     onItemTap: vi.fn(),
     onStubTap: vi.fn(),
@@ -260,6 +262,26 @@ describe("GanttCanvas callbacks", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Permit C/ }));
     expect(onStubTap).toHaveBeenCalledWith(many[2]);
+  });
+
+  it("offers Remove dep only for links the viewer may remove", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<GanttCanvas {...props()} />);
+    await user.click(
+      screen.getByRole("button", { name: "Options for Delivery" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /Remove dep/ }),
+    ).toBeInTheDocument();
+    unmount();
+    render(<GanttCanvas {...props({ canRemoveDependency: () => false })} />);
+    await user.click(
+      screen.getByRole("button", { name: "Options for Delivery" }),
+    );
+    await screen.findByRole("menu");
+    expect(
+      screen.queryByRole("menuitem", { name: /Remove dep/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders section bands as headings, not bar rows", () => {

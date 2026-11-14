@@ -62,6 +62,7 @@ export function GanttRowItem({
   onResize,
   onAddDependency,
   onRemoveDependency,
+  canRemoveDependency,
   onItemTap,
   stubs = NO_STUBS,
   onStubTap,
@@ -93,6 +94,8 @@ export function GanttRowItem({
     successorId: string;
   }) => void;
   onRemoveDependency: (vars: { dependencyId: string }) => void;
+  /** Whether the viewer may remove a given link; false hides its entry. */
+  canRemoveDependency: (dep: GanttDependency) => boolean;
   /** Plain tap (no drag activated) on the bar body or milestone — carries the
    * element's rect so the board can anchor the quick-edit peek. */
   onItemTap: (itemId: string, anchorRect: DOMRect) => void;
@@ -196,9 +199,13 @@ export function GanttRowItem({
   }, [stubs, barStartX, barEndX, totalW]);
 
   // Predecessors of this item (items that must finish before this starts)
+  // that the viewer may remove — the only ones the ⋯ menu lists.
   const predecessorDeps = useMemo(
-    () => dependencies.filter((d) => d.successor_id === row.itemId),
-    [dependencies, row.itemId],
+    () =>
+      dependencies.filter(
+        (d) => d.successor_id === row.itemId && canRemoveDependency(d),
+      ),
+    [dependencies, row.itemId, canRemoveDependency],
   );
 
   // Resize state. The refs hold the gesture origin; `resizeDeltaRef` mirrors
