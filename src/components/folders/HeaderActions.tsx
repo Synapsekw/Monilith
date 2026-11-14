@@ -80,7 +80,7 @@ export function HeaderActions({
                   alt=""
                 />
               ) : null}
-              <AvatarFallback className="bg-surface-muted text-muted-foreground text-[10px] font-medium">
+              <AvatarFallback className="bg-surface-muted text-muted-foreground text-3xs font-medium">
                 {initials(byId.get(id)?.fullName ?? "?")}
               </AvatarFallback>
             </Avatar>
@@ -88,7 +88,7 @@ export function HeaderActions({
           {more > 0 && (
             <span
               aria-hidden
-              className="bg-surface-muted text-muted-foreground border-content-surface -ml-1.5 flex size-7 items-center justify-center rounded-full border-2 font-mono text-[10px]"
+              className="bg-surface-muted text-muted-foreground border-content-surface text-3xs -ml-1.5 flex size-7 items-center justify-center rounded-full border-2 font-mono"
             >
               +{more}
             </span>
