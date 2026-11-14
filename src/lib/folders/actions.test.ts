@@ -440,8 +440,32 @@ describe("moveBoardToFolder into a shared folder", () => {
       { folder_id: F2, user_id: "m2" },
     ];
     const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
-    expect(r).toEqual({ ok: true, data: { needsConfirm: 2 } });
+    expect(r).toEqual({
+      ok: true,
+      data: { needsConfirm: 2, truncated: false },
+    });
     expect(calls.upserts).toHaveLength(0);
+  });
+
+  it("flags the member count as truncated when the read hit its cap", async () => {
+    state.folderMemberRows = Array.from({ length: 500 }, (_, i) => ({
+      folder_id: F2,
+      user_id: `m${i}`,
+    }));
+    const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
+    expect(r).toEqual({
+      ok: true,
+      data: { needsConfirm: 500, truncated: true },
+    });
+  });
+
+  it("does not pass a raw database error through on a move", async () => {
+    state.insertError = { message: 'relation "secret_table" exploded' };
+    const r = await moveBoardToFolder({ boardId: B, folderId: F2 });
+    expect(r).toEqual({
+      ok: false,
+      error: "Something went wrong. Please try again.",
+    });
   });
 
   it("moves once confirmed and invalidates every member's shared list", async () => {

@@ -36,14 +36,17 @@ function friendly(error: { message: string; code?: string }): string {
     return "A Mono gets access through its owner.";
   if (m.includes("invitation not found"))
     return "That invitation is no longer pending.";
-  if (error.code === "23505") return "That person already has access";
+  if (error.code === "23505" || m.includes("already has access"))
+    return "That person already has access";
   return GENERIC_ERROR;
 }
 
 /**
  * What a folder grant change makes stale for one person: their "Shared with
  * me" list (also the tag of the portfolio readable-boards cache) and their
- * folder-membership cache (sidebar guest filter).
+ * folder-membership cache (sidebar guest filter). foldersTag is deliberately
+ * NOT invalidated: the cached folder list holds only folders and placements,
+ * which a membership change does not touch.
  */
 function invalidateFor(userId: string): void {
   updateTag(sharedBoardsTag(userId));
@@ -96,6 +99,8 @@ export async function loadFolderAccess(
     data: {
       canManage,
       myUserId: user.id,
+      // True when the folder has more members than the list holds.
+      membersTruncated: (membersRes.data ?? []).length >= MEMBERS_LIMIT,
       members: (membersRes.data ?? []).map((r) => ({
         userId: r.user_id,
         fullName: byId.get(r.user_id)?.fullName ?? null,
@@ -154,8 +159,9 @@ export async function unshareFolder(input: unknown): Promise<ActionResult> {
  * shared directly (`kind: "shared"`). Any other address gets a pending folder
  * invitation plus a guest org invitation (both recorded by the RPC, which does
  * its own permission check on the caller's RLS client), then the standard
- * invite email; `emailSent` is false when the address already has an account
- * (Supabase sends nothing then) or delivery failed. Access starts when the
+ * invite email; `emailSent` is false only when delivery genuinely failed (an
+ * already-registered address counts as sent, so account existence is not
+ * revealed). Access starts when the
  * person signs in after a platform admin has approved the account.
  */
 export async function inviteToFolder(
@@ -182,16 +188,16 @@ export async function inviteToFolder(
   // The RPC succeeded, so the caller is allowed. Only now use the service role.
   const svc = createServiceClient();
   const { error: inviteErr } = await svc.auth.admin.inviteUserByEmail(email);
+  // "Already registered" counts as sent (they redeem on their next sign-in), so
+  // the result never reveals whether an address has an account. Only a genuine
+  // delivery failure reports `emailSent: false`.
   let emailSent = true;
-  if (inviteErr) {
+  if (inviteErr && !/already.*regist/i.test(inviteErr.message)) {
     emailSent = false;
-    // "Already registered" is expected: they redeem on their next sign-in.
-    if (!/already.*regist/i.test(inviteErr.message)) {
-      console.error("[inviteToFolder] invite email delivery failed", {
-        folderId,
-        error: inviteErr.message,
-      });
-    }
+    console.error("[inviteToFolder] invite email delivery failed", {
+      folderId,
+      error: inviteErr.message,
+    });
   }
 
   const [

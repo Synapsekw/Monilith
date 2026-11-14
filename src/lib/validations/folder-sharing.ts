@@ -16,6 +16,7 @@ export const inviteToFolderSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
+    .max(254, { message: "Enter a valid email address" })
     .email({ message: "Enter a valid email address" }),
   level,
 });

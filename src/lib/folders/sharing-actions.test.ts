@@ -9,13 +9,28 @@ const fromResult: { data: unknown; error: unknown } = {
   error: null,
 };
 const deleteEq = vi.fn();
+const membersResult: { data: unknown; error: unknown } = {
+  data: [],
+  error: null,
+};
+const roster = [
+  { userId: "u-me", fullName: "Me", email: "me@x.com", avatarUrl: null },
+  { userId: "u-a", fullName: "Ann", email: "ann@x.com", avatarUrl: "a.png" },
+  { userId: "u-b", fullName: "Bob", email: "bob@x.com", avatarUrl: null },
+];
+vi.mock("@/lib/org/queries-cached", () => ({
+  listOrgMembersCached: vi.fn(async () => roster),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     rpc: (...a: unknown[]) => rpc(...a),
     auth: { getUser: async () => ({ data: { user: { id: "me" } } }) },
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
-        eq: () => ({ maybeSingle: async () => fromResult }),
+        eq: () =>
+          table === "folder_members"
+            ? { order: () => ({ limit: async () => membersResult }) }
+            : { maybeSingle: async () => fromResult },
       }),
       delete: () => ({
         eq: (c1: string, v1: unknown) => ({
@@ -30,7 +45,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const inviteUserByEmail = vi.fn();
-const auditInsert = vi.fn(async () => ({ error: null }));
+const auditInsert = vi.fn(async (_row: unknown) => ({ error: null }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: vi.fn(() => ({
     auth: { admin: { inviteUserByEmail: (e: string) => inviteUserByEmail(e) } },
@@ -40,6 +55,7 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import {
   inviteToFolder,
+  loadFolderAccess,
   leaveFolder,
   revokeFolderInvitation,
   shareFolder,
@@ -56,6 +72,7 @@ beforeEach(() => {
   inviteUserByEmail.mockReset();
   auditInsert.mockClear();
   deleteEq.mockReset();
+  membersResult.data = [];
 });
 
 describe("shareFolder", () => {
@@ -152,22 +169,85 @@ describe("inviteToFolder", () => {
     expect(r).toEqual({ ok: true, data: { kind: "invited", emailSent: true } });
     expect(auditInsert).toHaveBeenCalledTimes(1);
   });
-  it("reports emailSent false when the address already has an account", async () => {
+  it("returns the identical result for an address with an account elsewhere and one with none", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
-    inviteUserByEmail.mockResolvedValue({
+    inviteUserByEmail.mockResolvedValueOnce({ error: null });
+    const none = await inviteToFolder({
+      folderId: F,
+      email: "new@x.com",
+      level: "viewer",
+    });
+    inviteUserByEmail.mockResolvedValueOnce({
       error: {
         message: "A user with this email address has already been registered",
       },
     });
-    const r = await inviteToFolder({
+    const elsewhere = await inviteToFolder({
       folderId: F,
       email: "old@x.com",
+      level: "viewer",
+    });
+    expect(elsewhere).toEqual(none);
+    expect(elsewhere).toEqual({
+      ok: true,
+      data: { kind: "invited", emailSent: true },
+    });
+  });
+  it("reports emailSent false on a genuine delivery error, still records the audit row", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    rpc.mockResolvedValue({ data: null, error: null });
+    inviteUserByEmail.mockResolvedValue({
+      error: { message: "SMTP provider timed out" },
+    });
+    const r = await inviteToFolder({
+      folderId: F,
+      email: "new@x.com",
       level: "viewer",
     });
     expect(r).toEqual({
       ok: true,
       data: { kind: "invited", emailSent: false },
     });
+    // The invitation was recorded by the RPC before the email was attempted.
+    expect(rpc).toHaveBeenCalledWith("invite_to_folder", expect.anything());
+    expect(auditInsert).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+  it("writes the audit row with actor, org, action and target", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    inviteUserByEmail.mockResolvedValue({ error: null });
+    await inviteToFolder({ folderId: F, email: "New@x.com", level: "editor" });
+    expect(auditInsert).toHaveBeenCalledWith({
+      org_id: "o1",
+      actor_id: "me",
+      actor_kind: "org",
+      action: "folder.invited",
+      target_email: "new@x.com",
+      metadata: { folderId: F, level: "editor" },
+    });
+  });
+  it("rejects an email over 254 characters without calling the database", async () => {
+    const r = await inviteToFolder({
+      folderId: F,
+      email: `${"a".repeat(250)}@x.com`,
+      level: "viewer",
+    });
+    expect(r).toEqual({ ok: false, error: "Enter a valid email address" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("maps the message from invite_to_folder for a current member to 'already has access'", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { message: "already has access", code: "23505" },
+    });
+    const r = await inviteToFolder({
+      folderId: F,
+      email: "ann@x.com",
+      level: "viewer",
+    });
+    expect(r).toEqual({ ok: false, error: "That person already has access" });
+    expect(inviteUserByEmail).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
   });
   it("sends no email and writes no audit row when the permission check fails", async () => {
     rpc.mockResolvedValue({
@@ -203,5 +283,120 @@ describe("leaveFolder", () => {
     expect(deleteEq).toHaveBeenCalledWith("folder_id", F, "user_id", "me");
     expect(updateTag).toHaveBeenCalledWith("shared-boards:user:me");
     expect(r.ok).toBe(true);
+  });
+  it("never invalidates the folders tag for a membership change", async () => {
+    await leaveFolder({ folderId: F });
+    for (const [tag] of updateTag.mock.calls)
+      expect(String(tag)).not.toMatch(/^folders:/);
+  });
+});
+
+describe("error mapping", () => {
+  const cases: [string, { message: string; code?: string }, string][] = [
+    [
+      "invalid email (22023)",
+      { message: "invalid email", code: "22023" },
+      "Enter a valid email address",
+    ],
+    [
+      "invitation not found (P0002)",
+      { message: "invitation not found", code: "P0002" },
+      "That invitation is no longer pending.",
+    ],
+    [
+      "target not in org",
+      { message: "target is not a member of this org", code: "42501" },
+      "That person isn't in your organization yet.",
+    ],
+    [
+      "a Mono target",
+      { message: "a Mono follows its owner", code: "42501" },
+      "A Mono gets access through its owner.",
+    ],
+    [
+      "not a manager",
+      { message: "not allowed to manage this folder", code: "42501" },
+      "Only the folder's creator or an admin can invite people",
+    ],
+    [
+      "unknown error never leaks the raw message",
+      { message: 'relation "folder_members" is locked by pid 4242' },
+      "Something went wrong. Please try again.",
+    ],
+  ];
+  it.each(cases)("%s", async (_name, error, copy) => {
+    rpc.mockResolvedValue({ data: null, error });
+    const r = await shareFolder({ folderId: F, userId: U, level: "viewer" });
+    expect(r).toEqual({ ok: false, error: copy });
+    const r2 = await revokeFolderInvitation({ folderId: F, invitationId: I });
+    expect(r2).toEqual({ ok: false, error: copy });
+  });
+});
+
+describe("loadFolderAccess", () => {
+  const states = [
+    { id: I, email: "pend@x.com", access_level: "viewer", state: "invited" },
+  ];
+  function wire(canManage: boolean) {
+    membersResult.data = [{ user_id: "u-a", access_level: "editor" }];
+    rpc.mockImplementation(async (fn: string) => {
+      if (fn === "can_manage_folder") return { data: canManage, error: null };
+      if (fn === "folder_invitation_states")
+        return { data: states, error: null };
+      return { data: null, error: null };
+    });
+  }
+
+  it("gives a manager invitations and candidates, and no emails in member entries", async () => {
+    wire(true);
+    const r = await loadFolderAccess({ folderId: F });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.canManage).toBe(true);
+    expect(r.data.invitations).toEqual([
+      { id: I, email: "pend@x.com", level: "viewer", state: "invited" },
+    ]);
+    expect(r.data.candidates.map((c) => c.userId).sort()).toEqual([
+      "u-b",
+      "u-me",
+    ]);
+    expect(r.data.members).toEqual([
+      { userId: "u-a", fullName: "Ann", avatarUrl: "a.png", level: "editor" },
+    ]);
+    expect(JSON.stringify(r.data.members)).not.toContain("@");
+    expect(JSON.stringify(r.data.candidates)).not.toContain("@");
+    expect(r.data.membersTruncated).toBe(false);
+  });
+
+  it("gives a non-manager no invitations and no candidates, and never asks for them", async () => {
+    wire(false);
+    const r = await loadFolderAccess({ folderId: F });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.canManage).toBe(false);
+    expect(r.data.invitations).toEqual([]);
+    expect(r.data.candidates).toEqual([]);
+    expect(rpc).not.toHaveBeenCalledWith(
+      "folder_invitation_states",
+      expect.anything(),
+    );
+  });
+
+  it("flags a member list cut at the read limit", async () => {
+    wire(true);
+    membersResult.data = Array.from({ length: 200 }, (_, i) => ({
+      user_id: `x${i}`,
+      access_level: "viewer",
+    }));
+    const r = await loadFolderAccess({ folderId: F });
+    expect(r.ok && r.data.membersTruncated).toBe(true);
+  });
+
+  it("reports a folder the caller cannot see as gone", async () => {
+    wire(false);
+    fromResult.data = null;
+    const r = await loadFolderAccess({ folderId: F });
+    fromResult.data = { id: "f1", org_id: "o1" };
+    expect(r).toEqual({ ok: false, error: "That folder no longer exists." });
   });
 });

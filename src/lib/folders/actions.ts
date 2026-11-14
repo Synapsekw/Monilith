@@ -14,6 +14,7 @@ import {
   moveBoardToFolderSchema,
   renameFolderSchema,
 } from "@/lib/validations/folders";
+import type { MoveConfirm } from "./sharing-types";
 import { resolveFolderTimeline, resolveFolderWorkload } from "./resolve";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
 import {
@@ -28,6 +29,23 @@ const DUPLICATE_NAME =
 const SHARED_FOLDER_MOVE =
   "Only the board's owner or an admin can move a board into or out of a shared folder.";
 
+const GENERIC_FOLDER_ERROR = "Something went wrong. Please try again.";
+/** Read cap on the members of the folders a placement change touches. */
+const MEMBER_ROWS_LIMIT = 500;
+
+/** Logs the raw database error server-side; the client only sees generic copy. */
+function genericFolderError(action: string, error: { message: string }) {
+  console.error(`[${action}] folder write failed`, { error: error.message });
+  return GENERIC_FOLDER_ERROR;
+}
+
+/** The shared-folder trigger gets its own copy; anything else stays generic. */
+function moveError(error: { message: string }) {
+  return error.message.includes("shared folder")
+    ? SHARED_FOLDER_MOVE
+    : genericFolderError("moveBoardToFolder", error);
+}
+
 type Db = Awaited<ReturnType<typeof createClient>>;
 
 /** Members of these folders. RLS client: only folders the caller can see answer. */
@@ -40,7 +58,7 @@ async function folderMemberRows(
     .from("folder_members")
     .select("folder_id, user_id")
     .in("folder_id", folderIds)
-    .limit(500);
+    .limit(MEMBER_ROWS_LIMIT);
   return data ?? [];
 }
 
@@ -151,7 +169,7 @@ export async function deleteFolder(input: {
     .eq("id", parsed.data.folderId)
     .select("id")
     .maybeSingle();
-  if (error) return fail(error.message);
+  if (error) return fail(genericFolderError("deleteFolder", error));
   if (!data) return fail(FOLDER_GONE_ERROR);
   updateTag(foldersTag(org.id));
   updateTag(dashboardsTag(org.id));
@@ -164,14 +182,19 @@ export async function deleteFolder(input: {
  * or unfile with null.
  *
  * Filing a board into a folder that has members gives those people access to
- * it, so the first call returns `needsConfirm` (the member count) and changes
- * nothing; the caller confirms and calls again with `confirmShared: true`.
+ * it, so the first call returns `needsConfirm` and changes nothing; the caller
+ * confirms and calls again with `confirmShared: true`.
+ *
+ * `needsConfirm` is the TOTAL number of members of the target folder, including
+ * the mover and people who can already read the board. Word it as "N people in
+ * this folder will have access", not "N new people". `truncated` is true when
+ * the member read hit its cap, so the real count may be higher.
  */
 export async function moveBoardToFolder(input: {
   boardId: string;
   folderId: string | null;
   confirmShared?: boolean;
-}): Promise<ActionResult<{ needsConfirm: number } | undefined>> {
+}): Promise<ActionResult<MoveConfirm | undefined>> {
   const parsed = moveBoardToFolderSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -193,7 +216,14 @@ export async function moveBoardToFolder(input: {
 
   if (folderId !== null && folderId !== currentFolderId && !confirmShared) {
     const incoming = memberRows.filter((r) => r.folder_id === folderId).length;
-    if (incoming > 0) return { ok: true, data: { needsConfirm: incoming } };
+    if (incoming > 0)
+      return {
+        ok: true,
+        data: {
+          needsConfirm: incoming,
+          truncated: memberRows.length >= MEMBER_ROWS_LIMIT,
+        },
+      };
   }
 
   if (folderId === null) {
@@ -202,12 +232,7 @@ export async function moveBoardToFolder(input: {
       .from("folder_boards")
       .delete()
       .eq("board_id", boardId);
-    if (error)
-      return fail(
-        error.message.includes("shared folder")
-          ? SHARED_FOLDER_MOVE
-          : error.message,
-      );
+    if (error) return fail(moveError(error));
   } else {
     const { data: last } = await supabase
       .from("folder_boards")
@@ -225,12 +250,7 @@ export async function moveBoardToFolder(input: {
     // A board outside the folder's workspace, or one you cannot read, is refused
     // by RLS (folder_accepts_board); moving into or out of a shared folder is
     // guarded by a trigger (owner or admin only).
-    if (error)
-      return fail(
-        error.message.includes("shared folder")
-          ? SHARED_FOLDER_MOVE
-          : error.message,
-      );
+    if (error) return fail(moveError(error));
   }
   updateTag(foldersTag(org.id));
   invalidateSharedLists(memberRows);
