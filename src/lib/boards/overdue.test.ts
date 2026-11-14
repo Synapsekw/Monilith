@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dueISO,
   firstStatusColumn,
   isItemComplete,
   isOverdue,
@@ -151,5 +152,17 @@ describe("isStatusValueComplete", () => {
     expect(isStatusValueComplete({ optionId: "o2" }, col)).toBe(
       isItemComplete("i1", [statusCol] as never, cells),
     );
+  });
+});
+
+describe("dueISO", () => {
+  it("reads end ?? date and rejects anything else", () => {
+    expect(dueISO({ date: "2026-07-02" })).toBe("2026-07-02");
+    expect(dueISO({ date: "2026-06-01", end: "2026-07-04" })).toBe(
+      "2026-07-04",
+    );
+    expect(dueISO({ date: 42 })).toBeNull();
+    expect(dueISO(null)).toBeNull();
+    expect(dueISO("2026-07-01")).toBeNull();
   });
 });
