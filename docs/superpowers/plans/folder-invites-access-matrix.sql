@@ -1,12 +1,18 @@
 -- Folder invites access matrix. Run AFTER the migration SQL, in the same
--- execute_sql call. The script opens its own transaction and ends with
--- ROLLBACK, so nothing it (or the migration before it) does is kept.
--- Output: one row per check, (name, value, note). A check passes when value = true.
+-- execute_sql call. There is deliberately no explicit BEGIN/ROLLBACK: an
+-- explicit BEGIN would leave the session in an aborted transaction, still
+-- holding table locks, if any statement failed part-way. Instead the whole
+-- call runs as one implicit transaction and the script ENDS BY RAISING AN
+-- EXCEPTION, so Postgres rolls back everything the migration and this script
+-- did. The results travel in that exception's message:
+--   ACCESS_MATRIX {"<check>": {"value": <value>, "note": <note>}, ...}
+-- An error that does not start with ACCESS_MATRIX means something failed
+-- earlier; it too rolls back.
+-- Output: one entry per check, (name, value, note). A check passes when value = true.
 -- Names starting with t_ are timings in ms; 'fixture' = NO_FIXTURE means no
 -- usable data. ALL_PASSED is true only when every check value is true; a check
 -- whose fixture could not be built is false with note 'fixture missing'. It prints only check names and booleans/numbers, never ids,
 -- names or emails.
-begin;
 
 create temp table matrix_results (name text primary key, value jsonb, note text);
 
@@ -537,6 +543,15 @@ select 'ALL_PASSED', to_jsonb(not exists (
   select 1 from matrix_results m
    where m.name !~ '^t_' and m.value is distinct from 'true'::jsonb));
 
-select name, value, note from matrix_results order by name;
-
-rollback;
+-- Report through the exception message; raising aborts and rolls back the
+-- implicit transaction, so nothing above persists.
+do $report$
+declare
+  v_out jsonb;
+begin
+  select coalesce(jsonb_object_agg(name, jsonb_build_object('value', value, 'note', note)), '{}'::jsonb)
+    into v_out
+  from matrix_results;
+  raise exception 'ACCESS_MATRIX %', v_out::text;
+end
+$report$;
