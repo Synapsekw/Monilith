@@ -49,11 +49,25 @@ begin
     limit 1;
   select w.id into strict v_ws from public.workspaces w where w.org_id = v_org
     order by w.id limit 1;
+  -- Fixture user: owner/admin/member (never guest/agent), not a Mono, no in-app
+  -- opt-out for mention/update_on_item (gate_notification_by_pref would silently
+  -- drop the fixture notifications), and the FEWEST real assigned items so real
+  -- data cannot crowd the fixtures out of a limit-50 page.
   select m.user_id into strict v_user from public.org_members m
-   where m.org_id = v_org and m.deactivated_at is null and m.role <> 'agent'
-   order by m.user_id limit 1;
+   where m.org_id = v_org and m.deactivated_at is null
+     and m.role in ('owner','admin','member')
+     and not exists (select 1 from public.profiles p where p.id = m.user_id and p.is_agent)
+     and not exists (select 1 from public.monos mo where mo.user_id = m.user_id)
+     and not exists (select 1 from public.notification_preferences np
+                      where np.user_id = m.user_id and np.channel = 'in_app'
+                        and np.kind in ('mention','update_on_item'))
+   order by (select count(*) from public.items_assigned_to(m.user_id)), m.user_id
+   limit 1;
   select m.user_id into strict v_other from public.org_members m
-   where m.org_id = v_org and m.deactivated_at is null and m.role <> 'agent'
+   where m.org_id = v_org and m.deactivated_at is null
+     and m.role in ('owner','admin','member')
+     and not exists (select 1 from public.profiles p where p.id = m.user_id and p.is_agent)
+     and not exists (select 1 from public.monos mo where mo.user_id = m.user_id)
      and m.user_id <> v_user order by m.user_id limit 1;
   select m.user_id, m.org_id into strict v_outsider, v_other_org
     from public.org_members m
@@ -160,27 +174,37 @@ begin
   delete from public.item_activities where item_id in (select id from fx);
   delete from public.item_updates where item_id in (select id from fx);
   delete from public.notifications where item_id in (select id from fx);
+  insert into public.item_updates (org_id, board_id, item_id, author_id, body, body_text, created_at)
+  select v_org, v_board, f.id, v_other, '{"type":"doc","content":[]}'::jsonb, 'ping',
+         '2026-11-13 12:00+00'::timestamptz
+  from fx f where f.name = 'chatty';
+  -- tg_log_update_activity just logged an `update_added` activity at now():
+  -- remove it so the comment is the ONLY recent signal on `chatty`.
+  delete from public.item_activities where item_id in (select id from fx);
   insert into public.item_activities (org_id, board_id, item_id, action, created_at)
   select v_org, v_board, f.id, 'cell_changed', a.ts::timestamptz
   from fx f join (values
     ('stalled','2026-11-01 12:00+00'),('stalled_old','2026-10-20 12:00+00'),
     ('fresh','2026-11-13 12:00+00'),('chatty','2026-11-01 12:00+00')
   ) as a(nm, ts) on a.nm = f.name;
-  insert into public.item_updates (org_id, board_id, item_id, author_id, body, created_at)
-  select v_org, v_board, f.id, v_other, 'ping', '2026-11-13 12:00+00'::timestamptz
-  from fx f where f.name = 'chatty';
   insert into public.notifications (org_id, board_id, item_id, recipient_id, kind, created_at, read_at)
-  select v_org, v_board, f.id, v_user, n.kind::public.notification_kind,
-         n.ts::timestamptz, n.rd::timestamptz
+  select v_org, v_board, f.id, v_user, nv.kind::public.notification_kind,
+         nv.ts::timestamptz, nv.rd::timestamptz
   from fx f join (values
     ('mentioned','mention','2026-11-12 10:00+00', null),
     ('mentioned_old','mention','2026-11-05 10:00+00', null),
     ('read_mention','mention','2026-11-12 10:00+00','2026-11-12 11:00+00'),
     ('mention_done','mention','2026-11-12 10:00+00', null)
-  ) as n(nm, kind, ts, rd) on n.nm = f.name;
+  ) as nv(nm, kind, ts, rd) on nv.nm = f.name;
   -- an `assigned` notification must NOT count as an unread reply
   insert into public.notifications (org_id, board_id, item_id, recipient_id, kind)
   select v_org, v_board, f.id, v_user, 'assigned' from fx f where f.name = 'later';
+  select count(*) into n from public.notifications where item_id in (select id from fx);
+  if n is distinct from 5 then
+    raise exception 'S1 fixture notifications were dropped by a trigger (preferences?): % of 5', n; end if;
+  select count(*) into n from public.item_activities where item_id in (select id from fx);
+  if n is distinct from 4 then
+    raise exception 'S2 expected exactly the 4 fixture activities, got %', n; end if;
 
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_user::text, 'role', 'authenticated')::text, true);
@@ -279,8 +303,15 @@ begin
     raise exception 'C1 overdue with today=11-10 must be tier 3: %', row_to_json(r); end if;
 
   -- Stall window: a huge p_stall_days un-stalls both stalled items.
+  -- cutoff 2026-10-05: stalled_old (10-20) is no longer stale -> zero tier-5 rows.
   select count(*) into n from public.get_focus_today(v_org, v_today, v_folder, 40, 50) where tier = 5;
-  if n is distinct from 1 then raise exception 'C2 p_stall_days=40 should leave only stalled_old: %', n; end if;
+  if n is distinct from 0 then raise exception 'C2a p_stall_days=40 should yield no tier-5 rows: %', n; end if;
+  -- cutoff 2026-10-25: only stalled_old (10-20) is stale; stalled (11-01) is not.
+  names := '{}';
+  for r in select * from public.get_focus_today(v_org, v_today, v_folder, 20, 50) where tier = 5 loop
+    names := names || r.item_name; end loop;
+  if names is distinct from array['stalled_old'] then
+    raise exception 'C2b p_stall_days=20 should leave only stalled_old: %', names; end if;
 
   -- Wrong org / random folder: zero rows.
   select count(*) into n from public.get_focus_today(v_other_org, v_today, v_folder);
@@ -289,6 +320,9 @@ begin
   if n is distinct from 0 then raise exception 'D2 random folder returned rows: %', n; end if;
 
   -- ===== E. unscoped (owner): fixture boards' rows, exact order =====
+  select count(*) into n from public.get_focus_today(v_org, v_today, null, 5, 50);
+  if n >= 50 then
+    raise exception 'E0 fixture user has >= 50 ranked real items; a limit-50 page could truncate fixtures'; end if;
   names := '{}';
   for r in select * from public.get_focus_today(v_org, v_today, null, 5, 50)
             where board_id in (v_board, v_board2) loop
