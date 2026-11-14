@@ -52,7 +52,7 @@ export function GanttRowItem({
   trackStyle,
   dayW,
   todayOffset,
-  dayCount,
+  todayInRange,
   readOnly = false,
   isExpanded = false,
   onToggleExpand,
@@ -80,7 +80,7 @@ export function GanttRowItem({
   /** Pixels per day at the active zoom (see PX_PER_DAY). */
   dayW: number;
   todayOffset: number;
-  dayCount: number;
+  todayInRange: boolean;
   /** When true the bar can't be dragged/resized (e.g. timestamp-sourced dates). */
   readOnly?: boolean;
   /** For a parent row (row.hasChildren): whether its sub-items are revealed. */
@@ -402,7 +402,7 @@ export function GanttRowItem({
         style={{ width: totalW, height: ROW_H, ...trackStyle }}
       >
         {/* Today hairline */}
-        {todayOffset >= 0 && todayOffset <= dayCount && (
+        {todayInRange && (
           <div
             data-today-line
             className="bg-destructive/30 absolute top-0 h-full w-px"

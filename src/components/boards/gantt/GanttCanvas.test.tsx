@@ -436,6 +436,10 @@ describe("GanttCanvas today line and weekends", () => {
     expect(screen.getByTestId("gantt-section-track").style.backgroundSize).toBe(
       "70px 100%",
     );
+    // 2026-11-01 is a Sunday: six days after Monday at 10px a day.
+    expect(
+      screen.getAllByTestId("gantt-track")[0]!.style.backgroundPosition,
+    ).toBe("-60px 0px");
     rerender(<GanttCanvas {...props({ zoom: "quarter" })} />);
     expect(screen.getAllByTestId("gantt-track")[0]!.style.backgroundSize).toBe(
       "",
@@ -511,6 +515,23 @@ describe("GanttCanvas opens on today", () => {
     scroller.scrollTo = scrollTo as unknown as typeof scroller.scrollTo;
     act(() => handleRef.current?.scrollToToday());
     expect(scrollTo).toHaveBeenCalledWith({ left: 1630, behavior: "smooth" });
+  });
+
+  it("scrolls instantly through the handle under prefers-reduced-motion", () => {
+    const handleRef = createRef<GanttCanvasHandle>();
+    const { container } = render(
+      <GanttCanvas {...props({ ...wide, handleRef })} />,
+    );
+    const scroller = scrollerOf(container);
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as typeof scroller.scrollTo;
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    try {
+      act(() => handleRef.current?.scrollToToday());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(scrollTo).toHaveBeenCalledWith({ left: 1630, behavior: "auto" });
   });
 
   it("falls back to an instant scroll where scrollTo is missing", () => {

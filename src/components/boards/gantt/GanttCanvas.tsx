@@ -293,9 +293,13 @@ export function GanttCanvas({
           dayW,
           Math.max(0, trackWidth),
         );
+        // An explicit smooth scroll ignores the global reduced-motion CSS rule.
+        const reduce =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         // Element.scrollTo is missing in some embedded webviews (and jsdom).
         if (typeof scroller.scrollTo === "function")
-          scroller.scrollTo({ left, behavior: "smooth" });
+          scroller.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
         else scroller.scrollLeft = left;
       },
     }),
@@ -371,7 +375,7 @@ export function GanttCanvas({
                   </div>
                 ))}
                 {/* Today line */}
-                {todayOffset >= 0 && todayOffset <= dayCount && (
+                {todayInRange && (
                   <div
                     className="bg-destructive/70 absolute top-0 z-10 h-full w-px"
                     style={{ left: todayOffset * dayW }}
@@ -408,7 +412,7 @@ export function GanttCanvas({
                         labelW={labelW}
                         dayW={dayW}
                         todayOffset={todayOffset}
-                        dayCount={dayCount}
+                        todayInRange={todayInRange}
                         trackStyle={trackStyle}
                         expanded={isExpanded?.(row.itemId) ?? true}
                         onToggle={onToggleExpand}
@@ -423,7 +427,7 @@ export function GanttCanvas({
                         trackStyle={trackStyle}
                         dayW={dayW}
                         todayOffset={todayOffset}
-                        dayCount={dayCount}
+                        todayInRange={todayInRange}
                         readOnly={!canEditItem(row.itemId)}
                         isExpanded={isExpanded?.(row.itemId) ?? false}
                         onToggleExpand={onToggleExpand}
@@ -523,7 +527,7 @@ function SectionBand({
   labelW,
   dayW,
   todayOffset,
-  dayCount,
+  todayInRange,
   trackStyle,
   expanded,
   onToggle,
@@ -533,7 +537,7 @@ function SectionBand({
   labelW: number;
   dayW: number;
   todayOffset: number;
-  dayCount: number;
+  todayInRange: boolean;
   trackStyle?: CSSProperties;
   expanded: boolean;
   onToggle?: (itemId: string) => void;
@@ -605,7 +609,7 @@ function SectionBand({
         className="relative shrink-0"
         style={{ width: totalW, height: ROW_H, ...trackStyle }}
       >
-        {todayOffset >= 0 && todayOffset <= dayCount && (
+        {todayInRange && (
           <div
             data-today-line
             className="bg-destructive/30 absolute top-0 h-full w-px"
