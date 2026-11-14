@@ -1964,6 +1964,64 @@ export type Database = {
           },
         ];
       };
+      folder_invitations: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at: string;
+          email: string;
+          folder_id: string;
+          id: string;
+          invited_by: string | null;
+          org_id: string;
+          org_invitation_id: string | null;
+          status: string;
+        };
+        Insert: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          email: string;
+          folder_id: string;
+          id?: string;
+          invited_by?: string | null;
+          org_id: string;
+          org_invitation_id?: string | null;
+          status?: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          email?: string;
+          folder_id?: string;
+          id?: string;
+          invited_by?: string | null;
+          org_id?: string;
+          org_invitation_id?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_invitations_folder_id_org_id_fkey";
+            columns: ["folder_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "folder_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folder_invitations_org_invitation_id_fkey";
+            columns: ["org_invitation_id"];
+            isOneToOne: false;
+            referencedRelation: "org_invitations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folder_layouts: {
         Row: {
           config: Json;
@@ -2005,6 +2063,48 @@ export type Database = {
           },
           {
             foreignKeyName: "folder_layouts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      folder_members: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at: string;
+          folder_id: string;
+          granted_by: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          folder_id: string;
+          granted_by?: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          folder_id?: string;
+          granted_by?: string | null;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_members_folder_id_org_id_fkey";
+            columns: ["folder_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "folder_members_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -4447,6 +4547,10 @@ export type Database = {
         Returns: string;
       };
       _embed_sweep_ping: { Args: never; Returns: undefined };
+      _folder_board_level: {
+        Args: { p_board_id: string; p_user_id: string };
+        Returns: Database["public"]["Enums"]["board_access"];
+      };
       _folder_item_flags: {
         Args: { p_folder_id: string };
         Returns: {
@@ -4503,6 +4607,14 @@ export type Database = {
       _reassign_authorship_target: {
         Args: { p_leaving: string; p_org_id: string };
         Returns: string;
+      };
+      _redeem_folder_invitations: {
+        Args: { p_email: string; p_org_id: string; p_uid: string };
+        Returns: undefined;
+      };
+      _sync_mono_board_row: {
+        Args: { p_board_id: string; p_owner: string };
+        Returns: undefined;
       };
       _timeline_boards_json: { Args: { p_board_ids: string[] }; Returns: Json };
       _timeline_items_json: { Args: { p_item_ids: string[] }; Returns: Json };
@@ -4629,6 +4741,7 @@ export type Database = {
       };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
+      auth_user_full_orgs: { Args: never; Returns: string[] };
       auth_user_orgs: { Args: never; Returns: string[] };
       automation_ai_apply: {
         Args: { p_action: Json; p_job: string };
@@ -4639,6 +4752,14 @@ export type Database = {
         Returns: string;
       };
       board_dependency_context: { Args: { p_board_id: string }; Returns: Json };
+      board_folder_grants: {
+        Args: { p_board_id: string };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          folder_name: string;
+          user_id: string;
+        }[];
+      };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
@@ -4653,7 +4774,9 @@ export type Database = {
         Args: { p_portfolio_id: string };
         Returns: boolean;
       };
+      can_manage_folder: { Args: { p_folder_id: string }; Returns: boolean };
       can_read_board: { Args: { p_board_id: string }; Returns: boolean };
+      can_see_folder: { Args: { p_folder_id: string }; Returns: boolean };
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
         Returns: {
@@ -5097,6 +5220,16 @@ export type Database = {
           overdue_count: number;
         }[];
       };
+      folder_has_members: { Args: { p_folder_id: string }; Returns: boolean };
+      folder_invitation_states: {
+        Args: { p_folder_id: string };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          email: string;
+          id: string;
+          state: string;
+        }[];
+      };
       folder_rollup: {
         Args: { p_folder_id: string };
         Returns: {
@@ -5265,11 +5398,21 @@ export type Database = {
         Args: { p_board_id: string; p_payload: Json };
         Returns: undefined;
       };
+      invite_to_folder: {
+        Args: {
+          p_email: string;
+          p_folder_id: string;
+          p_level: Database["public"]["Enums"]["board_access"];
+        };
+        Returns: string;
+      };
       is_board_member: { Args: { p_board_id: string }; Returns: boolean };
+      is_folder_member: { Args: { p_folder_id: string }; Returns: boolean };
       is_member_of: {
         Args: { p_org_id: string; p_user: string };
         Returns: boolean;
       };
+      is_org_guest: { Args: { p_org_id: string }; Returns: boolean };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
       is_org_member_of: {
         Args: { p_org_id: string; p_user_id: string };
@@ -5318,6 +5461,13 @@ export type Database = {
         }[];
       };
       mono_records_cleanup: { Args: { p_limit?: number }; Returns: number };
+      my_folder_board_levels: {
+        Args: { p_board_ids: string[] };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+        }[];
+      };
       my_pending_invitations: {
         Args: never;
         Returns: {
@@ -5526,6 +5676,7 @@ export type Database = {
       };
       restore_group: { Args: { p_group_id: string }; Returns: number };
       restore_item: { Args: { p_item_id: string }; Returns: number };
+      revoke_folder_invitation: { Args: { p_id: string }; Returns: undefined };
       save_board_view_prefs: {
         Args: { p_board_id: string; p_state: Json };
         Returns: undefined;
@@ -5605,6 +5756,14 @@ export type Database = {
         };
         Returns: undefined;
       };
+      share_folder: {
+        Args: {
+          p_folder_id: string;
+          p_level: Database["public"]["Enums"]["board_access"];
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
       start_timer: {
         Args: { p_column_id: string; p_item_id: string };
@@ -5630,6 +5789,10 @@ export type Database = {
       touch_board_visit: { Args: { p_board_id: string }; Returns: undefined };
       unshare_board: {
         Args: { p_board_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      unshare_folder: {
+        Args: { p_folder_id: string; p_user_id: string };
         Returns: undefined;
       };
       update_my_mono: {
