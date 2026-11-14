@@ -36,6 +36,8 @@ describe("date helpers", () => {
     expect(mondayOf("2026-09-15")).toBe("2026-09-14"); // a Tuesday
     expect(mondayOf("2026-09-14")).toBe("2026-09-14");
     expect(mondayOf("2026-09-20")).toBe("2026-09-14"); // a Sunday
+    expect(addDays("2026-12-28", 7)).toBe("2027-01-04");
+    expect(mondayOf("2027-01-01")).toBe("2026-12-28"); // a Friday
   });
 });
 
@@ -77,6 +79,13 @@ describe("kpiTrends", () => {
     expect(kpiTrends([wk("2026-09-14", 1, 0)], null, "2026-09-15", 5)).toEqual(
       {},
     );
+  });
+
+  it("has no current-week point when the burn rows end before today", () => {
+    const gap = [...rows.slice(0, 4), wk("2026-11-02", 2, 0, 0)];
+    const t = kpiTrends(gap, null, "2026-10-20", 20);
+    expect(t.overdue?.points).toEqual([0, 1, 2, 4]);
+    expect(t.dueThisWeek).toBeUndefined();
   });
 
   it("filters by stage and omits complete when the total is zero", () => {
@@ -190,6 +199,48 @@ describe("burnForecast", () => {
     );
   });
 
+  it("pluralises the imported suffix", () => {
+    const one = points.map((p) =>
+      p.weekStart === "2026-09-07" ? { ...p, importedDone: 1 } : p,
+    );
+    expect(forecastReading(burnForecast(one, 24)!)).toContain(
+      " 1 item arrived already done and is left out of the pace.",
+    );
+    const two = points.map((p) =>
+      p.weekStart === "2026-09-07" ? { ...p, importedDone: 2 } : p,
+    );
+    expect(forecastReading(burnForecast(two, 24)!)).toContain(
+      " 2 items arrived already done and are left out of the pace.",
+    );
+  });
+
+  it("does not say late when it finishes before the last planned date", () => {
+    const f = burnForecast(points, 16)!; // remaining 3 at pace 3: one week
+    expect(f.finishWeek).toBe("2026-09-21");
+    expect(f.weeksLate).toBe(0);
+    expect(forecastReading(f)).toBe(
+      "At 3 a week the folder finishes around Sep 21.",
+    );
+  });
+
+  it("needs two full past weeks before it forecasts", () => {
+    const first = (n: number) => points.slice(0, n);
+    expect(burnForecast(first(0), 24)).toBeNull();
+    for (const n of [1, 2]) {
+      const f = burnForecast(first(n), 24)!;
+      expect(f.insufficientHistory).toBe(true);
+      expect(f.line).toEqual([]);
+      expect(f.finishWeek).toBeNull();
+      expect(forecastReading(f)).toBe("Not enough history yet to forecast.");
+    }
+    // 3 past points: two full weeks (2, 2) -> mean 2
+    const three = burnForecast(first(3), 24)!;
+    expect(three.insufficientHistory).toBe(false);
+    expect(three.pace).toBe(2);
+    // 4 past points: three full weeks (2, 2, 4) -> mean 8/3
+    expect(burnForecast(first(4), 24)!.pace).toBeCloseTo(8 / 3);
+  });
+
   it("reports a zero pace instead of a date", () => {
     const flat = points.map((p) => ({
       ...p,
@@ -262,6 +313,25 @@ describe("loadGrid", () => {
     expect(g.rows[0]!.cells).toEqual([7, 0, 0, 3, 0, 0, 0]);
     expect(g.rows[1]!.cells).toEqual([0, 0, 0, 0, 0, 0, 4]);
     expect(g.max).toBe(7);
+  });
+
+  it("folds rows older than the window into the first column", () => {
+    const g = loadGrid(
+      [
+        ...rows,
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-06-01",
+          openDue: 6,
+        },
+      ],
+      boards,
+      { stageKey: null, boardId: null },
+      "2026-09-15",
+    );
+    expect(g.rows[0]!.cells).toEqual([13, 0, 0, 3, 0, 0, 0]);
+    expect(g.max).toBe(13);
   });
 
   it("applies the stage and board filters", () => {

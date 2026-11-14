@@ -147,6 +147,35 @@ describe("resolveFolderBurn", () => {
     });
   });
 
+  it("maps non-zero imported_done and overdue_open through", async () => {
+    const client = clientWith(async () => ({
+      data: [
+        {
+          stage_key: "build",
+          week_start: "2026-09-07",
+          planned: 4,
+          completed: 2,
+          imported_done: 3,
+          overdue_open: 5,
+        },
+      ],
+      error: null,
+    }));
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: true,
+      rows: [
+        {
+          stageKey: "build",
+          weekStart: "2026-09-07",
+          planned: 4,
+          completed: 2,
+          importedDone: 3,
+          overdueOpen: 5,
+        },
+      ],
+    });
+  });
+
   it("rejects a row with a missing/renamed column", async () => {
     const client = clientWith(async () => ({
       data: [{ stage_key: "build", week_start: "2026-09-07", planned: 4 }],

@@ -85,8 +85,11 @@ export function kpiTrends(
   let cur = -1;
   for (let i = 0; i < ws.length; i++) if (ws[i]!.weekStart <= todayISO) cur = i;
   if (cur < 1) return {};
+  // Only a row whose week contains today is the current week; when the burn
+  // rows stop earlier the trend ends at the last real week.
+  const inWeek = daysBetween(ws[cur]!.weekStart, todayISO) < 7;
   const past = ws.slice(Math.max(0, cur - (TREND_WEEKS - 1)), cur + 1);
-  const ahead = ws.slice(cur, cur + TREND_WEEKS);
+  const ahead = inWeek ? ws.slice(cur, cur + TREND_WEEKS) : [];
   const line = (points: number[]): Trend => ({
     kind: "line",
     points,
@@ -136,8 +139,8 @@ export function trendChange(
 }
 
 export type Forecast = {
-  /** Mean weekly completions over the four full weeks before the current one,
-   *  not counting items that arrived already done. */
+  /** Mean weekly completions over up to four full weeks before the current
+   *  one (at least two), not counting items that arrived already done. */
   pace: number;
   importedDone: number;
   remaining: number;
@@ -147,6 +150,9 @@ export type Forecast = {
   lastPlannedWeek: string | null;
   weeksLate: number | null;
   line: { weekStart: string; value: number }[];
+  /** True when fewer than two full weeks precede the current one; no pace,
+   *  date or line is produced then. */
+  insufficientHistory: boolean;
 };
 
 export function burnForecast(
@@ -166,8 +172,10 @@ export function burnForecast(
   const remaining = Math.max(0, total - here.completedCum);
   let lastPlannedWeek: string | null = null;
   for (const p of points) if (p.planned > 0) lastPlannedWeek = p.weekStart;
-  const finishWeek =
-    remaining === 0
+  const insufficientHistory = window.length < 2;
+  const finishWeek = insufficientHistory
+    ? null
+    : remaining === 0
       ? here.weekStart
       : pace > 0
         ? addDays(here.weekStart, Math.ceil(remaining / pace) * 7)
@@ -184,10 +192,13 @@ export function burnForecast(
     finishWeek,
     lastPlannedWeek,
     weeksLate,
-    line: points.slice(cur).map((p, i) => ({
-      weekStart: p.weekStart,
-      value: Math.min(total, Math.round(here.completedCum + pace * i)),
-    })),
+    line: insufficientHistory
+      ? []
+      : points.slice(cur).map((p, i) => ({
+          weekStart: p.weekStart,
+          value: Math.min(total, Math.round(here.completedCum + pace * i)),
+        })),
+    insufficientHistory,
   };
 }
 
@@ -201,9 +212,12 @@ function fmtDay(iso: string): string {
 
 export function forecastReading(f: Forecast): string {
   if (f.remaining === 0) return "Everything in scope is done.";
+  if (f.insufficientHistory) return "Not enough history yet to forecast.";
   const imported =
     f.importedDone > 0
-      ? ` ${f.importedDone} items arrived already done and are left out of the pace.`
+      ? f.importedDone === 1
+        ? " 1 item arrived already done and is left out of the pace."
+        : ` ${f.importedDone} items arrived already done and are left out of the pace.`
       : "";
   if (f.pace === 0 || f.finishWeek === null)
     return `No items completed in the last four weeks.${imported}`;
@@ -250,7 +264,8 @@ export function loadGrid(
   for (const r of rows) {
     if (f.boardId !== null && r.boardId !== f.boardId) continue;
     if (f.stageKey !== null && r.stageKey !== f.stageKey) continue;
-    const i = idx.get(r.weekStart);
+    // Older than the window folds into the first column; later is skipped.
+    const i = r.weekStart < weeks[0]!.weekStart ? 0 : idx.get(r.weekStart);
     if (i === undefined) continue;
     const cells = byBoard.get(r.boardId) ?? weeks.map(() => 0);
     cells[i] = (cells[i] ?? 0) + r.openDue;
