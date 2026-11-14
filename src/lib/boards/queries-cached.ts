@@ -1,8 +1,13 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
-import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
+import { boardsTag, folderMembersTag, sharedBoardsTag } from "@/lib/cache/tags";
+import { mergeSharedBoards } from "@/lib/boards/shared-merge";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
+
+// Bounds on the folder path (hot path: runs on ~every navigation).
+const FOLDER_MEMBERSHIPS_LIMIT = 500;
+const FOLDER_BOARDS_LIMIT = 500;
 
 /**
  * Cached `listMyBoards`. `userId` is read OUTSIDE this scope (in the shell server
@@ -37,39 +42,122 @@ export async function listMyBoardsCached(
 }
 
 /**
- * Cached `listSharedBoards` — boards shared WITH `userId` by someone else.
- * Explicit `user_id = userId` filter is the tenant boundary; owner names are
- * resolved in a second scoped read.
+ * Cached `listSharedBoards` — boards shared WITH `userId` by someone else:
+ * granted directly, or reached through a folder the user is a member of.
+ *
+ * The service client bypasses RLS, so this REPLICATES the boards read policy by
+ * hand and must be exactly as strict: ACTIVE membership of the board's org AND
+ * (creator OR board_members grant OR folder_members row on the board's folder).
+ * Creator boards are the user's own list, so they are left out here. `userId`
+ * comes from the server session (a cache key); the explicit `user_id` filters
+ * are the tenant boundary. A board reached both ways is listed once, at the
+ * higher level.
+ *
+ * Tags: `sharedBoardsTag` (board share/unshare, org removal) and
+ * `folderMembersTag` (folder share/unshare/invite/leave/move/delete).
  */
 export async function listSharedBoardsCached(
   userId: string,
 ): Promise<SharedBoardEntry[]> {
   "use cache";
   cacheLife("nav");
-  cacheTag(sharedBoardsTag(userId));
+  cacheTag(sharedBoardsTag(userId), folderMembersTag(userId));
 
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("board_members")
-    .select("access_level, boards!inner(id, name, position, created_by)")
-    .eq("user_id", userId)
-    .is("boards.archived_at", null)
-    .order("created_at", { ascending: true });
-  if (error || !data) return [];
-  const rows = data.filter((r) => r.boards && r.boards.created_by !== userId);
+  const [directRes, orgRes, folderRes] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select(
+        "access_level, boards!inner(id, name, position, created_by, org_id)",
+      )
+      .eq("user_id", userId)
+      .is("boards.archived_at", null)
+      .order("created_at", { ascending: true }),
+    // Active memberships only: a grant left behind after someone is removed
+    // from the org must show nothing (the service client bypasses the
+    // is_org_member check the SQL policy makes).
+    supabase
+      .from("org_members")
+      .select("org_id")
+      .eq("user_id", userId)
+      .is("deactivated_at", null),
+    supabase
+      .from("folder_members")
+      .select("folder_id, org_id, access_level")
+      .eq("user_id", userId)
+      .limit(FOLDER_MEMBERSHIPS_LIMIT),
+  ]);
+  if (directRes.error || !directRes.data) return [];
 
-  const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name")
-    .in("id", ownerIds);
+  const activeOrgs = new Set((orgRes.data ?? []).map((r) => r.org_id));
+  const folderGrants = new Map(
+    (folderRes.data ?? [])
+      .filter((r) => activeOrgs.has(r.org_id))
+      .map((r) => [r.folder_id, r] as const),
+  );
+
+  let folderRows: {
+    folder_id: string;
+    boards: {
+      id: string;
+      name: string;
+      position: number;
+      created_by: string;
+      org_id: string;
+    };
+  }[] = [];
+  if (folderGrants.size > 0) {
+    const { data } = await supabase
+      .from("folder_boards")
+      .select("folder_id, boards!inner(id, name, position, created_by, org_id)")
+      .in("folder_id", [...folderGrants.keys()])
+      .is("boards.archived_at", null)
+      .limit(FOLDER_BOARDS_LIMIT);
+    folderRows = (data ?? []).filter(
+      (r) =>
+        r.boards &&
+        r.boards.created_by !== userId &&
+        r.boards.org_id === folderGrants.get(r.folder_id)?.org_id,
+    );
+  }
+
+  const directRows = directRes.data.filter(
+    (r) =>
+      r.boards &&
+      r.boards.created_by !== userId &&
+      activeOrgs.has(r.boards.org_id),
+  );
+
+  const ownerIds = [
+    ...new Set([
+      ...directRows.map((r) => r.boards.created_by),
+      ...folderRows.map((r) => r.boards.created_by),
+    ]),
+  ];
+  const { data: profiles } =
+    ownerIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", ownerIds)
+      : { data: [] };
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
 
-  return rows.map((r) => ({
-    id: r.boards.id,
-    name: r.boards.name,
-    position: r.boards.position,
-    owner_name: nameById.get(r.boards.created_by) ?? null,
-    access_level: r.access_level,
-  }));
+  return mergeSharedBoards(
+    directRows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: r.access_level,
+    })),
+    folderRows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      // The filter above kept only rows whose folder has a grant.
+      access_level: folderGrants.get(r.folder_id)!.access_level,
+    })),
+  );
 }

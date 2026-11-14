@@ -123,6 +123,10 @@ export function SidebarNav({
   activeWorkspaceId = "",
   forceExpanded = false,
 }: {
+  /** The caller is an org guest (set by the loader). Carried for the follow-up
+   *  that hides Goals, Portfolios, Reports and Workload for guests; not read
+   *  here yet. Optional so every existing call site stays valid. */
+  isGuest?: boolean;
   orgs?: { id: string; name: string }[];
   activeOrgId?: string;
   boards: BoardListEntry[];

@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 import { fetchAllRows } from "@/lib/supabase/paginate";
+import { mergeSharedBoards } from "@/lib/boards/shared-merge";
 import {
   higherAccess,
   listMyFolderBoardLevels,
@@ -110,7 +111,11 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
   }));
 }
 
-/** Boards shared WITH the current user by someone else. */
+/**
+ * Boards shared WITH the current user by someone else: granted directly, or
+ * reached through a folder they are a member of. Runs on the caller's RLS
+ * client, so the boards policy already enforces active org membership.
+ */
 export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
   const user = await getUser();
   if (!user) return [];
@@ -128,20 +133,60 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
     (r) => r.boards && r.boards.created_by !== user.id,
   );
 
-  const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
+  // Folder path. A failed read here degrades to "direct grants only" rather
+  // than failing a list that is otherwise correct.
+  const { data: memberships } = await supabase
+    .from("folder_members")
+    .select("folder_id, access_level")
+    .eq("user_id", user.id)
+    .limit(MY_BOARDS_LIMIT);
+  const levelByFolder = new Map(
+    (memberships ?? []).map((r) => [r.folder_id, r.access_level] as const),
+  );
+  let folderRows: {
+    folder_id: string;
+    boards: { id: string; name: string; position: number; created_by: string };
+  }[] = [];
+  if (levelByFolder.size > 0) {
+    const { data: placed } = await supabase
+      .from("folder_boards")
+      .select("folder_id, boards!inner(id, name, position, created_by)")
+      .in("folder_id", [...levelByFolder.keys()])
+      .is("boards.archived_at", null)
+      .limit(MY_BOARDS_LIMIT);
+    folderRows = (placed ?? []).filter(
+      (r) => r.boards && r.boards.created_by !== user.id,
+    );
+  }
+
+  const ownerIds = [
+    ...new Set([
+      ...rows.map((r) => r.boards.created_by),
+      ...folderRows.map((r) => r.boards.created_by),
+    ]),
+  ];
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, full_name")
     .in("id", ownerIds);
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
 
-  return rows.map((r) => ({
-    id: r.boards.id,
-    name: r.boards.name,
-    position: r.boards.position,
-    owner_name: nameById.get(r.boards.created_by) ?? null,
-    access_level: r.access_level,
-  }));
+  return mergeSharedBoards(
+    rows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: r.access_level,
+    })),
+    folderRows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: levelByFolder.get(r.folder_id)!,
+    })),
+  );
 }
 
 /**

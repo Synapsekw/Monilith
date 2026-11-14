@@ -54,6 +54,12 @@ vi.mock("@/lib/folders/queries-cached", () => ({
     placements: [{ boardId: "b1", folderId: "f1", position: 0 }],
   })),
 }));
+vi.mock("@/lib/folders/access-cached", () => ({
+  getFolderAccessForUserCached: vi.fn(async () => ({
+    isGuest: false,
+    folderIds: [],
+  })),
+}));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
 }));
@@ -64,6 +70,7 @@ vi.mock("@/lib/workspaces/active", () => ({
 }));
 
 import { listFoldersCached } from "@/lib/folders/queries-cached";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
 import { useUIStore } from "@/stores/ui";
 
 beforeEach(() => {
@@ -99,6 +106,48 @@ describe("SidebarNavData", () => {
       { id: "org2", name: "Globex" },
     ]);
     expect(data.activeOrgId).toBe("org2");
+  });
+
+  it("exposes the caller's guest flag and gives a guest only their folders", async () => {
+    vi.mocked(getFolderAccessForUserCached).mockResolvedValueOnce({
+      isGuest: true,
+      folderIds: [],
+    });
+    const { getSidebarNavData } = await import("./sidebar-nav-data");
+    const data = await getSidebarNavData();
+    expect(data.isGuest).toBe(true);
+    expect(data.folders).toEqual([]);
+    expect(data.placements).toEqual([]);
+  });
+
+  it("keeps a member's folders and exposes isGuest false", async () => {
+    const { getSidebarNavData } = await import("./sidebar-nav-data");
+    const data = await getSidebarNavData();
+    expect(data.isGuest).toBe(false);
+    expect(data.folders?.map((f) => f.id)).toEqual(["f1"]);
+    expect(data.placements?.map((p) => p.boardId)).toEqual(["b1"]);
+    expect(getFolderAccessForUserCached).toHaveBeenCalledWith("u1", "org2");
+  });
+
+  it("drops the placement of a board the caller cannot read", async () => {
+    vi.mocked(listFoldersCached).mockResolvedValueOnce({
+      folders: [
+        {
+          id: "f1",
+          name: "Client work",
+          workspaceId: "w1",
+          orgId: "org2",
+          position: 0,
+        },
+      ],
+      placements: [
+        { boardId: "b1", folderId: "f1", position: 0 },
+        { boardId: "not-mine", folderId: "f1", position: 1 },
+      ],
+    });
+    const { getSidebarNavData } = await import("./sidebar-nav-data");
+    const data = await getSidebarNavData();
+    expect(data.placements?.map((p) => p.boardId)).toEqual(["b1"]);
   });
 
   it("omits the folder props entirely when the folders read fails", async () => {
