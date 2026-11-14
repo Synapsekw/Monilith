@@ -423,3 +423,69 @@ describe("BoardHeader", () => {
     expect(screen.getByText("AL")).toBeInTheDocument();
   });
 });
+
+describe("BoardHeader — Fit all columns", () => {
+  it("offers it to editors when the Table view provides the handler, and calls it once", async () => {
+    const onFit = vi.fn();
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="editor"
+        onFitAllColumns={onFit}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Fit all columns" }),
+    );
+    expect(onFit).toHaveBeenCalledTimes(1);
+  });
+
+  it("is absent in views that pass no handler (Kanban, Calendar, Gantt)", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="editor"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Automations" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Fit all columns" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("is hidden from viewers even if a handler is passed", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="viewer"
+        onFitAllColumns={vi.fn()}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Automations" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Fit all columns" }),
+    ).not.toBeInTheDocument();
+  });
+});

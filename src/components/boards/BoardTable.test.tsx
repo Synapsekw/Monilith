@@ -61,6 +61,8 @@ const archiveGroup = vi.fn();
 const archiveItem = vi.fn();
 const reorderItem = vi.fn();
 const updateColumnSettings = vi.fn();
+const resizeColumn = vi.fn();
+const resetColumnWidths = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   createGroup: (...a: unknown[]) => createGroup(...a),
   updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
@@ -71,6 +73,8 @@ vi.mock("@/lib/boards/actions", () => ({
   archiveItem: (...a: unknown[]) => archiveItem(...a),
   reorderItem: (...a: unknown[]) => reorderItem(...a),
   updateColumnSettings: (...a: unknown[]) => updateColumnSettings(...a),
+  resizeColumn: (...a: unknown[]) => resizeColumn(...a),
+  resetColumnWidths: (...a: unknown[]) => resetColumnWidths(...a),
 }));
 
 // dependency-actions is a server module pulled in transitively by
@@ -94,7 +98,19 @@ vi.mock("@/lib/collaboration/actions", () => ({
 // BoardHeader pulls in ViewSwitcher + AutomationsDialog (router + Server
 // Actions) that are out of scope here; stub it to a placeholder.
 vi.mock("./BoardHeader", () => ({
-  BoardHeader: () => <div data-testid="board-header" />,
+  BoardHeader: ({ onFitAllColumns }: { onFitAllColumns?: () => void }) => (
+    <div data-testid="board-header">
+      {onFitAllColumns ? (
+        <button
+          type="button"
+          data-testid="board-header-fit"
+          onClick={onFitAllColumns}
+        >
+          Fit all columns
+        </button>
+      ) : null}
+    </div>
+  ),
 }));
 
 // BoardTable now reads filter/sort/search state from the URL via
@@ -188,6 +204,8 @@ beforeEach(() => {
   archiveItem.mockReset();
   reorderItem.mockReset();
   updateColumnSettings.mockReset();
+  resizeColumn.mockReset();
+  resetColumnWidths.mockReset();
   sensorsSentinel = null;
   dndContextProps.length = 0;
 });
@@ -2002,5 +2020,46 @@ describe("BoardTable density", () => {
     const cell = screen.getByLabelText("Item 1 Status");
     expect(cell.className).toContain("px-2");
     expect(cell.className).not.toContain("px-4");
+  });
+});
+
+describe("BoardTable column fit", () => {
+  it("double-clicking a column's resize handle clears its saved width", async () => {
+    resizeColumn.mockResolvedValue({ ok: true, data: undefined });
+    renderBoardWithColumns();
+    fireEvent.doubleClick(
+      screen.getByRole("separator", { name: "Resize Status" }),
+    );
+    await waitFor(() =>
+      expect(resizeColumn).toHaveBeenCalledWith({
+        columnId: "c_status",
+        width: null,
+      }),
+    );
+  });
+
+  it("Fit all columns clears the board's widths through one action", async () => {
+    resetColumnWidths.mockResolvedValue({ ok: true, data: undefined });
+    renderBoardWithColumns();
+    fireEvent.click(screen.getByTestId("board-header-fit"));
+    await waitFor(() =>
+      expect(resetColumnWidths).toHaveBeenCalledWith({ boardId: "b1" }),
+    );
+    expect(resetColumnWidths).toHaveBeenCalledTimes(1);
+    expect(resizeColumn).not.toHaveBeenCalled();
+  });
+
+  it("does not hand viewers the Fit all columns handler", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable
+          payload={payloadWithColumns()}
+          selectedViewId="v1"
+          access="viewer"
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByTestId("board-header-fit")).toBeNull();
   });
 });

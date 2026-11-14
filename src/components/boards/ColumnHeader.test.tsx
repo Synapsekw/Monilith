@@ -365,12 +365,41 @@ describe("ColumnHeader — resize is frame-throttled", () => {
     expect(onResize).toHaveBeenCalledTimes(calls);
   });
 
-  it("a click on the handle without a move sends no live update", () => {
+  it("a press on the handle without a move is not a resize: nothing live, nothing persisted", () => {
     const { onResize, onResizeEnd, handle } = setup();
     fireEvent.pointerDown(handle, { clientX: 100 });
     release();
     act(() => void vi.advanceTimersToNextFrame());
     expect(onResize).not.toHaveBeenCalled();
-    expect(onResizeEnd).toHaveBeenCalledWith(180);
+    expect(onResizeEnd).not.toHaveBeenCalled();
+  });
+});
+
+describe("ColumnHeader — double-click to fit", () => {
+  it("asks to clear the saved width, and the two presses of the double-click persist nothing", () => {
+    const onAutoFit = vi.fn();
+    const onResizeEnd = vi.fn();
+    render(
+      <ColumnHeader
+        column={col({ width: 300 })}
+        width={300}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={onResizeEnd}
+        onAutoFit={onAutoFit}
+      />,
+    );
+    const handle = screen.getByRole("separator", { name: "Resize Notes" });
+    // A real double-click is two press/release pairs, then `dblclick`.
+    for (let i = 0; i < 2; i++) {
+      fireEvent.pointerDown(handle, { clientX: 100 });
+      act(() => {
+        window.dispatchEvent(new MouseEvent("pointerup"));
+      });
+    }
+    fireEvent.doubleClick(handle);
+    expect(onAutoFit).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd).not.toHaveBeenCalled();
   });
 });

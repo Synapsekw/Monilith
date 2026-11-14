@@ -11,6 +11,8 @@ import {
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
+  gridTemplate,
+  resolveColumnWidth,
 } from "./shared";
 
 function emptyCache(): BoardCache {
@@ -267,5 +269,35 @@ describe("Quiet Grid geometry", () => {
       expect(buildNameMeasureFont("")).toBe(NAME_MEASURE_FONT);
       expect(buildNameMeasureFont("   ")).toBe(NAME_MEASURE_FONT);
     });
+  });
+});
+
+describe("column widths: live → saved → auto-fit → 180", () => {
+  const column = (id: string, width: number | null) => ({ id, width });
+
+  it("prefers the live drag width, then the saved width, then the fitted width", () => {
+    expect(resolveColumnWidth(column("a", 240), { a: 310 }, { a: 96 })).toBe(
+      310,
+    );
+    expect(resolveColumnWidth(column("a", 240), {}, { a: 96 })).toBe(240);
+    expect(resolveColumnWidth(column("a", null), {}, { a: 96 })).toBe(96);
+  });
+
+  it("falls back to 180 before hydration, when nothing has been fitted", () => {
+    expect(resolveColumnWidth(column("a", null), {}, {})).toBe(180);
+    expect(resolveColumnWidth(column("a", null), {})).toBe(180);
+  });
+
+  it("builds the grid template from the same resolution", () => {
+    const columns = [column("a", null), column("b", 240), column("c", null)];
+    expect(gridTemplate(columns, { c: 200 }, 320, { a: 96, c: 120 })).toBe(
+      "320px 96px 240px 200px 160px 176px 44px",
+    );
+  });
+
+  it("keeps every unsaved column at 180 when no fitted widths are passed", () => {
+    expect(gridTemplate([column("a", null)], {}, 320)).toBe(
+      "320px 180px 160px 176px 44px",
+    );
   });
 });

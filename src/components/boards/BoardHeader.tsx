@@ -7,6 +7,7 @@ import {
   Eye,
   FileText,
   MoreHorizontal,
+  MoveHorizontal,
   Trash2,
   Upload,
   UserPlus,
@@ -120,6 +121,7 @@ export function BoardHeader({
   grants = EMPTY,
   currentUserId = "",
   filterable = false,
+  onFitAllColumns,
 }: {
   boardId: string;
   boardName: string;
@@ -137,6 +139,9 @@ export function BoardHeader({
   currentUserId?: string;
   /** Show the filter/sort/search toolbar. Only the Table + Kanban views apply it. */
   filterable?: boolean;
+  /** Table view only: clear every saved column width (and the Name width) so
+   *  all columns fit their content. Absent in the other views. */
+  onFitAllColumns?: () => void;
 }) {
   const { renameBoard } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
@@ -328,6 +333,11 @@ export function BoardHeader({
               {!isViewer ? (
                 <DropdownMenuItem onSelect={() => setImportOpen(true)}>
                   <Upload className="size-3.5" /> Import
+                </DropdownMenuItem>
+              ) : null}
+              {!isViewer && onFitAllColumns ? (
+                <DropdownMenuItem onSelect={() => onFitAllColumns()}>
+                  <MoveHorizontal className="size-3.5" /> Fit all columns
                 </DropdownMenuItem>
               ) : null}
               {!isViewer ? (

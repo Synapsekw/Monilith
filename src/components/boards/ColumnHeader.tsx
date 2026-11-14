@@ -59,6 +59,7 @@ export function ColumnHeader({
   onEditOptions,
   onEditCurrency,
   onSmartFill,
+  onAutoFit,
   reorder,
 }: {
   column: CacheColumn;
@@ -70,6 +71,7 @@ export function ColumnHeader({
   onEditOptions?: () => void; // open the option editor (status/dropdown only)
   onEditCurrency?: () => void; // open the currency picker (currency kind only)
   onSmartFill?: () => void; // open the Smart Fill dialog (text columns only)
+  onAutoFit?: () => void; // double-click the resize handle: clear the saved width
   reorder?: ColumnReorder; // drag + move-left/right affordances (optional)
 }) {
   const [editing, setEditing] = useState(false);
@@ -100,11 +102,16 @@ export function ColumnHeader({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      // The last move may still be waiting on its frame: drop it and apply the
-      // final width synchronously so the release never lands on a stale one.
+      // The last move may still be waiting on its frame: drop it.
       cancelThrottledResize();
-      if (moved) onResize(last);
-      onResizeEnd(last); // persist the final width
+      // A press without a move is not a resize. Persisting here would pin an
+      // auto-fitted column at whatever width it happened to have (and an
+      // auto-fit width under 80px would be rejected by the server), and each
+      // press of a double-click would save a width just before the
+      // double-click clears it.
+      if (!moved) return;
+      onResize(last); // apply the final width synchronously
+      onResizeEnd(last); // persist it
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -223,6 +230,8 @@ export function ColumnHeader({
         aria-orientation="vertical"
         aria-label={`Resize ${column.name}`}
         onPointerDown={onPointerDown}
+        onDoubleClick={onAutoFit}
+        title="Drag to resize. Double-click to fit the content."
         className="hover:before:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-transparent pointer-coarse:-right-5 pointer-coarse:w-11"
       />
 

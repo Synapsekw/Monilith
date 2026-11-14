@@ -8,6 +8,7 @@ import {
   type CacheCellValue,
   type CacheColumn,
 } from "@/lib/boards/cache";
+import { COLUMN_FIT_DEFAULT } from "@/lib/boards/fit-column-width";
 import type { Column } from "@/lib/boards/queries";
 import { type RelationLink } from "@/lib/boards/relations";
 import type { AggregationId, ColumnKind } from "@/lib/validations/boards";
@@ -261,20 +262,48 @@ export function buildNameMeasureFont(fontInterVar: string): string {
   return `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FONT_SIZE} ${family}, ${NAME_MEASURE_FONT_FALLBACK_STACK}`;
 }
 
-export const VALUE_COL_WIDTH = 180;
+/** Width of a value column that has neither a saved nor a fitted width yet. */
+export const VALUE_COL_WIDTH = COLUMN_FIT_DEFAULT;
 const ADD_COL_WIDTH = 44;
 
-const CREATED_BY_WIDTH = 180;
-const CREATED_AT_WIDTH = 180;
+// The two virtual creation-metadata columns are fixed: an avatar plus a
+// truncating name, and "Nov 14, 2026, 10:32 AM" in the 12px mono face.
+const CREATED_BY_WIDTH = 160;
+const CREATED_AT_WIDTH = 176;
+
+const NO_AUTO_FIT: Record<string, number> = {};
+
+/**
+ * The width a value column renders at, in priority order:
+ *   1. the live width of a drag in progress,
+ *   2. the width the user saved by dragging (`columns.width`),
+ *   3. the auto-fitted width (no saved width = fit the content, exactly like
+ *      the Name column - see table/use-column-auto-fit),
+ *   4. 180, before hydration, when nothing has been measured yet.
+ * The header and every row must resolve through this one function.
+ */
+export function resolveColumnWidth(
+  column: { id: string; width: number | null },
+  liveWidths: Record<string, number>,
+  autoFitWidths: Record<string, number> = NO_AUTO_FIT,
+): number {
+  return (
+    liveWidths[column.id] ??
+    column.width ??
+    autoFitWidths[column.id] ??
+    VALUE_COL_WIDTH
+  );
+}
 
 /** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
 export function gridTemplate(
   columns: { id: string; width: number | null }[],
   liveWidths: Record<string, number>,
   nameWidth: number,
+  autoFitWidths: Record<string, number> = NO_AUTO_FIT,
 ): string {
   const tracks = columns
-    .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
+    .map((c) => `${resolveColumnWidth(c, liveWidths, autoFitWidths)}px`)
     .join(" ");
   return `${nameWidth}px ${tracks} ${CREATED_BY_WIDTH}px ${CREATED_AT_WIDTH}px ${ADD_COL_WIDTH}px`;
 }
@@ -319,11 +348,13 @@ export type GroupSummaryControls = {
 export type ColumnHeaderControls = {
   nameWidth: number;
   liveWidths: Record<string, number>;
+  autoFitWidths: Record<string, number>;
   setLiveWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   setLiveNameWidth: (w: number | null) => void;
   renameColumn: (id: string, name: string) => void;
   deleteColumn: (id: string) => void;
-  resizeColumn: (id: string, w: number) => void;
+  /** `null` clears the saved width: the column goes back to auto-fit. */
+  resizeColumn: (id: string, w: number | null) => void;
   reorderColumn: (id: string, position: number) => void;
   resizeNameColumn: (w: number | null) => void;
   onAddColumn: (kind: ColumnKind) => void;

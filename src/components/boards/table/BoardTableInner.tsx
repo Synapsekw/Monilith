@@ -75,6 +75,7 @@ import {
 } from "@/lib/boards/board-filter";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useHydrated } from "@/lib/hooks/use-hydrated";
+import { useColumnAutoFit } from "./use-column-auto-fit";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
@@ -514,9 +515,19 @@ export function BoardTableInner({
   // has to land in one go across every grid-row surface — the group header row,
   // the item/subitem rows, the summary rows AND AddItemRow (owned by the
   // optimistic-add work) — all of which read `template`/`nameWidth` today.
+  // Value columns with no saved width fit their content, like the Name column
+  // above. Empty until hydration, so the server and the first client render
+  // agree on 180px tracks.
+  const autoFitWidths = useColumnAutoFit({
+    columns,
+    cellValues,
+    itemCount: items.length,
+    members,
+    enabled: hydrated,
+  });
   const template = useMemo(
-    () => gridTemplate(columns, liveWidths, nameWidth),
-    [columns, liveWidths, nameWidth],
+    () => gridTemplate(columns, liveWidths, nameWidth, autoFitWidths),
+    [columns, liveWidths, nameWidth, autoFitWidths],
   );
 
   // Board Total scope — stable so SummaryRow's `perColumn` memo survives
@@ -566,6 +577,7 @@ export function BoardTableInner({
     () => ({
       nameWidth,
       liveWidths,
+      autoFitWidths,
       setLiveWidths,
       setLiveNameWidth,
       renameColumn: m.renameColumn,
@@ -591,8 +603,17 @@ export function BoardTableInner({
       onEditCurrency: (c) => setCurrencyFor(c),
       onSmartFill: (c) => setSmartFillFor(c),
     }),
-    [nameWidth, liveWidths, m],
+    [nameWidth, liveWidths, autoFitWidths, m],
   );
+
+  // "Fit all columns" (board menu): one Server Action clears every saved
+  // column width and the saved Name width; the live drag widths are dropped
+  // here so nothing masks the result. No revalidation, no refetch.
+  const fitAllColumns = useCallback(() => {
+    setLiveWidths({});
+    setLiveNameWidth(null);
+    m.resetColumnWidths();
+  }, [m]);
 
   // Id-keyed group actions, built once for the whole board: the per-group
   // closures these replace were rebuilt every render and defeated
@@ -803,6 +824,7 @@ export function BoardTableInner({
         grants={grants}
         currentUserId={currentUserId}
         filterable
+        onFitAllColumns={canEdit ? fitAllColumns : undefined}
       />
 
       {columnError ? (
