@@ -98,7 +98,7 @@ describe("AttentionPanel grouped", () => {
     fireEvent.click(screen.getByRole("button", { name: /Big/ }));
     const note = screen.getByTestId("attention-cut");
     expect(note.textContent).toBe(
-      "Showing 20 of 140 overdue. Open the board for all.",
+      "Showing 20 of at least 140. Open the board for all.",
     );
     expect(
       within(note).getByRole("link", { name: "Open the board for all." }),
@@ -131,8 +131,33 @@ describe("AttentionPanel grouped", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Ops/ }));
     expect(screen.getByTestId("attention-cut").textContent).toBe(
-      "Showing 5 of 12 blocked. Open the board for all.",
+      "Showing 7 of at least 12. Open the board for all.",
     );
+  });
+
+  it("shows no notice for an item that is both overdue and blocked", () => {
+    // One item counted under two reasons: overdue 1 and blocked 1, but a single
+    // row is listed. A per-reason comparison would call the blocked list cut.
+    render(
+      <AttentionPanel
+        kicker="06"
+        attention={fx.attention}
+        caption={null}
+        groups={[
+          {
+            ...base,
+            boardId: "b6",
+            boardName: "Overlap",
+            overdue: 1,
+            blocked: 1,
+            items: [row(1, "b6", "overdue")],
+          },
+        ]}
+        onRetry={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Overlap/ }));
+    expect(screen.queryByTestId("attention-cut")).toBeNull();
   });
 
   it("shows no notice when every counted item is listed", () => {

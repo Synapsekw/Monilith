@@ -4,6 +4,16 @@ import { PRESETS, PRESET_KEYS } from "./presets";
 import { canvasSections, layoutNeedsBurn, resolveLayout } from "./layout";
 
 describe("presets", () => {
+  it("gives the crm and support presets the people section and no load map", () => {
+    for (const key of ["crm", "support"] as const) {
+      const panels = canvasSections(PRESETS[key], "overview").map((s) =>
+        s.type === "builtin" ? s.panel : "widget",
+      );
+      expect(panels).toContain("people");
+      expect(panels).not.toContain("load");
+    }
+  });
+
   it("every preset is a valid config", () => {
     for (const key of PRESET_KEYS)
       expect(folderLayoutConfigSchema.safeParse(PRESETS[key]).success).toBe(
@@ -11,14 +21,16 @@ describe("presets", () => {
       );
   });
 
-  it("the project preset is today's layout: six KPIs and all six panels", () => {
+  it("the project preset is the tower layout", () => {
     const sections = canvasSections(PRESETS.project, "overview");
     expect(
       sections.map((s) => (s.type === "builtin" ? s.panel : "widget")),
     ).toEqual([
       "kpis",
       "burn",
+      "load",
       "boardStatus",
+      "people",
       "attention",
       "intelligence",
       "milestones",

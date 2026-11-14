@@ -20,6 +20,8 @@ export const BUILTIN_PANELS = [
   "attention",
   "intelligence",
   "milestones",
+  "load",
+  "people",
 ] as const;
 export const builtinPanelSchema = z.enum(BUILTIN_PANELS);
 export type BuiltinPanel = z.infer<typeof builtinPanelSchema>;

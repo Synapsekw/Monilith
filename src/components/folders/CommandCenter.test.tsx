@@ -47,6 +47,13 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
 vi.mock("@/components/folders/tabs/Timeline", async () => ({
   TimelineTab: (await import("./tabs/TimelineInner")).TimelineInner,
 }));
+vi.mock("@/components/folders/panels/PeoplePanel", () => ({
+  PeoplePanel: (p: { stage: string | null; onSeeAll?: () => void }) => (
+    <button type="button" data-testid="people-panel" onClick={p.onSeeAll}>
+      people
+    </button>
+  ),
+}));
 vi.mock("@/lib/folders/layout-actions", () => ({
   saveFolderLayout: vi.fn(),
 }));
@@ -82,6 +89,18 @@ describe("CommandCenter", () => {
     routerPush.mockClear();
     routerRefresh.mockClear();
     toastError.mockClear();
+  });
+
+  it("opens the People tab from the overview's people section with no navigation", () => {
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(screen.getByTestId("people-panel"));
+    // The search params are mocked, so the proof is the URL write that drives
+    // the real tab state: history.replaceState, not a router call.
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe(
+      "people",
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("renders the header, snapshot chip, tab strip and filter bar from the payload", () => {

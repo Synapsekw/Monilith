@@ -55,26 +55,20 @@ function facts(g: AttentionGroup): string {
   return parts.join(" · ");
 }
 
-const REASONS = ["overdue", "blocked", "unassigned", "stale"] as const;
-
-/** Tells the reader the list under a board is a sample. The group's counts per
- *  reason overlap, so there is no distinct total: the notice names the reason
- *  with the largest cut-off count and counts the shown items of that reason. */
+/** Tells the reader the list under a board is a sample. The reason counts
+ *  overlap (one item can be overdue and blocked) while each row carries one
+ *  reason, so there is no distinct total. The board's largest single-reason
+ *  count is a floor on it: fewer rows than that means some are not listed. */
 function CutNotice({ g }: { g: AttentionGroup }) {
-  const cut = REASONS.map((reason) => ({
-    reason,
-    total: g[reason],
-    shown: g.items.filter((a) => a.reason === reason).length,
-  }))
-    .filter((c) => c.shown < c.total)
-    .sort((a, b) => b.total - a.total)[0];
-  if (!cut) return null;
+  const atLeast = Math.max(g.overdue, g.blocked, g.unassigned, g.stale);
+  const shown = g.items.length;
+  if (shown >= atLeast) return null;
   return (
     <p
       data-testid="attention-cut"
       className="text-muted-foreground py-2 text-xs"
     >
-      Showing {cut.shown} of {cut.total} {cut.reason}.{" "}
+      Showing {shown} of at least {atLeast}.{" "}
       <Link
         href={`/boards/${g.boardId}`}
         className="hover:text-foreground underline"

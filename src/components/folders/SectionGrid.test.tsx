@@ -32,7 +32,9 @@ describe("SectionGrid", () => {
     expect(screen.getAllByTestId("section").map((n) => n.textContent)).toEqual([
       "kpis",
       "burn",
+      "load",
       "board-status",
+      "people",
       "attention",
       "intelligence",
       "milestones",
@@ -47,7 +49,7 @@ describe("SectionGrid", () => {
       />,
     );
     const groups = screen.getAllByTestId("section-group");
-    // burn: x 0, w 8 → column 1 span 8. boardStatus: x 8, w 4 → column 9 span 4.
+    // burn: x 0, w 8 → column 1 span 8. load: x 8, w 4 → column 9 span 4.
     expect(groups[1].style.getPropertyValue("--col")).toBe("1 / span 8");
     expect(groups[2].style.getPropertyValue("--col")).toBe("9 / span 4");
   });
@@ -73,11 +75,13 @@ describe("SectionGrid", () => {
     expect(ids).toEqual([
       ["kpis"],
       ["burn"],
+      ["load"],
       ["board-status"],
+      ["people"],
       ["attention"],
       ["intelligence", "milestones"],
     ]);
-    const right = screen.getAllByTestId("section-group")[4];
+    const right = screen.getAllByTestId("section-group")[6];
     expect(right.className).toContain("flex-col");
     expect(right.className).toContain("gap-4");
   });

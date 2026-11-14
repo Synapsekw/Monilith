@@ -6,6 +6,8 @@ import { KpisPanel } from "@/components/folders/panels/KpisPanel";
 import { BurnPanel } from "@/components/folders/panels/BurnPanel";
 import { BoardStatusPanel } from "@/components/folders/panels/BoardStatusPanel";
 import { AttentionPanel } from "@/components/folders/panels/AttentionPanel";
+import { LoadPanel } from "@/components/folders/panels/LoadPanel";
+import { PeoplePanel } from "@/components/folders/panels/PeoplePanel";
 import { IntelligencePanel } from "@/components/folders/panels/IntelligencePanel";
 import { MilestonesPanel } from "@/components/folders/panels/MilestonesPanel";
 import {
@@ -13,15 +15,21 @@ import {
   burnSeries,
   nextMilestones,
 } from "@/lib/folders/rollup";
+import {
+  attentionGroups,
+  burnForecast,
+  loadGrid,
+  stageBars,
+} from "@/lib/folders/tower";
 import { stageKey, type StageSummary } from "@/lib/folders/stages";
 import type { KpiKey, LayoutSection } from "@/lib/validations/folder-layout";
 import type { FolderPayload, RollupRow } from "@/lib/folders/types";
 import { SectionChrome } from "@/components/folders/edit/SectionChrome";
 
 /**
- * Rows shown in "Needs attention". `buildFolderPayload` asks the RPC for
- * `ATTENTION_LIMIT` (100) so the stage filter below classifies from a wide
- * enough pool; only the top 20 are rendered, and the caption says so.
+ * Rows shown per board in "Needs attention". `buildFolderPayload` asks the RPC
+ * for `ATTENTION_LIMIT` (100) so the stage filter below classifies from a wide
+ * enough pool; each board expands to at most this many of them.
  */
 const ATTENTION_SHOWN = 20;
 
@@ -49,6 +57,7 @@ export function OverviewTab({
   onSetSectionWidth,
   onRenameSection,
   onSetKpiCards,
+  onSeeAllPeople,
 }: {
   payload: FolderPayload;
   rows: RollupRow[];
@@ -69,6 +78,8 @@ export function OverviewTab({
   onSetSectionWidth?: (id: string, w: number) => void;
   onRenameSection?: (id: string, label: string) => void;
   onSetKpiCards?: (id: string, cards: KpiKey[]) => void;
+  /** Opens the People tab; omitted when the layout has none. */
+  onSeeAllPeople?: () => void;
 }) {
   const boards = boardSummaries(rows, payload.boards, stages);
   const burn =
@@ -77,24 +88,32 @@ export function OverviewTab({
       : burnSeries(payload.burn, stage, payload.todayISO);
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
   // The RPC returns the folder's top ATTENTION_LIMIT (100) rows by severity;
-  // narrowing them to the selected stage happens here, on the client, so the
-  // rendered list is a slice of a slice. The caption makes that visible
-  // instead of quietly implying "this is everything".
+  // narrowing them to the selected board and stage happens here, on the client.
   const attentionInScope =
     payload.attention === null
       ? null
       : payload.attention.filter(
           (a) =>
-            stage === null ||
-            (a.groupName !== null && stageKey(a.groupName) === stage),
+            (board === null || a.boardId === board) &&
+            (stage === null ||
+              (a.groupName !== null && stageKey(a.groupName) === stage)),
         );
-  const attention = attentionInScope?.slice(0, ATTENTION_SHOWN) ?? null;
-  const attentionCaption =
-    attentionInScope === null || attentionInScope.length === 0
+  // One row per board. Counts come from the (already filtered) rollup rows, so
+  // they are totals; each board expands to at most ATTENTION_SHOWN of the
+  // RPC's top-N sample.
+  const groups =
+    attentionInScope === null
       ? null
-      : stage === null
-        ? `Top ${Math.min(attentionInScope.length, ATTENTION_SHOWN)} across the folder`
-        : `Top ${Math.min(attentionInScope.length, ATTENTION_SHOWN)} of ${attentionInScope.length} in this stage`;
+      : attentionGroups(rows, attentionInScope, payload.todayISO).map((g) => ({
+          ...g,
+          items: g.items.slice(0, ATTENTION_SHOWN),
+        }));
+  const attentionCaption =
+    groups === null || groups.length === 0
+      ? null
+      : "By board. Counts are totals; a board expands to its most urgent items.";
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  const forecast = burn === null ? null : burnForecast(burn, total);
   const milestones = nextMilestones(
     stages.filter((s) => stage === null || s.key === stage),
     payload.todayISO,
@@ -118,6 +137,9 @@ export function OverviewTab({
                     todayISO={payload.todayISO}
                     failed={payload.rollup === null}
                     onRetry={onRetry}
+                    burn={payload.burn}
+                    stage={stage}
+                    board={board}
                   />
                 );
               case "burn":
@@ -129,6 +151,8 @@ export function OverviewTab({
                     burn={burn}
                     anyDue={anyDue}
                     onRetry={onRetry}
+                    forecast={forecast}
+                    stageBars={stageBars(stages)}
                   />
                 );
               case "boardStatus":
@@ -146,8 +170,9 @@ export function OverviewTab({
                   <AttentionPanel
                     kicker={kicker}
                     title={s.title}
-                    attention={attention}
+                    attention={attentionInScope}
                     caption={attentionCaption}
+                    groups={groups}
                     onRetry={onRetry}
                   />
                 );
@@ -165,6 +190,34 @@ export function OverviewTab({
                     kicker={kicker}
                     title={s.title}
                     milestones={milestones}
+                  />
+                );
+              case "load":
+                // No dates or no load rows: nothing to plot, so the section is
+                // not drawn at all.
+                return anyDue && payload.load !== null ? (
+                  <LoadPanel
+                    kicker={kicker}
+                    title={s.title}
+                    grid={loadGrid(
+                      payload.load,
+                      payload.boards,
+                      { stageKey: stage, boardId: board },
+                      payload.todayISO,
+                    )}
+                    failed={false}
+                    onRetry={onRetry}
+                  />
+                ) : null;
+              case "people":
+                return (
+                  <PeoplePanel
+                    kicker={kicker}
+                    title={s.title}
+                    folderId={payload.folder.id}
+                    stage={stage}
+                    members={payload.members}
+                    onSeeAll={onSeeAllPeople}
                   />
                 );
               default:

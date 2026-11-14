@@ -62,6 +62,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
     useCommandCenterState(tabIds);
   const activeTab = layoutTabs.find((t) => t.id === tab);
   const canExport = activeTab?.kind === "canvas";
+  const peopleTabId = layoutTabs.find((t) => t.kind === "people")?.id ?? null;
 
   function handleCancel() {
     draft.revert();
@@ -240,6 +241,9 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               onSetSectionWidth={draft.setWidth}
               onRenameSection={draft.rename}
               onSetKpiCards={draft.setCards}
+              onSeeAllPeople={
+                peopleTabId === null ? undefined : () => setTab(peopleTabId)
+              }
             />
           )}
         </>

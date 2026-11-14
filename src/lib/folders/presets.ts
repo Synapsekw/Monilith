@@ -31,25 +31,37 @@ const BOARD_STATUS: BuiltinSection = {
   id: "board-status",
   type: "builtin",
   panel: "boardStatus",
-  layout: { x: 8, y: 2, w: 4, h: 4 },
+  layout: { x: 0, y: 6, w: 8, h: 4 },
 };
 const ATTENTION: BuiltinSection = {
   id: "attention",
   type: "builtin",
   panel: "attention",
-  layout: { x: 0, y: 6, w: 8, h: 5 },
+  layout: { x: 0, y: 10, w: 8, h: 5 },
 };
 const INTELLIGENCE: BuiltinSection = {
   id: "intelligence",
   type: "builtin",
   panel: "intelligence",
-  layout: { x: 8, y: 6, w: 4, h: 3 },
+  layout: { x: 8, y: 10, w: 4, h: 3 },
 };
 const MILESTONES: BuiltinSection = {
   id: "milestones",
   type: "builtin",
   panel: "milestones",
-  layout: { x: 8, y: 9, w: 4, h: 2 },
+  layout: { x: 8, y: 13, w: 4, h: 2 },
+};
+const LOAD: BuiltinSection = {
+  id: "load",
+  type: "builtin",
+  panel: "load",
+  layout: { x: 8, y: 2, w: 4, h: 4 },
+};
+const PEOPLE: BuiltinSection = {
+  id: "people",
+  type: "builtin",
+  panel: "people",
+  layout: { x: 8, y: 6, w: 4, h: 4 },
 };
 
 /** Default rect + props for a panel the user adds back from the Sections sheet.
@@ -61,6 +73,8 @@ export const DEFAULT_SECTION: Record<BuiltinPanel, LayoutSection> = {
   attention: ATTENTION,
   intelligence: INTELLIGENCE,
   milestones: MILESTONES,
+  load: LOAD,
+  people: PEOPLE,
 };
 
 const pick = (...panels: BuiltinPanel[]): LayoutSection[] =>
@@ -76,9 +90,9 @@ const TIMELINE_TAB = {
 } as const;
 
 /**
- * `project` is today's layout, exactly: the six KPI cards in their current
- * order, burn + status-by-board on one row, attention with intelligence and
- * milestones stacked in the right column, and the stages, timeline, boards and people tabs.
+ * `project` is the tower layout: KPI row, burn beside the load map, boards
+ * beside people, attention with intelligence and milestones stacked on the
+ * right, then the stages, timeline, boards and people tabs.
  */
 export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
   project: {
@@ -91,7 +105,9 @@ export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
         sections: pick(
           "kpis",
           "burn",
+          "load",
           "boardStatus",
+          "people",
           "attention",
           "intelligence",
           "milestones",
@@ -116,14 +132,9 @@ export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
             props: { cards: ["complete", "overdue", "dueThisWeek"] },
           },
           { ...ATTENTION, layout: { x: 0, y: 2, w: 8, h: 5 } },
-          {
-            ...BOARD_STATUS,
-            layout: { x: 8, y: 2, w: 4, h: 4 },
-          },
-          {
-            ...INTELLIGENCE,
-            layout: { x: 8, y: 7, w: 4, h: 3 },
-          },
+          { ...BOARD_STATUS, layout: { x: 8, y: 2, w: 4, h: 4 } },
+          { ...PEOPLE, layout: { x: 8, y: 6, w: 4, h: 4 } },
+          { ...INTELLIGENCE, layout: { x: 8, y: 10, w: 4, h: 3 } },
         ],
       },
       { ...STAGES_TAB, label: "Pipeline" },
@@ -143,10 +154,8 @@ export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
             props: { cards: ["overdue", "dueThisWeek", "blocked", "stale"] },
           },
           { ...ATTENTION, layout: { x: 0, y: 2, w: 8, h: 5 } },
-          {
-            ...BOARD_STATUS,
-            layout: { x: 8, y: 2, w: 4, h: 4 },
-          },
+          { ...BOARD_STATUS, layout: { x: 8, y: 2, w: 4, h: 4 } },
+          { ...PEOPLE, layout: { x: 8, y: 6, w: 4, h: 4 } },
         ],
       },
       BOARDS_TAB,

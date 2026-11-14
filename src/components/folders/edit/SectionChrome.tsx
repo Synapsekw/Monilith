@@ -32,6 +32,8 @@ const PANEL_LABEL: Record<BuiltinPanel, string> = {
   attention: "Needs attention",
   intelligence: "Intelligence",
   milestones: "Next milestones",
+  load: "Load by board and week",
+  people: "Open work by person",
 };
 
 const WIDTHS: { label: string; w: 12 | 8 | 4 }[] = [

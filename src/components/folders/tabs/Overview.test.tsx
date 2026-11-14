@@ -9,6 +9,18 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
     <div data-testid="burn-chart" data-mode={p.mode} />
   ),
 }));
+vi.mock("@/components/folders/panels/PeoplePanel", () => ({
+  PeoplePanel: (p: { stage: string | null; onSeeAll?: () => void }) => (
+    <button
+      type="button"
+      data-testid="people-panel"
+      data-stage={p.stage ?? ""}
+      onClick={p.onSeeAll}
+    >
+      people
+    </button>
+  ),
+}));
 import { OverviewTab } from "./Overview";
 
 function renderOverview(
@@ -63,8 +75,13 @@ describe("OverviewTab", () => {
     );
   });
 
-  it("lists attention rows linking to the board with ?item=", () => {
+  it("groups attention by board and expands to rows linking with ?item=", () => {
     renderOverview();
+    expect(screen.queryByRole("link", { name: /Auth refactor/ })).toBeNull();
+    const backend = screen
+      .getAllByTestId("attention-group")
+      .find((g) => g.textContent?.includes("Backend"))!;
+    fireEvent.click(backend.querySelector("button")!);
     const link = screen.getByRole("link", { name: /Auth refactor/ });
     expect(link).toHaveAttribute("href", "/boards/b1?item=i1");
     expect(screen.getByText("overdue · 14d")).toBeInTheDocument();
@@ -81,7 +98,7 @@ describe("OverviewTab", () => {
     expect(screen.queryByText("Intelligence")).toBeNull();
   });
 
-  it("replaces the burn chart when there are no due dates and shows an em dash for gap", () => {
+  it("swaps the burn chart for items by stage and hides the load map when there are no due dates", () => {
     const rows = folderFixture().rollup!.map((r) => ({
       ...r,
       minDue: null,
@@ -91,8 +108,10 @@ describe("OverviewTab", () => {
     }));
     renderOverview({ rollup: rows, burn: [] });
     expect(
-      screen.getByText("Add due dates to see planned vs completed"),
+      screen.getByRole("heading", { name: "Items by stage" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Load by board and week")).toBeNull();
+    expect(screen.getByText("No due dates set")).toBeInTheDocument();
     expect(screen.queryByTestId("burn-chart")).toBeNull();
   });
 
@@ -117,23 +136,25 @@ describe("OverviewTab", () => {
     expect(screen.queryByTestId("burn-scope-note")).toBeNull();
   });
 
-  it("captions how much of the attention list is shown, folder-wide", () => {
+  it("captions the attention section with its scope, not a row count", () => {
     renderOverview();
     expect(screen.getByTestId("attention-caption")).toHaveTextContent(
-      "Top 4 across the folder",
+      "By board. Counts are totals; a board expands to its most urgent items.",
     );
   });
 
-  it("captions the attention list as a slice of the stage when one is selected", () => {
-    // The stage filter is applied client-side to the RPC's top-N, so the
-    // caption has to say how many rows the stage actually holds.
+  it("keeps only the selected stage's items inside the groups", () => {
     renderOverview({}, { stage: "build" });
-    expect(screen.getByTestId("attention-caption")).toHaveTextContent(
-      "Top 4 of 4 in this stage",
-    );
+    const all = screen.getAllByTestId("attention-group");
+    for (const g of all) fireEvent.click(g.querySelector("button")!);
+    expect(
+      screen.getAllByRole("link", {
+        name: /Auth refactor|Push notifications|Onboarding flow|Crash reporting/,
+      }),
+    ).toHaveLength(4);
   });
 
-  it("never renders more than 20 attention rows", () => {
+  it("never renders more than 20 attention rows per board", () => {
     const many = Array.from({ length: 60 }, (_, i) => ({
       itemId: `x${i}`,
       itemName: `Item ${i}`,
@@ -146,10 +167,11 @@ describe("OverviewTab", () => {
       severity: 1,
     }));
     renderOverview({ attention: many });
+    const backend = screen
+      .getAllByTestId("attention-group")
+      .find((g) => g.textContent?.includes("Backend"))!;
+    fireEvent.click(backend.querySelector("button")!);
     expect(screen.getAllByRole("link", { name: /^Item / })).toHaveLength(20);
-    expect(screen.getByTestId("attention-caption")).toHaveTextContent(
-      "Top 20 across the folder",
-    );
   });
 
   it("gives the chart-mode radios a 44px hit target on a coarse pointer", () => {
@@ -163,5 +185,44 @@ describe("OverviewTab", () => {
     renderOverview();
     expect(screen.getByText("Next milestones")).toBeInTheDocument();
     expect(screen.getAllByTestId("milestone").length).toBeLessThanOrEqual(3);
+  });
+
+  it("renders the load map and the people section in the project layout", () => {
+    renderOverview();
+    expect(screen.getByText("Load by board and week")).toBeInTheDocument();
+    expect(
+      screen.getByRole("rowheader", { name: "Backend" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("people-panel")).toBeInTheDocument();
+  });
+
+  it("does not render a load section the saved layout does not have", () => {
+    const payload = folderFixture();
+    const sections = canvasSections(payload.layout.config, "overview").filter(
+      (s) => s.id !== "load",
+    );
+    render(
+      <OverviewTab
+        payload={payload}
+        rows={payload.rollup!}
+        stages={buildStages(payload.rollup!, FIXTURE_TODAY)}
+        stage={null}
+        board={null}
+        sections={sections}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Load by board and week")).toBeNull();
+  });
+
+  it("renders no load section at all while the load rows are not supplied", () => {
+    renderOverview({ load: null });
+    expect(screen.queryByText("Load by board and week")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("shows the reading line above the burn chart", () => {
+    renderOverview();
+    expect(screen.getByTestId("burn-reading")).toBeInTheDocument();
   });
 });
