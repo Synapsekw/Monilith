@@ -19,6 +19,7 @@ const m = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   toastError: vi.fn(),
+  scrollToToday: vi.fn(),
   canvas: { current: null as GanttCanvasProps | null },
 }));
 
@@ -35,15 +36,25 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: m.push, refresh: m.refresh }),
 }));
 // The real canvas is exercised in its own suite; here a probe records the
-// props so the tests can assert what the tab hands it and drive its callbacks.
-vi.mock("@/components/boards/gantt/GanttCanvas", () => ({
-  GanttCanvas: (p: GanttCanvasProps) => {
-    m.canvas.current = p;
-    return (
-      <div data-testid="canvas">{p.rows.map((r) => r.name).join("|")}</div>
-    );
-  },
-}));
+// props so the tests can assert what the tab hands it and drive its callbacks,
+// and answers the imperative handle the Today button calls.
+vi.mock("@/components/boards/gantt/GanttCanvas", () => {
+  // `handleRef` is a plain prop holding a ref object; fill it the way the real
+  // canvas's useImperativeHandle would.
+  const answerHandle = (ref: GanttCanvasProps["handleRef"]) => {
+    if (ref && typeof ref === "object")
+      ref.current = { scrollToToday: m.scrollToToday };
+  };
+  return {
+    GanttCanvas: (p: GanttCanvasProps) => {
+      m.canvas.current = p;
+      answerHandle(p.handleRef);
+      return (
+        <div data-testid="canvas">{p.rows.map((r) => r.name).join("|")}</div>
+      );
+    },
+  };
+});
 
 import { TimelineInner } from "./TimelineInner";
 
@@ -141,6 +152,7 @@ const canvasText = () => screen.getByTestId("canvas").textContent;
 beforeEach(() => {
   vi.clearAllMocks();
   m.canvas.current = null;
+  localStorage.clear();
 });
 
 describe("TimelineInner", () => {
@@ -471,5 +483,47 @@ describe("TimelineInner", () => {
     await screen.findByTestId("canvas");
     expect(canvasText()).toBe("Platform|Sites · No dates on this board");
     expect(screen.getByText("1 late link")).toBeInTheDocument();
+  });
+
+  it("has a Today button that asks the canvas to scroll, with no fetch", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(m.scrollToToday).toHaveBeenCalledTimes(1);
+    expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
+    expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it("opens the rail at 300px and remembers a new width for this folder", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(300);
+    act(() => canvas().onLabelWidthChange?.(420));
+    expect(canvas().labelWidth).toBe(420);
+    expect(localStorage.getItem("monolith.folder-timeline.rail:f1")).toBe(
+      "420",
+    );
+    expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores a stored rail width, clamped to the rail's bounds", async () => {
+    localStorage.setItem("monolith.folder-timeline.rail:f1", "9000");
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(520);
+  });
+
+  it("falls back to 300px when the store is blocked or holds junk", async () => {
+    const getItem = vi.spyOn(localStorage, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(300);
+    getItem.mockRestore();
   });
 });

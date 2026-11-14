@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useMutation,
@@ -27,8 +27,18 @@ import {
 } from "@/lib/boards/timeline-context";
 import { buildFolderTimeline, folderTimelineKey } from "@/lib/folders/timeline";
 import type { RollupRow } from "@/lib/folders/types";
-import type { TimelineZoom } from "@/components/boards/gantt/utils";
-import { GanttCanvas } from "@/components/boards/gantt/GanttCanvas";
+import {
+  DEFAULT_LABEL_W,
+  LABEL_W_MAX,
+  LABEL_W_MIN,
+  type TimelineZoom,
+} from "@/components/boards/gantt/utils";
+import {
+  GanttCanvas,
+  type GanttCanvasHandle,
+} from "@/components/boards/gantt/GanttCanvas";
+import { clampDragWidth } from "@/lib/boards/name-column-width";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +51,31 @@ const ZOOM_LABEL: Record<(typeof ZOOMS)[number], string> = {
 };
 const MAX_SHOWN = 5000;
 const MAX_LINK_CANDIDATES = 200;
+
+/** Per-viewer, per-folder rail width. A folder has no view config to hold it,
+ * and it is a convenience, so it lives in localStorage. */
+const railKey = (folderId: string) =>
+  `monolith.folder-timeline.rail:${folderId}`;
+
+/** The stored width, clamped; DEFAULT_LABEL_W when absent, junk or blocked. */
+function readRailWidth(folderId: string): number {
+  try {
+    const raw = Number(localStorage.getItem(railKey(folderId)));
+    return Number.isFinite(raw) && raw > 0
+      ? clampDragWidth(raw, LABEL_W_MIN, LABEL_W_MAX)
+      : DEFAULT_LABEL_W;
+  } catch {
+    return DEFAULT_LABEL_W;
+  }
+}
+
+function writeRailWidth(folderId: string, width: number): void {
+  try {
+    localStorage.setItem(railKey(folderId), String(width));
+  } catch {
+    // Blocked or full store: the width simply isn't remembered.
+  }
+}
 
 type Props = {
   folderId: string;
@@ -77,6 +112,7 @@ export function TimelineInner({ folderId, stage, board, rollup }: Props) {
     );
   return (
     <FolderTimelineChart
+      key={folderId}
       folderId={folderId}
       data={q.data}
       stage={stage}
@@ -140,6 +176,14 @@ function FolderTimelineChart({
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  const canvasRef = useRef<GanttCanvasHandle>(null);
+  // This component only ever renders on the client (the tab is ssr: false),
+  // so reading the store in the initializer is safe.
+  const [labelWidth, setLabelWidth] = useState(() => readRailWidth(folderId));
+  function handleLabelWidthChange(width: number) {
+    setLabelWidth(width);
+    writeRailWidth(folderId, width);
+  }
 
   const view = useMemo(
     () =>
@@ -412,27 +456,38 @@ function FolderTimelineChart({
             {lateCount} late {lateCount === 1 ? "link" : "links"}
           </span>
         ) : null}
-        <div
-          role="group"
-          aria-label="Zoom"
-          className="ml-auto flex items-center gap-1 rounded-md border p-0.5"
-        >
-          {ZOOMS.map((z) => (
-            <button
-              key={z}
-              type="button"
-              aria-pressed={zoom === z}
-              onClick={() => setZoom(z)}
-              className={cn(
-                "focus-visible:ring-ring rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3",
-                zoom === z
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-state-hover",
-              )}
-            >
-              {ZOOM_LABEL[z]}
-            </button>
-          ))}
+        <div className="ml-auto flex items-center gap-2">
+          <div
+            role="group"
+            aria-label="Zoom"
+            className="flex items-center gap-1 rounded-md border p-0.5"
+          >
+            {ZOOMS.map((z) => (
+              <button
+                key={z}
+                type="button"
+                aria-pressed={zoom === z}
+                onClick={() => setZoom(z)}
+                className={cn(
+                  "focus-visible:ring-ring rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3",
+                  zoom === z
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-state-hover",
+                )}
+              >
+                {ZOOM_LABEL[z]}
+              </button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            onClick={() => canvasRef.current?.scrollToToday()}
+          >
+            Today
+          </Button>
         </div>
       </div>
       {data.truncated ? (
@@ -452,6 +507,9 @@ function FolderTimelineChart({
             rangeStartISO={view.rangeStartISO}
             dayCount={view.dayCount}
             zoom={zoom}
+            handleRef={canvasRef}
+            labelWidth={labelWidth}
+            onLabelWidthChange={handleLabelWidthChange}
             colorFor={(row) => groupColor.get(row.itemId) ?? null}
             canEditItem={canEditItem}
             isExpanded={isExpanded}
