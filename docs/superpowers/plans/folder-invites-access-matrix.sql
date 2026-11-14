@@ -389,6 +389,149 @@ begin
 end
 $matrix$;
 
+-- Guest confinement checks (migration B). Own fixtures, all inside this
+-- transaction. Two existing boards of one org: b1 (the guest gets a direct
+-- viewer grant) and b2 (the guest has no access). Run after the migrations.
+do $guest$
+declare
+  v_org uuid; v_ws uuid; v_o uuid; v_g uuid; v_b1 uuid; v_b2 uuid;
+  v_i1 uuid; v_i2 uuid; v_dash uuid; v_goal uuid; v_pf uuid;
+  v_old int; v_new int; v_cnt int; v_ok1 boolean; v_ok2 boolean; v_ok3 boolean; v_ok4 boolean; v_own int; v_others int;
+  v_raised boolean; v_msg text;
+  v_names text[] := array[
+    'g1_rollup_guest_only_own_rows', 'g2_create_widget_refused', 'g3_set_layouts_refused',
+    'g4_guest_owned_goal_not_editable', 'g5_guest_cannot_read_goal_links',
+    'g6_guest_cannot_insert_goal_links', 'g7_guest_created_portfolio_not_editable',
+    'g8_guest_logs_time_on_readable_board', 'g9_guest_refused_time_on_unreadable_board',
+    'g10_member_dashboard_count_unchanged'];
+  n text;
+begin
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'none', true);
+
+  select b1.org_id, b1.workspace_id, b1.created_by, b1.id, b2.id, i1.id, i2.id
+    into v_org, v_ws, v_o, v_b1, v_b2, v_i1, v_i2
+  from public.boards b1
+  join public.org_members oc on oc.org_id = b1.org_id and oc.user_id = b1.created_by
+   and oc.deactivated_at is null and oc.role in ('owner', 'admin', 'member')
+  join public.boards b2 on b2.org_id = b1.org_id and b2.id <> b1.id and b2.archived_at is null
+  join lateral (select id from public.items where board_id = b1.id limit 1) i1 on true
+  join lateral (select id from public.items where board_id = b2.id limit 1) i2 on true
+  where b1.archived_at is null and b2.created_by <> b1.created_by
+  limit 1;
+
+  if v_b1 is not null then
+    select om.user_id into v_g from public.org_members om
+     where om.org_id = v_org and om.role = 'member' and om.deactivated_at is null
+       and om.user_id not in (select created_by from public.boards where id in (v_b1, v_b2))
+     limit 1;
+  end if;
+
+  if v_g is null then
+    foreach n in array v_names loop
+      insert into matrix_results values (n, 'false'::jsonb, 'fixture missing');
+    end loop;
+    return;
+  end if;
+
+  -- The guest starts with no access to either board, then gets b1 directly.
+  delete from public.board_members where user_id = v_g and board_id in (v_b1, v_b2);
+  delete from public.folder_members fm
+   where fm.user_id = v_g
+     and fm.folder_id in (select folder_id from public.folder_boards where board_id in (v_b1, v_b2));
+  insert into public.board_members (org_id, board_id, user_id, access_level, granted_by)
+  values (v_org, v_b1, v_g, 'viewer', v_o);
+
+  -- Org-wide fixtures, created as postgres (no JWT, so the insert trigger is idle).
+  insert into public.dashboards (org_id, workspace_id, name, created_by)
+  values (v_org, v_ws, 'matrix-dash', v_o) returning id into v_dash;
+  insert into public.goals (org_id, name, owner_id, progress_mode, created_by)
+  values (v_org, 'matrix-goal', v_g, (enum_range(null::public.goal_progress_mode))[1], v_o)
+  returning id into v_goal;
+  insert into public.goal_links (org_id, goal_id, board_id) values (v_org, v_goal, v_b1);
+  insert into public.portfolios (org_id, name, created_by)
+  values (v_org, 'matrix-portfolio', v_g) returning id into v_pf;
+  insert into public.time_allocations (org_id, user_id, board_id, item_id, work_date, duration_secs)
+  values (v_org, v_o, v_b1, v_i1, current_date, 600);
+
+  -- Regular member: dashboards read the same set as under the old predicate.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_o)::text, true);
+  select count(*) into v_old from public.dashboards
+   where org_id in (select public.auth_user_orgs());
+  perform set_config('role', 'authenticated', true);
+  select count(*) into v_new from public.dashboards;
+  perform set_config('role', 'none', true);
+  insert into matrix_results values ('g10_member_dashboard_count_unchanged',
+    to_jsonb(v_old > 0 and v_new = v_old), null);
+
+  -- From here on v_g is a guest.
+  perform set_config('request.jwt.claims', '', true);
+  update public.org_members set role = 'guest' where org_id = v_org and user_id = v_g;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_g)::text, true);
+
+  -- Time logging: own row on a readable board works, an unreadable one is
+  -- refused. Results go into variables; the temp table is only written as
+  -- postgres (role none).
+  perform set_config('role', 'authenticated', true);
+  v_raised := false;
+  begin
+    insert into public.time_allocations (org_id, user_id, board_id, item_id, work_date, duration_secs)
+    values (v_org, v_g, v_b1, v_i1, current_date, 300);
+  exception when others then v_raised := true;
+  end;
+  v_ok1 := not v_raised;
+  v_raised := false;
+  begin
+    insert into public.time_allocations (org_id, user_id, board_id, item_id, work_date, duration_secs)
+    values (v_org, v_g, v_b2, v_i2, current_date, 300);
+  exception when insufficient_privilege then v_raised := true;
+  end;
+  v_ok2 := v_raised;
+  -- Goal links: not readable, not writable for a guest who owns the goal.
+  select count(*) into v_cnt from public.goal_links where goal_id = v_goal;
+  v_ok3 := v_cnt = 0;
+  v_raised := false;
+  begin
+    insert into public.goal_links (org_id, goal_id, board_id) values (v_org, v_goal, v_b2);
+  exception when insufficient_privilege then v_raised := true;
+  end;
+  v_ok4 := v_raised;
+  perform set_config('role', 'none', true);
+
+  insert into matrix_results values
+    ('g8_guest_logs_time_on_readable_board', to_jsonb(v_ok1 and public.can_read_board(v_b1)), null),
+    ('g9_guest_refused_time_on_unreadable_board', to_jsonb(v_ok2 and not public.can_read_board(v_b2)), null),
+    ('g5_guest_cannot_read_goal_links', to_jsonb(v_ok3), null),
+    ('g6_guest_cannot_insert_goal_links', to_jsonb(v_ok4), null),
+    ('g4_guest_owned_goal_not_editable', to_jsonb(not public.can_edit_goal(v_goal)), null),
+    ('g7_guest_created_portfolio_not_editable', to_jsonb(not public.can_edit_portfolio(v_pf)), null);
+
+  -- Dashboard RPCs refuse a guest, with the guest message.
+  v_raised := false;
+  begin
+    perform public.create_dashboard_widget(v_dash, (enum_range(null::public.widget_kind))[1], null);
+  exception when insufficient_privilege then v_raised := sqlerrm like 'guests cannot change dashboards%';
+  end;
+  insert into matrix_results values ('g2_create_widget_refused', to_jsonb(v_raised), null);
+  v_raised := false;
+  begin
+    perform public.set_widget_layouts(v_dash, '[]'::jsonb);
+  exception when insufficient_privilege then v_raised := sqlerrm like 'guests cannot change dashboards%';
+  end;
+  insert into matrix_results values ('g3_set_layouts_refused', to_jsonb(v_raised), null);
+
+  -- Workload actuals: the guest gets their own rows only (the owner's row on
+  -- the same readable board must not appear).
+  select count(*) filter (where user_id = v_g), count(*) filter (where user_id <> v_g)
+    into v_own, v_others
+  from public.workload_actuals_rollup(current_date, current_date);
+  insert into matrix_results values ('g1_rollup_guest_only_own_rows',
+    to_jsonb(v_own >= 1 and v_others = 0), null);
+
+  perform set_config('request.jwt.claims', '', true);
+end
+$guest$;
+
 insert into matrix_results (name, value)
 select 'ALL_PASSED', to_jsonb(not exists (
   select 1 from matrix_results m
