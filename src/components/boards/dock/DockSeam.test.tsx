@@ -17,7 +17,7 @@ function mount(open: boolean) {
     </>,
   );
   const cap = screen.getByRole("button", {
-    name: open ? /close agent dock/i : /open agent dock/i,
+    name: open ? /close assistant dock/i : /open assistant dock/i,
   });
   return { ...handlers, cap, strip: cap.parentElement as HTMLElement };
 }
@@ -27,6 +27,18 @@ beforeEach(() => {
 });
 
 describe("DockSeam", () => {
+  it("shows a panel glyph for the dock, not a direction arrow", () => {
+    const { cap } = mount(true);
+    const svg = cap.querySelector("svg")!;
+    expect(svg).toHaveAttribute("data-panel-glyph", "right");
+    expect(svg).toHaveAttribute("data-state", "open");
+  });
+
+  it("empties the glyph while the dock is folded", () => {
+    const { cap } = mount(false);
+    expect(cap.querySelector("svg")).toHaveAttribute("data-state", "closed");
+  });
+
   it("renders onto the card, not into the dock", () => {
     mount(false);
     const seam = document.querySelector('[data-seam="right"]');

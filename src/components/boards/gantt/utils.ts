@@ -149,8 +149,6 @@ export type BarDragData = {
   itemId: string;
   startISO: string;
   endISO: string;
-  startColumnId: string;
-  endColumnId: string | null;
   startDayOffset: number;
 };
 

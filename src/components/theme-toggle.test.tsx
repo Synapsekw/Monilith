@@ -46,7 +46,26 @@ describe("ThemeToggle", () => {
 
     const radios = screen.getAllByRole("menuitemradio");
     expect(radios).toHaveLength(THEME_PRESETS.length);
-    for (const label of ["Aurora", "Sunset", "Nebula"]) {
+    expect(radios).toHaveLength(17);
+    for (const label of [
+      "Keystone",
+      "Graphite",
+      "Aurora",
+      "Sunset",
+      "Nebula",
+      "Lagoon",
+      "Tropic",
+      "Orchid",
+      "Peach",
+      "Glacier",
+      "Dusk",
+      "Berry",
+      "Candy",
+      "Citrus",
+      "Prism",
+      "Mocha",
+      "Neon",
+    ]) {
       expect(
         screen.getByRole("menuitemradio", { name: label }),
       ).toBeInTheDocument();
@@ -82,19 +101,19 @@ describe("ThemeToggle", () => {
       expect(swatch(name)).toHaveClass("h-3", "w-6", "rounded-full");
       expect(swatch(name).style.background).toBe(gradient);
     }
-    expect(swatch("Ocean")).toHaveAttribute("data-swatch-shape", "dot");
-    expect(swatch("Ocean")).toHaveClass("size-3", "rounded-full");
-    expect(swatch("Ocean").style.background).toBe("rgb(111, 198, 214)");
+    expect(swatch("Graphite")).toHaveAttribute("data-swatch-shape", "dot");
+    expect(swatch("Graphite")).toHaveClass("size-3", "rounded-full");
+    expect(swatch("Graphite").style.background).toBe("rgb(201, 201, 210)");
   });
 
-  it("selecting Ocean stamps the attribute synchronously and persists it", async () => {
+  it("selecting Graphite stamps the attribute synchronously and persists it", async () => {
     const user = await openMenu();
 
-    await user.click(screen.getByRole("menuitemradio", { name: "Ocean" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Graphite" }));
 
-    expect(document.documentElement.dataset.themePreset).toBe("ocean");
+    expect(document.documentElement.dataset.themePreset).toBe("graphite");
     expect(updateProfileThemePreset).toHaveBeenCalledWith({
-      themePreset: "ocean",
+      themePreset: "graphite",
     });
   });
 
@@ -105,7 +124,7 @@ describe("ThemeToggle", () => {
     });
     const user = await openMenu();
 
-    await user.click(screen.getByRole("menuitemradio", { name: "Rose" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Graphite" }));
 
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith("Could not update theme.");

@@ -33,6 +33,7 @@ import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { useLwwFlash } from "@/lib/boards/use-lww-flash";
 import { resolveSelectedView } from "@/lib/boards/views";
+import type { TimelineViewConfig } from "@/lib/boards/schedule";
 
 /**
  * Neutral full-area placeholder shown while a lazily-loaded view chunk streams
@@ -224,9 +225,21 @@ export function BoardViews({
         userId: m.userId,
         fullName: m.fullName,
         avatarUrl: m.avatarUrl,
+        mono: m.mono,
       })),
     [members],
   );
+
+  // The first timeline view (views arrive ordered by position) decides which
+  // dates the item panel's dependency section compares for "Late". Memoized
+  // because the item panel is memo'd on referentially stable props.
+  const timelineConfig = useMemo(
+    () =>
+      (payload.views.find((v) => v.kind === "timeline")?.config ??
+        null) as TimelineViewConfig,
+    [payload.views],
+  );
+  const canEdit = access !== "viewer";
 
   const view =
     selected?.kind === "kanban" ? (
@@ -294,6 +307,9 @@ export function BoardViews({
             itemName={openItem?.name ?? ""}
             orgId={payload.board.org_id}
             boardId={payload.board.id}
+            boardName={payload.board.name}
+            timelineConfig={timelineConfig}
+            canEdit={canEdit}
             currentUserId={currentUserId}
             columns={payload.columns}
             members={panelMembers}

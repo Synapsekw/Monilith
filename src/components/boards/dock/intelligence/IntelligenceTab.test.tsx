@@ -252,7 +252,14 @@ describe("IntelligenceTab — while it is reading", () => {
     expect(region).toHaveAttribute("aria-busy", "true");
     expect(region).toHaveAttribute("aria-label", "Reading the board");
     // Three brief lines and two suggestion cards.
-    expect(region.querySelectorAll(".animate-pulse")).toHaveLength(5);
+    const blocks = [...region.querySelectorAll(".animate-pulse")];
+    expect(blocks).toHaveLength(5);
+    // The dock is painted on the wash: alpha-on-parent blocks, like the
+    // dock's other skeletons — never the content card's opaque `bg-muted`.
+    for (const block of blocks) {
+      expect(block).toHaveClass("bg-chrome-fill");
+      expect(block).not.toHaveClass("bg-muted");
+    }
     expect(container.querySelector("svg.animate-spin")).toBeNull();
   });
 

@@ -2,7 +2,6 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { MessageList, type UIMessage } from "./MessageList";
-import type { MentionTarget } from "@/lib/collaboration/mentions";
 
 const ACTION = {
   kind: "create_item" as const,
@@ -267,10 +266,6 @@ describe("MessageList — pre-token working state (gotcha-62)", () => {
   });
 });
 
-const agents: MentionTarget[] = [
-  { kind: "agent", agentId: "a-ops", handle: "ops", name: "Ops" },
-];
-
 // A thread shared to a board opens for every member of that board. RLS scopes
 // `applyAskProposal` to the owner, so Approve on a viewer's screen can only
 // produce a refusal — the card still says WHAT was proposed and that it is
@@ -322,187 +317,34 @@ describe("MessageList — a viewer of someone else's shared thread", () => {
   });
 });
 
-describe("MessageList — per-turn attribution", () => {
-  it("names the agent that answered a turn", () => {
-    render(
-      <MessageList
-        messages={[
-          {
-            id: "m1",
-            role: "user",
-            content: "@ops what slipped?",
-            agentId: "a-ops",
-          },
-          {
-            id: "m2",
-            role: "assistant",
-            content: "Three items.",
-            agentId: "a-ops",
-          },
-        ]}
-        agents={agents}
-        streamingText={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Ops")).toBeInTheDocument();
-  });
-
-  it("labels an unattributed answer as the plain assistant", () => {
-    render(
-      <MessageList
-        messages={[
-          { id: "m1", role: "assistant", content: "Hi", agentId: null },
-        ]}
-        agents={agents}
-        streamingText={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
+describe("MessageList — attribution", () => {
+  it("labels every answer as the Monolith assistant", () => {
+    renderList([{ id: "m1", role: "assistant", content: "Hi" }]);
     expect(screen.getByText("Monolith")).toBeInTheDocument();
   });
 
-  // Disabling an agent stops it answering (spec §1 — routing now agrees with
-  // the enabled-only roster), but it must not rewrite what it already said:
-  // the roster no longer contains it, so without the historical name map every
-  // answer it ever gave would silently become "Monolith".
-  it("keeps naming a turn answered by an agent that has since been disabled", () => {
-    render(
-      <MessageList
-        messages={[
-          {
-            id: "m1",
-            role: "assistant",
-            content: "Three items.",
-            agentId: "a-gone",
-          },
-        ]}
-        agents={agents}
-        agentNames={{ "a-gone": "Retired Ops" }}
-        streamingText={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Retired Ops")).toBeInTheDocument();
-    expect(screen.queryByText("Monolith")).toBeNull();
-  });
-
-  it("still says Monolith for a turn no name can be found for", () => {
-    render(
-      <MessageList
-        messages={[
-          {
-            id: "m1",
-            role: "assistant",
-            content: "Three items.",
-            agentId: "a-gone",
-          },
-        ]}
-        agents={agents}
-        agentNames={{}}
-        streamingText={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
+  it("names Monolith on the live streaming bubble", () => {
+    renderList([], { streamingText: "Working on it" });
     expect(screen.getByText("Monolith")).toBeInTheDocument();
   });
 
-  it("greets an owner with agents by offering them", () => {
-    render(
-      <MessageList
-        messages={[]}
-        agents={agents}
-        streamingText={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/@ops/)).toBeInTheDocument();
-  });
-
-  it("names the answering agent on the live streaming bubble", () => {
-    render(
-      <MessageList
-        messages={[]}
-        agents={agents}
-        streamingText="Working on it"
-        streamingAgentId="a-ops"
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Ops")).toBeInTheDocument();
-  });
-
-  it("names the agent in the thinking indicator once one is known", () => {
-    render(
-      <MessageList
-        messages={[]}
-        agents={agents}
-        streamingText=""
-        streamingAgentId="a-ops"
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("status")).toHaveTextContent("Ops is working…");
-  });
-
-  it("falls back to the generic thinking label with no agent on the turn", () => {
-    render(
-      <MessageList
-        messages={[]}
-        agents={agents}
-        streamingText=""
-        streamingAgentId={null}
-        status={null}
-        onApprove={vi.fn()}
-        onCancel={vi.fn()}
-        onApplyBatch={vi.fn()}
-        onDismissBatch={vi.fn()}
-      />,
-    );
+  it("uses the generic thinking label while a turn has no tokens yet", () => {
+    renderList([], { streamingText: "" });
     expect(screen.getByRole("status")).toHaveTextContent("Thinking…");
   });
 });
 
-// Spec §3: the dock's transcript sits on the wash — no card, no centring —
-// and an agent's turn carries the same initial tile as its band tile. `/ask`
-// keeps the card, byte-for-byte.
+// Spec §3: the dock's transcript sits on the wash — no card, no centring.
+// `/ask` keeps the card, byte-for-byte.
 describe("MessageList — surface", () => {
   const TURNS: UIMessage[] = [
     { id: "m1", role: "user", content: "what slipped?" },
-    { id: "m2", role: "assistant", content: "Three items.", agentId: "a-ops" },
-    { id: "m3", role: "assistant", content: "Plain answer.", agentId: null },
+    { id: "m2", role: "assistant", content: "Three items." },
+    { id: "m3", role: "assistant", content: "Plain answer." },
   ];
 
   it("keeps the /ask card byte-for-byte by default", () => {
-    const { container } = renderList(TURNS, { agents });
+    const { container } = renderList(TURNS);
     const column = container.querySelector("[data-scroll-container] > div")!;
     expect(column.className).toBe(
       "mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6",
@@ -523,8 +365,8 @@ describe("MessageList — surface", () => {
     }
   });
 
-  it("on the wash: full-width column, chrome-fill user pill, initial tile for a persona, mark for plain Ask", () => {
-    const { container } = renderList(TURNS, { agents, surface: "atmosphere" });
+  it("on the wash: full-width column, chrome-fill user pill, the Ask AI mark on every answer", () => {
+    const { container } = renderList(TURNS, { surface: "atmosphere" });
     const column = container.querySelector("[data-scroll-container] > div")!;
     expect(column.className).not.toContain("max-w-3xl");
     expect(column.className).toContain("px-3.5");
@@ -532,32 +374,13 @@ describe("MessageList — surface", () => {
     expect(pill.className).toContain("bg-chrome-fill");
     expect(pill.className).toContain("border-border");
     expect(pill.className).not.toContain("bg-surface-muted");
-    // Ops answered → its initial on the brand tint, like the band tile.
-    const opsTile = screen
-      .getByText("Three items.")
-      .closest("[data-turn]")!
-      .querySelector("[data-turn-tile]")!;
-    expect(opsTile).toHaveTextContent("O");
-    expect(opsTile.className).toContain("bg-primary/15");
-    expect(opsTile.querySelector("svg")).toBeNull();
-    // Nobody on record → the Ask AI mark, on the chrome fill (no card).
-    const plainTile = screen
-      .getByText("Plain answer.")
-      .closest("[data-turn]")!
-      .querySelector("[data-turn-tile]")!;
-    expect(plainTile.querySelector("svg")).not.toBeNull();
-    expect(plainTile.className).toContain("bg-chrome-fill");
-    expect(plainTile.className).not.toContain("bg-surface");
-  });
-
-  it("uses the initial tile for the live streaming bubble too, when its agent is known", () => {
-    const { container } = renderList([], {
-      agents,
-      streamingText: "Working on it",
-      streamingAgentId: "a-ops",
-      surface: "atmosphere",
-    });
-    expect(container.querySelector("[data-turn-tile]")).toHaveTextContent("O");
+    const tiles = [...container.querySelectorAll("[data-turn-tile]")];
+    expect(tiles).toHaveLength(2);
+    for (const tile of tiles) {
+      expect(tile.querySelector("svg")).not.toBeNull();
+      expect(tile.className).toContain("bg-chrome-fill");
+      expect(tile.className).not.toContain("bg-surface");
+    }
   });
 
   it("slides each turn in on the wash, the first three staggered — and never on /ask", () => {
@@ -574,13 +397,11 @@ describe("MessageList — surface", () => {
     );
   });
 
-  // Confirmed gap: the empty state (a fresh, message-less thread — the first
-  // thing a viewer sees on tapping an agent tile in the dock) used to render
-  // the /ask hero unconditionally: a bordered `bg-surface` card floating on
-  // the wash. It must use the same wash grammar as an assistant's persona
-  // tile, with no card behind it.
+  // Confirmed gap: the empty state (a fresh, message-less thread in the dock)
+  // used to render the /ask hero unconditionally: a bordered `bg-surface` card
+  // floating on the wash. It must use the wash grammar, with no card behind it.
   it("keeps the empty-state hero un-carded on the wash", () => {
-    const { container } = renderList([], { agents, surface: "atmosphere" });
+    const { container } = renderList([], { surface: "atmosphere" });
     const wrapper = container.querySelector(
       "[data-scroll-container] > div > div",
     )!;
@@ -596,8 +417,8 @@ describe("MessageList — surface", () => {
     expect(screen.queryByText(/will appear here/i)).toBeNull();
   });
 
-  it("greets an empty /ask thread with Mono, a title and who to address", () => {
-    const { container } = renderList([], { agents });
+  it("greets an empty /ask thread with Mono and a title", () => {
+    const { container } = renderList([]);
     expect(container.querySelector("svg[data-mood]")).toHaveAttribute(
       "data-mood",
       "happy",
@@ -607,12 +428,10 @@ describe("MessageList — surface", () => {
     );
     expect(title.className).toContain("text-foreground");
     expect(title.className).toContain("font-semibold");
-    expect(screen.getByText("@ops")).toBeInTheDocument();
-    expect(container.textContent).toContain("— or just ask.");
     expect(container.textContent).not.toMatch(/pulse/i);
   });
 
-  it("with no agents, the /ask empty state says what a question can be about", () => {
+  it("the /ask empty state says what a question can be about", () => {
     const { container } = renderList([]);
     expect(container.querySelector("svg[data-mood]")).not.toBeNull();
     expect(
@@ -625,5 +444,52 @@ describe("MessageList — surface", () => {
       { id: "a1", role: "assistant", content: "Two overdue." },
     ]);
     expect(container.querySelector("svg[data-mood]")).toBeNull();
+  });
+});
+
+describe("MessageList speaker identity", () => {
+  const speaker = {
+    name: "Nova",
+    tint: "#7395ff",
+    mark: <i data-testid="speaker-mark" />,
+  };
+  const turn: UIMessage = { id: "a1", role: "assistant", content: "Hi." };
+
+  it("names the speaker with its mark on assistant turns, not Monolith", () => {
+    renderList([turn], { speaker, surface: "atmosphere" });
+    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByTestId("speaker-mark")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith")).toBeNull();
+  });
+
+  it("uses the speaker on the streaming bubble and thinking indicator", () => {
+    const { unmount } = renderList([], {
+      speaker,
+      streamingText: "Working",
+    });
+    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith")).toBeNull();
+    unmount();
+    renderList([], {
+      speaker: { ...speaker, thinkingMark: <i data-testid="think-mark" /> },
+      streamingText: "",
+    });
+    expect(screen.getByTestId("think-mark")).toBeInTheDocument();
+    expect(screen.queryByTestId("speaker-mark")).toBeNull();
+  });
+
+  it("dock empty state invites a chat with the speaker", () => {
+    renderList([], { speaker, surface: "atmosphere" });
+    expect(screen.getByText("Chat with Nova")).toBeInTheDocument();
+    expect(screen.getByText(/Only you can chat with Nova/)).toBeInTheDocument();
+    expect(screen.queryByText("Ask")).toBeNull();
+  });
+
+  it("without a speaker the org assistant look is unchanged", () => {
+    renderList([turn], { surface: "atmosphere" });
+    expect(screen.getByText("Monolith")).toBeInTheDocument();
+    expect(screen.queryByText("Agent")).toBeNull();
+    expect(screen.queryByTestId("speaker-mark")).toBeNull();
   });
 });

@@ -140,11 +140,19 @@ describe("updateProfileThemePresetSchema", () => {
 
   it("still accepts a single-accent preset and rejects an unknown id", () => {
     expect(
-      updateProfileThemePresetSchema.safeParse({ themePreset: "ocean" })
+      updateProfileThemePresetSchema.safeParse({ themePreset: "graphite" })
         .success,
     ).toBe(true);
     expect(
       updateProfileThemePresetSchema.safeParse({ themePreset: "teal" }).success,
     ).toBe(false);
+  });
+
+  it("rejects a removed preset id — aliases are a read-side concern only", () => {
+    for (const themePreset of ["ocean", "forest", "ember", "rose"])
+      expect(
+        updateProfileThemePresetSchema.safeParse({ themePreset }).success,
+        themePreset,
+      ).toBe(false);
   });
 });

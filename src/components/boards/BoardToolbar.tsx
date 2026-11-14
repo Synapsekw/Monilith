@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { HeaderMember } from "@/components/boards/BoardHeader";
+import { MonoIdentity } from "@/components/mono/MonoChip";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { ColumnOption } from "@/lib/validations/boards";
 import type { SortField } from "@/lib/boards/board-filter";
@@ -273,7 +274,12 @@ export function BoardToolbar({
                 >
                   My items
                 </OptionRow>
-                {members
+                {/* People first, then Monos (spec §8: a Mono is always
+                    labelled as one — pebble, Agent chip, whose Mono). */}
+                {[
+                  ...members.filter((m) => !m.mono),
+                  ...members.filter((m) => m.mono),
+                ]
                   .filter((m) => m.userId !== currentUserId)
                   .map((m) => (
                     <OptionRow
@@ -281,7 +287,16 @@ export function BoardToolbar({
                       selected={state.people.includes(m.userId)}
                       onClick={() => setPeople(toggle(state.people, m.userId))}
                     >
-                      {memberLabel(m)}
+                      {m.mono ? (
+                        <MonoIdentity
+                          name={memberLabel(m)}
+                          color={m.mono.color}
+                          ownerName={m.mono.ownerName}
+                          size={16}
+                        />
+                      ) : (
+                        memberLabel(m)
+                      )}
                     </OptionRow>
                   ))}
               </div>

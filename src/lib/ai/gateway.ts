@@ -76,6 +76,7 @@ export async function resolveAiAdapter(
   orgId: string,
   userId: string,
   provider?: string,
+  opts: { personal?: boolean } = {},
 ): Promise<ResolvedAi> {
   const svc = createServiceClient();
   const settings = await readOrgAiSettings(svc, orgId);
@@ -83,6 +84,27 @@ export async function resolveAiAdapter(
     settings.defaultProvider === resolvedProvider
       ? settings.defaultModelId
       : null;
+
+  // A Mono's key brain (Personal Monos spec §2): the OWNER's own credential,
+  // whatever the org's mode, because the person chose to power their Mono
+  // themselves. An org that turned AI off still gets none. TRUST: same as the
+  // per_user branch below; callers pass the session user's own id.
+  if (opts.personal) {
+    if (settings.mode === "off") throw new AiDisabledError();
+    const wanted = provider ?? "anthropic";
+    const { adapter, apiKey, baseUrl } = await resolveUserAdapterById(
+      asTrustedUserId(userId),
+      wanted,
+    );
+    return {
+      adapter,
+      apiKey,
+      baseUrl,
+      mode: "per_user",
+      provider: wanted,
+      orgDefaultModelId: defaultModelIdFor(wanted),
+    };
+  }
 
   switch (settings.mode) {
     case "off":
@@ -133,7 +155,7 @@ export async function resolveAiAdapter(
 
     // per_user resolves the SUPPLIED userId's key (session-less, service-role
     // read) — not a cookie-bound session. This is what makes the gateway
-    // usable from cron/service-role callers (e.g. the personal-agent sweep)
+    // usable from cron/service-role callers (e.g. a scheduled sweep)
     // that have no session at all: they already know, from their own scoped
     // data, which user's spend this is, and pass that same id to runAi for
     // the ledger. Credential resolution and ledger attribution therefore
@@ -143,9 +165,9 @@ export async function resolveAiAdapter(
     // TRUST: `asTrustedUserId(userId)` is safe HERE because every caller of
     // this function is itself either (a) a Server Action/route that derived
     // `userId` from its own `requireUser()` session before ever calling
-    // runAi/resolveAiAdapter, or (b) a service-role cron handler (e.g.
-    // personal-agent's route.ts) that derived it from an HMAC-verified
-    // request's own DB row (`agent.owner_id`), never from a request
+    // runAi/resolveAiAdapter, or (b) a service-role cron handler that
+    // derived it from an HMAC-verified request's own DB row (e.g. an
+    // owner id column), never from a request
     // parameter passed straight through. This is the ONE call site allowed
     // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
@@ -202,6 +224,12 @@ export async function runAi<T>(
     feature: string;
     /** Resolve THIS provider's key (an agent pin), not the mode's default. */
     provider?: string;
+    /**
+     * Whose key pays. `"org"` (default) follows the org's ai_mode. `"personal"`
+     * always spends `userId`'s own stored key for `provider` (a Mono's key
+     * brain); `userId` must be the session user's own id.
+     */
+    credential?: "org" | "personal";
     /** A pinned CATALOG key. Unavailable pins fall back and set `substituted`. */
     requestedModel?: string | null;
     /**
@@ -249,6 +277,7 @@ export async function runAi<T>(
     args.orgId,
     args.userId,
     args.provider,
+    { personal: args.credential === "personal" },
   );
   const svc = createServiceClient();
   const model = await resolveModel({

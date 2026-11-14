@@ -3,6 +3,8 @@
 import type { ActivityDescriptor } from "@/lib/collaboration/activity";
 import { pillTextColor } from "@/lib/boards/contrast";
 import { Kicker } from "@/components/ui/kicker";
+import { MonoIdentity } from "@/components/mono/MonoChip";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 function Chip({
   value,
@@ -27,17 +29,29 @@ function Chip({
 export function ActivityRow({
   descriptor,
   actorName,
+  actorMono,
   when,
 }: {
   descriptor: ActivityDescriptor;
   actorName: string;
+  /** Set when the actor is a Mono. */
+  actorMono?: MonoMemberMeta;
   when: string;
 }) {
   const time = new Date(when).toLocaleString();
   return (
     <li className="bg-surface-muted border-border flex flex-col gap-1 rounded-lg border p-3 text-sm">
       <div className="text-muted-foreground flex items-center gap-2 text-xs">
-        <span className="text-foreground font-bold">{actorName}</span>
+        {actorMono ? (
+          <MonoIdentity
+            name={actorName}
+            color={actorMono.color}
+            ownerName={actorMono.ownerName}
+            size={16}
+          />
+        ) : (
+          <span className="text-foreground font-bold">{actorName}</span>
+        )}
         <Kicker size="xs">{time}</Kicker>
       </div>
       <div className="flex items-center gap-2">

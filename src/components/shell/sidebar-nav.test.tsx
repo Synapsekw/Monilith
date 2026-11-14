@@ -220,7 +220,7 @@ describe("SidebarNav", () => {
         activeWorkspaceId="w1"
       />,
     );
-    // ws chip | My Work+Agents | Planning | Boards → 3 dividers in the body.
+    // ws chip | My Work+Ask | Planning | Boards → 3 dividers in the body.
     // The footer draws its own `border-t`, so no divider above it.
     expect(document.querySelectorAll("[data-rail-divider]").length).toBe(3);
     expect(screen.getByTestId("sidebar-footer")).toContainElement(

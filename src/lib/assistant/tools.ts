@@ -7,8 +7,8 @@ import type {
   ToolDescriptor,
   ToolInvokeContext,
 } from "@/lib/mcp/tools/descriptor";
-import { resolveTargetBoardId } from "@/lib/agents/board-scope-guard";
-import { summariseProposal } from "@/lib/agents/proposal-summary";
+import { resolveTargetBoardId } from "./target-board";
+import { summariseProposal } from "./proposal-summary";
 import { assistantDescriptors, effectOf } from "./catalog";
 import { takesOrgId } from "./org-pin";
 import { unsupportedReason } from "./unsupported";
@@ -17,6 +17,10 @@ import { MAX_STAGED_CALLS, stagedCallSchema, type StagedCall } from "./staged";
 const OPAQUE_FAILURE = "Tool failed.";
 export const ORG_MISMATCH_ERROR =
   "That organization is not the one you are working in.";
+/** A Mono may not create boards (enforced by `boards_no_agent_creator` in the
+ *  database too); refused here so the owner is never offered a card for it. */
+export const MONO_NO_BOARDS_ERROR =
+  "A Mono cannot create boards. Ask your owner to create the board, then add you to it.";
 export const STAGE_INVALID_ERROR =
   "This change could not be lined up. Nothing was staged.";
 
@@ -66,6 +70,8 @@ export function buildAssistantTools(args: {
    * (see `describe.ts`), or null to use the generic summary. Never model text.
    */
   describe?: (tool: string, input: Record<string, unknown>) => string | null;
+  /** True on a Mono thread: calls a Mono may never make are refused. */
+  actingAsMono?: boolean;
 }): ToolSet {
   const descriptors = args.descriptors ?? assistantDescriptors();
   return Object.fromEntries(
@@ -77,6 +83,12 @@ export function buildAssistantTools(args: {
         execute: async (raw: Record<string, unknown>) => {
           const input = pinToOrg(d, raw, args.orgId);
           if (input === null) return failure(ORG_MISMATCH_ERROR);
+          if (
+            args.actingAsMono &&
+            d.name === "manage_board" &&
+            input.action === "create"
+          )
+            return failure(MONO_NO_BOARDS_ERROR);
           const reason = unsupportedReason(d.name, input);
           if (reason) return failure(reason);
           const effect = effectOf(d, input);

@@ -3,7 +3,6 @@
 import { requireUser } from "@/lib/auth/session";
 import {
   listBoardThreads,
-  listAgentThreads,
   type BoardThreadRow,
 } from "@/lib/ai/ask/board-threads";
 import { recoverConversation } from "@/lib/ai/ask/conversation-actions";
@@ -11,9 +10,8 @@ import type { ThreadMessage } from "@/lib/ai/ask/conversations";
 import { type ActionResult, fail } from "@/lib/actions/result";
 
 /**
- * The dock's ONE fetch, issued on first open and never on first paint. Both
- * reads are bounded over indexed columns and run in parallel — neither depends
- * on the other.
+ * The dock's ONE fetch, issued on first open and never on first paint. The
+ * read is bounded over indexed columns.
  *
  * `requireUser()` sits OUTSIDE the try: it redirects, and redirect() works by
  * throwing a sentinel that Next.js must see. Swallowing it into `fail()` would
@@ -21,16 +19,11 @@ import { type ActionResult, fail } from "@/lib/actions/result";
  */
 export async function loadDockThreads(input: {
   boardId: string;
-}): Promise<
-  ActionResult<{ board: BoardThreadRow[]; agent: BoardThreadRow[] }>
-> {
-  const user = await requireUser();
+}): Promise<ActionResult<{ board: BoardThreadRow[] }>> {
+  await requireUser();
   try {
-    const [board, agent] = await Promise.all([
-      listBoardThreads(input.boardId),
-      listAgentThreads(user.id),
-    ]);
-    return { ok: true, data: { board, agent } };
+    const board = await listBoardThreads(input.boardId);
+    return { ok: true, data: { board } };
   } catch {
     return fail("Couldn't load threads.");
   }

@@ -81,7 +81,8 @@ export function AskComposer({
           {pairs.map((pair) => (
             <li
               key={pair.id}
-              className="bg-surface border-border flex flex-col gap-1 rounded-lg border p-2.5"
+              // `chrome-reset`: an opaque card inside the dock's chrome scope.
+              className="chrome-reset bg-surface border-border flex flex-col gap-1 rounded-lg border p-2.5"
             >
               {/* Free-form user text (up to 500 chars, sentence-cased), so it
                   reads as a quiet LABEL — muted, smaller, medium weight —

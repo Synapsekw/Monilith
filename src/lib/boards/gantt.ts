@@ -24,6 +24,10 @@ export type GanttRow = {
   isMilestone?: boolean;
   startISO?: string;
   endISO?: string;
+  /** "section" rows are label bands (folder board / group headers) with no bar. */
+  kind?: "item" | "section";
+  /** Section depth: 0 = board band, 1 = group band. */
+  level?: 0 | 1;
 };
 
 export type GanttDependency = {

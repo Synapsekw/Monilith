@@ -3,12 +3,17 @@ import * as z from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { runAi } from "@/lib/ai/gateway";
+import { runAi, type ResolvedAiCall } from "@/lib/ai/gateway";
+import { getMonoClient } from "@/lib/mono/session";
+import {
+  monoSystemLines,
+  resolveMonoTurn,
+  type MonoTurn,
+} from "@/lib/monos/turn";
 import { createClient } from "@/lib/supabase/server";
 import { composeFolderScope } from "@/lib/ai/ask/persona";
 import { getFolderHead } from "@/lib/folders/queries";
-import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
-import { composeAgentChatSystem } from "@/lib/ai/ask/agent-knowledge";
+import { getMessages } from "@/lib/ai/ask/conversations";
 import {
   splitForCompaction,
   composeSystem,
@@ -129,7 +134,7 @@ export async function POST(req: Request) {
 
   const conv = await supabase
     .from("ai_conversations")
-    .select("summary, summarized_upto, board_id, folder_id, agent_id, user_id")
+    .select("summary, summarized_upto, board_id, folder_id, user_id, mono_id")
     .eq("id", conversationId)
     .single();
   if (conv.error || !conv.data)
@@ -147,12 +152,25 @@ export async function POST(req: Request) {
       { status: 403 },
     );
 
-  // Board scope only, here. Persona composition moves to the per-turn agent
-  // read below (WHO ANSWERS) — the addressed agent is the LAST USER TURN's
-  // `agent_id`, not a pre-turn read of the conversation column. This read
-  // goes through the USER client, so RLS decides what is visible; a row that
-  // reads back null degrades to plain Ask rather than failing a turn whose
-  // history is still worth continuing.
+  // A Mono thread (Personal Monos 2A): the caller must own the Mono and it
+  // must be awake. Checked before the stream opens so a refusal is a status.
+  let monoTurn: MonoTurn | null = null;
+  if (conv.data.mono_id) {
+    const r = await resolveMonoTurn(
+      supabase,
+      user.id,
+      org.id,
+      conv.data.mono_id,
+    );
+    if (!r.ok)
+      return NextResponse.json({ error: r.error }, { status: r.status });
+    monoTurn = r.turn;
+  }
+
+  // Board scope only, here. Every turn is answered by the org assistant. This
+  // read goes through the USER client, so RLS decides what is visible; a row
+  // that reads back null degrades to plain Ask rather than failing a turn
+  // whose history is still worth continuing.
   // The system text itself is composed inside the turn, after the opening
   // status, because it names the signed-in user (a members read).
   let folderScope: Parameters<typeof composeFolderScope>[1] = null;
@@ -253,6 +271,14 @@ export async function POST(req: Request) {
         }),
         folderScope,
       );
+      if (monoTurn)
+        system = `${system}\n\n${monoSystemLines(monoTurn.mono, promptSafeName(me?.fullName))}`;
+      // A Mono's reads and staged writes are judged by RLS as the Mono itself
+      // (ADR decision-44). Minted here, after the opening status.
+      const actingClient = monoTurn
+        ? await getMonoClient(monoTurn.mono.userId)
+        : supabase;
+      const actorId = monoTurn ? monoTurn.mono.userId : user.id;
 
       // FOCUS. Read HERE, after the opening status, so a full board payload
       // never delays the turn's first byte (gotcha-62). A board thread's board
@@ -282,29 +308,6 @@ export async function POST(req: Request) {
 
       const allRows = await getMessages(conversationId);
 
-      // WHO ANSWERS. `ai_conversations.agent_id` — the column the header
-      // switcher writes — with the newest user turn as the fallback for a lost
-      // column write (see `currentPersonaFrom`). The request body carries no
-      // agent field at all, so a client cannot select a persona here.
-      //
-      // `enabled` is part of the read for the same reason it is part of
-      // `ownedAgentId`: every display path resolves names against the
-      // enabled-only `listOwnerAgentTargets`, so answering AS a disabled agent
-      // would compose its instructions, documents and memory into a turn the
-      // header and the kicker both label "Monolith". A disabled agent degrades
-      // to the plain assistant, which is what the whole UI is already saying.
-      const personaAgentId = currentPersonaFrom(allRows, conv.data.agent_id);
-      const personaAgent = personaAgentId
-        ? (
-            await supabase
-              .from("user_agents")
-              .select("id, name, instructions, doc_nonce")
-              .eq("id", personaAgentId)
-              .eq("enabled", true)
-              .maybeSingle()
-          ).data
-        : null;
-
       let summary = conv.data.summary;
       const isFirstExchange =
         allRows.length === 1 && allRows[0].role === "user";
@@ -312,135 +315,140 @@ export async function POST(req: Request) {
       // Rolling-summary compaction of older turns (keeps per-turn cost bounded).
       const { toFold, recent } = splitForCompaction(allRows, KEEP_RECENT);
 
-      const result = await runAi(
-        { orgId: org.id, userId: user.id, feature: "ask_pulse" },
-        async ({ adapter, apiKey, baseUrl, model }, reportUsage) => {
-          if (!model.supportsTools)
-            throw new Error(
-              `${model.model} can't use tools. Pick a tool-capable model in Settings → AI.`,
-            );
-          // The whole turn — rolling summary, the tool loop and the auto-title —
-          // runs on the ONE model runAi resolved, so all three agree with the
-          // ledger row it meters. The WIRE id, never the catalog key.
-          const lm = languageModelFor({
-            kind: adapter.kind,
-            apiKey,
-            baseUrl,
-            model: model.requestModel,
-          });
-          let usage: AiUsageTokens = {
-            inputTokens: 0,
-            outputTokens: 0,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-          };
+      const turnBody = async (
+        { adapter, apiKey, baseUrl, model }: ResolvedAiCall,
+        reportUsage: (usage: AiUsageTokens) => void,
+      ) => {
+        if (!model.supportsTools)
+          throw new Error(
+            `${model.model} can't use tools. Pick a tool-capable model in Settings → AI.`,
+          );
+        // The whole turn — rolling summary, the tool loop and the auto-title —
+        // runs on the ONE model runAi resolved, so all three agree with the
+        // ledger row it meters. The WIRE id, never the catalog key.
+        const lm = languageModelFor({
+          kind: adapter.kind,
+          apiKey,
+          baseUrl,
+          model: model.requestModel,
+        });
+        let usage: AiUsageTokens = {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        };
 
-          if (toFold.length > 0) {
-            const s = await summarizeThread(lm, summary, toFold);
-            usage = addUsage(usage, s.usage);
-            // Metered NOW, so a turn that dies before the loop's first step
-            // still pays for the summary it already spent.
-            reportUsage(usage);
-            // `summarizeThread` hands back the PRIOR summary when the model
-            // returned nothing. Advancing the cursor then would drop the
-            // folded turns for good, so only a new, non-empty summary moves it.
-            if (s.summary.length > 0 && s.summary !== (summary ?? "")) {
-              summary = s.summary;
-              await supabase
-                .from("ai_conversations")
-                .update({
-                  summary,
-                  summarized_upto: toFold[toFold.length - 1].created_at,
-                })
-                .eq("id", conversationId);
-            }
-          }
-
-          // Composed HERE, not above: `model.contextLength` is what the
-          // knowledge envelope is divided against, and it is only resolved
-          // inside this callback (execute-run.ts, same reason). `system`
-          // already carries the FOCUS block, so a persona keeps it.
-          const turnSystem = personaAgent
-            ? await composeAgentChatSystem({
-                client: supabase,
-                preamble: system,
-                agent: {
-                  id: personaAgent.id,
-                  name: personaAgent.name,
-                  instructions: personaAgent.instructions,
-                  docNonce: personaAgent.doc_nonce,
-                },
-                contextLength: model.contextLength,
+        if (toFold.length > 0) {
+          const s = await summarizeThread(lm, summary, toFold);
+          usage = addUsage(usage, s.usage);
+          // Metered NOW, so a turn that dies before the loop's first step
+          // still pays for the summary it already spent.
+          reportUsage(usage);
+          // `summarizeThread` hands back the PRIOR summary when the model
+          // returned nothing. Advancing the cursor then would drop the
+          // folded turns for good, so only a new, non-empty summary moves it.
+          if (s.summary.length > 0 && s.summary !== (summary ?? "")) {
+            summary = s.summary;
+            await supabase
+              .from("ai_conversations")
+              .update({
+                summary,
+                summarized_upto: toFold[toFold.length - 1].created_at,
               })
-            : system;
-
-          // SECURITY: reads run, and staged writes are later applied, as the
-          // signed-in user through their own cookie-bound client, so RLS is
-          // the boundary. Never a service-role client here.
-          const staged: StagedCall[] = [];
-          const tools = buildAssistantTools({
-            ctx: { getClient: async () => supabase, actorId: user.id },
-            client: supabase,
-            // Every org-scoped call is pinned to the org this turn runs in.
-            orgId: org.id,
-            stage: (call) => {
-              if (staged.length >= MAX_STAGED_CALLS) return false;
-              staged.push(call);
-              return true;
-            },
-            // Labels from real board data for the exact pinned input; a
-            // non-board thread keeps the generic summaries.
-            describe: describeCtx
-              ? (tool, input) => describeCall(tool, input, describeCtx)
-              : undefined,
-          });
-
-          const beforeLoop = usage;
-          const r = await runAssistantLoop({
-            model: lm,
-            system: composeSystem(turnSystem, summary),
-            messages: recent.map((m) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            })),
-            tools,
-            emit,
-            // The AI SDK sends no thinking config unless asked. Anthropic
-            // models get the repo's own per-model request shape; other wire
-            // formats have no such knob.
-            providerOptions:
-              adapter.kind === "anthropic"
-                ? anthropicReasoningOptions(model.requestModel)
-                : undefined,
-            // A turn that dies at step 9 still spent steps 1 to 8.
-            onUsage: (running) => reportUsage(addUsage(beforeLoop, running)),
-          });
-          usage = addUsage(usage, r.usage);
-
-          // Auto-title on the first exchange — same model, metered. Best-effort.
-          let title: string | undefined;
-          if (isFirstExchange) {
-            try {
-              const t = await titleThread(lm, allRows[0].content);
-              title = t.title;
-              usage = addUsage(usage, t.usage);
-            } catch {
-              /* title is best-effort */
-            }
+              .eq("id", conversationId);
           }
+        }
 
-          // A staged turn whose model wrote nothing stores the same line the
-          // client bubble shows live, so a reload reads identically.
-          const answer =
-            staged.length > 0 && !r.wroteText
-              ? PROPOSAL_FALLBACK_ANSWER
-              : r.text;
-          // The model wrote nothing, so nothing was streamed: send the stored
-          // answer now, so the live bubble reads exactly like the reloaded row.
-          if (!r.wroteText) emit({ type: "token", text: answer });
-          return { result: { answer, staged, title }, usage };
-        },
-      );
+        // SECURITY: reads run, and staged writes are later applied, as the
+        // signed-in user through their own cookie-bound client, so RLS is
+        // the boundary. Never a service-role client here. On a Mono thread
+        // the client is the Mono's own session; never a service-role client.
+        const staged: StagedCall[] = [];
+        const tools = buildAssistantTools({
+          ctx: { getClient: async () => actingClient, actorId },
+          client: actingClient,
+          // Every org-scoped call is pinned to the org this turn runs in.
+          orgId: org.id,
+          actingAsMono: monoTurn !== null,
+          stage: (call) => {
+            if (staged.length >= MAX_STAGED_CALLS) return false;
+            staged.push(call);
+            return true;
+          },
+          // Labels from real board data for the exact pinned input; a
+          // non-board thread keeps the generic summaries.
+          describe: describeCtx
+            ? (tool, input) => describeCall(tool, input, describeCtx)
+            : undefined,
+        });
+
+        const beforeLoop = usage;
+        const r = await runAssistantLoop({
+          model: lm,
+          system: composeSystem(system, summary),
+          messages: recent.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+          tools,
+          emit,
+          // The AI SDK sends no thinking config unless asked. Anthropic
+          // models get the repo's own per-model request shape; other wire
+          // formats have no such knob.
+          providerOptions:
+            adapter.kind === "anthropic"
+              ? anthropicReasoningOptions(model.requestModel)
+              : undefined,
+          // A turn that dies at step 9 still spent steps 1 to 8.
+          onUsage: (running) => reportUsage(addUsage(beforeLoop, running)),
+        });
+        usage = addUsage(usage, r.usage);
+
+        // Auto-title on the first exchange — same model, metered. Best-effort.
+        let title: string | undefined;
+        if (isFirstExchange) {
+          try {
+            const t = await titleThread(lm, allRows[0].content);
+            title = t.title;
+            usage = addUsage(usage, t.usage);
+          } catch {
+            /* title is best-effort */
+          }
+        }
+
+        // A staged turn whose model wrote nothing stores the same line the
+        // client bubble shows live, so a reload reads identically.
+        const answer =
+          staged.length > 0 && !r.wroteText ? PROPOSAL_FALLBACK_ANSWER : r.text;
+        // The model wrote nothing, so nothing was streamed: send the stored
+        // answer now, so the live bubble reads exactly like the reloaded row.
+        if (!r.wroteText) emit({ type: "token", text: answer });
+        return { result: { answer, staged, title }, usage };
+      };
+
+      // Two literal call sites: the model-map scanner reads the `feature`
+      // literal of each metered call, and wants each callback to destructure
+      // the resolved `model` (turnBody is what really reads it). A Mono turn
+      // spends the OWNER's own key (credential "personal", userId = the
+      // session user), so ai_usage meters the owner, never the Mono.
+      const result = monoTurn
+        ? await runAi(
+            {
+              orgId: org.id,
+              userId: user.id,
+              feature: "mono_chat",
+              credential: "personal",
+              provider: monoTurn.provider,
+            },
+            ({ model, ...resolved }, reportUsage) =>
+              turnBody({ ...resolved, model }, reportUsage),
+          )
+        : await runAi(
+            { orgId: org.id, userId: user.id, feature: "ask_pulse" },
+            ({ model, ...resolved }, reportUsage) =>
+              turnBody({ ...resolved, model }, reportUsage),
+          );
 
       // The staged batch rides the trace (see lib/ai/ask/tool-trace.ts), which
       // is what makes an unconfirmed card survive a reload. Apply re-reads the
@@ -450,12 +458,6 @@ export async function POST(req: Request) {
       const trace: AskToolTrace = { boardsConsulted: [] };
       if (result.staged.length) trace.stagedCalls = result.staged;
 
-      // Stamped with the agent that was actually READ, never the id we set out
-      // to resolve: a deleted or unreadable agent leaves `personaAgent` null,
-      // and stamping the dangling id would have the FK reject the whole insert
-      // — losing a fully-streamed, already-paid answer to attribute a turn that
-      // was, in the end, answered by the plain assistant (that is what the
-      // composed system prompt says above).
       const ins = await supabase
         .from("ai_messages")
         .insert({
@@ -463,7 +465,6 @@ export async function POST(req: Request) {
           role: "assistant",
           content: result.answer,
           tool_trace: trace as unknown as Json,
-          agent_id: personaAgent?.id ?? null,
         })
         .select("id")
         .single();

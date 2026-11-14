@@ -26,14 +26,10 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   /* The two-accent fill (`bg-brand-gradient`) and the primary Button's hover
-     (`bg-brand-gradient-hover`): the same two stops at 80% alpha, which for a
-     single-accent preset is exactly the old `hover:bg-primary/80`. */
+     (`bg-brand-gradient-hover`). Both read a token derived in `:root`, so the
+     light chrome scope can re-seed each (see `.chrome-scope`). */
   --background-image-brand-gradient: var(--brand-gradient);
-  --background-image-brand-gradient-hover: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--brand) 80%, transparent),
-    color-mix(in oklab, var(--brand-2) 80%, transparent)
-  );
+  --background-image-brand-gradient-hover: var(--brand-gradient-hover);
 
   /* Keystone additions */
   --color-kicker: var(--kicker);
@@ -286,17 +282,44 @@
   --brand: #5a6ed5;
   /* The second accent — a SEED token. Single-accent presets (this one
      included) declare it equal to their own --brand, a degenerate gradient;
-     aurora / sunset / nebula give it a second hue. It only ever appears as
-     the far stop of --brand-gradient and of the chart spectrum, and as the
-     header glow's second bloom. --ring, links and text stay on --brand. */
+     the fifteen two-accent presets (aurora, sunset, nebula and the twelve
+     generated ones) give it a second hue. It only ever appears as
+     the far stop of --brand-gradient and of the chart spectrum, as the header
+     glow's second bloom and as the wash's second mesh bloom. --ring, links
+     and text stay on --brand. */
   --brand-2: #5a6ed5;
   --brand-foreground: #ffffff;
-  /* Derived ONCE, here — never in a preset block and not in .dark. Both
-     stops are seeds every block re-declares on <html>, so this follows the
-     mode and the preset by itself. Sanctioned in exactly four places: the
-     primary Button fill, the active sidebar indicator, progress-bar fills
-     and the chart spectrum below. Utility: `bg-brand-gradient`. */
-  --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
+  /* The gradient's middle stop. Derived, not a seed: the even sRGB mix of
+     the two accents, which is exactly the colour a two-stop gradient already
+     paints at its centre — so naming it changes nothing. A preset MAY
+     redeclare it to bend the gradient through a third hue (only Prism does).
+     Mixed `in srgb` so globals.contrast.test.ts can reproduce it. */
+  --brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));
+  /* Derived ONCE, here — never in a preset block and not in .dark. The outer
+     stops are seeds every block re-declares on <html> and the middle follows
+     them, so this tracks the mode and the preset by itself. Sanctioned in
+     exactly four places: the primary Button fill, the active sidebar
+     indicator, progress-bar fills and the chart spectrum below. Utility:
+     `bg-brand-gradient`. */
+  --brand-gradient: linear-gradient(
+    90deg,
+    var(--brand),
+    var(--brand-mid),
+    var(--brand-2)
+  );
+  /* The primary Button's hover image: the same three stops at 80% alpha over
+     whatever is behind the button, which for a single-accent preset is
+     exactly the old `hover:bg-primary/80`. Derived ONCE, here, like the
+     gradient itself — never in a preset block and not in .dark. A token
+     rather than an inline recipe in `@theme` so the light chrome scope can
+     replace it: there the brand is white and the label is the frame's own
+     hue, and 80% white over the frame fails the label. */
+  --brand-gradient-hover: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--brand) 80%, transparent),
+    color-mix(in oklab, var(--brand-mid) 80%, transparent),
+    color-mix(in oklab, var(--brand-2) 80%, transparent)
+  );
 
   --background: #f6f6f8;
   --foreground: #1a1a1f;
@@ -314,13 +337,15 @@
   --secondary: #f1f1f4;
   --secondary-foreground: #1a1a1f;
   --muted: #f1f1f4;
-  /* Tuned against the WASH, not against --background: the sidebar's muted nav
-     labels sit on the gradient's dark end (light) and under the brand bloom
-     (dark). Worst case, computed with globals.contrast.test.ts's own over()
-     helper (per-channel Math.round of the alpha blend): 4.56:1 light
-     (darkest wash stop, #cfd4e6) / 4.70:1 dark (lightest wash stop #212540,
-     fully bloomed at 22% brand → composited rgb(57 65 102)) — both clear AA
-     4.5 with a thin margin. See globals.contrast.test.ts. */
+  /* Dark is tuned against the WASH, not against --background: the sidebar's
+     muted nav labels sit under the brand bloom — 4.70:1 on the lightest wash
+     stop #212540 fully bloomed at 22% brand (composited rgb(57 65 102)),
+     computed with globals.contrast.test.ts's own over() helper.
+     The LIGHT value no longer meets the wash at all: the light chrome is the
+     bold frame, whose muted text is white (see `.chrome-scope` below). This
+     grey only has to clear AA on the content card and the raised surfaces,
+     which it does with room — it was tuned against the old pale wash
+     (#cfd4e6, 4.56:1) and is deliberately unchanged. */
   --muted-foreground: #5b5b62;
   /* Kicker shares --muted-foreground's exact lightness in both themes: AA 4.5
      on the wash leaves no dimmer gray to spend, so the old "kicker is dimmer
@@ -338,30 +363,70 @@
   --ring: var(--brand);
   --glow-primary: 0 0 30px -8px rgba(90, 110, 213, 0.35);
 
-  /* Periwinkle Dusk — light. Chrome only; content stays neutral. The first stop
-     sits slightly below the bloom so the bloom has visible range (the Aug 27
-     tint had collapsed the two onto the same value — a no-op bloom). */
-  --app-wash: linear-gradient(168deg, #dde2f2 0%, #d6dbee 46%, #cfd4e6 100%);
-  /* Brand-derived, lighter than every wash stop: raises contrast against dark
-     text (see globals.contrast.test.ts) and lets theme presets inherit it. */
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  /* Periwinkle Dusk — light: the BOLD FRAME. In light mode the chrome is a
+     saturated gradient of the preset's own hues (periwinkle into deep indigo
+     here) and everything painted on it is white — see `.chrome-scope` after
+     the preset blocks. The content card stays white. The stops are not taste:
+     scripts/theme/gen-presets.mjs starts from a mid-tone ramp (OKLCH L
+     0.52 / 0.44 / 0.33) and lowers each stop only until white chrome text
+     clears AA on it under this preset's own bloom, keeping the three in
+     descending lightness; globals.contrast.test.ts re-checks every stop of
+     every preset. What binds the first stop is white body text on a
+     SELECTED row under the first bloom radial. */
+  --app-wash: linear-gradient(168deg, #3643a7 0%, #2c3699 46%, #222c72 100%);
+  /* Mesh bloom — three radials, one per accent stop, derived ONCE per mode.
+     Not a seed: preset blocks must not redeclare it. Mixed `in srgb` so
+     globals.contrast.test.ts can reproduce the painted colour. The light
+     blooms are a GLOW of each accent, not a white haze: 70% accent, 30%
+     white. They still lighten the ground and so lower contrast against the
+     white chrome text, which caps the alphas from above; from below, every
+     radial at its peak must sit >= 1.12:1 off every bare wash stop or the
+     mesh is not there (it is the grey Graphite accent that sets the lower
+     two at 16%). Tint, peaks and geometry must equal LIGHT_BLOOM in
+     scripts/theme/gen-presets.mjs. The radials keep the dark bloom's
+     geometry; the lower two do not overlap the first. */
+  --app-bloom:
+    radial-gradient(
+      110% 85% at 8% -6%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand) 70%, white) 18%,
+          transparent
+        )
+        0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      90% 60% at 100% 100%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand-2) 70%, white) 16%,
+          transparent
+        )
+        0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 0% 80%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand-mid) 70%, white) 16%,
+          transparent
+        )
+        0%,
+      transparent 60%
+    );
   --content-surface: #ffffff;
   --content-edge: rgb(0 0 0 / 12%);
   --content-lift:
     -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
   /* The bloom on a lit seam (`.seam-line` below). Derived from --foreground, so
      it is declared ONCE and every theme and preset resolves it for free — a
-     white haze on the near-black card, an ink haze on the paper one. Not a
-     seed token: preset blocks must not redeclare it. */
+     white haze on the near-black card, an ink haze at the light root. The
+     light root value is not what the seam paints with, though: the seam
+     carries `.chrome-scope` (it lights against the bold frame), and the scope
+     re-derives this from its own white foreground. Not a seed token: preset
+     blocks must not redeclare it. */
   --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
 
   /* Theme reach — Tinted, the default (no attribute on <html>). How much of
@@ -488,6 +553,39 @@
   --sidebar-accent-foreground: #1a1a1f;
   --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
+
+  /* Root values of every token `.chrome-scope` moves, captured so
+     `.chrome-reset` can hand them back to an opaque surface nested inside
+     the chrome (both rules live after the preset blocks). Declared ONCE,
+     here, and not in `.dark`: `:root`, `.dark` and every preset and reach
+     selector match the same <html> element, so each alias computes from the
+     value that won the cascade there and descendants inherit the resolved
+     colour. Not seed tokens: a preset block must never redeclare them. */
+  --base-foreground: var(--foreground);
+  --base-muted-foreground: var(--muted-foreground);
+  --base-kicker: var(--kicker);
+  --base-destructive: var(--destructive);
+  --base-border: var(--border);
+  --base-border-hover: var(--border-hover);
+  --base-border-bright: var(--border-bright);
+  --base-input: var(--input);
+  --base-ring: var(--ring);
+  --base-brand: var(--brand);
+  --base-brand-2: var(--brand-2);
+  --base-brand-mid: var(--brand-mid);
+  --base-brand-foreground: var(--brand-foreground);
+  --base-brand-gradient: var(--brand-gradient);
+  --base-brand-gradient-hover: var(--brand-gradient-hover);
+  --base-primary: var(--primary);
+  --base-primary-foreground: var(--primary-foreground);
+  --base-state-hover: var(--state-hover);
+  --base-state-active: var(--state-active);
+  --base-state-selected: var(--state-selected);
+  --base-chrome-fill: var(--chrome-fill);
+  --base-scrollbar-thumb: var(--scrollbar-thumb);
+  --base-reach-hover: var(--reach-hover);
+  --base-reach-selected: var(--reach-selected);
+  --base-seam-glow: var(--seam-glow);
 }
 
 .dark {
@@ -534,11 +632,27 @@
 
   /* Periwinkle Dusk — dark. Chrome only; content stays neutral. */
   --app-wash: linear-gradient(168deg, #212540 0%, #141728 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
+  /* Mesh bloom, dark — the accents themselves at low alpha. The first radial
+     is the original single bloom (same geometry, same 22% peak); --brand-2
+     lights the far corner and --brand-mid the lower-left edge. The alphas are
+     bound by globals.contrast.test.ts: muted text must clear AA with the two
+     left-edge radials stacked at full peak. */
+  --app-bloom:
+    radial-gradient(
+      110% 85% at 8% -6%,
+      color-mix(in srgb, var(--brand) 22%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      90% 60% at 100% 100%,
+      color-mix(in srgb, var(--brand-2) 18%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 0% 80%,
+      color-mix(in srgb, var(--brand-mid) 12%, transparent) 0%,
+      transparent 60%
+    );
   --content-surface: #0e0e10;
   --content-edge: rgb(255 255 255 / 8%);
   --content-lift:
@@ -624,8 +738,9 @@
    the wheel from the brand and from each other whatever the brand is. The
    old palette (a tint of the brand plus four fixed hues) could not promise
    that: cat-2 shared cat-1's hue in every single-accent preset, and a warm or
-   green brand landed on a fixed hue (dark sunset vs #f59e0b measured OKLab
-   dE 0.046, dark forest vs #34d399 0.052).
+   green brand landed on a fixed hue (measured on the presets of the time:
+   dark sunset vs #f59e0b OKLab dE 0.046, and 0.052 for the dark block of
+   Forest, a green preset since removed, vs #34d399).
 
    Lightness and chroma are FIXED per slot and chosen inside the sRGB gamut at
    every hue (the inscribed chroma is 0.119 at L 0.70, 0.111 at 0.78, 0.105 at
@@ -691,29 +806,42 @@
    The numbers are bound by tests, not by taste. globals.contrast.test.ts
    re-runs every check below for every preset x mode x reach.
 
+   The floors quoted in 1-3 are the measurements that SET each value, taken
+   on the presets of the time: nine, of which Ocean, Forest, Ember and Rose
+   have since been removed (stored ids are aliased in
+   src/lib/theme/presets.ts). They are kept as the record of why each number
+   is what it is, not as a description of today's seventeen presets — the
+   values did not move when the list changed, and the test is what holds
+   them for the current list.
+
    1. Light --reach-content is capped at 2.5% (the spec started at 5% / 9%).
       Mixing brand into a white card darkens it towards the chrome, and the
-      bloomed header band must stay >= 1.15:1 against the card. 2.5% is the
-      highest 0.5% step that holds in all six light presets (floor 1.152,
-      forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
-      equals light tinted here and differs by surface and glow only.
+      bloomed header band must stay >= 1.15:1 against the card. 2.5% was the
+      highest 0.5% step that held in all six light presets measured then
+      (floor 1.152, on the since-removed Forest); 3% was 1.142. Vivid cannot
+      go higher either, so light vivid equals light tinted here and differs
+      by surface and glow only.
+      (That floor was measured against the old pale light wash. Under the
+      bold frame the chrome is far darker than the card and the check has
+      a wide margin, so it no longer binds — the value is simply unchanged.)
    2. Light vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8%.
       A hover fill is alpha-on-parent, so muted text on a hovered row inside a
       raised surface sits on two doses of brand. At 7% / 13% that measured
-      4.12-4.40:1 on light --surface-muted in all six presets (and 4.11 on
-      dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
-      tinted's is 4.58. Raising either again needs a darker light
+      4.12-4.40:1 on light --surface-muted in all six presets measured then
+      (and 4.11 on the --secondary of the since-removed Rose, dark). At
+      5% / 8% the floor was 4.53 (light, on the since-removed Ocean);
+      tinted's was 4.58. Raising either again needs a darker light
       --muted-foreground in the preset seeds first.
    3. Dark vivid is content 8% / surface 7% (it shipped as 9% / 5%). The
       seeds put a raised surface about 1.07:1 above the dark content card, and
       a content mix that outruns the surface mix closes that gap: at 9% / 5%
-      cards measured 1.000-1.020 against the page in all nine presets and
-      the red channel inverted in ember and sunset. The two have to climb
-      together. Surface is capped at 7% by the same hovered-row check as (2)
-      with hover at 8% (floor 4.52, dark rose --secondary; 8% is 4.44), and
-      content sits one point above it, exactly as at Tinted (5% / 4%): the
-      card/page separation is then 1.061-1.073, against 1.068-1.073 at
-      Subtle. Dark vivid differs from dark tinted by +3 points of brand on
+      cards measured 1.000-1.020 against the page in all nine presets of the
+      time and the red channel inverted in Sunset and the since-removed
+      Ember. The two have to climb together. Surface is capped at 7% by the
+      same hovered-row check as (2) with hover at 8% (floor then 4.52, on the
+      --secondary of the since-removed Rose, dark; 8% was 4.44), and content
+      sits one point above it, exactly as at Tinted (5% / 4%): the card/page
+      separation measured 1.061-1.073 then, against 1.068-1.073 at Subtle. Dark vivid differs from dark tinted by +3 points of brand on
       the page and on every raised surface, plus the glow.
    4. --reach-selected is 12%. Selected is the brand at 14% alpha; at 8% reach
       the hover fill is itself a brand tint at 12.6% alpha, and an active row
@@ -787,7 +915,8 @@
    globals.contrast.test.ts re-runs every AA check against each block.
    --------------------------------------------------------------------------- */
 
-/* Graphite — the accent stands down to a neutral steel; the wash is pure grey.
+/* Graphite — the accent stands down to a neutral steel; the wash is pure grey
+   (a charcoal frame in light, where every wash is the bold frame).
    For people who want the chrome to disappear entirely.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
@@ -812,17 +941,7 @@
   --accent: #eeeef0;
   --accent-foreground: #1a1a1e;
   --glow-primary: 0 0 30px -8px rgba(75, 75, 85, 0.35);
-  --app-wash: linear-gradient(168deg, #e2e2e6 0%, #dadade 46%, #d1d1d6 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  --app-wash: linear-gradient(168deg, #515259 0%, #46464d 46%, #34353a 100%);
   --content-surface: #ffffff;
 }
 
@@ -847,292 +966,23 @@
   --accent: #1d1d1e;
   --accent-foreground: #f4f4f6;
   --app-wash: linear-gradient(168deg, #26262b 0%, #16161a 46%, #09090b 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0f0f10;
 }
 
-/* Ocean — cool teal accent over a blue-grey wash.
-   Seeded from the :root / .dark recipe — only the tokens a preset can move are
-   redeclared; everything alpha-based or brand-derived follows. */
-:root[data-theme-preset="ocean"] {
-  --brand: #1f7a8c;
-  --brand-2: #1f7a8c;
-  --brand-foreground: #ffffff;
-  --background: #f4f7f8;
-  --foreground: #14191b;
-  --surface: #ffffff;
-  --surface-muted: #eaf0f2;
-  --surface-sunken: #eaf0f2;
-  --card: #ffffff;
-  --card-foreground: #14191b;
-  --popover: #ffffff;
-  --popover-foreground: #14191b;
-  --secondary: #eaf0f2;
-  --secondary-foreground: #14191b;
-  --muted: #eaf0f2;
-  --muted-foreground: #505f64;
-  --kicker: #505f64;
-  --accent: #eaf0f2;
-  --accent-foreground: #14191b;
-  --glow-primary: 0 0 30px -8px rgba(31, 122, 140, 0.35);
-  --app-wash: linear-gradient(168deg, #dbe9ee 0%, #d2e2e8 46%, #c8d9df 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
-  --content-surface: #ffffff;
-}
-
-.dark[data-theme-preset="ocean"] {
-  --brand: #6fc6d6;
-  --brand-2: #6fc6d6;
-  --brand-foreground: #0e0e10;
-  --background: #0e1112;
-  --foreground: #f1f5f6;
-  --surface: #16191a;
-  --surface-muted: #1c1f20;
-  --surface-sunken: #1c1f20;
-  --card: #16191a;
-  --card-foreground: #f1f5f6;
-  --popover: #1c1f20;
-  --popover-foreground: #f1f5f6;
-  --secondary: #26292a;
-  --secondary-foreground: #f1f5f6;
-  --muted: #1c1f20;
-  --muted-foreground: #b1c0c4;
-  --kicker: #b1c0c4;
-  --accent: #1c1f20;
-  --accent-foreground: #f1f5f6;
-  --app-wash: linear-gradient(168deg, #1b3037 0%, #121e23 46%, #080c0e 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
-  --content-surface: #0e1112;
-}
-
-/* Forest — muted green accent over a green-grey wash.
-   Seeded from the :root / .dark recipe — only the tokens a preset can move are
-   redeclared; everything alpha-based or brand-derived follows. */
-:root[data-theme-preset="forest"] {
-  --brand: #2f7a4f;
-  --brand-2: #2f7a4f;
-  --brand-foreground: #ffffff;
-  --background: #f4f7f5;
-  --foreground: #151b17;
-  --surface: #ffffff;
-  --surface-muted: #eaf0ec;
-  --surface-sunken: #eaf0ec;
-  --card: #ffffff;
-  --card-foreground: #151b17;
-  --popover: #ffffff;
-  --popover-foreground: #151b17;
-  --secondary: #eaf0ec;
-  --secondary-foreground: #151b17;
-  --muted: #eaf0ec;
-  --muted-foreground: #525f56;
-  --kicker: #525f56;
-  --accent: #eaf0ec;
-  --accent-foreground: #151b17;
-  --glow-primary: 0 0 30px -8px rgba(47, 122, 79, 0.35);
-  --app-wash: linear-gradient(168deg, #dfeae2 0%, #d6e3da 46%, #ccd9d0 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
-  --content-surface: #ffffff;
-}
-
-.dark[data-theme-preset="forest"] {
-  --brand: #7fcf9c;
-  --brand-2: #7fcf9c;
-  --brand-foreground: #0e0e10;
-  --background: #0e110f;
-  --foreground: #f1f6f2;
-  --surface: #161917;
-  --surface-muted: #1c1f1d;
-  --surface-sunken: #1c1f1d;
-  --card: #161917;
-  --card-foreground: #f1f6f2;
-  --popover: #1c1f1d;
-  --popover-foreground: #f1f6f2;
-  --secondary: #262927;
-  --secondary-foreground: #f1f6f2;
-  --muted: #1c1f1d;
-  --muted-foreground: #b3c2b8;
-  --kicker: #b3c2b8;
-  --accent: #1c1f1d;
-  --accent-foreground: #f1f6f2;
-  --app-wash: linear-gradient(168deg, #1d3126 0%, #131f19 46%, #080d0a 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
-  --content-surface: #0e110f;
-}
-
-/* Ember — warm amber accent over a sand wash.
-   Seeded from the :root / .dark recipe — only the tokens a preset can move are
-   redeclared; everything alpha-based or brand-derived follows. */
-:root[data-theme-preset="ember"] {
-  --brand: #b4581a;
-  --brand-2: #b4581a;
-  --brand-foreground: #ffffff;
-  --background: #f8f5f2;
-  --foreground: #1e1712;
-  --surface: #ffffff;
-  --surface-muted: #f1ece7;
-  --surface-sunken: #f1ece7;
-  --card: #ffffff;
-  --card-foreground: #1e1712;
-  --popover: #ffffff;
-  --popover-foreground: #1e1712;
-  --secondary: #f1ece7;
-  --secondary-foreground: #1e1712;
-  --muted: #f1ece7;
-  --muted-foreground: #66574b;
-  --kicker: #66574b;
-  --accent: #f1ece7;
-  --accent-foreground: #1e1712;
-  --glow-primary: 0 0 30px -8px rgba(180, 88, 26, 0.35);
-  --app-wash: linear-gradient(168deg, #f0e4da 0%, #e8dbcf 46%, #dfd1c4 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
-  --content-surface: #ffffff;
-}
-
-.dark[data-theme-preset="ember"] {
-  --brand: #f0a868;
-  --brand-2: #f0a868;
-  --brand-foreground: #0e0e10;
-  --background: #12100e;
-  --foreground: #f6f3f0;
-  --surface: #1a1816;
-  --surface-muted: #201e1c;
-  --surface-sunken: #201e1c;
-  --card: #1a1816;
-  --card-foreground: #f6f3f0;
-  --popover: #201e1c;
-  --popover-foreground: #f6f3f0;
-  --secondary: #2a2826;
-  --secondary-foreground: #f6f3f0;
-  --muted: #201e1c;
-  --muted-foreground: #c0b4a9;
-  --kicker: #c0b4a9;
-  --accent: #201e1c;
-  --accent-foreground: #f6f3f0;
-  --app-wash: linear-gradient(168deg, #332419 0%, #211711 46%, #0d0906 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
-  --content-surface: #12100e;
-}
-
-/* Rose — magenta accent over a warm pink-grey wash.
-   Seeded from the :root / .dark recipe — only the tokens a preset can move are
-   redeclared; everything alpha-based or brand-derived follows. */
-:root[data-theme-preset="rose"] {
-  --brand: #b8375f;
-  --brand-2: #b8375f;
-  --brand-foreground: #ffffff;
-  --background: #f8f4f6;
-  --foreground: #1e1418;
-  --surface: #ffffff;
-  --surface-muted: #f1eaee;
-  --surface-sunken: #f1eaee;
-  --card: #ffffff;
-  --card-foreground: #1e1418;
-  --popover: #ffffff;
-  --popover-foreground: #1e1418;
-  --secondary: #f1eaee;
-  --secondary-foreground: #1e1418;
-  --muted: #f1eaee;
-  --muted-foreground: #665058;
-  --kicker: #665058;
-  --accent: #f1eaee;
-  --accent-foreground: #1e1418;
-  --glow-primary: 0 0 30px -8px rgba(184, 55, 95, 0.35);
-  --app-wash: linear-gradient(168deg, #f0dfe5 0%, #e8d5dc 46%, #dfcad2 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
-  --content-surface: #ffffff;
-}
-
-.dark[data-theme-preset="rose"] {
-  --brand: #f08fb0;
-  --brand-2: #f08fb0;
-  --brand-foreground: #0e0e10;
-  --background: #120f10;
-  --foreground: #f6f2f3;
-  --surface: #1a1718;
-  --surface-muted: #201d1e;
-  --surface-sunken: #201d1e;
-  --card: #1a1718;
-  --card-foreground: #f6f2f3;
-  --popover: #201d1e;
-  --popover-foreground: #f6f2f3;
-  --secondary: #2a2728;
-  --secondary-foreground: #f6f2f3;
-  --muted: #201d1e;
-  --muted-foreground: #bfabb2;
-  --kicker: #bfabb2;
-  --accent: #201d1e;
-  --accent-foreground: #f6f2f3;
-  --app-wash: linear-gradient(168deg, #33202a 0%, #21151b 46%, #0d080b 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
-  --content-surface: #120f10;
-}
-
 /* ---------------------------------------------------------------------------
-   Two-accent ("gradient") presets — opt-in. Same seed set as the six above;
+   Two-accent ("gradient") presets — opt-in, fifteen of them: the three
+   hand-seeded ones here, then twelve generated. Same seed set as Graphite above;
    the only difference is that --brand-2 is a second hue instead of a copy of
    --brand, so --brand-gradient and the chart spectrum actually travel. The
    wash leans from the first accent (top-left, under the bloom) towards the
-   second. Light brands are the dark hues deepened until the white label
+   second — a near-black lean in dark, the saturated bold frame in light
+   (generated by scripts/theme/gen-presets.mjs: `base` prints all five).
+   Light brands are the dark hues deepened until the white label
    clears AA on BOTH stops (globals.contrast.test.ts enforces it).
    --------------------------------------------------------------------------- */
 
-/* Aurora — teal into violet over a sea-glass wash that cools to lavender.
+/* Aurora — teal into violet. Dark: a sea-glass wash that cools to night.
+   Light: a deep teal frame that runs to violet.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="aurora"] {
@@ -1156,17 +1006,7 @@
   --accent: #e9f0ef;
   --accent-foreground: #141a19;
   --glow-primary: 0 0 30px -8px rgba(15, 125, 113, 0.35);
-  --app-wash: linear-gradient(168deg, #d9ebe7 0%, #d5dfe9 46%, #d0d3e8 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  --app-wash: linear-gradient(168deg, #015a4f 0%, #004572 46%, #36236c 100%);
   --content-surface: #ffffff;
 }
 
@@ -1191,15 +1031,12 @@
   --accent: #1c1f1f;
   --accent-foreground: #f1f6f5;
   --app-wash: linear-gradient(168deg, #182f2d 0%, #17192c 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0e1111;
 }
 
-/* Sunset — amber into pink over a sand wash that warms to rose.
+/* Sunset — amber into pink. Dark: an ember wash that cools to night.
+   Light: a burnt-orange frame that runs through crimson to plum (a dark
+   amber is brown, so the generator pulls a wash stop's hue from 50-95 to 45).
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="sunset"] {
@@ -1223,17 +1060,7 @@
   --accent: #f1ebe8;
   --accent-foreground: #1e1613;
   --glow-primary: 0 0 30px -8px rgba(182, 83, 24, 0.35);
-  --app-wash: linear-gradient(168deg, #f0e3d9 0%, #ead8d6 46%, #e1cad2 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  --app-wash: linear-gradient(168deg, #8e3800 0%, #8e0a20 46%, #600e38 100%);
   --content-surface: #ffffff;
 }
 
@@ -1258,15 +1085,11 @@
   --accent: #201e1d;
   --accent-foreground: #f6f2f1;
   --app-wash: linear-gradient(168deg, #33231a 0%, #23151b 46%, #0d0809 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #12100f;
 }
 
-/* Nebula — violet into blue over a lilac wash that cools to slate blue.
+/* Nebula — violet into blue. Dark: a violet wash that cools to night.
+   Light: a violet frame that runs to deep blue.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="nebula"] {
@@ -1290,17 +1113,7 @@
   --accent: #f0eef5;
   --accent-foreground: #19171f;
   --glow-primary: 0 0 30px -8px rgba(116, 80, 214, 0.35);
-  --app-wash: linear-gradient(168deg, #e2dcf2 0%, #d9dcef 46%, #cdd6e8 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  --app-wash: linear-gradient(168deg, #6639a0 0%, #323ca0 46%, #00346c 100%);
   --content-surface: #ffffff;
 }
 
@@ -1325,12 +1138,771 @@
   --accent: #1d1c21;
   --accent-foreground: #f4f3f7;
   --app-wash: linear-gradient(168deg, #261f40 0%, #131a2c 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0f0e12;
+}
+
+/* ---------------------------------------------------------------------------
+   Generated two-accent presets — the twelve blocks from here to the "Bold
+   frame" section are the output of `node scripts/theme/gen-presets.mjs
+   presets`, pasted. Same seed set and token order as the blocks above. Never
+   edit a value here: change the preset's row or the recipe in the script and
+   regenerate (scripts/theme/gen-presets.test.mjs fails on any drift). Prism
+   is the one preset that also seeds --brand-mid.
+   --------------------------------------------------------------------------- */
+
+/* Lagoon — cyan into blue over a deep-water wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="lagoon"] {
+  --brand: #02787d;
+  --brand-2: #1c65c8;
+  --brand-foreground: #ffffff;
+  --background: #f2f7f7;
+  --foreground: #101a1b;
+  --surface: #ffffff;
+  --surface-muted: #e9f1f1;
+  --surface-sunken: #e9f1f1;
+  --card: #ffffff;
+  --card-foreground: #101a1b;
+  --popover: #ffffff;
+  --popover-foreground: #101a1b;
+  --secondary: #e9f1f1;
+  --secondary-foreground: #101a1b;
+  --muted: #e9f1f1;
+  --muted-foreground: #455a5b;
+  --kicker: #455a5b;
+  --accent: #e9f1f1;
+  --accent-foreground: #101a1b;
+  --glow-primary: 0 0 30px -8px rgba(2, 120, 125, 0.35);
+  --app-wash: linear-gradient(168deg, #015a5e 0%, #024967 46%, #013271 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="lagoon"] {
+  --brand: #37d6dd;
+  --brand-2: #85b6fe;
+  --brand-foreground: #0e0e10;
+  --background: #0b0f0f;
+  --foreground: #f0f4f5;
+  --surface: #141818;
+  --surface-muted: #1a1e1f;
+  --surface-sunken: #1a1e1f;
+  --card: #141818;
+  --card-foreground: #f0f4f5;
+  --popover: #1a1e1f;
+  --popover-foreground: #f0f4f5;
+  --secondary: #232828;
+  --secondary-foreground: #f0f4f5;
+  --muted: #1a1e1f;
+  --muted-foreground: #aec2c3;
+  --kicker: #aec2c3;
+  --accent: #1a1e1f;
+  --accent-foreground: #f0f4f5;
+  --app-wash: linear-gradient(168deg, #002d2f 0%, #07162c 46%, #04060a 100%);
+  --content-surface: #0b0f0f;
+}
+
+/* Tropic — teal into lime over a palm-green wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="tropic"] {
+  --brand: #047b62;
+  --brand-2: #527700;
+  --brand-foreground: #ffffff;
+  --background: #f3f7f5;
+  --foreground: #111b17;
+  --surface: #ffffff;
+  --surface-muted: #e9f1ee;
+  --surface-sunken: #e9f1ee;
+  --card: #ffffff;
+  --card-foreground: #111b17;
+  --popover: #ffffff;
+  --popover-foreground: #111b17;
+  --secondary: #e9f1ee;
+  --secondary-foreground: #111b17;
+  --muted: #e9f1ee;
+  --muted-foreground: #485a54;
+  --kicker: #485a54;
+  --accent: #e9f1ee;
+  --accent-foreground: #111b17;
+  --glow-primary: 0 0 30px -8px rgba(4, 123, 98, 0.35);
+  --app-wash: linear-gradient(168deg, #005b48 0%, #015114 46%, #273c00 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="tropic"] {
+  --brand: #57d8b4;
+  --brand-2: #9bc462;
+  --brand-foreground: #0e0e10;
+  --background: #0c0f0e;
+  --foreground: #f0f5f3;
+  --surface: #151817;
+  --surface-muted: #1a1e1d;
+  --surface-sunken: #1a1e1d;
+  --card: #151817;
+  --card-foreground: #f0f5f3;
+  --popover: #1a1e1d;
+  --popover-foreground: #f0f5f3;
+  --secondary: #232826;
+  --secondary-foreground: #f0f5f3;
+  --muted: #1a1e1d;
+  --muted-foreground: #b0c3bc;
+  --kicker: #b0c3bc;
+  --accent: #1a1e1d;
+  --accent-foreground: #f0f5f3;
+  --app-wash: linear-gradient(168deg, #002e23 0%, #0f1a01 46%, #050603 100%);
+  --content-surface: #0c0f0e;
+}
+
+/* Orchid — magenta into violet over a plum wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="orchid"] {
+  --brand: #9d3d8d;
+  --brand-2: #6e4fc1;
+  --brand-foreground: #ffffff;
+  --background: #f8f4f7;
+  --foreground: #1d161b;
+  --surface: #ffffff;
+  --surface-muted: #f3edf1;
+  --surface-sunken: #f3edf1;
+  --card: #ffffff;
+  --card-foreground: #1d161b;
+  --popover: #ffffff;
+  --popover-foreground: #1d161b;
+  --secondary: #f3edf1;
+  --secondary-foreground: #1d161b;
+  --muted: #f3edf1;
+  --muted-foreground: #5e505b;
+  --kicker: #5e505b;
+  --accent: #f3edf1;
+  --accent-foreground: #1d161b;
+  --glow-primary: 0 0 30px -8px rgba(157, 61, 141, 0.35);
+  --app-wash: linear-gradient(168deg, #8d2d7d 0%, #692c8f 46%, #39246c 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="orchid"] {
+  --brand: #ef9ede;
+  --brand-2: #b6a5fe;
+  --brand-foreground: #0e0e10;
+  --background: #100d0f;
+  --foreground: #f6f2f5;
+  --surface: #191618;
+  --surface-muted: #201c1f;
+  --surface-sunken: #201c1f;
+  --card: #191618;
+  --card-foreground: #f6f2f5;
+  --popover: #201c1f;
+  --popover-foreground: #f6f2f5;
+  --secondary: #2a2528;
+  --secondary-foreground: #f6f2f5;
+  --muted: #201c1f;
+  --muted-foreground: #c7b9c3;
+  --kicker: #c7b9c3;
+  --accent: #201c1f;
+  --accent-foreground: #f6f2f5;
+  --app-wash: linear-gradient(168deg, #381a32 0%, #17112a 46%, #060509 100%);
+  --content-surface: #100d0f;
+}
+
+/* Peach — coral into gold over a warm clay wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="peach"] {
+  --brand: #b23a26;
+  --brand-2: #876204;
+  --brand-foreground: #ffffff;
+  --background: #f9f5f4;
+  --foreground: #1f1614;
+  --surface: #ffffff;
+  --surface-muted: #f5edeb;
+  --surface-sunken: #f5edeb;
+  --card: #ffffff;
+  --card-foreground: #1f1614;
+  --popover: #ffffff;
+  --popover-foreground: #1f1614;
+  --secondary: #f5edeb;
+  --secondary-foreground: #1f1614;
+  --muted: #f5edeb;
+  --muted-foreground: #62504d;
+  --kicker: #62504d;
+  --accent: #f5edeb;
+  --accent-foreground: #1f1614;
+  --glow-primary: 0 0 30px -8px rgba(178, 58, 38, 0.35);
+  --app-wash: linear-gradient(168deg, #951b05 0%, #742c00 46%, #5b2000 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="peach"] {
+  --brand: #ffa28f;
+  --brand-2: #dfab40;
+  --brand-foreground: #0e0e10;
+  --background: #110d0d;
+  --foreground: #f7f2f1;
+  --surface: #1a1615;
+  --surface-muted: #211c1b;
+  --surface-sunken: #211c1b;
+  --card: #1a1615;
+  --card-foreground: #f7f2f1;
+  --popover: #211c1b;
+  --popover-foreground: #f7f2f1;
+  --secondary: #2b2624;
+  --secondary-foreground: #f7f2f1;
+  --muted: #211c1b;
+  --muted-foreground: #cbb9b5;
+  --kicker: #cbb9b5;
+  --accent: #211c1b;
+  --accent-foreground: #f7f2f1;
+  --app-wash: linear-gradient(168deg, #3f1a13 0%, #201400 46%, #080502 100%);
+  --content-surface: #110d0d;
+}
+
+/* Glacier — ice blue into mint, low chroma.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="glacier"] {
+  --brand: #147394;
+  --brand-2: #027972;
+  --brand-foreground: #ffffff;
+  --background: #f4f6f7;
+  --foreground: #14191c;
+  --surface: #ffffff;
+  --surface-muted: #ecf0f2;
+  --surface-sunken: #ecf0f2;
+  --card: #ffffff;
+  --card-foreground: #14191c;
+  --popover: #ffffff;
+  --popover-foreground: #14191c;
+  --secondary: #ecf0f2;
+  --secondary-foreground: #14191c;
+  --muted: #ecf0f2;
+  --muted-foreground: #4d575c;
+  --kicker: #4d575c;
+  --accent: #ecf0f2;
+  --accent-foreground: #14191c;
+  --glow-primary: 0 0 30px -8px rgba(20, 115, 148, 0.35);
+  --app-wash: linear-gradient(168deg, #005874 0%, #004e54 46%, #003f3b 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="glacier"] {
+  --brand: #8ac8e4;
+  --brand-2: #74c5be;
+  --brand-foreground: #0e0e10;
+  --background: #0d0f10;
+  --foreground: #f1f4f5;
+  --surface: #161718;
+  --surface-muted: #1b1e1f;
+  --surface-sunken: #1b1e1f;
+  --card: #161718;
+  --card-foreground: #f1f4f5;
+  --popover: #1b1e1f;
+  --popover-foreground: #f1f4f5;
+  --secondary: #252729;
+  --secondary-foreground: #f1f4f5;
+  --muted: #1b1e1f;
+  --muted-foreground: #b5c0c4;
+  --kicker: #b5c0c4;
+  --accent: #1b1e1f;
+  --accent-foreground: #f1f4f5;
+  --app-wash: linear-gradient(168deg, #112a34 0%, #031a19 46%, #040606 100%);
+  --content-surface: #0d0f10;
+}
+
+/* Dusk — indigo into rose over a twilight wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="dusk"] {
+  --brand: #515bc3;
+  --brand-2: #b42f56;
+  --brand-foreground: #ffffff;
+  --background: #f5f6f9;
+  --foreground: #16181f;
+  --surface: #ffffff;
+  --surface-muted: #edeff5;
+  --surface-sunken: #edeff5;
+  --card: #ffffff;
+  --card-foreground: #16181f;
+  --popover: #ffffff;
+  --popover-foreground: #16181f;
+  --secondary: #edeff5;
+  --secondary-foreground: #16181f;
+  --muted: #edeff5;
+  --muted-foreground: #515464;
+  --kicker: #515464;
+  --accent: #edeff5;
+  --accent-foreground: #16181f;
+  --glow-primary: 0 0 30px -8px rgba(81, 91, 195, 0.35);
+  --app-wash: linear-gradient(168deg, #3a40a5 0%, #70126b 46%, #640c29 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="dusk"] {
+  --brand: #aab9ff;
+  --brand-2: #fc8ea4;
+  --brand-foreground: #0e0e10;
+  --background: #0d0e11;
+  --foreground: #f2f3f7;
+  --surface: #16171a;
+  --surface-muted: #1c1d21;
+  --surface-sunken: #1c1d21;
+  --card: #16171a;
+  --card-foreground: #f2f3f7;
+  --popover: #1c1d21;
+  --popover-foreground: #f2f3f7;
+  --secondary: #26272b;
+  --secondary-foreground: #f2f3f7;
+  --muted: #1c1d21;
+  --muted-foreground: #b9bdcc;
+  --kicker: #b9bdcc;
+  --accent: #1c1d21;
+  --accent-foreground: #f2f3f7;
+  --app-wash: linear-gradient(168deg, #1e2343 0%, #280b12 46%, #090405 100%);
+  --content-surface: #0d0e11;
+}
+
+/* Berry — crimson into purple over a wine wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="berry"] {
+  --brand: #b2354a;
+  --brand-2: #9041a7;
+  --brand-foreground: #ffffff;
+  --background: #f9f4f5;
+  --foreground: #1f1616;
+  --surface: #ffffff;
+  --surface-muted: #f5eded;
+  --surface-sunken: #f5eded;
+  --card: #ffffff;
+  --card-foreground: #1f1616;
+  --popover: #ffffff;
+  --popover-foreground: #1f1616;
+  --secondary: #f5eded;
+  --secondary-foreground: #1f1616;
+  --muted: #f5eded;
+  --muted-foreground: #625051;
+  --kicker: #625051;
+  --accent: #f5eded;
+  --accent-foreground: #1f1616;
+  --glow-primary: 0 0 30px -8px rgba(178, 53, 74, 0.35);
+  --app-wash: linear-gradient(168deg, #931232 0%, #770a5d 46%, #4e1a5c 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="berry"] {
+  --brand: #ff9ea6;
+  --brand-2: #d898ec;
+  --brand-foreground: #0e0e10;
+  --background: #110d0d;
+  --foreground: #f7f2f2;
+  --surface: #1a1616;
+  --surface-muted: #211c1c;
+  --surface-sunken: #211c1c;
+  --card: #1a1616;
+  --card-foreground: #f7f2f2;
+  --popover: #211c1c;
+  --popover-foreground: #f7f2f2;
+  --secondary: #2b2526;
+  --secondary-foreground: #f7f2f2;
+  --muted: #211c1c;
+  --muted-foreground: #ccb8b9;
+  --kicker: #ccb8b9;
+  --accent: #211c1c;
+  --accent-foreground: #f7f2f2;
+  --app-wash: linear-gradient(168deg, #3f181d 0%, #1f0e24 46%, #070508 100%);
+  --content-surface: #110d0d;
+}
+
+/* Candy — pastel pink into cyan.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="candy"] {
+  --brand: #9a4873;
+  --brand-2: #02768a;
+  --brand-foreground: #ffffff;
+  --background: #f8f5f6;
+  --foreground: #1c1619;
+  --surface: #ffffff;
+  --surface-muted: #f3edf0;
+  --surface-sunken: #f3edf0;
+  --card: #ffffff;
+  --card-foreground: #1c1619;
+  --popover: #ffffff;
+  --popover-foreground: #1c1619;
+  --secondary: #f3edf0;
+  --secondary-foreground: #1c1619;
+  --muted: #f3edf0;
+  --muted-foreground: #5e5157;
+  --kicker: #5e5157;
+  --accent: #f3edf0;
+  --accent-foreground: #1c1619;
+  --glow-primary: 0 0 30px -8px rgba(154, 72, 115, 0.35);
+  --app-wash: linear-gradient(168deg, #7a2b56 0%, #283b80 46%, #003b47 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="candy"] {
+  --brand: #eca5c6;
+  --brand-2: #5dc5dc;
+  --brand-foreground: #0e0e10;
+  --background: #100e0f;
+  --foreground: #f5f2f4;
+  --surface: #191617;
+  --surface-muted: #1f1c1e;
+  --surface-sunken: #1f1c1e;
+  --card: #191617;
+  --card-foreground: #f5f2f4;
+  --popover: #1f1c1e;
+  --popover-foreground: #f5f2f4;
+  --secondary: #292627;
+  --secondary-foreground: #f5f2f4;
+  --muted: #1f1c1e;
+  --muted-foreground: #c7babf;
+  --kicker: #c7babf;
+  --accent: #1f1c1e;
+  --accent-foreground: #f5f2f4;
+  --app-wash: linear-gradient(168deg, #371d29 0%, #001a21 46%, #030607 100%);
+  --content-surface: #100e0f;
+}
+
+/* Citrus — lime into orange over an olive wash.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="citrus"] {
+  --brand: #637103;
+  --brand-2: #935a00;
+  --brand-foreground: #ffffff;
+  --background: #f5f6f2;
+  --foreground: #181912;
+  --surface: #ffffff;
+  --surface-muted: #eef0e9;
+  --surface-sunken: #eef0e9;
+  --card: #ffffff;
+  --card-foreground: #181912;
+  --popover: #ffffff;
+  --popover-foreground: #181912;
+  --secondary: #eef0e9;
+  --secondary-foreground: #181912;
+  --muted: #eef0e9;
+  --muted-foreground: #545748;
+  --kicker: #545748;
+  --accent: #eef0e9;
+  --accent-foreground: #181912;
+  --glow-primary: 0 0 30px -8px rgba(99, 113, 3, 0.35);
+  --app-wash: linear-gradient(168deg, #495400 0%, #6e2a00 46%, #592000 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="citrus"] {
+  --brand: #b7c967;
+  --brand-2: #eca24a;
+  --brand-foreground: #0e0e10;
+  --background: #0e0f0c;
+  --foreground: #f3f4f0;
+  --surface: #171815;
+  --surface-muted: #1d1e1a;
+  --surface-sunken: #1d1e1a;
+  --card: #171815;
+  --card-foreground: #f3f4f0;
+  --popover: #1d1e1a;
+  --popover-foreground: #f3f4f0;
+  --secondary: #262723;
+  --secondary-foreground: #f3f4f0;
+  --muted: #1d1e1a;
+  --muted-foreground: #bcc0b0;
+  --kicker: #bcc0b0;
+  --accent: #1d1e1a;
+  --accent-foreground: #f3f4f0;
+  --app-wash: linear-gradient(168deg, #242a02 0%, #231100 46%, #080503 100%);
+  --content-surface: #0e0f0c;
+}
+
+/* Prism — cyan through violet into pink, the one three-stop preset.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="prism"] {
+  --brand: #077783;
+  --brand-2: #ab3276;
+  --brand-mid: #6e4fc1;
+  --brand-foreground: #ffffff;
+  --background: #f2f7f7;
+  --foreground: #101a1c;
+  --surface: #ffffff;
+  --surface-muted: #e9f1f2;
+  --surface-sunken: #e9f1f2;
+  --card: #ffffff;
+  --card-foreground: #101a1c;
+  --popover: #ffffff;
+  --popover-foreground: #101a1c;
+  --secondary: #e9f1f2;
+  --secondary-foreground: #101a1c;
+  --muted: #e9f1f2;
+  --muted-foreground: #45595d;
+  --kicker: #45595d;
+  --accent: #e9f1f2;
+  --accent-foreground: #101a1c;
+  --glow-primary: 0 0 30px -8px rgba(7, 119, 131, 0.35);
+  --app-wash: linear-gradient(168deg, #004d56 0%, #401981 46%, #520134 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="prism"] {
+  --brand: #3bd4e8;
+  --brand-2: #f48fc0;
+  --brand-mid: #b9a9ff;
+  --brand-foreground: #0e0e10;
+  --background: #0b0f10;
+  --foreground: #f0f4f5;
+  --surface: #141819;
+  --surface-muted: #1a1e1f;
+  --surface-sunken: #1a1e1f;
+  --card: #141819;
+  --card-foreground: #f0f4f5;
+  --popover: #1a1e1f;
+  --popover-foreground: #f0f4f5;
+  --secondary: #232829;
+  --secondary-foreground: #f0f4f5;
+  --muted: #1a1e1f;
+  --muted-foreground: #aec2c5;
+  --kicker: #aec2c5;
+  --accent: #1a1e1f;
+  --accent-foreground: #f0f4f5;
+  --app-wash: linear-gradient(168deg, #012c32 0%, #260b19 46%, #090406 100%);
+  --content-surface: #0b0f10;
+}
+
+/* Mocha — caramel into terracotta, earthy and low chroma.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="mocha"] {
+  --brand: #8f5b32;
+  --brand-2: #97524a;
+  --brand-foreground: #ffffff;
+  --background: #f7f5f4;
+  --foreground: #1b1715;
+  --surface: #ffffff;
+  --surface-muted: #f2eeec;
+  --surface-sunken: #f2eeec;
+  --card: #ffffff;
+  --card-foreground: #1b1715;
+  --popover: #ffffff;
+  --popover-foreground: #1b1715;
+  --secondary: #f2eeec;
+  --secondary-foreground: #1b1715;
+  --muted: #f2eeec;
+  --muted-foreground: #5b544e;
+  --kicker: #5b544e;
+  --accent: #f2eeec;
+  --accent-foreground: #1b1715;
+  --glow-primary: 0 0 30px -8px rgba(143, 91, 50, 0.35);
+  --app-wash: linear-gradient(168deg, #784025 0%, #6c331e 46%, #522722 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="mocha"] {
+  --brand: #e0b392;
+  --brand-2: #e0a39a;
+  --brand-foreground: #0e0e10;
+  --background: #0f0e0d;
+  --foreground: #f5f3f2;
+  --surface: #181716;
+  --surface-muted: #1f1d1c;
+  --surface-sunken: #1f1d1c;
+  --card: #181716;
+  --card-foreground: #f5f3f2;
+  --popover: #1f1d1c;
+  --popover-foreground: #f5f3f2;
+  --secondary: #292625;
+  --secondary-foreground: #f5f3f2;
+  --muted: #1f1d1c;
+  --muted-foreground: #c4bcb6;
+  --kicker: #c4bcb6;
+  --accent: #1f1d1c;
+  --accent-foreground: #f5f3f2;
+  --app-wash: linear-gradient(168deg, #332216 0%, #21110f 46%, #080505 100%);
+  --content-surface: #0f0e0d;
+}
+
+/* Neon — green into fuchsia, high chroma.
+   Generated by scripts/theme/gen-presets.mjs (`presets`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="neon"] {
+  --brand: #037e3f;
+  --brand-2: #8e3ab8;
+  --brand-foreground: #ffffff;
+  --background: #f3f7f4;
+  --foreground: #121b14;
+  --surface: #ffffff;
+  --surface-muted: #eaf1ec;
+  --surface-sunken: #eaf1ec;
+  --card: #ffffff;
+  --card-foreground: #121b14;
+  --popover: #ffffff;
+  --popover-foreground: #121b14;
+  --secondary: #eaf1ec;
+  --secondary-foreground: #121b14;
+  --muted: #eaf1ec;
+  --muted-foreground: #4a5a4d;
+  --kicker: #4a5a4d;
+  --accent: #eaf1ec;
+  --accent-foreground: #121b14;
+  --glow-primary: 0 0 30px -8px rgba(3, 126, 63, 0.35);
+  --app-wash: linear-gradient(168deg, #005226 0%, #003b65 46%, #41055b 100%);
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="neon"] {
+  --brand: #6ed88f;
+  --brand-2: #d595fb;
+  --brand-foreground: #0e0e10;
+  --background: #0c0f0d;
+  --foreground: #f1f5f1;
+  --surface: #151816;
+  --surface-muted: #1b1e1b;
+  --surface-sunken: #1b1e1b;
+  --card: #151816;
+  --card-foreground: #f1f5f1;
+  --popover: #1b1e1b;
+  --popover-foreground: #f1f5f1;
+  --secondary: #242825;
+  --secondary-foreground: #f1f5f1;
+  --muted: #1b1e1b;
+  --muted-foreground: #b2c3b6;
+  --kicker: #b2c3b6;
+  --accent: #1b1e1b;
+  --accent-foreground: #f1f5f1;
+  --app-wash: linear-gradient(168deg, #023014 0%, #1f0d28 46%, #070509 100%);
+  --content-surface: #0c0f0d;
+}
+
+/* ---------------------------------------------------------------------------
+   Bold frame — light mode only. The light wash is a saturated gradient, so
+   everything painted directly on it (sidebar rail, shell header, board dock,
+   the /ask rail and header) needs light-on-dark values. Inside
+   `.chrome-scope` the generic tokens are re-seeded and "the brand" is white:
+   an active row, a focus ring and a primary button all read as white on the
+   frame. The `@theme inline` aliases at the top of this file resolve on the
+   element, so every ordinary utility (text-muted-foreground, border-border,
+   bg-state-hover, bg-brand-gradient…) follows with no component change;
+   components never read these values directly.
+
+   `.chrome-reset` hands the root values back (the --base-* aliases captured
+   in `:root`) to an OPAQUE surface nested in the chrome — a dock card, the
+   composer, an avatar — so its contents are dark-on-light again. Every token
+   the scope moves must be restored there, in the same order:
+   globals.contrast.test.ts checks the two lists agree.
+
+   Dark mode is untouched by construction: every selector here starts with
+   `:root:not(.dark)`, so under .dark neither class declares anything. The
+   reset is also inert outside a scope (on the content card, in a portalled
+   menu, in the print root), where the shared components that carry it are
+   rendered too. Unlayered, like every palette block, so nothing in a cascade
+   layer can out-rank it; the one `color` declaration that goes with these
+   lives in `@layer base` below so a text utility still wins.
+
+   Things portalled to <body> (menus, popovers, dialogs, tooltips, the mobile
+   drawer) are outside the scope and keep the normal tokens.
+   --------------------------------------------------------------------------- */
+:root:not(.dark) .chrome-scope {
+  --foreground: #ffffff;
+  /* 90% is the ceiling: any higher and muted stops reading as muted beside
+     white body text. It must clear AA on every wash stop under the bloom
+     (globals.contrast.test.ts) and equal CHROME_MUTED_ALPHA in
+     scripts/theme/gen-presets.mjs. */
+  --muted-foreground: rgb(255 255 255 / 90%);
+  --kicker: rgb(255 255 255 / 90%);
+  /* The root red is a mid-tone tuned for white paper; on the frame it is the
+     same lightness as the wash. A pale red keeps error text legible (AA on
+     every stop, same test). Must equal CHROME_DESTRUCTIVE in the script. */
+  --destructive: #ffd5cf;
+  --border: rgb(255 255 255 / 16%);
+  --border-hover: rgb(255 255 255 / 26%);
+  --border-bright: rgb(255 255 255 / 40%);
+  --input: rgb(255 255 255 / 22%);
+  --ring: #ffffff;
+  --brand: #ffffff;
+  --brand-2: #ffffff;
+  --brand-mid: #ffffff;
+  --brand-foreground: var(--base-brand);
+  --brand-gradient: linear-gradient(90deg, #ffffff, #ffffff);
+  /* A primary button on the frame does not change its fill on hover. The
+     root recipe (the brand stops at 80% alpha) would be white at 80% here:
+     the frame shows through, under a label that is the frame's own hue —
+     3.1:1 in Keystone. There is no translucent step that works either: the
+     label is tuned to about 4.5:1 on PURE white, so even 99% fails
+     (globals.contrast.test.ts composites every stop of this image on every
+     ground). Press still moves the button 1px. */
+  --brand-gradient-hover: linear-gradient(90deg, #ffffff, #ffffff);
+  --primary: #ffffff;
+  --primary-foreground: var(--base-brand);
+  /* The fills are kept light on purpose: white body text on a SELECTED row is
+     the check that caps how light the wash itself may be, so every point of
+     alpha here is paid for in a darker frame. Selected still out-lifts hover
+     2:1. --state-selected must equal CHROME_SELECTED_ALPHA in
+     scripts/theme/gen-presets.mjs. */
+  --state-hover: rgb(255 255 255 / 8%);
+  --state-active: rgb(255 255 255 / 13%);
+  --state-selected: rgb(255 255 255 / 16%);
+  /* Secondary text sits ON this fill (the ⌘K kbd, the org kicker in the
+     context-switcher chip), and a white fill under white-90% text spends the
+     text's headroom twice. 9% is the highest whole step at which that text
+     clears the solver's 4.6 target on every shipped wash — so no wash had
+     to darken for it (12% measured 4.42 at worst, 10% 4.56). Must equal
+     CHROME_FILL_ALPHA in scripts/theme/gen-presets.mjs. */
+  --chrome-fill: rgb(255 255 255 / 9%);
+  --scrollbar-thumb: rgb(255 255 255 / 28%);
+  /* Reach leans the hover and selected fills to the brand; the brand is
+     white here and so are the fills, so the lean is switched off rather than
+     left to mix white into white. */
+  --reach-hover: 0%;
+  --reach-selected: 0%;
+  /* The card seam carries the scope (CardSeam): it is drawn over the content
+     card's outline, but what it has to read against is the frame beside it.
+     The root value was resolved on <html> from the ROOT foreground — an ink
+     haze — so the same recipe is restated here to resolve against the
+     scope's white one. The seam's opaque cap carries `.chrome-reset`. */
+  --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+
+:root:not(.dark) .chrome-scope .chrome-reset {
+  --foreground: var(--base-foreground);
+  --muted-foreground: var(--base-muted-foreground);
+  --kicker: var(--base-kicker);
+  --destructive: var(--base-destructive);
+  --border: var(--base-border);
+  --border-hover: var(--base-border-hover);
+  --border-bright: var(--base-border-bright);
+  --input: var(--base-input);
+  --ring: var(--base-ring);
+  --brand: var(--base-brand);
+  --brand-2: var(--base-brand-2);
+  --brand-mid: var(--base-brand-mid);
+  --brand-foreground: var(--base-brand-foreground);
+  --brand-gradient: var(--base-brand-gradient);
+  --brand-gradient-hover: var(--base-brand-gradient-hover);
+  --primary: var(--base-primary);
+  --primary-foreground: var(--base-primary-foreground);
+  --state-hover: var(--base-state-hover);
+  --state-active: var(--base-state-active);
+  --state-selected: var(--base-state-selected);
+  --chrome-fill: var(--base-chrome-fill);
+  --scrollbar-thumb: var(--base-scrollbar-thumb);
+  --reach-hover: var(--base-reach-hover);
+  --reach-selected: var(--base-reach-selected);
+  --seam-glow: var(--base-seam-glow);
 }
 
 @layer base {
@@ -1340,6 +1912,15 @@
   body {
     @apply bg-background text-foreground;
     font-optical-sizing: auto;
+  }
+  /* The bold frame's inherited text colour. `body` sets `color` once, from
+     the ROOT --foreground, and inheritance would carry that dark value into
+     the chrome; re-reading the token on the scope (and again on a reset)
+     flips it. In this layer on purpose: a text utility on the same element
+     (text-muted-foreground, text-brand…) must still win. */
+  :root:not(.dark) .chrome-scope,
+  :root:not(.dark) .chrome-scope .chrome-reset {
+    color: var(--foreground);
   }
   /* Inter runs wider than the Nunito Sans it replaced. Display sizes need
      negative tracking to hold the same optical rhythm; UI-sized text is tuned
@@ -1516,20 +2097,27 @@
     stroke-dasharray: var(--seam-len) var(--seam-gap);
     filter: drop-shadow(var(--seam-glow));
   }
+  /* The edge nub: visible at rest, so the control is findable without hunting
+     for a hover target. Approach brightens it the Keystone way — hairline and
+     glyph brighten, the pill grows a touch taller; nothing thickens. The
+     lit values are utilities on SEAM_CAP (this is @layer base, which h-11
+     would out-rank); only the timing lives here. */
   .seam-cap {
+    transition:
+      height 300ms var(--ease-keystone),
+      border-color 200ms var(--ease-keystone),
+      color 200ms var(--ease-keystone);
+  }
+  /* Folding empties the glyph's panel bar (PanelGlyph). */
+  .panel-glyph-bar {
+    transform-box: fill-box;
+    transition:
+      transform 320ms var(--ease-keystone),
+      opacity 320ms var(--ease-keystone);
+  }
+  .panel-glyph[data-state="closed"] .panel-glyph-bar {
+    transform: scaleX(0);
     opacity: 0;
-    transition: opacity 180ms var(--ease-keystone);
-  }
-  .seam-hit:hover .seam-cap,
-  .seam-hit:focus-visible .seam-cap,
-  .seam-hit:has(:focus-visible) .seam-cap {
-    opacity: 1;
-  }
-  /* No hover to reveal it with, so the chevron simply stays. */
-  @media (pointer: coarse) {
-    .seam-cap {
-      opacity: 1;
-    }
   }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {
@@ -1658,6 +2246,47 @@
   .content-glow::before {
     display: none !important;
   }
+  /* The bold frame is a SCREEN look. Browsers drop backgrounds on paper, and
+     the hiding rules above only apply to a page with a print root — so
+     Cmd+P anywhere else printed the light chrome's white text on white. In
+     print the scope hands every token it moves back to its root value (the
+     same --base-* aliases `.chrome-reset` uses), and the wash goes with it
+     so the result is dark-on-paper even with "background graphics" on.
+     Deliberately NOT behind `body:has([data-print-root])`, and light-only
+     like every other chrome rule: dark mode prints exactly as it did.
+     Every token of the screen scope must be listed, in the same order
+     (print-styles.test.ts). Same specificity as the screen rule; it wins by
+     coming later. */
+  :root:not(.dark) .chrome-scope {
+    --foreground: var(--base-foreground);
+    --muted-foreground: var(--base-muted-foreground);
+    --kicker: var(--base-kicker);
+    --destructive: var(--base-destructive);
+    --border: var(--base-border);
+    --border-hover: var(--base-border-hover);
+    --border-bright: var(--base-border-bright);
+    --input: var(--base-input);
+    --ring: var(--base-ring);
+    --brand: var(--base-brand);
+    --brand-2: var(--base-brand-2);
+    --brand-mid: var(--base-brand-mid);
+    --brand-foreground: var(--base-brand-foreground);
+    --brand-gradient: var(--base-brand-gradient);
+    --brand-gradient-hover: var(--base-brand-gradient-hover);
+    --primary: var(--base-primary);
+    --primary-foreground: var(--base-primary-foreground);
+    --state-hover: var(--base-state-hover);
+    --state-active: var(--base-state-active);
+    --state-selected: var(--base-state-selected);
+    --chrome-fill: var(--base-chrome-fill);
+    --scrollbar-thumb: var(--base-scrollbar-thumb);
+    --reach-hover: var(--base-reach-hover);
+    --reach-selected: var(--base-reach-selected);
+    --seam-glow: var(--base-seam-glow);
+  }
+  :root:not(.dark) .app-wash {
+    background-image: none;
+  }
   [data-print-root],
   [data-print-root] * {
     visibility: visible;
@@ -1703,9 +2332,15 @@
     --card: #ffffff;
     --brand: #5a6ed5;
     --brand-2: #5a6ed5;
-    /* Re-derived: the :root declaration resolved on <html>, against the
+    /* Re-derived: the :root declarations resolved on <html>, against the
        SCREEN preset's stops. */
-    --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
+    --brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));
+    --brand-gradient: linear-gradient(
+      90deg,
+      var(--brand),
+      var(--brand-mid),
+      var(--brand-2)
+    );
     --primary: var(--brand);
     /* Reach off: the surface aliases mix --brand into the seeds above, and
        paper must stay white whatever reach the screen is on. */

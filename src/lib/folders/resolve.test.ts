@@ -6,6 +6,7 @@ import {
   resolveFolderBurn,
   resolveFolderGallery,
   resolveFolderRollup,
+  resolveFolderTimeline,
   resolveFolderWorkload,
 } from "./resolve";
 import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
@@ -324,5 +325,45 @@ describe("resolveFolderGallery", () => {
       ok: false,
       error: FOLDER_GONE_ERROR,
     });
+  });
+});
+
+describe("resolveFolderTimeline", () => {
+  const empty = {
+    board_order: [],
+    boards: [],
+    items: [],
+    external_item_ids: [],
+    dependencies: [],
+    total_items: 0,
+    truncated: false,
+  };
+
+  it("calls folder_timeline and returns the parsed payload", async () => {
+    const client = clientWith(async () => ({ data: empty, error: null }));
+    const res = await resolveFolderTimeline(client, "f1");
+    expect(client.rpc).toHaveBeenCalledWith("folder_timeline", {
+      p_folder_id: "f1",
+    });
+    expect(res).toEqual({ ok: true, data: empty });
+  });
+
+  it("fails on a payload that doesn't match the schema", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const client = clientWith(async () => ({
+      data: { ...empty, truncated: "no" },
+      error: null,
+    }));
+    expect((await resolveFolderTimeline(client, "f1")).ok).toBe(false);
+    expect(log).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
+
+  it("maps an rpc error", async () => {
+    const client = clientWith(async () => ({
+      data: null,
+      error: { code: "P0002", message: "folder not found" },
+    }));
+    expect((await resolveFolderTimeline(client, "f1")).ok).toBe(false);
   });
 });

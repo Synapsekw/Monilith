@@ -19,7 +19,6 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 function Row({
   thread,
   active,
-  agentName,
   owned,
   busy,
   onSelect,
@@ -27,8 +26,6 @@ function Row({
 }: {
   thread: BoardThreadRow;
   active: boolean;
-  /** Display name of the agent behind this thread, when there is one. */
-  agentName?: string;
   /** The caller owns this thread, so they may change who can see it. */
   owned: boolean;
   /** A visibility change is in flight for this thread. */
@@ -63,16 +60,11 @@ function Row({
         >
           {thread.title}
         </span>
-        {(agentName || shared) && (
+        {shared && (
           <span className="mt-1 flex min-w-0 items-center gap-1.5">
-            {agentName && <Kicker className="truncate">{agentName}</Kicker>}
-            {shared && (
-              // Said in words, not by colour alone — and it means one thing
-              // for both owners: everyone on this board can read it.
-              <Kicker className="shrink-0 rounded-sm border px-1">
-                Shared
-              </Kicker>
-            )}
+            {/* Said in words, not by colour alone — and it means one thing
+                for both owners: everyone on this board can read it. */}
+            <Kicker className="shrink-0 rounded-sm border px-1">Shared</Kicker>
           </span>
         )}
       </button>
@@ -122,35 +114,29 @@ function Group({
 }
 
 /**
- * The dock's two thread groups: this board's threads (yours plus anything
- * shared to it) and your agents' own cross-board threads. Both are already
- * bounded server-side (50 / 5), so this renders the whole set.
+ * This board's threads (yours plus anything shared to it). Already bounded
+ * server-side (50), so this renders the whole set.
  *
- * Two empty headings is not an empty state — when there is nothing at all, the
- * headings go away and the surface says what to do instead.
+ * An empty heading is not an empty state — when there is nothing at all, the
+ * heading goes away and the surface says what to do instead.
  */
 export function DockThreadList({
   boardThreads,
-  agentThreads,
   activeId,
   currentUserId,
-  agentNames,
   sharingId,
   onSelect,
   onToggleShare,
 }: {
   boardThreads: BoardThreadRow[];
-  agentThreads: BoardThreadRow[];
   activeId: string | null;
   currentUserId: string;
-  /** agent id → display name, for attributing a thread to the agent behind it. */
-  agentNames: Record<string, string>;
   /** Thread whose visibility change is in flight. */
   sharingId?: string | null;
   onSelect: (id: string) => void;
   onToggleShare?: (thread: BoardThreadRow) => void;
 }) {
-  if (boardThreads.length === 0 && agentThreads.length === 0) {
+  if (boardThreads.length === 0) {
     return (
       <EmptyState variant="inline" className="py-6">
         No threads yet. Ask something about this board to start one.
@@ -163,14 +149,12 @@ export function DockThreadList({
       key={t.id}
       thread={t}
       active={t.id === activeId}
-      agentName={t.agent_id ? agentNames[t.agent_id] : undefined}
       owned={t.user_id === currentUserId}
       busy={sharingId === t.id}
       onSelect={onSelect}
       // Ownership is not enough: the shared-read policy begins with `board_id
-      // is not null`, so sharing a BOARDLESS thread (a scheduled briefing, and
-      // every row in the "From your agents" group) can never make it readable —
-      // it would only print a "Shared" chip that lies. `setThreadVisibility`
+      // is not null`, so sharing a BOARDLESS thread can never make it
+      // readable — it would only print a "Shared" chip that lies. `setThreadVisibility`
       // refuses it server-side too; this keeps the affordance honest.
       onToggleShare={t.board_id ? onToggleShare : undefined}
     />
@@ -178,12 +162,7 @@ export function DockThreadList({
 
   return (
     <div className="flex flex-col gap-2">
-      {boardThreads.length > 0 && (
-        <Group label="This board">{boardThreads.map(rowFor)}</Group>
-      )}
-      {agentThreads.length > 0 && (
-        <Group label="From your agents">{agentThreads.map(rowFor)}</Group>
-      )}
+      <Group label="This board">{boardThreads.map(rowFor)}</Group>
     </div>
   );
 }

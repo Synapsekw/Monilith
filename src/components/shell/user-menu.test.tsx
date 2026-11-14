@@ -74,6 +74,25 @@ describe("UserMenu", () => {
     ).toHaveTextContent("A");
   });
 
+  it("keeps the fallback disc opaque on hover in light mode", () => {
+    // The disc is an opaque surface inside the header's chrome scope, so it
+    // carries `chrome-reset` — and inside the reset a hover fill is the root's
+    // black 4%. An unprefixed `hover:bg-state-hover` therefore swapped the
+    // white disc for a near-transparent one and left a dark initial on the
+    // coloured frame. The translucent hover is the DARK look only.
+    const { container } = render(
+      <UserMenu user={{ email: "a@b.co", full_name: "Ada" }} />,
+    );
+    const classes = container
+      .querySelector('[data-slot="avatar-fallback"]')!
+      .className.split(/\s+/);
+    expect(classes).toContain("chrome-reset");
+    expect(classes).toContain("bg-surface");
+    expect(classes).toContain("text-foreground");
+    expect(classes).not.toContain("hover:bg-state-hover");
+    expect(classes).toContain("dark:hover:bg-state-hover");
+  });
+
   it("renders the sign-out control in the menu", async () => {
     render(<UserMenu user={{ email: "a@b.co", full_name: "Ada" }} />);
     await userEvent.click(

@@ -3,17 +3,16 @@ import * as z from "zod";
 const TEXT = z.string().trim().min(1, "Update cannot be empty").max(10_000);
 
 /**
- * A mention is now TAGGED. It used to be a bare uuid array, which was fine when
- * every target was a person — but an agent id and a user id are both uuids, so
- * an untagged array forces the server to guess which table to look in and makes
- * "an agent id you do not own" indistinguishable from a typo.
+ * A mention is TAGGED by kind, so a later target kind (Plan 2's Mono) can be
+ * added without the server guessing which table an id belongs to. A mention
+ * is a person or the author's own Mono.
  *
- * `.max(20)` is new and not incidental: the array was UNBOUNDED, and
- * `actions.ts` fans out one notification INSERT per entry with no cap.
+ * `.max(20)` bounds the array: `actions.ts` fans out one notification INSERT
+ * per entry.
  */
 export const mentionTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("user"), userId: z.string().uuid() }),
-  z.object({ kind: z.literal("agent"), agentId: z.string().uuid() }),
+  z.object({ kind: z.literal("mono"), userId: z.string().uuid() }),
 ]);
 export type MentionTargetInput = z.infer<typeof mentionTargetSchema>;
 

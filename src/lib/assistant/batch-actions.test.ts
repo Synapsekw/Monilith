@@ -19,6 +19,7 @@ const state = {
   convOrg: "o-1",
   msgConv: CONV,
   mode: "per_user" as string,
+  monoId: null as string | null,
   inserted: [] as { tool_trace: Record<string, unknown>; content: string }[],
 };
 
@@ -49,7 +50,11 @@ const supabase = {
           q((eqs) =>
             eqs.id === CONV
               ? {
-                  data: { user_id: state.ownerId, org_id: state.convOrg },
+                  data: {
+                    user_id: state.ownerId,
+                    org_id: state.convOrg,
+                    mono_id: state.monoId,
+                  },
                   error: null,
                 }
               : { data: null, error: null },
@@ -70,7 +75,7 @@ const supabase = {
           : q((eqs) =>
               eqs.id === MSG && eqs.conversation_id === state.msgConv
                 ? {
-                    data: { tool_trace: state.trace, agent_id: null },
+                    data: { tool_trace: state.trace },
                     error: null,
                   }
                 : { data: null, error: null },
@@ -126,6 +131,16 @@ vi.mock("./catalog", () => ({
         : undefined,
 }));
 
+const loadOwnedMono = vi.fn();
+const monoClient = { from: () => ({}) };
+const getMonoClient = vi.fn(async (_id: string) => monoClient);
+vi.mock("@/lib/monos/turn", () => ({
+  loadOwnedMono: (...a: unknown[]) => loadOwnedMono(...a),
+}));
+vi.mock("@/lib/mono/session", () => ({
+  getMonoClient: (id: string) => getMonoClient(id),
+}));
+
 import { applyBatch, dismissBatch } from "./batch-actions";
 
 const call = (id: string, over: object = {}) => ({
@@ -149,7 +164,10 @@ beforeEach(() => {
   state.msgConv = CONV;
   state.ownerId = "u-1";
   state.mode = "per_user";
+  state.monoId = null;
   state.inserted = [];
+  loadOwnedMono.mockReset();
+  getMonoClient.mockClear();
   invoke.mockReset();
   invoke.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
 });
@@ -545,5 +563,38 @@ describe("dismissBatch", () => {
     expect(state.inserted[0]!.content).toBe(
       "You dismissed these changes. Nothing was changed.",
     );
+  });
+});
+
+describe("applyBatch on a Mono thread", () => {
+  it("applies every row as the Mono", async () => {
+    state.monoId = "m-1";
+    loadOwnedMono.mockResolvedValue({ userId: "m-1" });
+    const res = await applyBatch({
+      conversationId: CONV,
+      messageId: MSG,
+      selectedIds: ["a"],
+    });
+    expect(res.ok).toBe(true);
+    expect(loadOwnedMono).toHaveBeenCalledWith(supabase, "u-1", "o-1", "m-1");
+    expect(getMonoClient).toHaveBeenCalledWith("m-1");
+    const ctx = invoke.mock.calls[0]![0] as {
+      actorId: string;
+      getClient: () => Promise<unknown>;
+    };
+    expect(ctx.actorId).toBe("m-1");
+    expect(await ctx.getClient()).toBe(monoClient);
+  });
+
+  it("refuses when the Mono is no longer the caller's", async () => {
+    state.monoId = "m-1";
+    loadOwnedMono.mockResolvedValue(null);
+    const res = await applyBatch({
+      conversationId: CONV,
+      messageId: MSG,
+      selectedIds: ["a"],
+    });
+    expect(res).toEqual({ ok: false, error: "Conversation not found." });
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

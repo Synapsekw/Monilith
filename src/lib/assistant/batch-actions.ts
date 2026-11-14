@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { parseToolTrace, type AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import type { Json } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/types/database.types";
+import { getMonoClient } from "@/lib/mono/session";
+import { loadOwnedMono } from "@/lib/monos/turn";
 import { findDescriptor } from "./catalog";
 import { takesOrgId } from "./org-pin";
 import { unsupportedReason } from "./unsupported";
@@ -25,12 +28,11 @@ export type BatchOutcome = {
   content: string;
   trace: AskToolTrace;
   touchedBoardIds: string[];
-  agentId: string | null;
 };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Loaded =
-  | { ok: true; calls: StagedCall[]; agentId: string | null }
+  | { ok: true; calls: StagedCall[]; monoId: string | null }
   | { ok: false; error: string };
 
 /**
@@ -47,7 +49,7 @@ async function loadBatch(
 ): Promise<Loaded> {
   const conv = await supabase
     .from("ai_conversations")
-    .select("user_id, org_id")
+    .select("user_id, org_id, mono_id")
     .eq("id", conversationId)
     .maybeSingle();
   if (
@@ -60,7 +62,7 @@ async function loadBatch(
 
   const row = await supabase
     .from("ai_messages")
-    .select("tool_trace, agent_id")
+    .select("tool_trace")
     .eq("id", messageId)
     .eq("conversation_id", conversationId)
     .maybeSingle();
@@ -85,7 +87,7 @@ async function loadBatch(
   if (prior.data?.length)
     return { ok: false, error: "These changes were already resolved." };
 
-  return { ok: true, calls, agentId: row.data.agent_id };
+  return { ok: true, calls, monoId: conv.data.mono_id ?? null };
 }
 
 type InsertedRow = { id: string | null; error: unknown };
@@ -96,7 +98,6 @@ async function insertOutcomeRow(
   conversationId: string,
   content: string,
   trace: AskToolTrace,
-  agentId: string | null,
 ): Promise<InsertedRow> {
   const ins = await supabase
     .from("ai_messages")
@@ -105,7 +106,6 @@ async function insertOutcomeRow(
       role: "assistant",
       content,
       tool_trace: trace as unknown as Json,
-      agent_id: agentId,
     })
     .select("id")
     .single();
@@ -120,19 +120,17 @@ async function insertOutcome(
   content: string,
   trace: AskToolTrace,
   touchedBoardIds: string[],
-  agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
   const { id } = await insertOutcomeRow(
     supabase,
     conversationId,
     content,
     trace,
-    agentId,
   );
   if (!id) return fail("Couldn't record the result.");
   return {
     ok: true,
-    data: { messageId: id, content, trace, touchedBoardIds, agentId },
+    data: { messageId: id, content, trace, touchedBoardIds },
   };
 }
 
@@ -150,7 +148,6 @@ async function insertAppliedOutcome(
   content: string,
   trace: AskToolTrace,
   touchedBoardIds: string[],
-  agentId: string | null,
 ): Promise<ActionResult<BatchOutcome>> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -159,12 +156,11 @@ async function insertAppliedOutcome(
       conversationId,
       content,
       trace,
-      agentId,
     );
     if (id)
       return {
         ok: true,
-        data: { messageId: id, content, trace, touchedBoardIds, agentId },
+        data: { messageId: id, content, trace, touchedBoardIds },
       };
     lastError = error;
   }
@@ -179,16 +175,16 @@ async function insertAppliedOutcome(
       content,
       trace,
       touchedBoardIds,
-      agentId,
     },
   };
 }
 
 const ORG_ROW_MISMATCH = "This change targets a different organization.";
 
-/** Run one staged call under the user's own client. Never throws. */
+/** Run one staged call under the acting client (the user's own, or on a Mono
+ *  thread the Mono's own session). Never throws. */
 async function runCall(
-  supabase: Supabase,
+  supabase: SupabaseClient<Database>,
   actorId: string,
   orgId: string,
   call: StagedCall,
@@ -277,6 +273,23 @@ export async function applyBatch(input: {
     );
     if (!loaded.ok) return fail(loaded.error);
 
+    // A Mono thread applies as the Mono, so RLS judges its own board
+    // memberships and the rows show the Mono as their author. The outcome
+    // turn is still written by the owner, who owns the thread.
+    let actingClient: SupabaseClient<Database> = supabase;
+    let actorId = user.id;
+    if (loaded.monoId) {
+      const mono = await loadOwnedMono(
+        supabase,
+        user.id,
+        org.id,
+        loaded.monoId,
+      );
+      if (!mono) return fail("Conversation not found.");
+      actingClient = await getMonoClient(mono.userId);
+      actorId = mono.userId;
+    }
+
     const selected = new Set(selectedIds);
     if (!loaded.calls.some((c) => selected.has(c.id)))
       return fail("Pick at least one change to apply.");
@@ -289,7 +302,7 @@ export async function applyBatch(input: {
         continue;
       }
       seen.add(call.id);
-      const result = await runCall(supabase, user.id, org.id, call);
+      const result = await runCall(actingClient, actorId, org.id, call);
       results.push(result);
       if (result.ok && call.boardId) touched.add(call.boardId);
     }
@@ -307,7 +320,6 @@ export async function applyBatch(input: {
         stagedResults: results,
       },
       [...touched],
-      loaded.agentId,
     );
   } catch (e) {
     console.error("[assistant] applyBatch failed", e);
@@ -343,7 +355,6 @@ export async function dismissBatch(input: {
       DISMISSED_OUTCOME,
       { resolvesProposal: messageId, outcome: "cancelled" },
       [],
-      loaded.agentId,
     );
   } catch (e) {
     console.error("[assistant] dismissBatch failed", e);

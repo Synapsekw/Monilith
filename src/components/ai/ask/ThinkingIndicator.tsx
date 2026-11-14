@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 
@@ -39,15 +40,24 @@ const DOT_DELAYS = [
 export function ThinkingIndicator({
   label,
   className,
+  mark,
 }: {
   /** The freshest server status, if one has arrived yet. */
   label?: string | null;
   className?: string;
+  /** The speaker's mark when it is not the org assistant. */
+  mark?: ReactNode;
 }) {
   return (
     <div className={cn("animate-fadein flex items-start gap-3", className)}>
-      <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
-        <AskAiMark className="size-3.5" />
+      {/* `chrome-reset`: an opaque tile that also renders in the board dock,
+          inside its chrome scope (inert on the content card). */}
+      <span className="chrome-reset bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
+        {mark ? (
+          <span aria-hidden="true">{mark}</span>
+        ) : (
+          <AskAiMark className="size-3.5" />
+        )}
       </span>
       <p
         role="status"

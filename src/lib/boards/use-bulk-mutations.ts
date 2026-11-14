@@ -19,6 +19,7 @@ import {
 import { boardKey } from "@/lib/boards/use-board-cache";
 import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import { assertOnline } from "@/lib/offline/online-status";
+import { useMyMonoStore } from "@/stores/my-mono";
 
 /**
  * Bulk (multi-item) board mutations for the Table view's floating action bar.
@@ -162,7 +163,8 @@ export function useBulkMutations(boardId: string) {
       itemIds: string[];
       columnId: string;
       value: Record<string, unknown> | null;
-    }
+    },
+    { priorValues: Map<string, unknown> } | undefined
   >({
     mutationFn: async ({ itemIds, columnId, value }) => {
       assertOnline();
@@ -174,6 +176,13 @@ export function useBulkMutations(boardId: string) {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
       if (!previous) return;
+      const priorValues = new Map<string, unknown>(
+        previous.cellValues
+          .filter(
+            (c) => c.column_id === columnId && itemIds.includes(c.item_id),
+          )
+          .map((c) => [c.item_id, c.value]),
+      );
       const next = itemIds.reduce((c, itemId) => {
         if (value === null) return removeCellValue(c, itemId, columnId);
         const cell: CacheCellValue = {
@@ -185,8 +194,16 @@ export function useBulkMutations(boardId: string) {
         return upsertCellValue(c, cell);
       }, previous);
       qc.setQueryData<BoardCache>(key, next);
+      return { priorValues };
     },
-    onSuccess: (outcome) => reconcile(outcome, "update"),
+    onSuccess: (outcome, { value }, mctx) => {
+      // Assigning the viewer's own Mono also puts it on the board server-side;
+      // mirror that into the rail's store for each write that landed.
+      const note = useMyMonoStore.getState().notePeopleWrite;
+      for (const itemId of outcome.succeeded)
+        note(boardId, mctx?.priorValues.get(itemId), value);
+      reconcile(outcome, "update");
+    },
     onError: (err) => {
       resync();
       showMutationError(

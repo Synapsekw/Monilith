@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { BoardCache } from "@/lib/boards/cache";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
@@ -65,6 +66,8 @@ export type IntelMember = {
   userId: string;
   fullName: string | null;
   email: string | null;
+  /** Set when this row is a Mono (Personal Monos). */
+  mono?: MonoMemberMeta;
 };
 
 export function BoardIntelligenceProvider({
@@ -111,6 +114,11 @@ export function BoardIntelligenceProvider({
       ),
     [members],
   );
+  // Workload is people-only: Monos never count toward "overloaded".
+  const monoIds = useMemo(
+    () => new Set(members.filter((m) => m.mono).map((m) => m.userId)),
+    [members],
+  );
   const lastSeen = useMemo(
     () => (lastSeenAt ? new Date(lastSeenAt) : null),
     [lastSeenAt],
@@ -126,8 +134,9 @@ export function BoardIntelligenceProvider({
         lastSeenAt: lastSeen,
         currentUserId,
         memberNames,
+        monoIds,
       }),
-    [cache, now, lastSeen, currentUserId, memberNames],
+    [cache, now, lastSeen, currentUserId, memberNames, monoIds],
   );
 
   const filter = useBoardFilterSort();

@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   CardSeam,
   SEAM_CAP,
   seamHitClasses,
 } from "@/components/shell/card-seam";
+import { PanelGlyph } from "@/components/shell/panel-glyph";
 import { cn } from "@/lib/utils";
 import { DOCK_MAX_WIDTH, DOCK_MIN_WIDTH } from "./use-dock-state";
 
@@ -72,7 +72,7 @@ export function DockSeam({
       <div
         role={open ? "separator" : undefined}
         aria-orientation={open ? "vertical" : undefined}
-        aria-label={open ? "Resize agent dock" : undefined}
+        aria-label={open ? "Resize assistant dock" : undefined}
         aria-valuenow={open ? width : undefined}
         aria-valuemin={open ? DOCK_MIN_WIDTH : undefined}
         aria-valuemax={open ? DOCK_MAX_WIDTH : undefined}
@@ -122,7 +122,7 @@ export function DockSeam({
         <button
           type="button"
           data-dock-seam-toggle
-          aria-label={open ? "Close agent dock" : "Open agent dock"}
+          aria-label={open ? "Close assistant dock" : "Open assistant dock"}
           aria-expanded={open}
           onClick={(e) => {
             // Without this the separator's own handler folds it straight back.
@@ -134,11 +134,7 @@ export function DockSeam({
             "focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none",
           )}
         >
-          {open ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronLeft className="size-3.5" />
-          )}
+          <PanelGlyph side="right" open={open} />
         </button>
       </div>
     </CardSeam>,

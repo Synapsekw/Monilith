@@ -31,6 +31,7 @@ import {
   PAGE_TITLE_CLASS,
   PAGE_TITLE_INPUT_CLASS,
 } from "@/components/ui/page-header";
+import { peopleOnly } from "@/lib/monos/people";
 import { once, useEverOpened } from "@/lib/ui/lazy-dialog";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
@@ -40,6 +41,7 @@ import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardIntelligenceStore } from "@/stores/board-intelligence";
 import type { Draft } from "@/components/boards/automations/recipes";
+import type { MonoMemberMeta } from "@/lib/monos/types";
 
 // The four on-demand dialogs are code-split: each chunk is fetched the first
 // time its dialog is opened (or a moment earlier — see the `prefetch*` helpers),
@@ -96,6 +98,8 @@ export type HeaderMember = {
   userId: string;
   fullName: string | null;
   email: string | null;
+  /** Set when this row is a Mono (Personal Monos). */
+  mono?: MonoMemberMeta;
 };
 
 export type HeaderGrant = { userId: string; access: "viewer" | "editor" };
@@ -341,7 +345,7 @@ export function BoardHeader({
           <AutomationsDialog
             boardId={boardId}
             columns={columns}
-            members={members}
+            members={peopleOnly(members)}
             groups={groups}
             open={automationsOpen}
             onOpenChange={(next) => {
@@ -366,7 +370,7 @@ export function BoardHeader({
         {isOwner && shareMounted ? (
           <ShareBoardDialog
             boardId={boardId}
-            members={members}
+            members={peopleOnly(members)}
             grants={grants}
             open={shareOpen}
             onOpenChange={setShareOpen}

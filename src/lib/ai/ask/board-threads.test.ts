@@ -5,12 +5,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from }),
 }));
 
-import {
-  listBoardThreads,
-  listAgentThreads,
-  BOARD_THREADS_LIMIT,
-  AGENT_THREADS_LIMIT,
-} from "./board-threads";
+import { listBoardThreads, BOARD_THREADS_LIMIT } from "./board-threads";
 
 /** Minimal chainable PostgREST double that records the calls made on it. */
 function builder(rows: unknown[]) {
@@ -70,23 +65,5 @@ describe("listBoardThreads", () => {
     await listBoardThreads("board-1");
     const eqKeys = (chain.calls.eq ?? []).map((c) => (c as string[])[0]);
     expect(eqKeys).not.toContain("user_id");
-  });
-});
-
-describe("listAgentThreads", () => {
-  it("returns the owner's cross-board agent threads, capped at 5", async () => {
-    const chain = builder([{ id: "a1" }]);
-    from.mockReturnValue(chain);
-
-    await listAgentThreads("user-1");
-
-    expect(chain.calls.eq).toContainEqual(["user_id", "user-1"]);
-    expect(chain.calls.is).toContainEqual(["board_id", null]);
-    expect(chain.calls.not).toContainEqual(["agent_id", "is", null]);
-    expect(chain.calls.limit).toEqual([[AGENT_THREADS_LIMIT]]);
-    expect(AGENT_THREADS_LIMIT).toBe(5);
-    // Same column set as the board read: one row shape feeds one row component.
-    const [columns] = (chain.calls.select?.[0] ?? []) as string[];
-    expect(columns).toContain("board_id");
   });
 });

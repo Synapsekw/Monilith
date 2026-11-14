@@ -23,7 +23,8 @@ const MESSAGES_LIMIT = 200;
  *  partial indexes added with `ai_messages.agent_id`. */
 export const RAIL_LIMIT = 50;
 
-/** The user's own chats — threads no agent run wrote. */
+/** The user's own chats — threads no agent run wrote. Mono threads live in
+ *  the My Mono tab, not the /ask rail. */
 export async function listChats(userId: string): Promise<ConversationRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -31,6 +32,7 @@ export async function listChats(userId: string): Promise<ConversationRow[]> {
     .select("id, title, updated_at")
     .eq("user_id", userId)
     .is("run_id", null)
+    .is("mono_id", null)
     .order("updated_at", { ascending: false })
     .limit(RAIL_LIMIT);
   if (error) throw new Error(`listChats: ${error.message}`);
@@ -51,33 +53,6 @@ export async function listBriefings(
     .limit(RAIL_LIMIT);
   if (error) throw new Error(`listBriefings: ${error.message}`);
   return data ?? [];
-}
-
-/**
- * The agent run this thread reports on, or null for an ordinary chat.
- *
- * `ai_conversations.run_id` is set only by `writeBriefingThread`, so a non-null
- * answer means "this thread is a briefing" — which is what lets the thread page
- * show the run's queued approvals next to the report that asked for them. A
- * single-row primary-key read, issued in parallel with the messages, and RLS
- * scopes it to the owner exactly as `getMessages` is scoped.
- */
-export async function getConversationRunId(
-  conversationId: string,
-): Promise<string | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("ai_conversations")
-    .select("run_id")
-    .eq("id", conversationId)
-    .maybeSingle();
-  // Never throws: a briefing that renders without its approval cards is a
-  // degraded thread; a 500 is no thread at all.
-  if (error) {
-    console.error(`[ask] run id read failed for ${conversationId}`, error);
-    return null;
-  }
-  return data?.run_id ?? null;
 }
 
 /** Load a conversation's turns oldest-first, bounded. RLS returns empty rows for

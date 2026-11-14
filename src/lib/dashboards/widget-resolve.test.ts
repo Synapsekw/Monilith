@@ -3,6 +3,7 @@ import {
   resolveAggregate,
   resolveCompletion,
   resolveHealth,
+  resolveSeries,
 } from "./widget-resolve";
 
 function fakeClient(rpc: Record<string, unknown>) {
@@ -62,5 +63,32 @@ describe("resolveCompletion", () => {
     const c = fakeClient({});
     const r = await resolveCompletion(c, { boardId: "b", config: {} });
     expect(r).toEqual({ ok: true, rows: [], groups: [] });
+  });
+});
+
+describe("resolveSeries people dimension", () => {
+  it("lists people only: a Mono (role agent) is excluded from members", async () => {
+    const neq = vi.fn(async () => ({ data: [], error: null }));
+    const eq = vi.fn(() => ({ neq }));
+    const select = vi.fn(() => ({ eq }));
+    const c = {
+      rpc: vi.fn(async () => ({
+        data: [{ primary_key: "u1", series_key: null, value: 3 }],
+        error: null,
+      })),
+      from: vi.fn(() => ({ select })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    await resolveSeries(c, {
+      boardId: "b",
+      orgId: "org-1",
+      config: {
+        chartType: "bar",
+        primary: { kind: "people", columnId: "col" },
+      },
+    });
+    expect(c.from).toHaveBeenCalledWith("org_members");
+    expect(eq).toHaveBeenCalledWith("org_id", "org-1");
+    expect(neq).toHaveBeenCalledWith("role", "agent");
   });
 });

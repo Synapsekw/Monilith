@@ -30,21 +30,21 @@ describe("MentionTextarea", () => {
     expect(mentions).toEqual([{ kind: "user", userId: "u2" }]);
   });
 
-  it("completes an agent by handle and emits a tagged target", async () => {
+  it("completes a person mid-token on mount and emits a tagged target", async () => {
     const onChange = vi.fn();
     render(
       <MentionTextarea
-        value="ping @op"
+        value="ping @Al"
         mentions={[]}
-        targets={[
-          { kind: "agent", agentId: "a1", handle: "ops", name: "Ops Chaser" },
-        ]}
+        targets={targets}
         onChange={onChange}
       />,
     );
-    await userEvent.click(await screen.findByRole("button", { name: /ops/i }));
-    expect(onChange).toHaveBeenCalledWith("ping @ops ", [
-      { kind: "agent", agentId: "a1" },
+    await userEvent.click(
+      await screen.findByRole("button", { name: /alan turing/i }),
+    );
+    expect(onChange).toHaveBeenCalledWith("ping @Alan Turing ", [
+      { kind: "user", userId: "u2" },
     ]);
   });
 
@@ -64,5 +64,36 @@ describe("MentionTextarea", () => {
       { kind: "user", userId: "u1" },
       { kind: "user", userId: "u2" },
     ]);
+  });
+  it("suggests the author's own Mono as a Mono and records a mono target", () => {
+    const onChange = vi.fn();
+    render(
+      <MentionTextarea
+        value=""
+        mentions={[]}
+        targets={[
+          ...targets,
+          {
+            kind: "mono",
+            userId: "m1",
+            name: "Nova",
+            ownerName: "Ada Lovelace",
+            color: "#7395ff",
+          },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "hi @No", selectionStart: 6 },
+    });
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nova, Ada's Mono" }),
+    ).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByText("Nova"));
+    const [text, mentions] = onChange.mock.calls.at(-1)!;
+    expect(text).toContain("@Nova ");
+    expect(mentions).toEqual([{ kind: "mono", userId: "m1" }]);
   });
 });

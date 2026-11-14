@@ -57,3 +57,25 @@ describe("CreatedAtCell", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+describe("CreatedByCell for a Mono", () => {
+  it("shows the pebble, the Agent chip and whose Mono it is", () => {
+    render(
+      <CreatedByCell
+        name="Nova"
+        mono={{
+          color: "#7395ff",
+          ownerId: "u1",
+          ownerName: "Ada Owner",
+          directable: false,
+        }}
+      />,
+    );
+    expect(screen.getByText("Nova")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Ada's Mono")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nova, Ada's Mono" }),
+    ).toBeInTheDocument();
+  });
+});

@@ -4,6 +4,76 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-14",
+    kind: "new",
+    title: "Twelve new colour themes and a bolder light mode",
+    description:
+      "Pick from twelve new themes in Settings: Lagoon, Tropic, Orchid, Peach, Glacier, Dusk, Berry, Candy, Citrus, Prism, Mocha and Neon. Light mode now wraps your work in a bold coloured frame with white text, and every theme has soft colour glows behind the sidebar. Ocean, Forest, Ember and Rose have been retired: if you used one, Monolith switches you to the closest new theme automatically (Ocean to Lagoon, Forest to Tropic, Ember to Peach, Rose to Orchid).",
+  },
+  {
+    date: "2026-11-14",
+    kind: "new",
+    title: "Dependencies across boards",
+    description:
+      "Link an item to work on any board in your organisation from the item panel's new Waiting on / Blocking section, with a Late marker when the dates clash.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "new",
+    title: "Folder Timeline",
+    description:
+      "A Timeline tab on every folder shows all its boards on one Gantt, with links drawn between them; drag bars to reschedule.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "fixed",
+    title: "Timeline arrows",
+    description:
+      "Dependency arrows between items now draw on the board Timeline view.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Faster settings navigation",
+    description:
+      "Switching between settings sections now responds instantly, and the settings menu stays in place while a section loads.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "A simpler AI setup",
+    description:
+      "Agent setup, Autopilot and agent personas are gone. Ask and the board's assistant dock now run one assistant for your whole organization, which can act on any board you can open, and the sidebar entry that used to say Agents now says Ask.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Board totals stand out",
+    description:
+      "The Board Total row at the bottom of a table is now tinted in your theme colour with bold figures, and group summaries are quieter, so the grand total no longer blends into the last group.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "new",
+    title: "Leave a shared board",
+    description:
+      "Boards someone shared with you now have a Leave board option in the sidebar menu. It removes the board from your sidebar and ends your access, without changing it for anyone else, and the owner can invite you again.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Easier-to-find panel toggles",
+    description:
+      "The controls that fold the sidebar and the assistant dock are now small handles that are always visible on the edge of the page, instead of arrows that only appeared on hover.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
+    title: "Tidier collapsed sidebar and dock",
+    description:
+      "With the sidebar collapsed you now see one Boards button instead of a letter for every board, and the collapsed agent dock shows just Intelligence and your current chat, which reopens right where you left off.",
+  },
+  {
     date: "2026-11-13",
     kind: "new",
     title: "New accounts are reviewed before they get in",

@@ -49,16 +49,32 @@ function fmtDate(iso: string): string {
   });
 }
 
+/** How loudly a summary value reads. `quiet` is for per-group rows, which sit
+ *  under the Board Total; `strong` is the Board Total itself. */
+export type FooterTone = "default" | "quiet" | "strong";
+
+// Joined with a template string, never cn(): tailwind-merge does not know the
+// custom `text-cell` size and would drop `text-foreground` as a conflicting
+// text colour (same trap as TimeTrackingCell / GroupHeaderRow).
+const VALUE_TONE: Record<FooterTone, string> = {
+  default: "text-foreground text-xs font-medium",
+  quiet: "text-muted-foreground text-xs font-medium",
+  strong: "text-foreground text-cell font-semibold",
+};
+
 /** Pure presentational renderer for a computed footer aggregate.
  *  `dirhamSign` is the column's AED display flag (absent = default ON) —
  *  only consulted when the result carries the currency style. */
 export function FooterValue({
   result,
   dirhamSign,
+  tone = "default",
 }: {
   result: AggregateResult;
   dirhamSign?: boolean;
+  tone?: FooterTone;
 }) {
+  const valueClass = VALUE_TONE[tone];
   switch (result.kind) {
     case "empty":
       return null;
@@ -69,7 +85,7 @@ export function FooterValue({
         return <PercentBar percent={result.value} />;
       }
       return (
-        <span className="text-foreground text-xs font-medium tabular-nums">
+        <span className={`${valueClass} tabular-nums`}>
           {result.style === "currency" && result.currency ? (
             <CurrencyAmount
               amount={result.value}
@@ -82,26 +98,22 @@ export function FooterValue({
       );
     case "checkbox":
       return (
-        <span className="text-foreground text-xs font-medium tabular-nums">
+        <span className={`${valueClass} tabular-nums`}>
           {result.checked}/{result.total}
         </span>
       );
     case "date":
-      return (
-        <span className="text-foreground text-xs font-medium">
-          {fmtDate(result.date)}
-        </span>
-      );
+      return <span className={valueClass}>{fmtDate(result.date)}</span>;
     case "dateSpan":
       return (
-        <span className="text-foreground text-xs font-medium">
+        <span className={valueClass}>
           {fmtDate(result.start)}
           {result.end !== result.start ? ` – ${fmtDate(result.end)}` : ""}
         </span>
       );
     case "duration":
       return (
-        <span className="text-foreground text-xs font-medium tabular-nums">
+        <span className={`${valueClass} tabular-nums`}>
           {formatDuration(result.totalSecs)}
           {result.estimateSecs
             ? ` / ${formatDuration(result.estimateSecs)}`
@@ -152,6 +164,8 @@ export type FooterCellProps = {
   canEdit: boolean;
   /** Persist a new choice (`null` clears it). */
   onChange: (agg: AggregationId | null) => void;
+  /** Value emphasis; see `FooterTone`. */
+  tone?: FooterTone;
 };
 
 /**
@@ -170,6 +184,7 @@ export function FooterCell({
   allowed,
   canEdit,
   onChange,
+  tone,
 }: FooterCellProps) {
   const result: AggregateResult = current
     ? aggregate(aggregateKind, current, values, options, currency)
@@ -184,7 +199,7 @@ export function FooterCell({
           {label}
         </Kicker>
       )}
-      <FooterValue result={result} dirhamSign={dirhamSign} />
+      <FooterValue result={result} dirhamSign={dirhamSign} tone={tone} />
       {!current && canEdit && (
         <span className="text-muted-foreground/60 text-xs">Summary</span>
       )}

@@ -218,10 +218,8 @@ describe("pickModel — the org default outranks the feature tier, deliberately"
 
   // `pickModel` is capability-BLIND, and that is the boundary the "should this
   // be a capability constraint rather than a tier?" question sits on. Today the
-  // only capability gate is downstream and per-caller: the personal-agent route
-  // throws `ModelNotToolCapableError` after resolution
-  // (`app/api/ai/personal-agent/route.ts`), and `AgentEditor` warns at pick
-  // time. So an org default that cannot call tools is honoured here and fails
+  // only capability gate is downstream and per-caller (the retired
+  // personal-agent route was one). So an org default that cannot call tools is honoured here and fails
   // LOUDLY there, rather than being silently swapped for a model the admin did
   // not choose. Whoever implements the capability resolver flips this test.
   it("honours an org default that cannot call tools, leaving the gate downstream", () => {

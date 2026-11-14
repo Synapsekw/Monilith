@@ -5,6 +5,7 @@ import { executeAgentTool } from "@/test/agent-tool-exec";
 import type { StagedCall } from "./staged";
 import {
   buildAssistantTools,
+  MONO_NO_BOARDS_ERROR,
   ORG_MISMATCH_ERROR,
   STAGE_INVALID_ERROR,
 } from "./tools";
@@ -97,6 +98,35 @@ describe("buildAssistantTools", () => {
     });
     expect(goal.invoke).not.toHaveBeenCalled();
     expect(stage).not.toHaveBeenCalled();
+  });
+
+  it("refuses a board create on a Mono turn without staging, but stages other board changes", async () => {
+    const manage = descriptor({
+      name: "manage_board",
+      capability: { create: "board.structure", rename: "board.structure" },
+    });
+    const staged: StagedCall[] = [];
+    const tools = buildAssistantTools({
+      ctx,
+      client,
+      orgId: ORG,
+      stage: (c) => (staged.push(c), true),
+      descriptors: [manage],
+      actingAsMono: true,
+    });
+    const out = await executeAgentTool(tools, "manage_board", {
+      action: "create",
+      workspaceId: ORG,
+      name: "X",
+    });
+    expect(out).toEqual({ error: MONO_NO_BOARDS_ERROR });
+    expect(staged).toHaveLength(0);
+    await executeAgentTool(tools, "manage_board", {
+      action: "rename",
+      name: "Y",
+    });
+    expect(staged).toHaveLength(1);
+    expect(manage.invoke).not.toHaveBeenCalled();
   });
 
   it("marks a board.destroy action as destructive", async () => {

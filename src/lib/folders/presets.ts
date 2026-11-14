@@ -69,11 +69,16 @@ const pick = (...panels: BuiltinPanel[]): LayoutSection[] =>
 const STAGES_TAB = { id: "stages", label: "Stages", kind: "stages" } as const;
 const BOARDS_TAB = { id: "boards", label: "Boards", kind: "boards" } as const;
 const PEOPLE_TAB = { id: "people", label: "People", kind: "people" } as const;
+const TIMELINE_TAB = {
+  id: "timeline",
+  label: "Timeline",
+  kind: "timeline",
+} as const;
 
 /**
  * `project` is today's layout, exactly: the six KPI cards in their current
  * order, burn + status-by-board on one row, attention with intelligence and
- * milestones stacked in the right column, and the four current tabs.
+ * milestones stacked in the right column, and the stages, timeline, boards and people tabs.
  */
 export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
   project: {
@@ -93,6 +98,7 @@ export const PRESETS: Record<PresetKey, FolderLayoutConfig> = {
         ),
       },
       STAGES_TAB,
+      TIMELINE_TAB,
       BOARDS_TAB,
       PEOPLE_TAB,
     ],

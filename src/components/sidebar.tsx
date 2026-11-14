@@ -39,7 +39,9 @@ export function Sidebar({ navSlot }: { navSlot: ReactNode }) {
       <aside
         data-collapsed={isCollapsed}
         className={cn(
-          "hidden shrink-0 flex-col overflow-hidden md:flex",
+          // Painted on the wash: light mode re-seeds the tokens for this
+          // subtree (the bold frame — `.chrome-scope` in globals.css).
+          "chrome-scope hidden shrink-0 flex-col overflow-hidden md:flex",
           hasHydrated && "ease-keystone transition-[width] duration-200",
           isCollapsed ? "w-14" : "w-60",
         )}

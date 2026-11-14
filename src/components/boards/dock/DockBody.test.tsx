@@ -8,17 +8,17 @@ import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
 vi.mock("@/components/ai/ask/AskChat", () => ({
   AskChat: (p: {
     surface?: string;
-    onBusyChange?: (b: boolean) => void;
     agentNames?: Readonly<Record<string, string>>;
     agents?: readonly unknown[];
+    agentId?: string;
     readOnly?: boolean;
   }) => (
     <div
       data-testid="ask-chat"
       data-surface={p.surface ?? ""}
-      data-busy-wired={p.onBusyChange ? "yes" : "no"}
       data-agent-names={p.agentNames ? JSON.stringify(p.agentNames) : "none"}
       data-agents={p.agents ? String(p.agents.length) : "none"}
+      data-agent-id={p.agentId ?? "none"}
       data-read-only={p.readOnly ? "yes" : "no"}
     >
       {p.readOnly ? (
@@ -44,11 +44,6 @@ vi.mock("./intelligence/IntelligenceTab", () => ({
 
 import { DockBody, type DockBodyProps } from "./DockBody";
 
-const AGENTS = [
-  { id: "a1", name: "Morning Brief" },
-  { id: "a2", name: "Overdue Chaser" },
-];
-
 const thread = (over: Partial<BoardThreadRow> = {}): BoardThreadRow => ({
   id: "c1",
   title: "About the roadmap",
@@ -62,17 +57,12 @@ const thread = (over: Partial<BoardThreadRow> = {}): BoardThreadRow => ({
 
 function props(over: Partial<DockBodyProps> = {}): DockBodyProps {
   return {
-    agents: AGENTS,
-    agentNames: { a1: "Morning Brief", a2: "Overdue Chaser" },
-    tileAgentId: null,
-    presence: {},
     onSelectTile: vi.fn(),
     onNew: vi.fn(),
     onClose: vi.fn(),
     error: null,
     loading: false,
     boardThreads: [],
-    agentThreads: [],
     activeId: null,
     activeThread: null,
     currentUserId: "me",
@@ -83,17 +73,18 @@ function props(over: Partial<DockBodyProps> = {}): DockBodyProps {
     readOnly: false,
     boardId: "b1",
     messages: [],
-    agentId: null,
     chatKey: "chat-0",
     onStarted: vi.fn(),
     onTurnComplete: vi.fn(),
-    onBusyChange: vi.fn(),
     tab: "chat",
     badge: 0,
     canApply: true,
     runOnMount: false,
     onRanOnMount: vi.fn(),
     ruleMeta: { columns: [], memberIds: [] },
+    myMono: null,
+    monoOnBoard: false,
+    ownerName: null,
     ...over,
   };
 }
@@ -107,7 +98,7 @@ describe("DockBody — band", () => {
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New thread" })).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Close agent dock" }),
+      screen.getByRole("button", { name: "Close assistant dock" }),
     ).toBeInTheDocument();
   });
 
@@ -115,7 +106,7 @@ describe("DockBody — band", () => {
     render(<DockBody {...props({ activeId: "c1", onClose: undefined })} />);
     expect(screen.getByRole("button", { name: "New thread" })).toBeEnabled();
     expect(
-      screen.queryByRole("button", { name: "Close agent dock" }),
+      screen.queryByRole("button", { name: "Close assistant dock" }),
     ).toBeNull();
   });
 
@@ -148,62 +139,22 @@ describe("DockBody — title row", () => {
     );
   });
 
-  it("shows the open thread's title and its persona, and labels the panel by that tile", () => {
+  it("shows the open thread's title with Ask as who answers, even for a legacy agent thread", () => {
     render(
       <DockBody
         {...props({
           activeId: "c1",
           activeThread: thread({ agent_id: "a2" }),
-          tileAgentId: "a2",
         })}
       />,
     );
     expect(
       screen.getByRole("heading", { name: "About the roadmap" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading").parentElement).toHaveTextContent(
-      "Overdue Chaser",
-    );
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "aria-labelledby",
-      "dock-tab-agent-a2",
-    );
-    expect(screen.getByRole("tab", { name: "Overdue Chaser" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-  });
-
-  it("falls back to Ask when the queued persona has left the roster", () => {
-    // `tileAgentId` names an agent no longer in `agentNames` — e.g. the owner
-    // disabled it after it was queued for a new thread. `DockTiles` already
-    // collapses this to its Ask tile; the panel's `aria-labelledby` must
-    // agree, not point at a `dock-tab-agent-<id>` nothing renders.
-    render(<DockBody {...props({ tileAgentId: "gone" })} />);
     expect(screen.getByRole("heading").parentElement).toHaveTextContent("Ask");
     expect(screen.getByRole("tabpanel")).toHaveAttribute(
       "aria-labelledby",
       "dock-tab-ask",
-    );
-    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-  });
-
-  it("treats an agent with an empty-string name as still on the roster", () => {
-    // A truthiness check on `agentNames[id]` would wrongly treat an agent
-    // whose display name happens to be "" as absent — disagreeing with
-    // `DockTiles`, which checks its own `agents` array by id, never by name.
-    render(
-      <DockBody {...props({ tileAgentId: "a1", agentNames: { a1: "" } })} />,
-    );
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "aria-labelledby",
-      "dock-tab-agent-a1",
-    );
-    expect(screen.getByRole("heading").parentElement).not.toHaveTextContent(
-      "Ask",
     );
   });
 
@@ -241,6 +192,13 @@ describe("DockBody — threads ledger", () => {
     expect(ledger()).toHaveAttribute("aria-expanded", "true");
     expect(well).not.toHaveAttribute("hidden");
     expect(screen.getByText("Sprint review")).toBeVisible();
+  });
+
+  it("renders without an agents prop and shows no agent thread group", async () => {
+    render(<DockBody {...props({ boardThreads: rows })} />);
+    await userEvent.click(ledger());
+    expect(screen.getByText("Sprint review")).toBeVisible();
+    expect(screen.queryByText(/from your agents/i)).toBeNull();
   });
 
   it("folds again when a thread is picked, and reports the pick", async () => {
@@ -290,34 +248,20 @@ describe("DockBody — threads ledger", () => {
 });
 
 describe("DockBody — transcript", () => {
-  it("renders the chat on the wash and wires the busy signal", () => {
+  it("renders the chat on the wash", () => {
     render(<DockBody {...props()} />);
     expect(screen.getByTestId("ask-chat")).toHaveAttribute(
       "data-surface",
       "atmosphere",
     );
-    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
-      "data-busy-wired",
-      "yes",
-    );
   });
 
-  // Finding #3: the band, the title kicker and the presence dot all name the
-  // persona; without the roster the transcript stamped every answer
-  // "Monolith". `MessageList` resolves a turn's `agentId` through exactly
-  // this map.
-  it("hands the chat the persona names, so the transcript can attribute a turn", () => {
+  it("hands the chat no agent roster, names or persona: the org assistant answers", () => {
     render(<DockBody {...props()} />);
-    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
-      "data-agent-names",
-      JSON.stringify({ a1: "Morning Brief", a2: "Overdue Chaser" }),
-    );
-    // But NOT the @handle roster: on this surface a persona is chosen by
-    // tapping its tile, and the board page reads no handles to offer.
-    expect(screen.getByTestId("ask-chat")).toHaveAttribute(
-      "data-agents",
-      "none",
-    );
+    const chat = screen.getByTestId("ask-chat");
+    expect(chat).toHaveAttribute("data-agent-names", "none");
+    expect(chat).toHaveAttribute("data-agents", "none");
+    expect(chat).toHaveAttribute("data-agent-id", "none");
   });
 
   // Finding #7: this used to replace `AskChat` wholesale with the sentence, so

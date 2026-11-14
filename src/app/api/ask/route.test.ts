@@ -153,13 +153,21 @@ const { getBoardPayload, listOrgMembersCached } = vi.hoisted(() => ({
   ),
 }));
 vi.mock("@/lib/boards/queries", () => ({ getBoardPayload }));
+const { resolveMonoTurn, getMonoClient } = vi.hoisted(() => ({
+  resolveMonoTurn: vi.fn(),
+  getMonoClient: vi.fn(async () => ({ mono: "client" })),
+}));
+vi.mock("@/lib/monos/turn", () => ({
+  resolveMonoTurn,
+  monoSystemLines: () => "MONO LINES",
+}));
+vi.mock("@/lib/mono/session", () => ({ getMonoClient }));
 vi.mock("@/lib/org/queries-cached", () => ({ listOrgMembersCached }));
 vi.mock("@/lib/profile/queries-cached", () => ({
   getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
 }));
-// Mutable so tests can shape the thread `currentPersonaFrom` reads — the real
-// implementation is kept (spread `actual`) so route.ts's own import of
-// `currentPersonaFrom` is the real function, not a stub.
+// Mutable so tests can shape the thread the route reads — the real
+// implementation is kept (spread `actual`) for everything else.
 type FakeMessageRow = {
   id: string;
   role: "user" | "assistant";
@@ -212,6 +220,7 @@ type ConversationRow = {
   folder_id: string | null;
   agent_id: string | null;
   user_id: string;
+  mono_id: string | null;
 };
 const defaultConversationRow = (): ConversationRow => ({
   summary: null,
@@ -220,23 +229,12 @@ const defaultConversationRow = (): ConversationRow => ({
   folder_id: null,
   agent_id: null,
   user_id: USER_ID,
+  mono_id: null,
 });
 let conversationRow: { data: ConversationRow | null; error: unknown } = {
   data: defaultConversationRow(),
   error: null,
 };
-type AgentRowData = {
-  id: string;
-  name: string;
-  instructions: string;
-  doc_nonce: string;
-};
-let agentRow: { data: AgentRowData | null; error: unknown } = {
-  data: null,
-  error: null,
-};
-const agentEqCalls: [string, unknown][] = [];
-
 /** Overrides the conversation row `ai_conversations` reads back for the next
  *  POST. `user_id` defaults to the caller so existing tests keep passing the
  *  owner gate without having to know it exists. */
@@ -245,29 +243,6 @@ function mockConversationRow(overrides: Partial<ConversationRow>) {
     data: { ...defaultConversationRow(), ...overrides },
     error: null,
   };
-}
-/** Overrides the `user_agents` row the route reads back for `agent_id`. Pass
- *  `null` to simulate a dangling/unreadable agent id. `id`/`doc_nonce` default
- *  so existing callers that only care about persona text need not supply them. */
-function mockAgentRow(
-  row: {
-    name: string;
-    instructions: string;
-    id?: string;
-    doc_nonce?: string;
-  } | null,
-) {
-  agentRow = row
-    ? {
-        data: {
-          id: row.id ?? "agent-1",
-          name: row.name,
-          instructions: row.instructions,
-          doc_nonce: row.doc_nonce ?? "nonce-1",
-        },
-        error: null,
-      }
-    : { data: null, error: null };
 }
 /** The RLS-scoped payload `getBoardPayload` returns for `board_id`. Pass
  *  `null` to simulate an RLS-invisible or dangling board. Only the fields
@@ -340,9 +315,9 @@ function mockFolderMissing() {
 }
 
 // Table-routed, because the route reads several tables through the same
-// client: ai_conversations (owner gate + persona/board ids), user_agents
-// (persona lookup, via maybeSingle so a missing row is not an error), the
-// folder tables, and ai_messages (the assistant insert). The board focus goes
+// client: ai_conversations (owner gate + board/folder ids), the folder
+// tables, and ai_messages (the assistant insert). `user_agents` is not
+// mocked: the route must never read it, and an unmocked table throws. The board focus goes
 // through `getBoardPayload`, mocked above, never this client.
 //
 // ONE client object for the whole file, so a test can prove the tool builder
@@ -383,24 +358,6 @@ theClient.current = {
               }),
             }),
           }),
-        }),
-      };
-    }
-    if (table === "user_agents") {
-      return {
-        select: () => ({
-          // Records the filter chain: the persona read is scoped to an
-          // ENABLED agent, and a test has to be able to see that.
-          eq: (col: string, val: unknown) => {
-            agentEqCalls.push([col, val]);
-            return {
-              eq: (col2: string, val2: unknown) => {
-                agentEqCalls.push([col2, val2]);
-                return { maybeSingle: vi.fn(async () => agentRow) };
-              },
-              maybeSingle: vi.fn(async () => agentRow),
-            };
-          },
         }),
       };
     }
@@ -455,11 +412,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   afterTasks.length = 0;
   conversationRow = { data: defaultConversationRow(), error: null };
-  agentRow = { data: null, error: null };
   mockBoardPayload(null);
   listOrgMembersCached.mockResolvedValue([]);
   mockFolderMissing();
-  agentEqCalls.length = 0;
   single.mockResolvedValue({ data: { id: "a1" }, error: null });
   setMessagesRows(defaultMessagesRows());
   supportsToolsRef.value = true;
@@ -789,10 +744,10 @@ describe("POST /api/ask · client disconnect", () => {
   });
 });
 
-// Task 4: the conversation row — not the request body — is now the source of
-// the board and agent ids for a turn, so ownership and persona composition are
-// asserted against `ai_conversations`, `boards` and `user_agents` reads.
-describe("POST /api/ask · ownership, persona, and board scope", () => {
+// The conversation row — not the request body — is the source of the board
+// id for a turn, so ownership and scope are asserted against `ai_conversations`
+// and `boards` reads.
+describe("POST /api/ask · ownership and board scope", () => {
   const BOARD_ID = "board-1";
   const AGENT_ID = "agent-1";
   const SOMEONE_ELSE_ID = "u2";
@@ -811,19 +766,17 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     expect(runAi).not.toHaveBeenCalled();
   });
 
-  it("composes the agent persona into the system prompt for an agent thread", async () => {
+  it("answers a legacy agent thread as the org assistant, without reading user_agents", async () => {
+    // The table double throws on `user_agents`, so reaching it would fail
+    // the turn rather than pass silently.
     mockConversationRow({ board_id: null, agent_id: AGENT_ID });
-    mockAgentRow({
-      id: AGENT_ID,
-      name: "Morning Brief",
-      instructions: "Focus on blockers.",
-    });
-    // The persona is composed INSIDE the runAi callback now (Task 6), so
-    // draining the body is still what synchronizes the test with the turn.
-    await (await POST(makeReq())).text();
+    const text = await (await POST(makeReq())).text();
+    expect(text).toContain('"type":"done"');
     const system = runAssistantLoop.mock.calls[0]![0].system;
-    expect(system).toContain('personal agent "Morning Brief"');
-    expect(system).toContain("Focus on blockers.");
+    expect(system).not.toContain("personal agent");
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({ agent_id: expect.anything() }),
+    );
   });
 
   it("composes the board focus into the system prompt for a board thread", async () => {
@@ -865,17 +818,12 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     expect(system).toContain("No page is in focus");
   });
 
-  it("keeps the board focus under an agent persona", async () => {
+  it("keeps the board focus on a legacy agent board thread", async () => {
     mockConversationRow({ board_id: BOARD_ID, agent_id: AGENT_ID });
-    mockAgentRow({
-      id: AGENT_ID,
-      name: "Morning Brief",
-      instructions: "Focus on blockers.",
-    });
     mockBoardPayload({ id: BOARD_ID, name: "Roadmap" });
     await (await POST(makeReq())).text();
     const system = runAssistantLoop.mock.calls[0]![0].system;
-    expect(system).toContain('personal agent "Morning Brief"');
+    expect(system).not.toContain("personal agent");
     expect(system).toContain("=== FOCUS");
     expect(system).toContain("Roadmap");
   });
@@ -931,204 +879,37 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     // conversation against it would let an afternoon of chat silently cancel
     // tomorrow's briefing.
     mockConversationRow({ board_id: BOARD_ID, agent_id: AGENT_ID });
-    mockAgentRow({ name: "Morning Brief", instructions: "Focus on blockers." });
     await (await POST(makeReq())).text();
     expect(runAi).toHaveBeenCalledWith(
       expect.objectContaining({ feature: "ask_pulse" }),
       expect.any(Function),
     );
   });
-
-  it("ignores an agent the caller cannot read and still runs the turn", async () => {
-    // agent_id survives a deletion race as a dangling value only until the FK's
-    // ON DELETE SET NULL lands. A row we cannot read must degrade to plain Ask,
-    // not fail the turn — the thread's history is still worth continuing.
-    mockConversationRow({ board_id: null, agent_id: AGENT_ID });
-    mockAgentRow(null);
-    await (await POST(makeReq())).text();
-    const system = runAssistantLoop.mock.calls[0]![0].system;
-    expect(system).not.toContain("personal agent");
-  });
 });
 
-// Task 6: the route answers as the agent the TURN addressed — the last user
-// message's `agent_id`, resolved via `currentPersonaFrom` — never the request
-// body, which carries no agent field at all.
-describe("POST /api/ask · answers as the agent the turn addressed", () => {
-  it("answers as the agent the LAST user turn addressed, not the request body", async () => {
+// Every turn is the org assistant: a stamped user turn or a request-body
+// `agentId` never selects a persona, and the assistant row carries no agent.
+describe("POST /api/ask · every turn is the org assistant", () => {
+  it("ignores a turn stamped with an old agent and a request-body agentId", async () => {
     setMessagesRows([
       {
         id: "m1",
         role: "user",
-        content: "how are ops doing?",
-        tool_trace: null,
-        created_at: "t1",
-        agent_id: "a-ops",
-      },
-      {
-        id: "m2",
-        role: "assistant",
-        content: "ops is fine",
-        tool_trace: null,
-        created_at: "t2",
-        agent_id: "a-ops",
-      },
-      {
-        id: "m3",
-        role: "user",
         content: "what about invoices?",
         tool_trace: null,
-        created_at: "t3",
+        created_at: "t1",
         agent_id: "a-fin",
       },
     ]);
-    mockAgentRow({
-      id: "a-fin",
-      name: "Finance",
-      instructions: "Track overdue invoices.",
-    });
     await (
       await POST(request({ conversationId: CONV_ID, agentId: "a-attacker" }))
     ).text();
-    const capturedSystem = runAssistantLoop.mock.calls[0]![0].system;
-    expect(capturedSystem).toContain('personal agent "Finance"');
-    expect(capturedSystem).not.toContain("a-attacker");
-  });
-
-  it("stamps the answering agent on the assistant row", async () => {
-    setMessagesRows([
-      {
-        id: "m1",
-        role: "user",
-        content: "what about invoices?",
-        tool_trace: null,
-        created_at: "t1",
-        agent_id: "a-fin",
-      },
-    ]);
-    mockAgentRow({
-      id: "a-fin",
-      name: "Finance",
-      instructions: "Track overdue invoices.",
-    });
-    await (await POST(request({ conversationId: CONV_ID }))).text();
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "assistant", agent_id: "a-fin" }),
-    );
-  });
-
-  it("stays the plain assistant when no turn carries an agent", async () => {
-    // Default fixtures already have every row's (and the conversation's)
-    // agent_id null — this is the "ordinary chat" baseline this suite starts
-    // from in `beforeEach`.
-    await (await POST(request({ conversationId: CONV_ID }))).text();
-    const capturedSystem = runAssistantLoop.mock.calls[0]![0].system;
-    expect(capturedSystem).not.toContain("personal agent");
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "assistant", agent_id: null }),
-    );
-  });
-});
-
-// The BLOCKING regression: `setConversationAgent` writes only
-// `ai_conversations.agent_id`, so a rule that let the last user message's stamp
-// outrank it made the header switcher decorative — the chip moved and every
-// following turn still went to the old agent.
-describe("POST /api/ask · the conversation's agent is authoritative", () => {
-  const opsThenSwitched = () =>
-    setMessagesRows([
-      {
-        id: "m1",
-        role: "user",
-        content: "how are ops doing?",
-        tool_trace: null,
-        created_at: "t1",
-        agent_id: "a-ops",
-      },
-    ]);
-
-  it("answers as the agent the header switched to, not the last turn's", async () => {
-    opsThenSwitched();
-    mockConversationRow({ agent_id: "a-fin" });
-    mockAgentRow({
-      id: "a-fin",
-      name: "Finance",
-      instructions: "Track overdue invoices.",
-    });
-    await (await POST(makeReq())).text();
-    const system = runAssistantLoop.mock.calls[0]![0].system;
-    expect(system).toContain('personal agent "Finance"');
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "assistant", agent_id: "a-fin" }),
-    );
-  });
-
-  it("answers as the plain assistant once the persona is cleared", async () => {
-    // The escape hatch: the column is null and the newest user turn was
-    // stamped null by `appendUserMessage`. Nothing may reach back past it to
-    // the agent the owner just dismissed.
-    setMessagesRows([
-      {
-        id: "m1",
-        role: "user",
-        content: "how are ops doing?",
-        tool_trace: null,
-        created_at: "t1",
-        agent_id: "a-ops",
-      },
-      {
-        id: "m2",
-        role: "assistant",
-        content: "fine",
-        tool_trace: null,
-        created_at: "t2",
-        agent_id: "a-ops",
-      },
-      {
-        id: "m3",
-        role: "user",
-        content: "and now?",
-        tool_trace: null,
-        created_at: "t3",
-        agent_id: null,
-      },
-    ]);
-    mockConversationRow({ agent_id: null });
-    mockAgentRow({ id: "a-ops", name: "Ops", instructions: "Watch delivery." });
-    await (await POST(makeReq())).text();
     const system = runAssistantLoop.mock.calls[0]![0].system;
     expect(system).not.toContain("personal agent");
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "assistant", agent_id: null }),
-    );
-  });
-});
-
-// Spec §1: a persona is an ENABLED agent. The display paths already resolve
-// names against the enabled-only roster, so a disabled agent that kept
-// answering was a turn composed from its instructions, documents and memory
-// under a header and a kicker that both read "Monolith".
-describe("POST /api/ask · a disabled agent does not answer", () => {
-  it("scopes the persona read to an enabled agent", async () => {
-    mockConversationRow({ agent_id: "agent-1" });
-    mockAgentRow({ id: "agent-1", name: "Ops", instructions: "Watch." });
-    await (await POST(makeReq())).text();
-    expect(agentEqCalls).toContainEqual(["id", "agent-1"]);
-    expect(agentEqCalls).toContainEqual(["enabled", true]);
-  });
-
-  it("degrades to the plain assistant and stamps no agent when the read comes back empty", async () => {
-    // What a DISABLED (or deleted) agent looks like through that read. The row
-    // must not be stamped with an id we could not read: the FK rejects a
-    // deleted one outright, losing a fully-streamed, already-paid answer.
-    mockConversationRow({ agent_id: "agent-1" });
-    mockAgentRow(null);
-    await (await POST(makeReq())).text();
-    const system = runAssistantLoop.mock.calls[0]![0].system;
-    expect(system).not.toContain("personal agent");
-    expect(insertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "assistant", agent_id: null }),
-    );
+    expect(system).not.toContain("a-attacker");
+    const inserted = (insertSpy.mock.calls as unknown[][])[0]![0];
+    expect(inserted).toMatchObject({ role: "assistant" });
+    expect(inserted).not.toHaveProperty("agent_id");
   });
 });
 
@@ -1461,5 +1242,58 @@ describe("POST /api/ask · reasoning options", () => {
     adapterKindRef.value = "openai";
     await readEvents();
     expect(runAssistantLoop.mock.calls[0]![0].providerOptions).toBeUndefined();
+  });
+});
+
+describe("POST /api/ask · a Mono thread", () => {
+  it("acts as the Mono, on the owner's own key, metered as mono_chat", async () => {
+    mockConversationRow({ mono_id: "m1" });
+    resolveMonoTurn.mockResolvedValue({
+      ok: true,
+      turn: { mono: { userId: "m1", name: "Nova" }, provider: "openai" },
+    });
+    await (await POST(makeReq())).text();
+
+    expect(resolveMonoTurn).toHaveBeenCalledWith(
+      theClient.current,
+      USER_ID,
+      "org1",
+      "m1",
+    );
+    expect(getMonoClient).toHaveBeenCalledWith("m1");
+    const built = buildAssistantTools.mock.calls[0]![0];
+    expect(built.ctx.actorId).toBe("m1");
+    expect(await built.ctx.getClient()).toEqual({ mono: "client" });
+    expect(built.client).toEqual({ mono: "client" });
+    expect(vi.mocked(runAi).mock.calls[0]![0]).toMatchObject({
+      orgId: "org1",
+      userId: USER_ID,
+      feature: "mono_chat",
+      credential: "personal",
+      provider: "openai",
+    });
+    expect(runAssistantLoop.mock.calls[0]![0].system).toContain("MONO LINES");
+  });
+
+  it("refuses before streaming when the Mono cannot answer", async () => {
+    mockConversationRow({ mono_id: "m1" });
+    resolveMonoTurn.mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "Your Mono is asleep.",
+    });
+    const res = await POST(makeReq());
+    expect(res.status).toBe(409);
+    expect(runAi).not.toHaveBeenCalled();
+  });
+
+  it("never resolves a Mono for an ordinary thread", async () => {
+    await (await POST(makeReq())).text();
+    expect(resolveMonoTurn).not.toHaveBeenCalled();
+    expect(getMonoClient).not.toHaveBeenCalled();
+    expect(vi.mocked(runAi).mock.calls[0]![0]).toMatchObject({
+      feature: "ask_pulse",
+    });
+    expect(vi.mocked(runAi).mock.calls[0]![0]).not.toHaveProperty("credential");
   });
 });

@@ -14,8 +14,8 @@ export class AiNotConfiguredError extends Error {
  * which stays a plain AiNotConfiguredError. Extends AiNotConfiguredError so
  * every existing `instanceof AiNotConfiguredError` catch (mapAiError, the
  * interactive action call sites) still matches unchanged for BOTH causes —
- * this only adds a strictly narrower check for unattended callers (like the
- * personal-agent cron route) that must tell "a person needs to add their own
+ * this only adds a strictly narrower check for unattended callers (like a
+ * cron route) that must tell "a person needs to add their own
  * key" (a benign, per-user config state safe to record as a silent `skipped`
  * run) apart from "the platform is misconfigured" (an operational fault that
  * must surface as an `error`, because nobody else will ever see it).

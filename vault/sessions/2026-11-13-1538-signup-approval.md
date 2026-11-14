@@ -42,7 +42,7 @@ Setup: pull `develop`, `pnpm dev`. Uses the DEV database (live data). You need a
 
 ## Open threads
 
-- **PR #150 is open for this and awaits the owner's manual merge** (develop CI and PR checks green). Until it is merged, a new signup on production is refused with the old "provisioning" error instead of the waiting screen, because the database rule is already live.
+- **Shipped: PR #150 merged 2026-11-13 12:43 UTC** (`db8c0367`), main CI green, Vercel deploy READY, `develop` healed (`cb14f344`). The PR also carried a parallel session's rail cleanup. Smoke check: `/pending-approval` on production redirects a signed-out visitor to login. The remainder of this bullet describes the window before the merge. Until it is merged, a new signup on production is refused with the old "provisioning" error instead of the waiting screen, because the database rule is already live.
 - **Correction found while promoting:** PR #149 had already been merged at 09:29 UTC and it included the unified assistant runtime, so the assistant has been live in production since then, before its remaining acceptance checks (non-Anthropic model, old proposal thread, step limit, two-organisation person) were run. That merge was not followed by the heal; `develop` was healed just before PR #150 (`251839bd`). The commit range since the last heal was therefore misleading and the PR was described from the tree difference against `main`.
 - Not exercised live: a real email-confirmation signup through the form, an invited person, a password-recovery link for a pending account. Unit-tested only.
 - Rejected accounts can still sign in and reset a password; they just never get past the waiting screen. No email is sent to the admin when someone signs up.

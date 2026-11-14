@@ -32,6 +32,7 @@ import {
 } from "@/components/boards/cells/editors/status-options";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import { MemberAvatar } from "@/components/boards/cells/member-avatar";
+import { assignableMembers } from "@/lib/monos/members";
 import type { Column } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { cn } from "@/lib/utils";
@@ -320,7 +321,8 @@ function PeopleAssignList({
           No members
         </span>
       ) : (
-        members.map((m) => {
+        // Adding is owner-only for Monos: people plus the viewer's own Mono.
+        assignableMembers(members).map((m) => {
           const isSelected = selected.includes(m.userId);
           const name = m.fullName ?? m.email ?? m.userId;
           return (
@@ -339,6 +341,7 @@ function PeopleAssignList({
                 userId={m.userId}
                 name={name}
                 avatarUrl={m.avatarUrl}
+                mono={m.mono}
               />
               <span className="truncate">{name}</span>
               {isSelected ? (

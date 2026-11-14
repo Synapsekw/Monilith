@@ -13,22 +13,12 @@ import {
   resolveProposalStates,
   type AskToolTrace,
 } from "@/lib/ai/ask/tool-trace";
-import {
-  isAgentMention,
-  type MentionTarget,
-} from "@/lib/collaboration/mentions";
 import type { ChatSurface } from "./surface";
+import type { ChatSpeaker } from "./speaker";
+import { AgentChip, monoNameColor } from "@/components/mono/MonoChip";
 
-/** What an assistant turn is called when it has no agent on record — a legacy
- *  row, or a thread never handed to a persona. Distinct from `ThreadHeader`'s
- *  "Monolith assistant" chip on purpose: that names WHO is on duty going
- *  forward, this names WHO already answered — shorter reads better inline,
- *  once per turn, than repeated in a transcript. */
+/** What every assistant turn is called: the org assistant answers them all. */
 const PLAIN_ASSISTANT_NAME = "Monolith";
-
-/** Stable empty default — a fresh `{}` would give the prop a new identity on
- *  every render of the surfaces that carry no historical names. */
-const EMPTY_NAMES: Readonly<Record<string, string>> = {};
 
 /** What an undecided proposal says to someone who cannot decide it. */
 const OWNER_DECIDES_NOTE = "Only this thread's owner can decide this.";
@@ -40,10 +30,6 @@ export type UIMessage = {
   /** Parsed `ai_messages.tool_trace`. Carries a turn's proposed actions, or —
    *  on an outcome turn — which proposal it resolved. */
   trace?: AskToolTrace | null;
-  /** The agent this turn belongs to — rendered as the assistant turn's kicker
-   *  (`nameOf` below). Optional because the client appends turns of its own
-   *  mid-stream; absent and null both read as the plain assistant. */
-  agentId?: string | null;
 };
 
 /** Atmosphere entrance (spec §5): each turn slides in 14px from the right on
@@ -59,24 +45,20 @@ const TURN_ENTRANCE =
  *  the mark (gutter) and the name (label) each do one job.
  *
  *  On the wash (`atmosphere`) the user bubble is the chrome fill rather than a
- *  muted card, and an assistant turn with a real persona carries that agent's
- *  brand-tinted initial — the same tile as its band tile (DockTiles) — while a
- *  plain assistant turn keeps the Ask AI mark. */
+ *  muted card. */
 function Bubble({
   role,
   content,
   agentName,
-  persona = false,
   surface = "card",
+  speaker,
 }: {
   role: UIMessage["role"];
   content: string;
   /** Assistant turns only — who answered. Ignored for user turns. */
   agentName?: string;
-  /** `agentName` is a real agent (resolved from the roster or the historical
-   *  names), not the plain-assistant fallback. */
-  persona?: boolean;
   surface?: ChatSurface;
+  speaker?: ChatSpeaker;
 }) {
   if (role === "user") {
     return (
@@ -95,28 +77,38 @@ function Bubble({
   }
   return (
     <div className="flex items-start gap-3">
-      {surface === "atmosphere" && persona ? (
-        <span
-          data-turn-tile
-          aria-hidden="true"
-          className="bg-primary/15 text-primary text-2xs mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm font-bold uppercase"
-        >
-          {agentName?.slice(0, 1)}
-        </span>
-      ) : (
-        <span
-          data-turn-tile
-          className={
-            surface === "card"
-              ? "bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border"
-              : "bg-chrome-fill text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm border"
-          }
-        >
+      <span
+        data-turn-tile
+        className={
+          surface === "card"
+            ? "bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border"
+            : "bg-chrome-fill text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-sm border"
+        }
+      >
+        {speaker ? (
+          <span aria-hidden="true">{speaker.mark}</span>
+        ) : (
           <AskAiMark className="size-3.5" />
-        </span>
-      )}
+        )}
+      </span>
       <div className="min-w-0 flex-1 pt-0.5">
-        {agentName ? <Kicker className="mb-1 block">{agentName}</Kicker> : null}
+        {speaker ? (
+          <div className="mb-1 flex min-w-0 items-center gap-1.5">
+            <Kicker
+              className="truncate"
+              style={
+                speaker.tint
+                  ? { color: monoNameColor(speaker.tint) }
+                  : undefined
+              }
+            >
+              {speaker.name}
+            </Kicker>
+            <AgentChip />
+          </div>
+        ) : agentName ? (
+          <Kicker className="mb-1 block">{agentName}</Kicker>
+        ) : null}
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {content}
         </div>
@@ -145,11 +137,9 @@ export function MessageList({
   busyMessageId,
   dropState = "none",
   onRetryDrop,
-  agents = [],
-  agentNames = EMPTY_NAMES,
-  streamingAgentId = null,
   readOnly = false,
   surface = "card",
+  speaker,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -163,21 +153,6 @@ export function MessageList({
   busyMessageId?: string | null;
   dropState?: DropState;
   onRetryDrop?: () => void;
-  /** The owner's agents — a pure lookup table for turn attribution, not a
-   *  fetch trigger. Also doubles as the empty state's "who you can ask"
-   *  list, so an owner with no agents yet gets the same empty state as
-   *  before rather than an offer to address nobody. */
-  agents?: readonly MentionTarget[];
-  /** Names for agents that already ANSWERED in this thread, including ones
-   *  since disabled. `agents` is the enabled-only roster (it is also what the
-   *  empty state offers to address), so on its own it re-labels every answer a
-   *  disabled agent ever gave as "Monolith" — rewriting history to reflect a
-   *  setting changed today. Consulted only after the roster misses. */
-  agentNames?: Readonly<Record<string, string>>;
-  /** Who is answering the LIVE turn (streaming bubble / thinking indicator).
-   *  Distinct from any message's `agentId` because the live turn has no
-   *  message row yet. */
-  streamingAgentId?: string | null;
   /** A thread shared to a board, opened by someone who does not own it. The
    *  transcript still reads; the decisions belong to the owner, and their RLS
    *  scope is what would refuse them anyway. */
@@ -185,6 +160,8 @@ export function MessageList({
   /** `card` (/ask, default) or `atmosphere` (the board dock, on the wash).
    *  Purely presentational — see `surface.ts`. */
   surface?: ChatSurface;
+  /** Who answers, when not the org assistant. Absent = today's look. */
+  speaker?: ChatSpeaker;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -195,43 +172,13 @@ export function MessageList({
   // Pure derivation over the thread — a proposal is resolved by a LATER message
   // naming it, so reload and live-update render identically.
   const proposalStates = resolveProposalStates(messages);
-  // Filtered ONCE per render; `nameOf` and the empty-state list both scan
-  // this array rather than re-filtering `agents` on every call.
-  const agentHandles = agents.filter(isAgentMention);
-  // A real name, or nothing — the roster first, then the historical names.
-  const resolvedName = (id?: string | null) =>
-    agentHandles.find((a) => a.agentId === id)?.name ??
-    (id ? agentNames[id] : undefined);
-  const nameOf = (id?: string | null) =>
-    resolvedName(id) ?? PLAIN_ASSISTANT_NAME;
-  // Unlike `nameOf`, no "Monolith" fallback: the thinking indicator's own
-  // generic label already covers "no agent on record" — this is only truthy
-  // when there is a real name to announce.
-  const streamingAgent = agentHandles.find(
-    (a) => a.agentId === streamingAgentId,
-  )?.name;
-
-  // One sentence for both surfaces' empty state: who can be addressed, or —
-  // with no agents — what a question can be about.
-  const emptyMessage =
-    agentHandles.length > 0 ? (
-      <>
-        Start with{" "}
-        {agentHandles.map((a, i) => (
-          <span key={a.agentId}>
-            <span className="text-foreground font-mono">@{a.handle}</span>
-            {i < agentHandles.length - 1 ? ", " : ""}
-          </span>
-        ))}{" "}
-        — or just ask.
-      </>
-    ) : (
-      <>
-        Ask a question about your boards — what&apos;s overdue, who&apos;s
-        overloaded, what shipped this week. Answers are grounded in your real
-        data.
-      </>
-    );
+  const emptyMessage = (
+    <>
+      Ask a question about your boards — what&apos;s overdue, who&apos;s
+      overloaded, what shipped this week. Answers are grounded in your real
+      data.
+    </>
+  );
 
   return (
     <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
@@ -259,11 +206,17 @@ export function MessageList({
           // empty states, not a panel on someone else's page.
           <div className="mt-8 flex flex-col items-center gap-3 text-center">
             <span className="bg-primary/15 text-primary flex size-11 items-center justify-center rounded-sm">
-              <AskAiMark className="size-5" />
+              {speaker ? (
+                <span aria-hidden="true">{speaker.mark}</span>
+              ) : (
+                <AskAiMark className="size-5" />
+              )}
             </span>
-            <Kicker>Agents</Kicker>
+            <Kicker>{speaker ? `Chat with ${speaker.name}` : "Ask"}</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
-              {emptyMessage}
+              {speaker
+                ? `Only you can chat with ${speaker.name}. Ask about your boards, or have it take something on.`
+                : emptyMessage}
             </p>
           </div>
         ) : null}
@@ -294,13 +247,10 @@ export function MessageList({
                 role={m.role}
                 content={m.content}
                 agentName={
-                  m.role === "assistant" ? nameOf(m.agentId) : undefined
-                }
-                persona={
-                  m.role === "assistant" &&
-                  resolvedName(m.agentId) !== undefined
+                  m.role === "assistant" ? PLAIN_ASSISTANT_NAME : undefined
                 }
                 surface={surface}
+                speaker={speaker}
               />
               {actions.length > 0 && proposalStatus ? (
                 // Indented to the assistant gutter (size-7 mark + gap-3), so the
@@ -349,16 +299,13 @@ export function MessageList({
 
         {/* Open, no tokens: the 25–42s stretch that used to render a static "…"
             and read as a hung page (gotcha-62). One live region, carrying the
-            freshest status — so the status is NOT also drawn below. The label
-            names the answering agent once one is known; with no agent on the
-            turn, `ThinkingIndicator` falls back to its own generic label
-            rather than a hollow "Monolith is working…". */}
+            freshest status — so the status is NOT also drawn below. With no
+            status yet, `ThinkingIndicator` falls back to its own generic
+            label. */}
         {streamingText === "" ? (
           <ThinkingIndicator
-            label={
-              status ??
-              (streamingAgent ? `${streamingAgent} is working…` : null)
-            }
+            label={status}
+            mark={speaker?.thinkingMark ?? speaker?.mark}
           />
         ) : null}
 
@@ -366,9 +313,9 @@ export function MessageList({
           <Bubble
             role="assistant"
             content={streamingText}
-            agentName={nameOf(streamingAgentId)}
-            persona={resolvedName(streamingAgentId) !== undefined}
+            agentName={PLAIN_ASSISTANT_NAME}
             surface={surface}
+            speaker={speaker}
           />
         ) : null}
 

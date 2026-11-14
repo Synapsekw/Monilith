@@ -18,6 +18,7 @@ import { OverviewTab } from "./tabs/Overview";
 import { StagesTab } from "./tabs/Stages";
 import { BoardsTab } from "./tabs/Boards";
 import { PeopleTab, peopleFromWorkload } from "./tabs/People";
+import { TimelineTab } from "@/components/folders/tabs/Timeline";
 import { OVERLOAD_THRESHOLD } from "@/components/folders/charts/WorkloadBars";
 import { useLayoutDraft } from "./edit/use-layout-draft";
 import { CustomizeBar } from "./edit/CustomizeBar";
@@ -206,6 +207,12 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               }
               stages={stages}
             />
+          ) : activeTab?.kind === "timeline" ? (
+            <TimelineTab
+              folderId={payload.folder.id}
+              stage={stage}
+              board={board}
+            />
           ) : activeTab?.kind === "people" ? (
             <PeopleTab
               folderId={payload.folder.id}
@@ -243,6 +250,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               onRenameTab={draft.renameTab}
               onHideTab={draft.hideTab}
               onMoveTab={draft.moveTab}
+              onAddTimelineTab={() => draft.addTab("timeline")}
             />
           </div>
           <CustomizeBar

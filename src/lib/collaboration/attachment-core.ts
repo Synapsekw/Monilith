@@ -134,8 +134,7 @@ export const MAX_ATTACHMENT_BYTES = 52_428_800;
  * the storage truth and re-reading it would be a network call to learn a number
  * we just produced.
  *
- * Callers: `attachFileHandler`'s inline branch (`src/lib/mcp/tools/attach-file.ts`)
- * and `create_pdf` (`src/lib/agents/create-pdf.ts`).
+ * Caller: `attachFileHandler`'s inline branch (`src/lib/mcp/tools/attach-file.ts`).
  */
 export async function uploadAndRegisterAttachment(
   supabase: SupabaseClient<Database>,

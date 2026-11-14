@@ -9,7 +9,6 @@ import {
   listChats,
   listBriefings,
   getMessages,
-  getConversationRunId,
   getConversationHeader,
   toThreadMessages,
   currentPersonaFrom,
@@ -18,18 +17,21 @@ import {
 beforeEach(() => from.mockReset());
 
 describe("listChats / listBriefings", () => {
-  it("lists only threads with no run, bounded and newest-first", async () => {
+  it("lists only threads with no run and no Mono, bounded and newest-first", async () => {
     const limit = vi
       .fn()
       .mockResolvedValue({ data: [{ id: "c1" }], error: null });
     const order = vi.fn().mockReturnValue({ limit });
-    const is = vi.fn().mockReturnValue({ order });
+    const isMono = vi.fn().mockReturnValue({ order });
+    const is = vi.fn().mockReturnValue({ is: isMono });
     const eq = vi.fn().mockReturnValue({ is });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
     await listChats("user-1");
     expect(eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(is).toHaveBeenCalledWith("run_id", null);
+    // Mono threads live in the My Mono tab, not the /ask rail.
+    expect(isMono).toHaveBeenCalledWith("mono_id", null);
     expect(order).toHaveBeenCalledWith("updated_at", { ascending: false });
     expect(limit).toHaveBeenCalledWith(50);
   });
@@ -216,33 +218,6 @@ describe("toThreadMessages", () => {
       },
     ]);
     expect(m.agentId).toBe("a-ops");
-  });
-});
-
-describe("getConversationRunId", () => {
-  function clientReturning(data: unknown, error: unknown = null) {
-    const maybeSingle = vi.fn().mockResolvedValue({ data, error });
-    const eq = vi.fn().mockReturnValue({ maybeSingle });
-    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
-    return { eq, maybeSingle };
-  }
-
-  it("returns the run a briefing thread reports on", async () => {
-    const { eq } = clientReturning({ run_id: "run-1" });
-    expect(await getConversationRunId("c1")).toBe("run-1");
-    expect(eq).toHaveBeenCalledWith("id", "c1");
-  });
-
-  it("returns null for an ordinary chat", async () => {
-    clientReturning({ run_id: null });
-    expect(await getConversationRunId("c1")).toBeNull();
-  });
-
-  it("degrades to null on a read failure rather than 500-ing the thread", async () => {
-    // The approval cards are an addition to the page; the transcript is the
-    // page. A failure here must never take the thread down with it.
-    clientReturning(null, { message: "boom" });
-    expect(await getConversationRunId("c1")).toBeNull();
   });
 });
 

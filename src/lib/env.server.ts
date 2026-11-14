@@ -35,7 +35,7 @@ const serverEnvSchema = z.object({
   // every in-DB `pg_net → service endpoint` hop. The DB reads the same value from
   // Vault (`ai_pgnet_hmac_secret`) and HMAC-signs the body; each route handler
   // re-verifies with this env var (verifyBody). Shared by /api/ai/automation-step
-  // + /api/ai/autopilot (F13/F14) and /api/ai/embed (F15 sweep + backfill). Absent
+  // (F13) and /api/ai/embed (F15 sweep + backfill). Absent
   // → those endpoints 503 (no verification key); the app still boots and CI stays
   // green.
   AI_PGNET_HMAC_SECRET: z

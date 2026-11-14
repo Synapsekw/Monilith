@@ -30,7 +30,7 @@ import { describe, expect, it } from "vitest";
 /**
  * Server files rendered above every Suspense boundary of the `(app)` group —
  * plus the settings layout, which sits above every boundary of the
- * `settings/*` routes (its `loading.tsx` wraps the layout's children, not the
+ * `settings/*` routes (each section owns its `loading.tsx`, below the
  * layout). That one shipped async for months: it awaited the user, the active
  * org and the admin flag in its body, so every settings page had an empty
  * shell and a first byte 6-15x slower than the rest of the app.

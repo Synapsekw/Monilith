@@ -48,8 +48,7 @@ const inputSchema = z.object({
  *
  * Written through the caller's OWN client, never the service client — RLS
  * bounds this write exactly as it bounds the run read above it. Modelled on
- * `writeBriefingThread` (`src/lib/agents/briefing-thread.ts`), which does the
- * same two-insert dance for a scheduled agent's briefing: one
+ * the retired agent-briefing writer, with the same two-insert dance: one
  * `ai_conversations` row, then its `ai_messages`, `visibility` omitted so the
  * column default (`private`) is the guarantee.
  *

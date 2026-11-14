@@ -15,37 +15,32 @@ const row = (over: Partial<BoardThreadRow> = {}): BoardThreadRow => ({
   ...over,
 });
 
-/** What a briefing thread looks like: owned, agent-authored, and on NO board. */
-const agentRow = (over: Partial<BoardThreadRow> = {}): BoardThreadRow =>
-  row({ agent_id: "a1", board_id: null, ...over });
-
 describe("DockThreadList", () => {
-  it("separates board threads from agent threads", () => {
+  it("lists this board's threads, with no agent group", () => {
     render(
       <DockThreadList
-        boardThreads={[row({ id: "b", title: "About the roadmap" })]}
-        agentThreads={[
-          row({ id: "a", title: "Morning Brief — 3 Aug", agent_id: "a1" }),
+        boardThreads={[
+          row({ id: "b", title: "About the roadmap" }),
+          // A legacy thread stamped with an old agent reads like any other.
+          row({ id: "a", title: "Old brief", agent_id: "a1" }),
         ]}
         activeId={null}
         currentUserId="me"
-        agentNames={{ a1: "Morning Brief" }}
         onSelect={() => {}}
       />,
     );
     expect(screen.getByText("This board")).toBeInTheDocument();
-    expect(screen.getByText("From your agents")).toBeInTheDocument();
     expect(screen.getByText("About the roadmap")).toBeInTheDocument();
+    expect(screen.getByText("Old brief")).toBeInTheDocument();
+    expect(screen.queryByText(/from your agents/i)).toBeNull();
   });
 
   it("marks a thread shared by someone else so it reads as not-yours", () => {
     render(
       <DockThreadList
         boardThreads={[row({ user_id: "someone-else", visibility: "board" })]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
       />,
     );
@@ -65,10 +60,8 @@ describe("DockThreadList", () => {
             visibility: "board",
           }),
         ]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
         onToggleShare={onToggleShare}
       />,
@@ -82,40 +75,22 @@ describe("DockThreadList", () => {
   });
 
   // ── I1: the shared-read policy's first conjunct is `board_id is not null` ──
-  it("withholds the share toggle from a boardless agent thread", async () => {
-    const onToggleShare = vi.fn();
+  it("withholds the share toggle from a boardless thread", () => {
     render(
       <DockThreadList
-        boardThreads={[]}
-        agentThreads={[
-          agentRow({ id: "brief", title: "Morning Brief — 3 Aug" }),
+        boardThreads={[
+          row({ id: "docked", title: "Docked" }),
+          row({ id: "brief", title: "Brief", board_id: null }),
         ]}
         activeId={null}
         currentUserId="me"
-        agentNames={{ a1: "Morning Brief" }}
         onSelect={() => {}}
-        onToggleShare={onToggleShare}
+        onToggleShare={vi.fn()}
       />,
     );
     // Owned by the caller, so ownership alone would render it — but a thread
     // with no board can never satisfy the policy, so pressing it could only
     // print a "Shared" chip on something no board member can read.
-    expect(screen.queryByRole("button", { name: /share|private/i })).toBeNull();
-  });
-
-  it("still offers the toggle on a docked thread in the same list", async () => {
-    // The discriminator: the two rows differ by `board_id` alone.
-    render(
-      <DockThreadList
-        boardThreads={[row({ id: "docked", title: "Docked" })]}
-        agentThreads={[agentRow({ id: "brief", title: "Brief" })]}
-        activeId={null}
-        currentUserId="me"
-        agentNames={{ a1: "Morning Brief" }}
-        onSelect={() => {}}
-        onToggleShare={vi.fn()}
-      />,
-    );
     expect(
       screen.getByRole("button", { name: /share "docked" with this board/i }),
     ).toBeInTheDocument();
@@ -128,10 +103,8 @@ describe("DockThreadList", () => {
     render(
       <DockThreadList
         boardThreads={[shared]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
         onToggleShare={onToggleShare}
       />,
@@ -148,10 +121,8 @@ describe("DockThreadList", () => {
     render(
       <DockThreadList
         boardThreads={[row({ user_id: "me", visibility: "board" })]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
       />,
     );
@@ -164,24 +135,20 @@ describe("DockThreadList", () => {
     render(
       <DockThreadList
         boardThreads={[row({ user_id: "me", visibility: "private" })]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
       />,
     );
     expect(screen.queryByText(/shared/i)).toBeNull();
   });
 
-  it("renders an empty state rather than two empty headings", () => {
+  it("renders an empty state rather than an empty heading", () => {
     render(
       <DockThreadList
         boardThreads={[]}
-        agentThreads={[]}
         activeId={null}
         currentUserId="me"
-        agentNames={{}}
         onSelect={() => {}}
       />,
     );
@@ -197,10 +164,8 @@ describe("DockThreadList", () => {
           row({ id: "b1", title: "First" }),
           row({ id: "b2", title: "Second" }),
         ]}
-        agentThreads={[]}
         activeId="b2"
         currentUserId="me"
-        agentNames={{}}
         onSelect={onSelect}
       />,
     );

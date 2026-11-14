@@ -167,6 +167,24 @@ describe("upsertCellCore", () => {
     expect(res.ok).toBe(false);
   });
 
+  it("words the Mono assign guard plainly and notifies nobody", async () => {
+    const ctx = makeClient({ kind: "people", prior: { userIds: [A] } });
+    ctx.upsert.mockReturnValueOnce({
+      select: () => ({
+        single: async () => ({
+          data: null,
+          error: { code: "42501", message: "only its owner can assign a Mono" },
+        }),
+      }),
+    });
+    const res = await call(ctx, { userIds: [A, B] });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only its owner can assign a Mono.",
+    });
+    expect(ctx.notify).not.toHaveBeenCalled();
+  });
+
   it("guards: missing column, cross-board item, invalid value", async () => {
     const missing = makeClient({ kind: "text", columnMissing: true });
     expect(await call(missing, { text: "x" })).toEqual({

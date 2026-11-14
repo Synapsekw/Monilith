@@ -75,24 +75,6 @@ function pageFiles(dir: string): string[] {
 }
 
 /**
- * The nearest `loading.tsx` at or above `pageFile`, stopping at `root`.
- * A `loading.tsx` is the Suspense boundary for its whole subtree, so a
- * settings subsection is covered by `settings/loading.tsx` — the invariant is
- * "an ancestor has one", not "a sibling has one".
- */
-function nearestLoading(pageFile: string, root: string): string | null {
-  let dir = dirname(pageFile);
-  for (;;) {
-    const candidate = join(dir, "loading.tsx");
-    if (existsSync(candidate)) return candidate;
-    if (dir === root) return null;
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-}
-
-/**
  * Cache Components (`cacheComponents: true`) validates every Page segment in
  * dev. These pages all await Supabase in the page body, which is only legal
  * because `loading.tsx` wraps the segment in a Suspense boundary — that is
@@ -103,33 +85,107 @@ function nearestLoading(pageFile: string, root: string): string | null {
  * segment only; it does not cover the pages beneath it. The whole `/admin`
  * section shipped without a single `loading.tsx` and every route logged a
  * blocking-prerender-dynamic error on navigation — this test is the guard.
+ *
+ * The skeleton must sit BESIDE the page, not above it. A `loading.tsx` is the
+ * Suspense boundary for its own segment, keyed by that segment: a parent's
+ * boundary does not re-suspend when you move between two of its children, so
+ * `/settings/a` → `/settings/b` blocked on the server even though
+ * `settings/loading.tsx` "covered" both pages (gotcha-110). An ancestor's
+ * skeleton only helps on the way INTO the section.
  */
 describe("route skeletons", () => {
   for (const [name, root] of [
     ["(app)", APP_GROUP],
     ["admin", join(process.cwd(), "src/app/admin")],
   ] as const) {
-    it(`covers every ${name} page with a loading.tsx at or above it`, () => {
+    it(`gives every ${name} page its own sibling loading.tsx`, () => {
       const pages = pageFiles(root);
       expect(pages.length).toBeGreaterThan(0);
-      const uncovered = pages.filter((p) => nearestLoading(p, root) === null);
+      const uncovered = pages.filter(
+        (p) => !existsSync(join(dirname(p), "loading.tsx")),
+      );
       expect(
         uncovered,
-        `these pages block navigation with no skeleton: ${uncovered.join(", ")}`,
+        `these pages block navigation with no skeleton of their own: ${uncovered.join(", ")}`,
       ).toEqual([]);
     });
   }
+});
 
-  it("gives each admin route its own skeleton, not the overview's", () => {
-    // The overview fallback (stat cards + two panels) is wrong for a list or a
-    // detail page, so inheriting it would be worse than the geometry mismatch
-    // it fixes. Every admin segment that owns a page owns a fallback.
-    const adminRoot = join(process.cwd(), "src/app/admin");
-    for (const page of pageFiles(adminRoot)) {
-      const sibling = join(dirname(page), "loading.tsx");
-      expect(existsSync(sibling), `${page} has no sibling loading.tsx`).toBe(
-        true,
+/**
+ * The bold light frame. In light mode the wash is a saturated gradient and
+ * `.chrome-scope` (globals.css) re-seeds the generic tokens to white-on-colour
+ * for whatever is painted on it; `.chrome-reset` hands the root values back to
+ * an opaque surface nested inside. Both are plain class names on elements, so
+ * nothing but this test notices when one is dropped in a refactor — and a
+ * missing scope is dark text on a dark frame, a missing reset white text on a
+ * white card.
+ */
+describe("bold frame chrome scope", () => {
+  const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+  it("every element painted on the wash carries chrome-scope", () => {
+    expect(read("src/components/sidebar.tsx")).toMatch(/"chrome-scope /);
+    expect(read("src/components/app-shell.tsx")).toMatch(
+      /<header className="chrome-scope /,
+    );
+    const ask = read("src/app/ask/layout.tsx");
+    expect(ask).toMatch(/<aside className="chrome-scope /);
+    expect(ask).toMatch(/<header className="chrome-scope /);
+    expect(read("src/components/boards/dock/BoardDock.tsx")).toMatch(
+      /"chrome-scope /,
+    );
+  });
+
+  it("the wash root and the content card stay outside the scope", () => {
+    for (const file of [
+      "src/components/app-shell.tsx",
+      "src/app/ask/layout.tsx",
+    ]) {
+      const src = read(file);
+      expect(src, file).not.toMatch(
+        /className="[^"]*app-wash[^"]*chrome-scope/,
       );
+      expect(src, file).not.toMatch(
+        /className="[^"]*chrome-scope[^"]*app-wash/,
+      );
+      expect(src, file).not.toMatch(/<main className="[^"]*chrome-/);
     }
   });
+
+  it.each([
+    ["the account avatar fallback", "src/components/shell/user-menu.tsx"],
+    ["the dock composer", "src/components/ai/ask/Composer.tsx"],
+    ["the thinking tile", "src/components/ai/ask/ThinkingIndicator.tsx"],
+    ["the stream-drop card", "src/components/ai/ask/StreamDropNotice.tsx"],
+    [
+      "the proposed-action card",
+      "src/components/ai/actions/ActionConfirmCard.tsx",
+    ],
+    [
+      "the batch-confirm card",
+      "src/components/ai/assistant/BatchConfirmCard.tsx",
+    ],
+    [
+      "the intelligence Q&A card",
+      "src/components/boards/dock/intelligence/AskComposer.tsx",
+    ],
+    [
+      "the suggestion card",
+      "src/components/boards/dock/intelligence/SuggestionCard.tsx",
+    ],
+    ["the sleeping-Mono card", "src/components/mono/rail/MonoTab.tsx"],
+  ])(
+    "%s — an opaque surface inside the scope — carries chrome-reset",
+    (_name, file) => {
+      // On the same class string as the opaque fill it resets for. (The
+      // avatar's fill comes from the AvatarFallback primitive; its own string
+      // is the reset plus a DARK-only hover — an unprefixed translucent hover
+      // would replace the opaque disc inside the reset.)
+      expect(read(file)).toMatch(
+        /"chrome-reset [^"]*\bbg-surface\b|"chrome-reset dark:hover:bg-state-hover /,
+      );
+      expect(read(file)).not.toMatch(/"chrome-reset hover:bg-state-hover /);
+    },
+  );
 });

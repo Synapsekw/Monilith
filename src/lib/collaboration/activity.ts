@@ -1,10 +1,17 @@
 import type { Tables } from "@/types/database.types";
+import type { MonoMemberMeta } from "@/lib/monos/types";
+import { ownerPossessive } from "@/lib/monos/labels";
 import { formatDuration } from "@/lib/boards/time-format";
 import { previewMarkdown } from "@/lib/boards/markdown";
 
 export type ActivityRow = Tables<"item_activities">;
 export type Column = Tables<"columns">;
-export type Member = { userId: string; fullName: string | null };
+export type Member = {
+  userId: string;
+  fullName: string | null;
+  /** Set when this row is a Mono (Personal Monos): labelled as whose Mono. */
+  mono?: MonoMemberMeta;
+};
 
 type Chip = { label: string; color: string };
 type CellDisplay = Chip | string | null;
@@ -70,9 +77,12 @@ function describeCell(
       const ids = (value as { userIds?: string[] }).userIds ?? [];
       if (ids.length === 0) return null;
       return ids
-        .map(
-          (id) => members.find((m) => m.userId === id)?.fullName ?? "Someone",
-        )
+        .map((id) => {
+          const m = members.find((x) => x.userId === id);
+          if (m?.mono)
+            return `${m.fullName ?? "Mono"} (${ownerPossessive(m.mono.ownerName)})`;
+          return m?.fullName ?? "Someone";
+        })
         .join(", ");
     }
     case "date": {

@@ -53,9 +53,6 @@ vi.mock("@/components/settings/ProviderVerificationBadge", () => ({
 vi.mock("@/components/settings/OrgAiSettingsForm", () => ({
   OrgAiSettingsForm: () => null,
 }));
-vi.mock("@/components/settings/OrgAgentCeiling", () => ({
-  OrgAgentCeiling: () => null,
-}));
 vi.mock("@/components/settings/UsageBreakdown", () => ({
   UsageBreakdown: () => null,
 }));
@@ -67,7 +64,7 @@ beforeEach(() => {
   isOrgAdminCached.mockResolvedValue(true);
   getOrgAiSettings.mockResolvedValue({
     ok: true,
-    data: { mode: "per_user", agentCapabilityCeiling: [] },
+    data: { mode: "per_user" },
   });
   buildModelOptions.mockResolvedValue([]);
   getUsageSummary.mockResolvedValue(null);

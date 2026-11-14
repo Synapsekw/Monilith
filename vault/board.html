@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-13 16:50",
+  "updated": "2026-11-14 10:36",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "healed",
-        "tone": "ok",
-        "note": "Healed against main after PR #149. Carries signup approval, which is PR #150. Pushed; CI green."
+        "value": "949cde02",
+        "tone": "warn",
+        "note": "Ahead of main: edge-nub panel toggles, Leave board, theme-tinted Board Total, personal Monos (Plans 1 and 2A, Mono chat identity), per-section settings skeletons. Awaiting a bundled promotion PR."
       },
       {
         "name": "main",
-        "value": "deb30166",
-        "tone": "warn",
-        "note": "PR #149 merged 09:29 UTC: performance batch 1 and the unified assistant runtime. PR #150 (signup approval) awaits the owner."
+        "value": "db8c0367",
+        "tone": "ok",
+        "note": "PR #150 merged 12:43 UTC: signup approval and the rail cleanup. CI green."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Performance batch 1 and the assistant runtime are live. Signup approval is not live until PR #150 is merged."
+        "note": "Vercel READY on PR #150. Signup approval, the assistant runtime and performance batch 1 are all live."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "11,429 passing, 1 skipped, on the signup-approval merge.",
+        "note": "Green on the Board Total merge (finish-task gates): 10,399 passed, 1 skipped.",
         "label": "test"
       },
       {
@@ -180,20 +180,30 @@
       },
       {
         "name": "ledger",
-        "value": "178/178",
+        "value": "180/180",
         "tone": "ok",
-        "note": "178 committed files / 178 live DEV ledger rows. Signup approval added one migration.",
+        "note": "180 committed files / 180 live DEV ledger rows, in sync. Leave board added one policy-only migration.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Merge PR #150: signup approval",
-      "why": "The database already refuses a membership to an unapproved account, so a new signup on production gets a rough error until this ships the waiting screen and the admin approve and reject buttons. Develop CI and the PR checks are green; a live run passed.",
+      "title": "Live-run Personal Monos before promoting",
+      "why": "Plans 1 and 2A are on develop but nobody has used a Mono in a browser: create one, add a key, chat, confirm a change and see the Mono as author, and check a teammate cannot assign it. Then write Plan 2B.",
       "tags": [
         "owner",
-        "critical",
+        "verify",
+        "ai",
+        "critical"
+      ]
+    },
+    {
+      "title": "Try signup approval on production",
+      "why": "It shipped in PR #150 after a local live run. Sign up a throwaway account on the live site, confirm the waiting screen, approve it from the admin users page, then delete it. An invited person and a password-reset link while waiting were unit-tested only.",
+      "tags": [
+        "owner",
+        "verify",
         "auth"
       ]
     },
@@ -321,11 +331,6 @@
   "risks": [
     {
       "sev": "amber",
-      "title": "Signup approval is half live",
-      "text": "The membership rule is in the live database; the waiting screen and the admin approve and reject buttons are only on develop. Existing accounts are unaffected. A new signup today cannot get in and sees a rough error. Closes on promotion."
-    },
-    {
-      "sev": "amber",
       "title": "Goals and portfolios can land in the wrong organisation",
       "text": "create_goal and create_portfolio choose an organisation with limit 1 and ignore the one requested. The assistant refuses these creates for now; the Goals and Portfolios pages may be affected for people in more than one organisation. Needs a migration."
     },
@@ -447,14 +452,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-11-13-1538-signup-approval",
-    "when": "2026-11-13 15:38",
-    "title": "Signup approval",
+    "id": "2026-11-14-1036-settings-section-loading-boundaries",
+    "when": "2026-11-14 10:36",
+    "title": "Settings sections get their own loading boundaries",
     "bullets": [
-      "Every new account now waits for a platform admin; all 22 existing accounts were approved by the migration.",
-      "The database refuses a membership to an unapproved account, covering the app, the API and MCP in one rule.",
-      "Waiting screen, plus Approve and Reject on the admin users page with audit entries.",
-      "Whole-branch review found no lockout or bypass; a live run with two throwaway accounts passed."
+      "Every settings page showed a dev-overlay Instant warning: switching sections blocked on the server.",
+      "Cause: settings/loading.tsx never re-suspends between two sections, since its segment does not change (gotcha-110).",
+      "Each of the 11 sections now owns its loading.tsx; the settings-level one is gone so the header and nav paint at once.",
+      "The structure test now requires a sibling loading.tsx for every page. Merged to develop."
     ]
   }
 }

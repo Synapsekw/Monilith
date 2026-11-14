@@ -1,25 +1,18 @@
 "use client";
 
-import {
-  memo,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useTransition,
-  useMemo,
-} from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { memo, useState, useTransition, useMemo } from "react";
 import { CalendarDays, GanttChartSquare } from "lucide-react";
 
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
-import type { CacheDependency } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
+import { useDependencyContext } from "@/lib/boards/use-dependency-context";
+import { crossBoardStubs } from "@/lib/boards/cross-board";
+import { contextSpans } from "@/lib/boards/timeline-context";
+import { scheduleFromPicks } from "@/lib/boards/schedule";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
@@ -32,7 +25,6 @@ import {
   onBarResized,
   timelineDayCount,
   visibleRows,
-  type GanttRow,
 } from "@/lib/boards/gantt";
 import {
   itemDateRange,
@@ -46,7 +38,6 @@ import { colorForItem } from "@/lib/boards/timeline-color";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
-import { Kicker } from "@/components/ui/kicker";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import {
@@ -54,30 +45,16 @@ import {
   type QuickEditTarget,
 } from "@/components/boards/quick-edit/ItemQuickEdit";
 import {
-  LABEL_W,
-  ROW_H,
-  PX_PER_DAY,
   ZOOM_DAY_COUNT,
-  fittedDayW,
-  buildMonthTicks,
-  buildQuarterTicks,
   effectiveCriticalLabel,
-  parseISO,
-  todayISO,
-  type BarDragData,
   type TimelineZoom,
 } from "@/components/boards/gantt/utils";
-import { GanttRowItem } from "@/components/boards/gantt/GanttRowItem";
+import { GanttCanvas } from "@/components/boards/gantt/GanttCanvas";
 import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection";
 
 // ---------------------------------------------------------------------------
 // GanttBoard (main export)
 // ---------------------------------------------------------------------------
-
-// useLayoutEffect warns during SSR; this client component still pre-renders on
-// the server, so fall back to useEffect there (same guard as GroupSection).
-const useIsoLayoutEffect =
-  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // Memoized for the same reason as BoardTable / KanbanBoard: it re-renders on
 // real cache changes via its own useBoardCache subscription, and every prop
@@ -104,6 +81,7 @@ function GanttBoardInner({
   const { data: cache } = useBoardCache(payload.board.id, payload);
   const mutations = useBoardMutations(payload.board.id, currentUserId);
 
+  const router = useRouter();
   const [, startTransition] = useTransition();
 
   // Resolve the selected view and its config
@@ -115,7 +93,10 @@ function GanttBoardInner({
     zoom?: TimelineZoom;
   } | null;
 
-  const dateColumns = cache.columns.filter((c) => c.kind === "date");
+  const dateColumns = useMemo(
+    () => cache.columns.filter((c) => c.kind === "date"),
+    [cache.columns],
+  );
   const colorColumns = cache.columns.filter(
     (c) => c.kind === "status" || c.kind === "dropdown",
   );
@@ -151,15 +132,13 @@ function GanttBoardInner({
     [dateColumns],
   );
 
-  // The ids actually used to resolve dates. A synthetic pick keeps its sentinel;
-  // a real/absent start falls back to the resolved date column.
-  const startSourceId = isSyntheticDateSource(startColId)
-    ? startColId
-    : (dateColumn?.id ?? null);
-  const endSourceId = endColId;
-  // A timestamp-sourced bar can't be dragged/resized — there's no cell to write.
-  const readOnly =
-    isSyntheticDateSource(startSourceId) || isSyntheticDateSource(endSourceId);
+  // The ids actually used to resolve dates. A timestamp-sourced bar can't be
+  // dragged/resized — there's no cell to write.
+  const { startSourceId, endSourceId, readOnly } = scheduleFromPicks(
+    dateColumns,
+    startColId,
+    endColId,
+  );
 
   // Cell values augmented with synthetic created/updated-at cells when a
   // timestamp source is selected, so date resolution reads them like any cell.
@@ -173,10 +152,6 @@ function GanttBoardInner({
       ...syntheticDateCellValues(cache.items, needed),
     ];
   }, [cache.cellValues, cache.items, startSourceId, endSourceId]);
-
-  // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
-  // long-press lift) so a finger can move bars on iPad while a quick swipe scrolls.
-  const sensors = useTouchAwareSensors();
 
   // Earliest scheduled item start date for range anchoring.
   // Guard: returns "" when no dateColumn (we'll be in the early-return path).
@@ -249,10 +224,50 @@ function GanttBoardInner({
   const rows = useMemo(() => ganttResult?.rows ?? [], [ganttResult]);
 
   // Detect dependency violations (finish-to-start constraint check).
-  const violations = useMemo(
-    () => detectViolations(rows, cache.dependencies),
-    [rows, cache.dependencies],
+  // Only same-board links are arrows; cross-board links become stubs below.
+  const localIds = useMemo(
+    () => new Set(cache.items.map((i) => i.id)),
+    [cache.items],
   );
+  const intraDeps = useMemo(
+    () =>
+      cache.dependencies.filter(
+        (d) => localIds.has(d.predecessor_id) && localIds.has(d.successor_id),
+      ),
+    [cache.dependencies, localIds],
+  );
+  const violations = useMemo(
+    () => detectViolations(rows, intraDeps),
+    [rows, intraDeps],
+  );
+
+  const ctx = useDependencyContext(payload.board.id, cache.dependencies);
+  const localSpans = useMemo(
+    () =>
+      new Map(
+        rows.map((r) => [
+          r.itemId,
+          r.startISO && r.endISO
+            ? {
+                start: r.startISO,
+                end: r.endISO,
+                isMilestone: !!r.isMilestone,
+              }
+            : null,
+        ]),
+      ),
+    [rows],
+  );
+  const externalLinks = useMemo(() => {
+    const context = ctx.data ?? { boards: [], items: [] };
+    return crossBoardStubs({
+      dependencies: cache.dependencies,
+      localItemIds: localIds,
+      localSpans,
+      context,
+      contextSpans: contextSpans(context),
+    });
+  }, [ctx.data, cache.dependencies, localIds, localSpans]);
 
   // Rows with an actual bar (a valid date range) — the dependency picker offers
   // these as endpoints.
@@ -330,139 +345,6 @@ function GanttBoardInner({
   );
   // The tapped bar/milestone/row the quick-edit peek is anchored to.
   const [quickEdit, setQuickEdit] = useState<QuickEditTarget | null>(null);
-
-  // Header tick labels. Year zoom uses coarser quarter ticks (monthly ticks
-  // would cram together at ~1.5px/day); every other level keeps month ticks.
-  const headerTicks = useMemo(() => {
-    if (!rangeStartISO) return [];
-    return zoom === "year"
-      ? buildQuarterTicks(rangeStartISO, dayCount)
-      : buildMonthTicks(rangeStartISO, dayCount);
-  }, [rangeStartISO, dayCount, zoom]);
-
-  // Pixels per day at the active zoom. Row day-offsets are scale-independent;
-  // this multiplier is the only thing that turns them into on-screen width. The
-  // zoom scale is a floor: when the date range is shorter than the visible
-  // track, px/day stretches to fill the width (no dead space to the right);
-  // when it overflows, the base scale wins and the grid scrolls. trackWidth is
-  // the measured width available to the timeline (scroller minus the name rail).
-  const [trackWidth, setTrackWidth] = useState(0);
-  const dayW = fittedDayW(PX_PER_DAY[zoom], trackWidth, dayCount);
-  const totalW = dayCount * dayW;
-
-  // Row index lookup for SVG arrow geometry (over the visible, collapse-aware
-  // row list — arrows to a hidden sub-item simply don't draw until expanded).
-  const rowIndexMap = useMemo(
-    () => new Map(visibleTimelineRows.map((r, i) => [r.itemId, i])),
-    [visibleTimelineRows],
-  );
-
-  // ── Row virtualization (B3) ────────────────────────────────────────────────
-  // The timeline can hold hundreds of scheduled rows; mounting every GanttRowItem
-  // (each with a draggable bar, a dependency menu, presence wiring) is a slow
-  // first paint and janky scroll. Window the rows with react-virtual keyed to the
-  // vertical scroll container, mirroring the Table view's config. Row geometry is
-  // unchanged (ROW_H per row); only the mounted node count drops.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const rowsAreaRef = useRef<HTMLDivElement>(null);
-  // Offset of the rows area within the scroll content (the sticky header sits
-  // above it) — the virtualizer needs it to map scroll position → row index.
-  const [rowScrollMargin, setRowScrollMargin] = useState(0);
-  useIsoLayoutEffect(() => {
-    const area = rowsAreaRef.current;
-    const scroller = scrollRef.current;
-    if (!area || !scroller) return;
-    const top =
-      area.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top +
-      scroller.scrollTop;
-    setRowScrollMargin((prev) => (prev === top ? prev : top));
-    // Track width available to the timeline (scroller minus the sticky name
-    // rail) — drives the fill-to-width day scale (see fittedDayW / dayW).
-    const width = scroller.clientWidth - LABEL_W;
-    setTrackWidth((prev) => (prev === width ? prev : width));
-  });
-
-  // Re-fit the day scale when the viewport resizes (sidebar toggle, window
-  // resize) — the layout effect above only reruns on React renders, so observe
-  // the scroller directly to keep the grid filling the available width.
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => {
-      const width = scroller.clientWidth - LABEL_W;
-      setTrackWidth((prev) => (prev === width ? prev : width));
-    });
-    ro.observe(scroller);
-    return () => ro.disconnect();
-  }, []);
-  // React Compiler safely skips memoizing this component because useVirtualizer
-  // returns non-memoizable functions; that fallback is correct here.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const rowVirtualizer = useVirtualizer({
-    count: visibleTimelineRows.length,
-    getScrollElement: () => scrollRef.current,
-    scrollMargin: rowScrollMargin,
-    estimateSize: () => ROW_H,
-    overscan: 6,
-    // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_H so
-    // tests don't collapse every virtual row to 0px.
-    measureElement: (el) => el.getBoundingClientRect().height || ROW_H,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-
-  // Build dependency arrow geometry data.
-  const arrowLines = useMemo(
-    () =>
-      cache.dependencies
-        .map((dep) => {
-          const predIdx = rowIndexMap.get(dep.predecessor_id);
-          const succIdx = rowIndexMap.get(dep.successor_id);
-          const predRow = visibleTimelineRows[predIdx ?? -1];
-          const succRow = visibleTimelineRows[succIdx ?? -1];
-          if (
-            predIdx === undefined ||
-            succIdx === undefined ||
-            (!predRow?.startCol !== undefined &&
-              predRow.spanCols !== undefined &&
-              succRow.startCol !== undefined)
-          ) {
-            return null;
-          }
-          if (predRow?.startCol === undefined || predRow.spanCols === undefined)
-            return null;
-          if (succRow?.startCol === undefined) return null;
-          return { dep, predIdx, succIdx, predRow, succRow };
-        })
-        .filter(Boolean) as {
-        dep: CacheDependency;
-        predIdx: number;
-        succIdx: number;
-        predRow: GanttRow;
-        succRow: GanttRow;
-      }[],
-    [cache.dependencies, rowIndexMap, visibleTimelineRows],
-  );
-
-  // B3b — clamp the arrow overlay to arrows with an endpoint inside the rendered
-  // window (virtualRows already includes the overscan band). Endpoint→coordinate
-  // math still uses the absolute whole-set index (predIdx * ROW_H), so positions
-  // stay correct regardless of what's mounted; this just skips drawing arrows
-  // that are entirely off-window.
-  const visibleFirst = virtualRows[0]?.index ?? 0;
-  const visibleLast =
-    virtualRows[virtualRows.length - 1]?.index ??
-    visibleTimelineRows.length - 1;
-  const clampedArrows = arrowLines.filter(
-    ({ predIdx, succIdx }) =>
-      (predIdx >= visibleFirst && predIdx <= visibleLast) ||
-      (succIdx >= visibleFirst && succIdx <= visibleLast),
-  );
-
-  const today = todayISO();
-  const todayOffset = rangeStartISO
-    ? Math.round((parseISO(today) - parseISO(rangeStartISO)) / 86_400_000)
-    : -1;
 
   // Empty state: no date column
   if (!dateColumn) {
@@ -566,26 +448,31 @@ function GanttBoardInner({
     persistConfig({ color_column_id: next });
   }
 
-  function handleDragEnd(event: DragEndEvent) {
-    if (readOnly) return; // timestamp-sourced bars can't be moved
-    const { active, delta } = event;
-    const data = active.data.current as BarDragData | undefined;
-    if (!data || data.kind !== "bar") return;
-    const deltaDays = Math.round(delta.x / dayW);
-    if (deltaDays === 0) return;
-    const range = itemDateRange(
-      data.itemId,
-      cache.cellValues,
-      data.startColumnId,
-    );
+  // Bar move / resize write back through the board's date source(s).
+  const startWriteId = startSourceId ?? resolvedDateColumn.id;
+  function handleMoveBar(itemId: string, deltaDays: number) {
+    const range = itemDateRange(itemId, cache.cellValues, startWriteId);
     if (!range) return;
     onBarMoved(
-      data.itemId,
+      itemId,
       deltaDays,
       range,
-      data.startColumnId,
-      data.endColumnId,
+      startWriteId,
+      endSourceId,
       mutations.setCell as Parameters<typeof onBarMoved>[5],
+    );
+  }
+  function handleResizeBar(itemId: string, newEndISO: string) {
+    // Same range the row item used to hand back: the row's own resolved span.
+    const row = rows.find((r) => r.itemId === itemId);
+    const range = { start: row?.startISO ?? "", end: row?.endISO ?? "" };
+    onBarResized(
+      itemId,
+      newEndISO,
+      range,
+      startWriteId,
+      endSourceId,
+      mutations.setCell as Parameters<typeof onBarResized>[5],
     );
   }
 
@@ -690,178 +577,52 @@ function GanttBoardInner({
         </div>
       </div>
 
-      {/* Gantt grid */}
-      <DndContext
-        id={`gantt-${selectedViewId}`}
-        sensors={sensors}
-        onDragEnd={handleDragEnd}
-      >
-        <div
-          data-scroll-container
-          ref={scrollRef}
-          className="min-h-0 flex-1 overflow-auto"
-        >
-          <div className="inline-block min-w-full">
-            {/* Sticky header row */}
-            <div className="bg-background sticky top-0 z-20 flex border-b">
-              {/* Name rail header */}
-              <div
-                className="bg-background hover:border-border-hover sticky left-0 z-10 flex shrink-0 items-center border-r px-4 py-2.5"
-                style={{ width: LABEL_W }}
-              >
-                <Kicker>Item</Kicker>
-              </div>
-              {/* Timeline header */}
-              <div className="relative" style={{ width: totalW, height: 38 }}>
-                {/* Header tick labels (month, or quarter at Year zoom) */}
-                {headerTicks.map((tick) => (
-                  <div
-                    key={tick.dayOffset}
-                    className="text-muted-foreground text-2xs absolute top-0 h-full border-l pt-2 pl-1.5 whitespace-nowrap"
-                    style={{ left: tick.dayOffset * dayW }}
-                  >
-                    {tick.label}
-                  </div>
-                ))}
-                {/* Today line */}
-                {todayOffset >= 0 && todayOffset <= dayCount && (
-                  <div
-                    className="bg-destructive/70 absolute top-0 z-10 h-full w-px"
-                    style={{ left: todayOffset * dayW }}
-                    aria-label="Today"
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Scheduled rows (windowed) with SVG arrow overlay. The spacer div
-                holds the full timeline height so scroll geometry is unchanged;
-                each row is absolutely positioned at its virtual offset. */}
-            <div
-              ref={rowsAreaRef}
-              className="relative"
-              style={{ height: visibleTimelineRows.length * ROW_H }}
-            >
-              {virtualRows.map((vr) => {
-                const row = visibleTimelineRows[vr.index];
-                return (
-                  <div
-                    key={row.itemId}
-                    data-index={vr.index}
-                    ref={rowVirtualizer.measureElement}
-                    className="absolute top-0 left-0 w-full"
-                    style={{
-                      transform: `translateY(${vr.start - rowScrollMargin}px)`,
-                    }}
-                  >
-                    <GanttRowItem
-                      row={row}
-                      criticalLabel={effectiveCriticalLabel(
-                        priorityColumn
-                          ? (cellMap.get(
-                              cellKey(row.itemId, priorityColumn.id),
-                            ) ?? null)
-                          : null,
-                        dependentsByItem.get(row.itemId) ?? 0,
-                      )}
-                      rowIdx={vr.index}
-                      totalW={totalW}
-                      dayW={dayW}
-                      todayOffset={todayOffset}
-                      dayCount={dayCount}
-                      startColumnId={startSourceId ?? resolvedDateColumn.id}
-                      endColumnId={endSourceId}
-                      readOnly={readOnly}
-                      isExpanded={expanded.has(row.itemId)}
-                      onToggleExpand={toggleExpand}
-                      color={rowColors.get(row.itemId) ?? null}
-                      allRows={scheduledRows}
-                      dependencies={cache.dependencies}
-                      violations={violations}
-                      onBarResized={(itemId, newEndISO, range) =>
-                        onBarResized(
-                          itemId,
-                          newEndISO,
-                          range,
-                          startSourceId ?? resolvedDateColumn.id,
-                          endSourceId,
-                          mutations.setCell as Parameters<
-                            typeof onBarResized
-                          >[5],
-                        )
-                      }
-                      addDependency={mutations.addDependency}
-                      removeDependency={mutations.removeDependency}
-                      onItemTap={handleItemTap}
-                    />
-                  </div>
-                );
-              })}
-
-              {/* SVG dependency arrow overlay (clamped to the rendered window) */}
-              {clampedArrows.length > 0 && (
-                <svg
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    width: LABEL_W + totalW,
-                    height: visibleTimelineRows.length * ROW_H,
-                  }}
-                  aria-hidden
-                >
-                  {clampedArrows.map(
-                    ({ dep, predIdx, succIdx, predRow, succRow }) => {
-                      const isViolation = violations.has(dep.id);
-                      const predEndX =
-                        LABEL_W +
-                        ((predRow.startCol ?? 0) + (predRow.spanCols ?? 1)) *
-                          dayW;
-                      const predMidY = predIdx * ROW_H + ROW_H / 2;
-                      const succStartX =
-                        LABEL_W + (succRow.startCol ?? 0) * dayW;
-                      const succMidY = succIdx * ROW_H + ROW_H / 2;
-                      const mx = (predEndX + succStartX) / 2;
-                      const d = `M${predEndX},${predMidY} C${mx},${predMidY} ${mx},${succMidY} ${succStartX},${succMidY}`;
-                      return (
-                        <path
-                          key={dep.id}
-                          d={d}
-                          fill="none"
-                          strokeWidth={1.5}
-                          className={
-                            isViolation
-                              ? "stroke-destructive"
-                              : "stroke-muted-foreground"
-                          }
-                          markerEnd="url(#arrowhead)"
-                          opacity={0.7}
-                        />
-                      );
-                    },
-                  )}
-                  <defs>
-                    <marker
-                      id="arrowhead"
-                      markerWidth="6"
-                      markerHeight="6"
-                      refX="3"
-                      refY="3"
-                      orient="auto"
-                    >
-                      <path
-                        d="M0,0 L0,6 L6,3 z"
-                        className="fill-muted-foreground"
-                      />
-                    </marker>
-                  </defs>
-                </svg>
-              )}
-            </div>
-          </div>
-        </div>
-      </DndContext>
-
-      {/* Unscheduled section */}
-      <UnscheduledSection rows={unscheduledRows} onItemTap={handleItemTap} />
+      {/* Gantt grid (+ Unscheduled section underneath) */}
+      <GanttCanvas
+        rows={visibleTimelineRows}
+        dependencies={intraDeps}
+        violations={violations}
+        externalLinks={externalLinks}
+        rangeStartISO={rangeStartISO}
+        dayCount={dayCount}
+        zoom={zoom}
+        colorFor={(row) => rowColors.get(row.itemId) ?? null}
+        criticalLabelFor={(itemId) =>
+          effectiveCriticalLabel(
+            priorityColumn
+              ? (cellMap.get(cellKey(itemId, priorityColumn.id)) ?? null)
+              : null,
+            dependentsByItem.get(itemId) ?? 0,
+          )
+        }
+        canEditItem={() => !readOnly}
+        isExpanded={(itemId) => expanded.has(itemId)}
+        onToggleExpand={toggleExpand}
+        onMoveBar={handleMoveBar}
+        onResizeBar={handleResizeBar}
+        onAddDependency={(vars) =>
+          mutations.addDependency(vars, {
+            onError: (err) => toast.error(err.message),
+          })
+        }
+        onRemoveDependency={mutations.removeDependency}
+        // Arrows here are same-board links only (cross-board ones are stubs),
+        // so removal follows this board's access.
+        canRemoveDependency={() => access !== "viewer"}
+        linkCandidates={(row) =>
+          scheduledRows
+            .filter((o) => o.itemId !== row.itemId)
+            .map((o) => ({ itemId: o.itemId, name: o.name }))
+        }
+        onItemTap={handleItemTap}
+        onStubTap={(s) => router.push(`/boards/${s.boardId}?item=${s.itemId}`)}
+        footer={
+          <UnscheduledSection
+            rows={unscheduledRows}
+            onItemTap={handleItemTap}
+          />
+        }
+      />
 
       {quickEdit && (
         <ItemQuickEdit

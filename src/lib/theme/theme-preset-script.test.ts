@@ -53,7 +53,7 @@ describe("no-flash inline script: reach", () => {
     expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
 
     // A valid PRESET id is still not a reach id.
-    localStorage.setItem(THEME_REACH_STORAGE_KEY, "ocean");
+    localStorage.setItem(THEME_REACH_STORAGE_KEY, "graphite");
     run();
     expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
   });
@@ -70,10 +70,10 @@ describe("no-flash inline script: reach", () => {
 
 describe("no-flash inline script: preset and reach together", () => {
   it("stamps both attributes from the one script", () => {
-    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "ocean");
+    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "graphite");
     localStorage.setItem(THEME_REACH_STORAGE_KEY, "vivid");
     run();
-    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("ocean");
+    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("graphite");
     expect(root.getAttribute(THEME_REACH_ATTR)).toBe("vivid");
   });
 
@@ -86,6 +86,27 @@ describe("no-flash inline script: preset and reach together", () => {
     localStorage.setItem(THEME_PRESET_STORAGE_KEY, "vivid");
     run();
     expect(root.hasAttribute(THEME_PRESET_ATTR)).toBe(false);
+  });
+
+  it("resolves a removed preset id through the alias map before the whitelist", () => {
+    // Literal on purpose: the four removed ids and what each one stamps now.
+    for (const [stored, stamped] of [
+      ["ocean", "lagoon"],
+      ["forest", "tropic"],
+      ["ember", "peach"],
+      ["rose", "orchid"],
+    ]) {
+      root.removeAttribute(THEME_PRESET_ATTR);
+      localStorage.setItem(THEME_PRESET_STORAGE_KEY, stored);
+      run();
+      expect(root.getAttribute(THEME_PRESET_ATTR), stored).toBe(stamped);
+    }
+  });
+
+  it("the alias map applies to the preset only, never to the reach", () => {
+    localStorage.setItem(THEME_REACH_STORAGE_KEY, "ocean");
+    run();
+    expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
   });
 
   it("an invalid preset does not stop a valid reach from being stamped", () => {

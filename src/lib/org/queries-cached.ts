@@ -39,6 +39,8 @@ export async function listOrgMembersCached(
     .from("org_members")
     .select("user_id")
     .eq("org_id", orgId)
+    // A Mono is an org member with role `agent`, never a person in a roster.
+    .neq("role", "agent")
     .limit(ORG_MEMBERS_LIMIT);
   if (membersErr || !members || members.length === 0) return [];
 

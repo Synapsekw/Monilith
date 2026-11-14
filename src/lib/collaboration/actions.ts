@@ -20,33 +20,12 @@ import {
 } from "@/lib/collaboration/attachments-format";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { createAttachmentCore } from "./attachment-core";
-import { createServiceClient } from "@/lib/supabase/service";
-import { checkAgentMentionRateLimit } from "@/lib/rate-limit/agent-mention-rate-limit";
-import {
-  claimAgentRun,
-  CLAIM_REFUSAL_COPY,
-  type ClaimOutcome,
-} from "@/lib/agents/run-claim";
-import { dispatchAgentRun } from "@/lib/agents/mention-dispatch";
+import { keepOwnMonoMentions } from "@/lib/collaboration/mentions";
 import type { Json } from "@/types/database.types";
 
-/**
- * What happened to the agent an update summoned.
- *
- * `agentRun: null` with a `reason` is the ONLY way a refusal reaches the
- * person: a summons that is rate-limited, on cooldown, over the org's daily
- * cap, aimed at a disabled agent, or aimed at an agent they do not own must
- * never fail the comment — the comment is the thing they actually asked for —
- * but it must never fail SILENTLY either, or they are left waiting for an
- * answer that is never coming.
- */
+/** What posting an update returns: the new update's id. */
 export type AddUpdateResult = {
   updateId: string;
-  agentRun: "started" | null;
-  /** The summoned agent's handle, so the confirmation can name it. Present
-   *  only alongside `agentRun: "started"`. */
-  agentHandle?: string;
-  reason?: string;
 };
 
 export async function addUpdate(input: {
@@ -76,6 +55,27 @@ export async function addUpdate(input: {
     .maybeSingle();
   if (itemErr || !item) return fail("Item not found.");
 
+  // Mentions vs Monos (Personal Monos spec §4). One bounded read (≤20 ids on
+  // the monos PK, org-scoped by RLS and the filter) tells which mentioned ids
+  // are Monos: a Mono is never stored as a user mention (no notification, no
+  // Plan 2B ambiguity), and only the author's own Mono is kept as a Mono
+  // mention. Skipped entirely when nothing is mentioned. A failed read keeps
+  // no Mono mention (fails closed).
+  let mentions = parsed.data.mentions;
+  if (mentions.length > 0) {
+    const { data: monoRows } = await supabase
+      .from("monos")
+      .select("user_id, owner_id")
+      .eq("org_id", item.org_id)
+      .in("user_id", [...new Set(mentions.map((m) => m.userId))]);
+    const rows = monoRows ?? [];
+    const monoIds = new Set(rows.map((r) => r.user_id));
+    mentions = keepOwnMonoMentions(
+      mentions.filter((m) => !(m.kind === "user" && monoIds.has(m.userId))),
+      rows.filter((r) => r.owner_id === user.id).map((r) => r.user_id),
+    );
+  }
+
   const { data, error } = await supabase
     .from("item_updates")
     .insert({
@@ -83,7 +83,7 @@ export async function addUpdate(input: {
       board_id: item.board_id,
       item_id: parsed.data.itemId,
       author_id: user.id,
-      body: { text: parsed.data.text, mentions: parsed.data.mentions } as Json,
+      body: { text: parsed.data.text, mentions } as Json,
       body_text: parsed.data.text,
     })
     .select("id")
@@ -91,15 +91,10 @@ export async function addUpdate(input: {
   if (error || !data) return fail(error?.message ?? "Could not post update.");
 
   // Fan out one notification per mentioned member (deduped, excluding self).
-  // Humans only here. Agent targets are handled by the agent trigger path; an
-  // agent has no `profiles` row, so a notification row for one would be
-  // undeliverable and `gate_notification_by_pref` has nothing to gate.
+  // Humans only: a non-user target has no `profiles` row, so a notification
+  // row for one would be undeliverable.
   const recipients = [
-    ...new Set(
-      parsed.data.mentions
-        .filter((m) => m.kind === "user")
-        .map((m) => m.userId),
-    ),
+    ...new Set(mentions.filter((m) => m.kind === "user").map((m) => m.userId)),
   ].filter((id) => id !== user.id);
   if (recipients.length > 0) {
     const { error: notifErr } = await supabase.from("notifications").insert(
@@ -122,64 +117,7 @@ export async function addUpdate(input: {
       });
   }
 
-  // ── The agent trigger ──────────────────────────────────────────────────
-  // ONE agent per update, deliberately. Several handles in one comment would
-  // turn a single keystroke into several billable runs; the orchestrator (and
-  // its bounded `delegate` fan-out) is the supported way to reach more than
-  // one agent from one sentence.
-  //
-  // Everything below is AFTER the update is committed and can only ever change
-  // what the caller is TOLD, never whether the comment was saved.
-  const agentTarget = parsed.data.mentions.find((m) => m.kind === "agent");
-  let agentRun: "started" | null = null;
-  let agentHandle: string | undefined;
-  let reason: string | undefined;
-  if (agentTarget) {
-    const limit = await checkAgentMentionRateLimit(user.id);
-    if (!limit.allowed) {
-      reason = "You have summoned agents too many times this hour.";
-    } else {
-      // OWNERSHIP, checked here and not delegated to the RPC. `agent_run_claim`
-      // establishes ownership from `auth.uid()`, and the claim below runs on
-      // the SERVICE client (a Server Action has no way to call it as the user
-      // and still bypass nothing else), where `auth.uid()` is null — so its
-      // ownership arm cannot fire. This read is that arm, run through the
-      // USER's client so RLS is what answers it: a uuid the author cannot see
-      // returns no row, and "not yours" and "does not exist" are the same
-      // answer, as they must be.
-      const { data: owned } = await supabase
-        .from("user_agents")
-        .select("id, handle")
-        .eq("id", agentTarget.agentId)
-        .eq("owner_id", user.id)
-        .maybeSingle();
-      if (!owned) {
-        reason = "That agent isn't yours.";
-      } else {
-        const claim = await claimAgentRun(createServiceClient(), {
-          agentId: agentTarget.agentId,
-          trigger: "mention",
-        });
-        if (claim.outcome === "claimed" && claim.runId) {
-          // Fire-and-forget: the POST is queued behind the response, so the
-          // comment returns now and the run happens on its own invocation.
-          await dispatchAgentRun(claim.runId, parsed.data.itemId, data.id);
-          agentRun = "started";
-          agentHandle = owned.handle;
-        } else {
-          reason =
-            CLAIM_REFUSAL_COPY[
-              claim.outcome as Exclude<ClaimOutcome, "claimed">
-            ];
-        }
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    data: { updateId: data.id, agentRun, agentHandle, reason },
-  };
+  return { ok: true, data: { updateId: data.id } };
 }
 
 export async function editUpdate(input: {

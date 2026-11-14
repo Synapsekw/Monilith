@@ -69,6 +69,8 @@ const bulkItemIds = z.array(uuid).min(1).max(500);
 export const archiveBoardSchema = z.object({ boardId: uuid });
 export const restoreBoardSchema = z.object({ boardId: uuid });
 export const purgeBoardSchema = z.object({ boardId: uuid });
+// Leaving drops only the caller's own grant on a board shared with them.
+export const leaveBoardSchema = z.object({ boardId: uuid });
 export const archiveGroupSchema = z.object({ groupId: uuid });
 export const restoreGroupSchema = z.object({ groupId: uuid });
 export const purgeGroupSchema = z.object({ groupId: uuid });

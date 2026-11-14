@@ -16,6 +16,7 @@ import type {
   SetCellVars,
 } from "./shared";
 import { assertOnline } from "@/lib/offline/online-status";
+import { useMyMonoStore } from "@/stores/my-mono";
 
 /** Cell-value mutations: optimistic single-cell writes with targeted rollback. */
 export function useCellMutations(ctx: BoardMutationCtx) {
@@ -42,7 +43,17 @@ export function useCellMutations(ctx: BoardMutationCtx) {
         updated_at: new Date().toISOString(),
       };
       qc.setQueryData<BoardCache>(key, upsertCellValue(previous, cell));
-      return { rollback: cellRollback(prior, vars.itemId, vars.columnId) };
+      return {
+        rollback: cellRollback(prior, vars.itemId, vars.columnId),
+        priorValue: prior?.value,
+      };
+    },
+    onSuccess: (_res, vars, mctx) => {
+      // Assigning the viewer's own Mono also puts it on the board server-side;
+      // mirror that into the rail's store (client state, no refetch).
+      useMyMonoStore
+        .getState()
+        .notePeopleWrite(ctx.boardId, mctx?.priorValue, vars.value);
     },
     onError: (err, _vars, ctx) => {
       rollback(ctx);

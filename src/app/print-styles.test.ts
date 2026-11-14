@@ -91,6 +91,48 @@ describe("print stylesheet (folder Overview export)", () => {
     expect(printRoot).toMatch(/(?<!-webkit-)print-color-adjust:\s*exact/);
   });
 
+  it("hands the bold frame's chrome its base tokens back, so it prints dark on paper", () => {
+    // Light mode paints the chrome white-on-colour (`.chrome-scope`). Browsers
+    // drop backgrounds when printing, and the hiding rules above only apply
+    // to a page with a print root — so Cmd+P on a board printed a white
+    // sidebar, header and dock on white paper. In print the scope restores
+    // every token it moves to the `--base-*` value captured on <html>.
+    const tokens = (block: string) =>
+      [...block.matchAll(/^\s+(--[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
+        m[1],
+        m[2].trim(),
+      ]);
+    const SCOPE = ":root:not(.dark) .chrome-scope {";
+    const screen = css.split("@media print")[0];
+    const start = screen.indexOf(`\n${SCOPE}`);
+    expect(start).toBeGreaterThan(-1);
+    const moved = tokens(screen.slice(start, screen.indexOf("\n}", start))).map(
+      ([token]) => token,
+    );
+    expect(moved.length).toBeGreaterThan(20);
+
+    const at = print.indexOf(`\n  ${SCOPE}`);
+    expect(at, "no chrome-scope fallback in @media print").toBeGreaterThan(-1);
+    const fallback = tokens(print.slice(at, print.indexOf("\n  }", at)));
+    // Every token, in the scope's own order, each back to its base alias.
+    expect(fallback).toEqual(
+      moved.map((token) => [token, `var(--base-${token.slice(2)})`]),
+    );
+    // Unconditional — the selector opens its own line, so it is not behind
+    // `body:has([data-print-root])`: the pages that need it are exactly the
+    // ones without a print root.
+    expect(print).not.toMatch(/data-print-root[^\n{]*\.chrome-scope/);
+  });
+
+  it("drops the light frame's wash in print, and only the light one", () => {
+    // With "background graphics" on, the saturated wash would print under
+    // the now-dark chrome text. Dark mode is left exactly as it was.
+    expect(print).toMatch(
+      /\n {2}:root:not\(\.dark\) \.app-wash \{\n {4}background-image: none;\n {2}\}/,
+    );
+    expect(print).not.toMatch(/\n {2}\.app-wash \{/);
+  });
+
   it("prints the folder title above the print root", () => {
     const titleBlock =
       print.match(/\[data-print-title\]\s*\{[^}]*\}/)?.[0] ?? "";

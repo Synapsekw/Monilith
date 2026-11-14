@@ -1,40 +1,37 @@
-/**
- * A mention target is a PERSON or one of the author's own AGENTS.
- *
- * The two carry different text: a person's mention writes their DISPLAY NAME
- * (which may contain spaces and is matched back out by `renderBody`), while an
- * agent's writes its HANDLE — which is what makes an agent mention typeable.
- * `activeMentionQuery` terminates a token at the first whitespace, so a
- * multi-word name can only ever be CLICKED; a handle can be typed straight
- * through, which is the whole point of Spec 3's addressing half.
- */
+/** A person, or the author's own Mono (Personal Monos spec §4). */
 export type UserMentionTarget = {
   kind: "user";
   userId: string;
   fullName: string | null;
 };
-export type AgentMentionTarget = {
-  kind: "agent";
-  agentId: string;
-  handle: string;
+export type MonoMentionTarget = {
+  kind: "mono";
+  userId: string;
   name: string;
+  ownerName: string | null;
+  color: string;
 };
-export type MentionTarget = UserMentionTarget | AgentMentionTarget;
+export type MentionTarget = UserMentionTarget | MonoMentionTarget;
 
-/** Narrows a `MentionTarget` to its agent variant — the one shared type guard
- *  for the union, so callers (`ThreadHeader`, `MessageList`, …) get real
- *  narrowing from `.filter()`/`.find()` without each re-declaring the same
- *  one-line predicate. */
-export function isAgentMention(t: MentionTarget): t is AgentMentionTarget {
-  return t.kind === "agent";
+/** The text a mention writes into the body, including the leading `@`. */
+export function mentionLabel(target: MentionTarget): string {
+  return target.kind === "mono"
+    ? `@${target.name}`
+    : `@${target.fullName ?? "Someone"}`;
 }
 
-/** The text a mention writes into the body — and the token `renderBody`
- *  accents back out of it. Includes the leading `@`. */
-export function mentionLabel(target: MentionTarget): string {
-  return target.kind === "agent"
-    ? `@${target.handle}`
-    : `@${target.fullName ?? "Someone"}`;
+/**
+ * Only the author's own Mono may be mentioned (spec §4). The picker already
+ * offers no other; this is the server's copy of the rule. In Plan 2A a kept
+ * Mono mention wakes nothing: it is stored in `body.mentions` for Plan 2B's
+ * inbox trigger, which re-checks ownership.
+ */
+export function keepOwnMonoMentions<
+  M extends { kind: "user" | "mono"; userId: string },
+>(mentions: readonly M[], ownMonoIds: readonly string[]): M[] {
+  return mentions.filter(
+    (m) => m.kind !== "mono" || ownMonoIds.includes(m.userId),
+  );
 }
 
 /** The `@query` immediately preceding the caret, or null. A space closes the
@@ -54,7 +51,7 @@ export function activeMentionQuery(
 
 /** Replace the active @query (from its `start` to the caret) with the target's
  *  `@label ` and return the new text + caret. The caller records the target's
- *  tagged id (`{ kind: "user", userId }` / `{ kind: "agent", agentId }`). */
+ *  tagged id (`{ kind: "user", userId }`). */
 export function applyMention(
   text: string,
   caret: number,

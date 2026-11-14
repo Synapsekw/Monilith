@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { THEME_PRESET_ATTR } from "@/lib/theme/presets";
+import { THEME_PRESET_ATTR, THEME_PRESETS } from "@/lib/theme/presets";
 import { ThemePresetForm } from "./theme-preset-form";
 
 const updateProfileThemePreset = vi.fn();
@@ -22,17 +22,89 @@ describe("ThemePresetForm", () => {
     for (const label of [
       "Keystone",
       "Graphite",
-      "Ocean",
-      "Forest",
-      "Ember",
-      "Rose",
       "Aurora",
       "Sunset",
       "Nebula",
+      "Lagoon",
+      "Tropic",
+      "Orchid",
+      "Peach",
+      "Glacier",
+      "Dusk",
+      "Berry",
+      "Candy",
+      "Citrus",
+      "Prism",
+      "Mocha",
+      "Neon",
     ]) {
       expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("radio", { name: "Keystone" })).toBeChecked();
+    expect(screen.getAllByRole("radio")).toHaveLength(17);
+    expect(screen.getAllByRole("radio")).toHaveLength(THEME_PRESETS.length);
+    // One group, announced as such.
+    expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
+  });
+
+  it("paints each half with that mode's wash, first stop to last", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const ground = (name: string, mode: string) =>
+      screen
+        .getByRole("radio", { name })
+        .closest("label")!
+        .querySelector<HTMLElement>(`[data-swatch-chrome="${mode}"]`)!;
+
+    // Keystone has no preset block: its washes are `:root` / `.dark`.
+    expect(ground("Keystone", "light").style.background).toBe(
+      "linear-gradient(135deg, rgb(54, 67, 167), rgb(34, 44, 114))",
+    );
+    expect(ground("Keystone", "dark").style.background).toBe(
+      "linear-gradient(135deg, rgb(33, 37, 64), rgb(8, 9, 13))",
+    );
+    expect(ground("Aurora", "light").style.background).toBe(
+      "linear-gradient(135deg, rgb(1, 90, 79), rgb(54, 35, 108))",
+    );
+    expect(ground("Neon", "dark").style.background).toBe(
+      "linear-gradient(135deg, rgb(2, 48, 20), rgb(7, 5, 9))",
+    );
+    expect(document.querySelectorAll("[data-swatch-chrome]")).toHaveLength(34);
+  });
+
+  it("rings the accent with a white hairline on the light wash, where it would sink, and not on the dark", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    for (const p of THEME_PRESETS) {
+      const tile = screen
+        .getByRole("radio", { name: p.label })
+        .closest("label")!;
+      const dot = (mode: string) =>
+        tile.querySelector<HTMLElement>(`[data-swatch-accent="${mode}"]`)!;
+      expect(dot("light").style.boxShadow, p.id).toBe(
+        "0 0 0 1px rgba(255, 255, 255, 0.9)",
+      );
+      expect(dot("dark").style.boxShadow, p.id).toBe("");
+    }
+  });
+
+  it("lays the tiles out in a grid that fits as many 84px tiles as its column holds", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const grid = screen
+      .getByRole("radio", { name: "Keystone" })
+      .closest("label")!.parentElement!;
+    expect(grid.querySelectorAll("label")).toHaveLength(17);
+    expect(grid).toHaveClass(
+      "grid",
+      "gap-2",
+      "grid-cols-[repeat(auto-fill,minmax(5.25rem,1fr))]",
+    );
+    // Touch target and focus ring are untouched by the new layout.
+    for (const tile of grid.querySelectorAll("label")) {
+      expect(tile).toHaveClass(
+        "pointer-coarse:min-h-11",
+        "has-[:focus-visible]:ring-2",
+        "has-[:focus-visible]:ring-ring/50",
+      );
+    }
   });
 
   it("draws a two-stop gradient PILL for a two-accent preset, in both modes", () => {
@@ -57,27 +129,31 @@ describe("ThemePresetForm", () => {
     }
   });
 
-  it.each(["Aurora", "Sunset", "Nebula"])(
-    "%s is a pill — every two-accent preset is",
-    (label) => {
-      render(<ThemePresetForm currentPreset="keystone" />);
-      const tile = screen.getByRole("radio", { name: label }).closest("label")!;
-      expect(tile.querySelectorAll('[data-swatch-shape="pill"]')).toHaveLength(
-        2,
-      );
-    },
-  );
+  it.each([
+    "Aurora",
+    "Sunset",
+    "Nebula",
+    "Lagoon",
+    "Tropic",
+    "Orchid",
+    "Peach",
+    "Glacier",
+    "Dusk",
+    "Berry",
+    "Candy",
+    "Citrus",
+    "Prism",
+    "Mocha",
+    "Neon",
+  ])("%s is a pill — every two-accent preset is", (label) => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const tile = screen.getByRole("radio", { name: label }).closest("label")!;
+    expect(tile.querySelectorAll('[data-swatch-shape="pill"]')).toHaveLength(2);
+  });
 
   it("keeps a flat round dot for a single-accent preset", () => {
     render(<ThemePresetForm currentPreset="keystone" />);
-    for (const label of [
-      "Keystone",
-      "Graphite",
-      "Ocean",
-      "Forest",
-      "Ember",
-      "Rose",
-    ]) {
+    for (const label of ["Keystone", "Graphite"]) {
       const tile = screen.getByRole("radio", { name: label }).closest("label")!;
       const dots = tile.querySelectorAll<HTMLElement>("[data-swatch-accent]");
       expect(dots).toHaveLength(2);
@@ -87,11 +163,11 @@ describe("ThemePresetForm", () => {
         expect(dot).not.toHaveClass("w-5");
       }
     }
-    const ocean = screen
-      .getByRole("radio", { name: "Ocean" })
+    const graphite = screen
+      .getByRole("radio", { name: "Graphite" })
       .closest("label")!
       .querySelector<HTMLElement>('[data-swatch-accent="light"]')!;
-    expect(ocean.style.background).toBe("rgb(31, 122, 140)");
+    expect(graphite.style.background).toBe("rgb(75, 75, 85)");
   });
 
   it("marks the selected tile with a bright border, a brand ring and a check — and only that tile", async () => {
@@ -143,20 +219,20 @@ describe("ThemePresetForm", () => {
     const user = userEvent.setup();
     render(<ThemePresetForm currentPreset="keystone" />);
 
-    await user.click(screen.getByRole("radio", { name: "Ocean" }));
+    await user.click(screen.getByRole("radio", { name: "Graphite" }));
 
     expect(document.documentElement.getAttribute(THEME_PRESET_ATTR)).toBe(
-      "ocean",
+      "graphite",
     );
     expect(updateProfileThemePreset).toHaveBeenCalledWith({
-      themePreset: "ocean",
+      themePreset: "graphite",
     });
-    expect(screen.getByRole("radio", { name: "Ocean" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Graphite" })).toBeChecked();
   });
 
   it("removes the attribute when the default preset is chosen", async () => {
     const user = userEvent.setup();
-    render(<ThemePresetForm currentPreset="ocean" />);
+    render(<ThemePresetForm currentPreset="graphite" />);
 
     await user.click(screen.getByRole("radio", { name: "Keystone" }));
 
@@ -176,7 +252,7 @@ describe("ThemePresetForm", () => {
     const user = userEvent.setup();
     render(<ThemePresetForm currentPreset="keystone" />);
 
-    await user.click(screen.getByRole("radio", { name: "Rose" }));
+    await user.click(screen.getByRole("radio", { name: "Graphite" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -193,11 +269,11 @@ describe("ThemePresetForm", () => {
     render(<ThemePresetForm currentPreset="keystone" />);
 
     act(() => {
-      document.documentElement.setAttribute(THEME_PRESET_ATTR, "ocean");
+      document.documentElement.setAttribute(THEME_PRESET_ATTR, "graphite");
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("radio", { name: "Ocean" })).toBeChecked();
+      expect(screen.getByRole("radio", { name: "Graphite" })).toBeChecked();
     });
   });
 });

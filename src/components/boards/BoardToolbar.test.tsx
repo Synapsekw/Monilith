@@ -106,6 +106,44 @@ describe("BoardToolbar", () => {
     expect(lastHistoryUrl(pushState).get("people")).toBe("me");
   });
 
+  it("lists Monos after people, labelled as Monos, and filters by them", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    render(
+      <BoardToolbar
+        columns={[peopleColumn]}
+        members={[
+          {
+            userId: "m1",
+            fullName: "Nova",
+            email: null,
+            mono: {
+              color: "#7395ff",
+              ownerId: "u2",
+              ownerName: "Alan Turing",
+              directable: false,
+            },
+          },
+          ...members,
+        ]}
+        currentUserId="me"
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^Filter$/ }));
+    const people = screen.getByRole("region", { name: "Filter by person" });
+    const labels = Array.from(people.querySelectorAll('[role="option"]')).map(
+      (o) => o.textContent,
+    );
+    expect(labels.at(-1)).toContain("Nova");
+    expect(labels.at(-2)).toContain("Alan Turing");
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Alan's Mono")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Nova, Alan's Mono" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: /Nova/ }));
+    expect(lastHistoryUrl(pushState).get("people")).toBe("m1");
+  });
+
   it("sets a sort via the History API", async () => {
     const pushState = vi.spyOn(window.history, "pushState");
     render(

@@ -38,7 +38,8 @@ export function AppShell({
       <Sidebar navSlot={sidebarNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-4">
+        {/* `chrome-scope`: the band is painted on the wash, like the rail. */}
+        <header className="chrome-scope flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-1 md:hidden">
             {mobileNav}
             <Brand />
@@ -69,7 +70,7 @@ export function AppShell({
           <div id="card-seam-slot" />
         </div>
       </div>
-      {/* The board page's agent dock portals its <aside> in here (BoardDock.tsx),
+      {/* The board page's dock portals its <aside> in here (BoardDock.tsx),
           so the dock sits on the wash as the sidebar's twin — rail | card | dock —
           instead of inside the content card. Static and empty on purpose: no
           props, no request-time reads, so the prerendered shell is untouched

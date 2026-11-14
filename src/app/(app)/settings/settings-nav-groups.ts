@@ -16,9 +16,9 @@ export function settingsNavGroups(isAdmin: boolean): SettingsNavGroup[] {
       label: "Account",
       items: [
         { href: "/settings/profile", label: "Profile" },
+        { href: "/settings/my-mono", label: "My Mono" },
         { href: "/settings/preferences", label: "Preferences" },
         { href: "/settings/notifications", label: "Notifications" },
-        { href: "/settings/agents", label: "Agent setup" },
         { href: "/settings/security", label: "Security" },
       ],
     },

@@ -12,7 +12,7 @@ export async function getBoardHandler(
   const supabase = await getClient();
   const { data: board, error: boardErr } = await supabase
     .from("boards")
-    .select("id, name, description")
+    .select("id, name, description, workspace_id")
     .eq("id", input.boardId)
     .maybeSingle();
   if (boardErr || !board) {
@@ -39,7 +39,12 @@ export async function getBoardHandler(
       {
         type: "text" as const,
         text: JSON.stringify({
-          board,
+          board: {
+            id: board.id,
+            name: board.name,
+            description: board.description,
+            workspaceId: board.workspace_id,
+          },
           columns: (columns ?? []).map(describeColumn),
           groups: groups ?? [],
         }),

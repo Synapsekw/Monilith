@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { updateTag } from "next/cache";
 import type { Database } from "@/types/database.types";
-import { sharedBoardsTag } from "@/lib/cache/tags";
+import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { getBoardAccessCore } from "@/lib/boards/queries";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
@@ -109,5 +109,47 @@ export async function restoreBoardCore(
     .update({ archived_at: null, archived_by: null })
     .eq("id", input.boardId);
   if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Leave a board someone else shared with me: delete MY `board_members` grant,
+ * and nothing else. The board, its content and every other member's access are
+ * untouched — this is "remove it from my view", not a delete.
+ *
+ * The owner cannot leave (they have no grant to drop; they delete instead).
+ * RLS lets a member delete only the row whose `user_id` is their own
+ * ("board_members: member leaves"), and the delete RETURNS what it removed: an
+ * RLS-filtered delete of 0 rows is otherwise a lying success, so "nothing
+ * removed" is reported as not found.
+ *
+ * Expires the leaver's "Shared with me" list and the owner's board list (whose
+ * shared marker counts grants).
+ */
+export async function leaveBoardCore(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  input: { boardId: string },
+): Promise<ActionResult> {
+  const { data: board } = await supabase
+    .from("boards")
+    .select("created_by")
+    .eq("id", input.boardId)
+    .maybeSingle();
+  if (!board) return fail("Board not found.");
+  if (board.created_by === userId)
+    return fail("You own this board. Delete it instead of leaving.");
+
+  const { data: removed, error } = await supabase
+    .from("board_members")
+    .delete()
+    .eq("board_id", input.boardId)
+    .eq("user_id", userId)
+    .select("board_id");
+  if (error) return fail(error.message);
+  if (!removed || removed.length === 0) return fail("Board not found.");
+
+  updateTag(sharedBoardsTag(userId));
+  if (board.created_by) updateTag(boardsTag(board.created_by));
   return { ok: true, data: undefined };
 }

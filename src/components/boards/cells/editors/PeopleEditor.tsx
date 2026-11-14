@@ -4,6 +4,8 @@ import { useState } from "react";
 import { X } from "lucide-react";
 
 import { Kicker } from "@/components/ui/kicker";
+import { AgentChip } from "@/components/mono/MonoChip";
+import { assignableMembers } from "@/lib/monos/members";
 import { MemberAvatar } from "../member-avatar";
 import { PopoverSurface } from "./popover-surface";
 import { ClearOptionButton } from "./status-options";
@@ -40,7 +42,11 @@ export function PeopleEditor({
   const assigned = selected
     .map((id) => members.find((m) => m.userId === id))
     .filter((m): m is EditorMember => Boolean(m));
-  const unassigned = members.filter((m) => !selected.includes(m.userId));
+  // Adding is owner-only for Monos: the list offers people and the viewer's
+  // own awake Mono. Already-assigned Monos stay removable (assigned strip).
+  const unassigned = assignableMembers(members).filter(
+    (m) => !selected.includes(m.userId),
+  );
   return (
     <PopoverSurface label="Assign people" onCancel={onCancel}>
       {members.length === 0 ? (
@@ -77,8 +83,10 @@ export function PeopleEditor({
                       userId={m.userId}
                       name={memberName(m)}
                       avatarUrl={m.avatarUrl}
+                      mono={m.mono}
                     />
                     <span className="truncate">{memberName(m)}</span>
+                    {m.mono ? <AgentChip /> : null}
                     <X aria-hidden className="text-muted-foreground size-3" />
                   </button>
                 ))}
@@ -107,8 +115,10 @@ export function PeopleEditor({
                     userId={m.userId}
                     name={memberName(m)}
                     avatarUrl={m.avatarUrl}
+                    mono={m.mono}
                   />
                   <span className="truncate">{memberName(m)}</span>
+                  {m.mono ? <AgentChip /> : null}
                 </button>
               ))}
             </div>
