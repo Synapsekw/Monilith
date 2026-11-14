@@ -83,6 +83,14 @@ The forecast is computed on the client from rows already loaded. Weekly mode is 
 
 ### 3. A real completion date
 
+> **Superseded on 2026-11-14 after measuring DEV.** All 663 done items in DAAS have an activity
+> row, and every one carries the same instant as the status cell's `updated_at`: the boards were
+> imported already done on 2026-11-14, so the chart's step is real data and the rule below would
+> change nothing. `_folder_item_flags` and `folder_rollup` are left untouched. Instead `folder_burn`
+> returns `imported_done` (completions dated on the item's own creation day); the forecast pace
+> leaves those out and the reading line says so. See "Deviations from spec" in the plan. The text
+> below is kept for the record.
+
 The forecast is only as good as the completed series. `_folder_item_flags` changes how it derives
 an item's done date:
 
