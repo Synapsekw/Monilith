@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { BoardSummary } from "@/lib/folders/rollup";
-import { BoardStatusPanel } from "./BoardStatusPanel";
+import { BoardStatusPanel, sortBoardStatus } from "./BoardStatusPanel";
 
 const b = (
   o: Partial<BoardSummary> &
@@ -48,12 +49,12 @@ describe("BoardStatusPanel", () => {
         onRetry={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("radio", { name: "Size" }));
+    fireEvent.click(screen.getByRole("button", { name: "Size" }));
     expect(names()).toEqual(["Mid", "Zeta", "Alpha"]);
-    fireEvent.click(screen.getByRole("radio", { name: "A–Z" }));
+    fireEvent.click(screen.getByRole("button", { name: "A–Z" }));
     expect(names()).toEqual(["Alpha", "Mid", "Zeta"]);
-    expect(screen.getByRole("radio", { name: "A–Z" })).toHaveAttribute(
-      "aria-checked",
+    expect(screen.getByRole("button", { name: "A–Z" })).toHaveAttribute(
+      "aria-pressed",
       "true",
     );
   });
@@ -67,6 +68,56 @@ describe("BoardStatusPanel", () => {
         onRetry={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Sort boards" })).toBeNull();
+  });
+
+  it("can be operated from the keyboard and reports the pressed sort", async () => {
+    const user = userEvent.setup();
+    render(
+      <BoardStatusPanel
+        kicker="04"
+        boards={boards}
+        failed={false}
+        onRetry={vi.fn()}
+      />,
+    );
+    const health = screen.getByRole("button", { name: "Health" });
+    const size = screen.getByRole("button", { name: "Size" });
+    expect(health).toHaveAttribute("aria-pressed", "true");
+    expect(size).toHaveAttribute("aria-pressed", "false");
+    await user.tab();
+    // Every sort button is a tab stop; Enter and Space both press it.
+    const stops = [health, size, screen.getByRole("button", { name: "A–Z" })];
+    let reached = 0;
+    for (let i = 0; i < 12 && reached < 3; i++) {
+      if (stops.includes(document.activeElement as HTMLElement)) reached++;
+      if (reached < 3) await user.tab();
+    }
+    expect(reached).toBe(3);
+    size.focus();
+    await user.keyboard("{Enter}");
+    expect(size).toHaveAttribute("aria-pressed", "true");
+    expect(health).toHaveAttribute("aria-pressed", "false");
+    expect(names()).toEqual(["Mid", "Zeta", "Alpha"]);
+    screen.getByRole("button", { name: "A–Z" }).focus();
+    await user.keyboard(" ");
+    expect(names()).toEqual(["Alpha", "Mid", "Zeta"]);
+  });
+});
+
+describe("sortBoardStatus health order", () => {
+  it("breaks a health tie by more overdue first, then by name", () => {
+    const tied = [
+      b({ id: "1", name: "Beta", health: "at_risk", total: 5, overdue: 1 }),
+      b({ id: "2", name: "Delta", health: "at_risk", total: 5, overdue: 4 }),
+      b({ id: "3", name: "Alpha", health: "at_risk", total: 5, overdue: 1 }),
+      b({ id: "4", name: "Gamma", health: "on_track", total: 5, overdue: 9 }),
+    ];
+    expect(sortBoardStatus(tied, "health").map((x) => x.name)).toEqual([
+      "Delta",
+      "Alpha",
+      "Beta",
+      "Gamma",
+    ]);
   });
 });

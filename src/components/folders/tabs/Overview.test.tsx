@@ -36,6 +36,8 @@ function renderOverview(
 describe("OverviewTab", () => {
   it("renders the six KPI cards", () => {
     renderOverview();
+    // Scoped to the KPI labels: "Overdue" also appears in the boards legend.
+    const labels = screen.getAllByTestId("kpi-label").map((n) => n.textContent);
     for (const label of [
       "Complete",
       "Gap to plan",
@@ -44,7 +46,7 @@ describe("OverviewTab", () => {
       "Blocked",
       "Stale",
     ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(labels).toContain(label);
     }
   });
 

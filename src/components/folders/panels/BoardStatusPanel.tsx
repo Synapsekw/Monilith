@@ -72,7 +72,7 @@ export function BoardStatusPanel({
             </ul>
             {boards.length > 1 ? (
               <div
-                role="radiogroup"
+                role="group"
                 aria-label="Sort boards"
                 data-print-hide
                 className="flex gap-1"
@@ -81,8 +81,7 @@ export function BoardStatusPanel({
                   <button
                     key={s.key}
                     type="button"
-                    role="radio"
-                    aria-checked={sort === s.key}
+                    aria-pressed={sort === s.key}
                     onClick={() => setSort(s.key)}
                     className={cn(
                       "focus-visible:ring-ring inline-flex items-center rounded-sm border px-2 py-0.5 text-xs outline-none focus-visible:ring-2 pointer-coarse:min-h-11 pointer-coarse:px-3",

@@ -55,6 +55,36 @@ function facts(g: AttentionGroup): string {
   return parts.join(" · ");
 }
 
+const REASONS = ["overdue", "blocked", "unassigned", "stale"] as const;
+
+/** Tells the reader the list under a board is a sample. The group's counts per
+ *  reason overlap, so there is no distinct total: the notice names the reason
+ *  with the largest cut-off count and counts the shown items of that reason. */
+function CutNotice({ g }: { g: AttentionGroup }) {
+  const cut = REASONS.map((reason) => ({
+    reason,
+    total: g[reason],
+    shown: g.items.filter((a) => a.reason === reason).length,
+  }))
+    .filter((c) => c.shown < c.total)
+    .sort((a, b) => b.total - a.total)[0];
+  if (!cut) return null;
+  return (
+    <p
+      data-testid="attention-cut"
+      className="text-muted-foreground py-2 text-xs"
+    >
+      Showing {cut.shown} of {cut.total} {cut.reason}.{" "}
+      <Link
+        href={`/boards/${g.boardId}`}
+        className="hover:text-foreground underline"
+      >
+        Open the board for all.
+      </Link>
+    </p>
+  );
+}
+
 function Group({ g }: { g: AttentionGroup }) {
   const [open, setOpen] = useState(false);
   const panelId = `attention-${g.boardId}`;
@@ -65,7 +95,7 @@ function Group({ g }: { g: AttentionGroup }) {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="hover:bg-accent focus-visible:ring-ring flex w-full items-center gap-2 rounded-sm px-1 py-1.5 text-left text-xs outline-none focus-visible:ring-2 pointer-coarse:min-h-11"
+        className="hover:bg-state-hover focus-visible:ring-ring flex w-full items-center gap-2 rounded-sm px-1 py-1.5 text-left text-xs outline-none focus-visible:ring-2 pointer-coarse:min-h-11"
       >
         <ChevronRight
           aria-hidden
@@ -81,9 +111,9 @@ function Group({ g }: { g: AttentionGroup }) {
           {facts(g)}
         </span>
       </button>
-      {open ? (
-        <div id={panelId} className="pl-6">
-          {g.items.length === 0 ? (
+      <div id={panelId} hidden={!open} className="pl-6">
+        {open ? (
+          g.items.length === 0 ? (
             <p className="text-muted-foreground py-2 text-xs">
               None of this board&apos;s items are in the top of the list.{" "}
               <Link
@@ -100,21 +130,11 @@ function Group({ g }: { g: AttentionGroup }) {
                   <ItemRow key={a.itemId} a={a} withBoard={false} />
                 ))}
               </ul>
-              {g.overdue > g.items.length ? (
-                <p className="text-muted-foreground py-2 text-xs">
-                  Showing {g.items.length}.{" "}
-                  <Link
-                    href={`/boards/${g.boardId}`}
-                    className="hover:text-foreground underline"
-                  >
-                    Open the board for all {g.overdue} overdue.
-                  </Link>
-                </p>
-              ) : null}
+              <CutNotice g={g} />
             </>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : null}
+      </div>
     </li>
   );
 }
