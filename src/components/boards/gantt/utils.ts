@@ -218,3 +218,75 @@ export function weekendStripes(
     backgroundPosition: `${-sinceMonday * dayW}px 0`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Bar labels
+// ---------------------------------------------------------------------------
+
+/** The inside label's own horizontal padding (`px-2`, both sides). */
+export const BAR_LABEL_PAD = 16;
+/** The resize strip at the end of an editable bar (`w-2`). */
+export const BAR_RESIZE_W = 8;
+/** Space between a bar's edge and the label drawn beside it. */
+export const OUTSIDE_LABEL_GAP = 6;
+
+/**
+ * Does the name fit inside the bar? Decided from pixels — the bar's width
+ * against the measured text — never from character counts. An unmeasured name
+ * (0: no canvas) counts as fitting, which keeps the CSS-truncated label.
+ */
+export function barLabelFits(
+  barWidthPx: number,
+  textWidthPx: number,
+  editable: boolean,
+): boolean {
+  if (textWidthPx <= 0) return true;
+  return (
+    textWidthPx + BAR_LABEL_PAD + (editable ? BAR_RESIZE_W : 0) <= barWidthPx
+  );
+}
+
+/** "Oct 24" from YYYY-MM-DD, in UTC so the day never drifts. */
+export function formatShortDay(iso: string): string {
+  return new Date(parseISO(iso)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * The short label drawn beside a bar, or null for none. The name is already
+ * in the rail on the same row, so beside the bar goes what is missing: how
+ * late the item is, or — when the bar is too short to carry its name, and for
+ * a milestone, which has no inside label — its end date.
+ */
+export function outsideBarLabel(a: {
+  lateDays: number | null;
+  insideFits: boolean;
+  isMilestone: boolean;
+  endISO: string | undefined;
+}): { text: string; late: boolean } | null {
+  if (a.lateDays !== null) return { text: `${a.lateDays}d late`, late: true };
+  if ((a.insideFits && !a.isMilestone) || !a.endISO) return null;
+  return { text: formatShortDay(a.endISO), late: false };
+}
+
+/**
+ * Which side of the bar the outside label goes on. After the bar by default;
+ * before it when cross-board link stubs already hold the after side or the
+ * label would clip the track; null (not drawn) when neither side has room.
+ */
+export function outsideLabelSide(a: {
+  barStartX: number;
+  barEndX: number;
+  trackW: number;
+  labelW: number;
+  afterTaken: boolean;
+  beforeTaken: boolean;
+}): "after" | "before" | null {
+  const need = a.labelW + OUTSIDE_LABEL_GAP;
+  if (!a.afterTaken && a.barEndX + need <= a.trackW) return "after";
+  if (!a.beforeTaken && a.barStartX - need >= 0) return "before";
+  return null;
+}

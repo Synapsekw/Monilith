@@ -10,6 +10,7 @@ import {
 } from "@/lib/boards/cache";
 import { COLUMN_FIT_DEFAULT } from "@/lib/boards/fit-column-width";
 import type { Column } from "@/lib/boards/queries";
+import { buildMeasureFont } from "@/lib/text-measure";
 import { type RelationLink } from "@/lib/boards/relations";
 import type { AggregationId, ColumnKind } from "@/lib/validations/boards";
 
@@ -278,9 +279,11 @@ export const NAME_MEASURE_FONT = `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FON
  * empty (e.g. in jsdom, or before next/font registers it).
  */
 export function buildNameMeasureFont(fontInterVar: string): string {
-  const family = fontInterVar.trim();
-  if (!family) return NAME_MEASURE_FONT;
-  return `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FONT_SIZE} ${family}, ${NAME_MEASURE_FONT_FALLBACK_STACK}`;
+  return buildMeasureFont(
+    fontInterVar,
+    NAME_MEASURE_FONT_WEIGHT,
+    NAME_MEASURE_FONT_SIZE,
+  );
 }
 
 /** Width of a value column that has neither a saved nor a fitted width yet. */

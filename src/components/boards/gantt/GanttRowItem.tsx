@@ -33,8 +33,12 @@ import {
   BAR_H,
   MILESTONE,
   MIN_BAR_W,
+  OUTSIDE_LABEL_GAP,
   ROW_H,
+  barLabelFits,
   formatISO,
+  outsideBarLabel,
+  outsideLabelSide,
   parseISO,
   type BarDragData,
 } from "@/components/boards/gantt/utils";
@@ -42,6 +46,8 @@ import {
 const NO_STUBS: ExternalLinkStub[] = [];
 /** px between a bar's edge and its link stubs. */
 const STUB_GAP = 4;
+/** Stand-in when the canvas hands down no measurer: everything "fits". */
+const NO_MEASURE = () => 0;
 
 export function GanttRowItem({
   row,
@@ -67,6 +73,8 @@ export function GanttRowItem({
   onItemTap,
   stubs = NO_STUBS,
   onStubTap,
+  lateDays = null,
+  measureLabel = NO_MEASURE,
 }: {
   row: GanttRow;
   /** Effective-critical marker text (see effectiveCriticalLabel), or null. */
@@ -107,6 +115,11 @@ export function GanttRowItem({
   /** Cross-board / out-of-view links drawn as chips beside the bar. */
   stubs?: ExternalLinkStub[];
   onStubTap?: (stub: ExternalLinkStub) => void;
+  /** Whole days late, or null when the item is on time (or lateness is not
+   * known on this timeline). */
+  lateDays?: number | null;
+  /** Width in px of a string at the bar-label font; 0 = not measurable. */
+  measureLabel?: (text: string) => number;
 }) {
   void rowIdx;
   void violations;
@@ -202,6 +215,32 @@ export function GanttRowItem({
     }
     return [...bySide];
   }, [stubs, barStartX, barEndX, totalW]);
+
+  // Inside label vs. the short label beside the bar (see outsideBarLabel).
+  const nameW = useMemo(() => measureLabel(row.name), [measureLabel, row.name]);
+  const insideFits = barLabelFits(barWidth, nameW, !readOnly);
+  const meta = outsideBarLabel({
+    lateDays,
+    insideFits,
+    isMilestone: !!row.isMilestone,
+    endISO: row.endISO ?? row.startISO,
+  });
+  const metaText = meta?.text ?? null;
+  const metaW = useMemo(
+    () => (metaText ? measureLabel(metaText) : 0),
+    [measureLabel, metaText],
+  );
+  const metaSide =
+    meta && row.scheduled && !isDragging
+      ? outsideLabelSide({
+          barStartX,
+          barEndX,
+          trackW: totalW,
+          labelW: metaW,
+          afterTaken: stubGroups.some(([side]) => side === "after"),
+          beforeTaken: stubGroups.some(([side]) => side === "before"),
+        })
+      : null;
 
   // Predecessors of this item (items that must finish before this starts)
   // that the viewer may remove — the only ones the ⋯ menu lists.
@@ -422,6 +461,7 @@ export function GanttRowItem({
               grabCursor,
               color ? "" : "bg-primary",
               isDragging && "opacity-50",
+              lateDays !== null && "border-destructive border",
             )}
             style={{
               left: barLeft + dayW / 2 - MILESTONE / 2,
@@ -451,6 +491,7 @@ export function GanttRowItem({
                 ? "bg-[color-mix(in_oklab,var(--pill)_15%,transparent)]"
                 : "bg-primary",
               isDragging && "opacity-50",
+              lateDays !== null && "border-destructive border",
             )}
             style={{
               left: barLeft,
@@ -479,16 +520,18 @@ export function GanttRowItem({
               onKeyDown={handleTapKeyDown}
               className="flex h-full flex-1 items-center overflow-hidden px-2"
             >
-              <span
-                className={cn(
-                  "text-2xs truncate font-medium",
-                  color
-                    ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
-                    : "text-primary-foreground",
-                )}
-              >
-                {row.name}
-              </span>
+              {insideFits && (
+                <span
+                  className={cn(
+                    "text-2xs truncate font-medium",
+                    color
+                      ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
+                      : "text-primary-foreground",
+                  )}
+                >
+                  {row.name}
+                </span>
+              )}
             </div>
             {/* Right-edge resize handle (hidden for read-only bars) */}
             {!readOnly && (
@@ -527,6 +570,28 @@ export function GanttRowItem({
               <LinkStubs stubs={group} onTap={onStubTap} />
             </div>
           ))}
+
+        {/* Short label beside the bar: "Nd late", or the end date when the bar
+            is too short to carry its name (the name is in the rail). */}
+        {meta && metaSide && (
+          <span
+            data-testid="gantt-bar-meta"
+            className={cn(
+              "text-2xs pointer-events-none absolute -translate-y-1/2 whitespace-nowrap tabular-nums",
+              meta.late
+                ? "text-destructive font-medium"
+                : "text-muted-foreground",
+            )}
+            style={{
+              top: ROW_H / 2,
+              ...(metaSide === "after"
+                ? { left: barEndX + OUTSIDE_LABEL_GAP }
+                : { right: totalW - barStartX + OUTSIDE_LABEL_GAP }),
+            }}
+          >
+            {meta.text}
+          </span>
+        )}
       </div>
     </div>
   );

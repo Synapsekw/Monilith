@@ -11,6 +11,10 @@ import {
   LABEL_W_MAX,
   todayScrollLeft,
   weekendStripes,
+  barLabelFits,
+  formatShortDay,
+  outsideBarLabel,
+  outsideLabelSide,
 } from "@/components/boards/gantt/utils";
 
 describe("fittedDayW", () => {
@@ -129,5 +133,78 @@ describe("weekendStripes", () => {
     expect(weekendStripes("2026-11-02", 4, "quarter")).toBeUndefined();
     expect(weekendStripes("2026-11-02", 1.5, "year")).toBeUndefined();
     expect(weekendStripes("", 10, "month")).toBeUndefined();
+  });
+});
+
+describe("barLabelFits", () => {
+  it("needs the text plus padding, plus the resize strip on an editable bar", () => {
+    expect(barLabelFits(80, 64, false)).toBe(true); // 64 + 16
+    expect(barLabelFits(80, 64, true)).toBe(false); // 64 + 16 + 8
+    expect(barLabelFits(88, 64, true)).toBe(true);
+  });
+  it("treats an unmeasured name as fitting", () => {
+    expect(barLabelFits(6, 0, true)).toBe(true);
+  });
+});
+
+describe("formatShortDay", () => {
+  it("prints month and day without drifting across time zones", () => {
+    expect(formatShortDay("2026-10-24")).toBe("Oct 24");
+    expect(formatShortDay("2026-01-01")).toBe("Jan 1");
+  });
+});
+
+describe("outsideBarLabel", () => {
+  const base = {
+    lateDays: null,
+    insideFits: true,
+    isMilestone: false,
+    endISO: "2026-10-24",
+  };
+  it("is nothing when the name fits and the item is on time", () => {
+    expect(outsideBarLabel(base)).toBeNull();
+  });
+  it("is the end date when the name does not fit", () => {
+    expect(outsideBarLabel({ ...base, insideFits: false })).toEqual({
+      text: "Oct 24",
+      late: false,
+    });
+  });
+  it("is the date for a milestone, which has no inside label", () => {
+    expect(outsideBarLabel({ ...base, isMilestone: true })?.text).toBe(
+      "Oct 24",
+    );
+  });
+  it("is 'Nd late' for a late item, even when the name fits", () => {
+    expect(outsideBarLabel({ ...base, lateDays: 21 })).toEqual({
+      text: "21d late",
+      late: true,
+    });
+  });
+});
+
+describe("outsideLabelSide", () => {
+  const base = {
+    barStartX: 100,
+    barEndX: 150,
+    trackW: 300,
+    labelW: 40,
+    afterTaken: false,
+    beforeTaken: false,
+  };
+  it("prefers the space after the bar", () => {
+    expect(outsideLabelSide(base)).toBe("after");
+  });
+  it("goes before the bar when stubs hold the after side or it would clip", () => {
+    expect(outsideLabelSide({ ...base, afterTaken: true })).toBe("before");
+    expect(outsideLabelSide({ ...base, barEndX: 280 })).toBe("before");
+  });
+  it("is not drawn when neither side has room", () => {
+    expect(
+      outsideLabelSide({ ...base, barStartX: 10, barEndX: 290 }),
+    ).toBeNull();
+    expect(
+      outsideLabelSide({ ...base, afterTaken: true, beforeTaken: true }),
+    ).toBeNull();
   });
 });

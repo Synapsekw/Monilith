@@ -78,6 +78,7 @@ import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useColumnAutoFit } from "./use-column-auto-fit";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
+import { createTextMeasurer } from "@/lib/text-measure";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 import { AddGroupRow } from "./AddGroupRow";
@@ -85,7 +86,8 @@ import { BoardColumnHeader } from "./BoardColumnHeader";
 import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
-  buildNameMeasureFont,
+  NAME_MEASURE_FONT_SIZE,
+  NAME_MEASURE_FONT_WEIGHT,
   gridTemplate,
   type CellControls,
   type ColumnHeaderControls,
@@ -455,32 +457,13 @@ export function BoardTableInner({
   // Offscreen canvas measurer at the Name cell font (500 13px Inter /
   // text-item), used to auto-fit the Name column to the longest item name
   // across ALL items (not just the virtualized rows). Pure measurement — no
-  // server round-trip. Reads the LIVE `--font-inter` variable next/font sets
-  // on <html> (see src/app/layout.tsx) rather than the literal family name
-  // "Inter" — next/font self-hosts it under a generated family, so the bare
-  // literal never resolves in the browser; buildNameMeasureFont (./shared) is
-  // the single source of truth for composing the rest of the font string and
-  // falls back to that literal when the variable is empty (e.g. jsdom).
-  const measureName = useMemo(() => {
-    const ctx =
-      typeof document !== "undefined"
-        ? document.createElement("canvas").getContext("2d")
-        : null;
-    if (ctx) {
-      // Read once per mount (useMemo's `[]` deps), not hoisted to a module
-      // constant: next/font's generated family name is only ever present as
-      // this custom property's VALUE on <html> at runtime (src/app/layout.tsx)
-      // — it doesn't exist at module-evaluation time, and never exists during
-      // SSR (no `document` at all, which is why this whole block is already
-      // gated on `ctx` — `document` is guaranteed here since `ctx` came from
-      // `document.createElement` above).
-      const fontInterVar = getComputedStyle(
-        document.documentElement,
-      ).getPropertyValue("--font-inter");
-      ctx.font = buildNameMeasureFont(fontInterVar);
-    }
-    return (text: string) => ctx?.measureText(text).width ?? 0;
-  }, []);
+  // server round-trip. createTextMeasurer reads the LIVE `--font-inter`
+  // variable next/font sets on <html>, so it is created once per mount here,
+  // never at module scope; it measures 0 where there is no canvas (SSR, jsdom).
+  const measureName = useMemo(
+    () => createTextMeasurer(NAME_MEASURE_FONT_WEIGHT, NAME_MEASURE_FONT_SIZE),
+    [],
+  );
   // `items` is the FULL flat list of every item on the board — top-level rows
   // AND subitems alike (see useBoardCache / bucketItems, which partitions this
   // same list by `parent_id`) — so a long subitem name is measured too, with

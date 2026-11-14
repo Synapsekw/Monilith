@@ -18,6 +18,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { createTextMeasurer } from "@/lib/text-measure";
 import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
 import { Kicker } from "@/components/ui/kicker";
 import {
@@ -66,6 +67,10 @@ export type GanttCanvasProps = {
   /** Bar color for a row; null keeps the default primary fill. */
   colorFor: (row: GanttRow) => string | null;
   criticalLabelFor?: (itemId: string) => string | null;
+  /** Whole days an item is late, or null. Late bars get a destructive border
+   * and an "Nd late" label. Omit where lateness is not known (the folder
+   * timeline, whose payload carries no status). */
+  lateFor?: (row: GanttRow) => number | null;
   canEditItem: (itemId: string) => boolean;
   /** Expanded parents; for a board band (section level 0), whether it is open. */
   isExpanded?: (itemId: string) => boolean;
@@ -114,6 +119,7 @@ export function GanttCanvas({
   zoom,
   colorFor,
   criticalLabelFor,
+  lateFor,
   canEditItem,
   isExpanded,
   onToggleExpand,
@@ -312,6 +318,10 @@ export function GanttCanvas({
     [rangeStartISO, dayW, zoom],
   );
 
+  // Measures bar labels at the label's own type: text-2xs (11px), medium.
+  // Created once per mount and caches per string, so rows never re-measure.
+  const measureLabel = useMemo(() => createTextMeasurer("500", "11px"), []);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, delta } = event;
     const data = active.data.current as BarDragData | undefined;
@@ -442,6 +452,8 @@ export function GanttCanvas({
                         onItemTap={onItemTap}
                         stubs={externalLinks?.get(row.itemId)}
                         onStubTap={onStubTap}
+                        lateDays={lateFor?.(row) ?? null}
+                        measureLabel={measureLabel}
                       />
                     )}
                   </div>

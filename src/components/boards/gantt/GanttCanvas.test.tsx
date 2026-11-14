@@ -1,5 +1,14 @@
 import { createRef } from "react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -543,5 +552,92 @@ describe("GanttCanvas opens on today", () => {
     scroller.scrollLeft = 0;
     act(() => handleRef.current?.scrollToToday());
     expect(scroller.scrollLeft).toBe(1630);
+  });
+});
+
+describe("GanttCanvas bar labels", () => {
+  // jsdom has no canvas. Stand in a measurer of 7px per character so the fit
+  // decision is exercised; "PO raised" is 63px, "Delivery" 56px.
+  beforeEach(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      font: "",
+      measureText: (t: string) => ({ width: t.length * 7 }),
+    } as never);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const firstRow = () => screen.getAllByTestId("gantt-row")[0]!;
+
+  it("drops a name that does not fit and shows the end date beside the bar", () => {
+    render(<GanttCanvas {...props()} />);
+    // i1 is 5 days x 10px = 50px; the name needs 63 + 16 + 8. Rail only now.
+    expect(screen.getAllByText("PO raised")).toHaveLength(1);
+    const meta = within(firstRow()).getByTestId("gantt-bar-meta");
+    expect(meta).toHaveTextContent("Nov 5");
+    expect(meta).toHaveStyle({ left: "56px" }); // bar end 50 + 6px gap
+    expect(meta).toHaveClass("text-muted-foreground");
+    // The bar still names itself to assistive tech.
+    expect(screen.getByLabelText("PO raised")).toBeInTheDocument();
+  });
+
+  it("keeps the name inside a bar that is wide enough", () => {
+    const wide: GanttRow[] = [
+      { ...rows[1]!, spanCols: 20, endISO: "2026-11-20" },
+    ];
+    render(<GanttCanvas {...props({ rows: wide, dependencies: [] })} />);
+    expect(screen.getAllByText("PO raised")).toHaveLength(2);
+    expect(screen.queryByTestId("gantt-bar-meta")).not.toBeInTheDocument();
+  });
+
+  it("marks a late bar with the destructive border and an 'Nd late' label", () => {
+    render(
+      <GanttCanvas
+        {...props({ lateFor: (r) => (r.itemId === "i1" ? 21 : null) })}
+      />,
+    );
+    const bar = screen.getByLabelText("PO raised").parentElement as HTMLElement;
+    expect(bar).toHaveClass("border", "border-destructive");
+    const meta = within(firstRow()).getByTestId("gantt-bar-meta");
+    expect(meta).toHaveTextContent("21d late");
+    expect(meta).toHaveClass("text-destructive");
+    // Its on-time neighbour is untouched.
+    expect(screen.getByLabelText("Delivery").parentElement).not.toHaveClass(
+      "border-destructive",
+    );
+  });
+
+  it("gives a late milestone the border and the label too", () => {
+    const dot: GanttRow[] = [
+      {
+        itemId: "m1",
+        name: "Gate",
+        scheduled: true,
+        isMilestone: true,
+        startCol: 10,
+        spanCols: 1,
+        startISO: "2026-11-11",
+        endISO: "2026-11-11",
+      },
+    ];
+    render(
+      <GanttCanvas
+        {...props({ rows: dot, dependencies: [], lateFor: () => 3 })}
+      />,
+    );
+    expect(screen.getByLabelText("Gate")).toHaveClass("border-destructive");
+    expect(screen.getByTestId("gantt-bar-meta")).toHaveTextContent("3d late");
+  });
+
+  it("leaves the after side to link stubs", () => {
+    // The waiting-on stub flips after i1 (it starts at the track edge), and
+    // there is no room before a bar that starts at x = 0.
+    render(
+      <GanttCanvas
+        {...props({ externalLinks: new Map([["i1", [stub()]]]) })}
+      />,
+    );
+    expect(
+      within(firstRow()).queryByTestId("gantt-bar-meta"),
+    ).not.toBeInTheDocument();
   });
 });
