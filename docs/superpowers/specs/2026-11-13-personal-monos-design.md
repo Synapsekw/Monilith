@@ -178,8 +178,15 @@ on boards. The org-wide assistant that shipped in PR #149 stays exactly as it is
   size plus an amber dot when an approval waits).
 - **My Mono tab:** the Mono and its mood; its brain status in plain words ("Runs on your Anthropic
   key, works on its own" / "Connected to your Claude subscription, works when you ask in Claude" /
-  "Asleep"); pending approvals; items it is working on; the owner-only chat thread; "Only you can
-  chat with, assign or @mention it".
+  "Asleep"); pending approvals; items it is working on; its inbox; the owner-only chat thread;
+  "Only you can chat with, assign or @mention it".
+- **Inbox (owner-visible).** The owner can see the Mono's inbox in the My Mono tab: the 20 newest
+  `mono_inbox` rows, each showing what woke it (assigned, @mention, reply, approval resolved,
+  daily check), who caused it, the item (linked), when, and its state ("Waiting" or "Done"). A
+  handled row shows the outcome from its `mono_runs` record in one line ("Posted an update",
+  "Asked for approval", or the error). Read-only in v1: no dismiss or re-run; the owner acts through
+  chat or approvals. `mono_inbox` and `mono_runs` are SELECT-able only by the Mono's owner (RLS via
+  `monos.owner_id = auth.uid()`); no client role can insert, update or delete them.
 - **First open:** name and colour picker (as in the prototype), then the Wake up card if there is
   no brain.
 - **Settings → My Mono** replaces `/settings/agents`: rename, recolour, brain (key or connected
@@ -202,8 +209,9 @@ on boards. The org-wide assistant that shipped in PR #149 stays exactly as it is
 
 ## Performance and data-fetching budget
 
-- **First paint.** The rail adds one small read: the viewer's own `monos` row and their pending
-  approval count. Other Monos' name, colour and owner come with the existing member payload the
+- **First paint.** The rail adds one small read: the viewer's own `monos` row, their pending
+  approval count and the count of unhandled inbox rows (badge only). The inbox list itself loads
+  when the owner expands it. Other Monos' name, colour and owner come with the existing member payload the
   board already loads.
 - **No round-trip:** switching rail tabs, opening the picker, changing mood.
 - **Round-trips:** sending a chat message (existing streaming route), approve/decline (Server
