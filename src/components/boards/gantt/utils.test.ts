@@ -4,6 +4,11 @@ import {
   buildQuarterTicks,
   buildMonthTicks,
   fittedDayW,
+  ROW_H,
+  BAR_H,
+  DEFAULT_LABEL_W,
+  LABEL_W_MIN,
+  LABEL_W_MAX,
 } from "@/components/boards/gantt/utils";
 
 describe("fittedDayW", () => {
@@ -81,5 +86,14 @@ describe("buildQuarterTicks", () => {
     expect(buildQuarterTicks("2026-01-01", span).length).toBeLessThan(
       buildMonthTicks("2026-01-01", span).length,
     );
+  });
+});
+
+describe("row geometry constants", () => {
+  it("uses compact rows and a 300px default rail clamped to 160–520", () => {
+    expect(ROW_H).toBe(32);
+    expect(BAR_H).toBe(20);
+    expect(DEFAULT_LABEL_W).toBe(300);
+    expect([LABEL_W_MIN, LABEL_W_MAX]).toEqual([160, 520]);
   });
 });

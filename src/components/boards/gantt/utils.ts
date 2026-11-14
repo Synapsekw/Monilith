@@ -4,9 +4,16 @@ import { effectivePriority } from "@/lib/boards/priority";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const LABEL_W = 200; // px for the left name rail
-export const ROW_H = 40; // px per row
-export const BAR_H = 24; // px bar height
+// The left name rail is resizable: this is the width it opens at and the
+// width a double-click on its handle restores. Renamed from LABEL_W so a
+// stale use of the old constant fails typecheck.
+export const DEFAULT_LABEL_W = 300;
+export const LABEL_W_MIN = 160;
+export const LABEL_W_MAX = 520;
+// One height for EVERY row kind (item, sub-item, section band): the arrow
+// overlay and the rows-area height both compute from index * ROW_H.
+export const ROW_H = 32;
+export const BAR_H = 20; // px bar height
 export const MILESTONE = 13; // px milestone diamond (pre-rotation); centered in its day column
 export const MIN_BAR_W = 6; // px floor so a bar stays visible/clickable at coarse zoom
 

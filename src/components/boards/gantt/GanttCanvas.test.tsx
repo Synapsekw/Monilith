@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   GanttCanvas,
@@ -307,5 +307,76 @@ describe("GanttCanvas callbacks", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(toggle);
     expect(onToggleExpand).toHaveBeenCalledWith("sec-b1");
+  });
+});
+
+describe("GanttCanvas name rail", () => {
+  it("draws every row kind at the same 32px height", () => {
+    render(<GanttCanvas {...props()} />);
+    expect(screen.getByTestId("gantt-section")).toHaveStyle({ height: "32px" });
+    for (const row of screen.getAllByTestId("gantt-row")) {
+      expect(row).toHaveStyle({ height: "32px" });
+    }
+  });
+
+  it("defaults the rail to 300px and follows labelWidth", () => {
+    const { rerender } = render(<GanttCanvas {...props()} />);
+    expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
+      width: "300px",
+    });
+    rerender(<GanttCanvas {...props({ labelWidth: 220 })} />);
+    expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
+      width: "220px",
+    });
+    // A band spans the rail plus the 300px track (30 days × 10px, unmeasured).
+    expect(screen.getByTestId("gantt-section")).toHaveStyle({ width: "520px" });
+  });
+
+  it("shows no resize handle unless onLabelWidthChange is given", () => {
+    render(<GanttCanvas {...props()} />);
+    expect(
+      screen.queryByRole("separator", { name: /Resize name rail/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reports one clamped width on drag end and none while dragging", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 300, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 600 });
+    fireEvent.pointerMove(window, { clientX: 900 });
+    expect(onLabelWidthChange).not.toHaveBeenCalled();
+    fireEvent.pointerUp(window);
+    expect(onLabelWidthChange).toHaveBeenCalledTimes(1);
+    expect(onLabelWidthChange).toHaveBeenCalledWith(520);
+  });
+
+  it("clamps a drag to the left at 160px", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 300, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 0 });
+    fireEvent.pointerUp(window);
+    expect(onLabelWidthChange).toHaveBeenCalledWith(160);
+  });
+
+  it("resets the rail to 300px on double-click", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 420, onLabelWidthChange })} />);
+    fireEvent.doubleClick(
+      screen.getByRole("separator", { name: /Resize name rail/ }),
+    );
+    expect(onLabelWidthChange).toHaveBeenCalledWith(300);
+  });
+
+  it("gives rail names a title with the full name", () => {
+    render(<GanttCanvas {...props()} />);
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Procurement" }),
+    ).toHaveAttribute("title", "Procurement");
+    const first = screen.getAllByTestId("gantt-row")[0]!;
+    expect(within(first).getByTitle("PO raised")).toBeInTheDocument();
   });
 });

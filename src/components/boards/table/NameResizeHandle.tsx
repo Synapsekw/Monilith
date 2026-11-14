@@ -22,11 +22,19 @@ export function NameResizeHandle({
   onResize,
   onResizeEnd,
   onAutoFit,
+  min = NAME_DRAG_MIN,
+  max = NAME_COL_MAX,
+  label = "Resize Name column (double-click to auto-fit)",
 }: {
   width: number;
   onResize: (w: number) => void;
   onResizeEnd: (w: number) => void;
   onAutoFit: () => void;
+  /** Drag clamp. Defaults are the table Name column's bounds. */
+  min?: number;
+  max?: number;
+  /** Accessible name. The default is the table Name column's. */
+  label?: string;
 }) {
   // Coalesce per-pixel live-width updates to one state update per frame so the
   // drag stays smooth; the persist-on-release path (onResizeEnd) is unchanged.
@@ -38,11 +46,7 @@ export function NameResizeHandle({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = clampDragWidth(
-        startW + (ev.clientX - startX),
-        NAME_DRAG_MIN,
-        NAME_COL_MAX,
-      );
+      last = clampDragWidth(startW + (ev.clientX - startX), min, max);
       throttledResize(last);
     };
     const up = () => {
@@ -61,7 +65,7 @@ export function NameResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize Name column (double-click to auto-fit)"
+      aria-label={label}
       onPointerDown={onPointerDown}
       onDoubleClick={onAutoFit}
       className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"

@@ -18,7 +18,9 @@ import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
 import { Kicker } from "@/components/ui/kicker";
 import {
-  LABEL_W,
+  DEFAULT_LABEL_W,
+  LABEL_W_MAX,
+  LABEL_W_MIN,
   ROW_H,
   PX_PER_DAY,
   fittedDayW,
@@ -30,6 +32,7 @@ import {
   type TimelineZoom,
 } from "@/components/boards/gantt/utils";
 import { GanttRowItem } from "@/components/boards/gantt/GanttRowItem";
+import { NameResizeHandle } from "@/components/boards/table/NameResizeHandle";
 import type { ExternalLinkStub } from "@/components/boards/gantt/LinkStubs";
 
 // useLayoutEffect warns during SSR; this client component still pre-renders on
@@ -73,6 +76,12 @@ export type GanttCanvasProps = {
   onStubTap: (stub: ExternalLinkStub) => void;
   /** Rendered under the rows (board Gantt passes UnscheduledSection). */
   footer?: ReactNode;
+  /** Width of the name rail in px. Defaults to DEFAULT_LABEL_W (300). */
+  labelWidth?: number;
+  /** Given → the rail header shows a drag handle. Called ONCE on drag end with
+   * an integer clamped to LABEL_W_MIN..LABEL_W_MAX, and with DEFAULT_LABEL_W on
+   * double-click. Never called while dragging. */
+  onLabelWidthChange?: (width: number) => void;
 };
 
 /**
@@ -104,6 +113,8 @@ export function GanttCanvas({
   onItemTap,
   onStubTap,
   footer,
+  labelWidth,
+  onLabelWidthChange,
 }: GanttCanvasProps) {
   const dndId = useId();
   // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
@@ -125,6 +136,10 @@ export function GanttCanvas({
   // track, px/day stretches to fill the width (no dead space to the right);
   // when it overflows, the base scale wins and the grid scrolls. trackWidth is
   // the measured width available to the timeline (scroller minus the name rail).
+  // Live width while the rail handle is dragged (local state only — the parent
+  // hears about it once, on release).
+  const [liveLabelW, setLiveLabelW] = useState<number | null>(null);
+  const labelW = liveLabelW ?? labelWidth ?? DEFAULT_LABEL_W;
   const [trackWidth, setTrackWidth] = useState(0);
   const dayW = fittedDayW(PX_PER_DAY[zoom], trackWidth, dayCount);
   const totalW = dayCount * dayW;
@@ -158,7 +173,7 @@ export function GanttCanvas({
     setRowScrollMargin((prev) => (prev === top ? prev : top));
     // Track width available to the timeline (scroller minus the sticky name
     // rail) — drives the fill-to-width day scale (see fittedDayW / dayW).
-    const width = scroller.clientWidth - LABEL_W;
+    const width = scroller.clientWidth - labelW;
     setTrackWidth((prev) => (prev === width ? prev : width));
   });
 
@@ -169,12 +184,12 @@ export function GanttCanvas({
     const scroller = scrollRef.current;
     if (!scroller || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
-      const width = scroller.clientWidth - LABEL_W;
+      const width = scroller.clientWidth - labelW;
       setTrackWidth((prev) => (prev === width ? prev : width));
     });
     ro.observe(scroller);
     return () => ro.disconnect();
-  }, []);
+  }, [labelW]);
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -258,10 +273,28 @@ export function GanttCanvas({
             <div className="bg-background sticky top-0 z-20 flex border-b">
               {/* Name rail header */}
               <div
+                data-testid="gantt-rail-header"
                 className="bg-background hover:border-border-hover sticky left-0 z-10 flex shrink-0 items-center border-r px-4 py-2.5"
-                style={{ width: LABEL_W }}
+                style={{ width: labelW }}
               >
                 <Kicker>Item</Kicker>
+                {onLabelWidthChange && (
+                  <NameResizeHandle
+                    width={labelW}
+                    min={LABEL_W_MIN}
+                    max={LABEL_W_MAX}
+                    label="Resize name rail (double-click to reset)"
+                    onResize={setLiveLabelW}
+                    onResizeEnd={(w) => {
+                      setLiveLabelW(null);
+                      onLabelWidthChange(w);
+                    }}
+                    onAutoFit={() => {
+                      setLiveLabelW(null);
+                      onLabelWidthChange(DEFAULT_LABEL_W);
+                    }}
+                  />
+                )}
               </div>
               {/* Timeline header */}
               <div className="relative" style={{ width: totalW, height: 38 }}>
@@ -310,6 +343,7 @@ export function GanttCanvas({
                       <SectionBand
                         row={row}
                         totalW={totalW}
+                        labelW={labelW}
                         expanded={isExpanded?.(row.itemId) ?? true}
                         onToggle={onToggleExpand}
                       />
@@ -319,6 +353,7 @@ export function GanttCanvas({
                         criticalLabel={criticalLabelFor?.(row.itemId) ?? null}
                         rowIdx={vr.index}
                         totalW={totalW}
+                        labelW={labelW}
                         dayW={dayW}
                         todayOffset={todayOffset}
                         dayCount={dayCount}
@@ -347,7 +382,7 @@ export function GanttCanvas({
                 <svg
                   className="pointer-events-none absolute inset-0"
                   style={{
-                    width: LABEL_W + totalW,
+                    width: labelW + totalW,
                     height: rows.length * ROW_H,
                   }}
                   aria-hidden
@@ -356,12 +391,12 @@ export function GanttCanvas({
                     ({ dep, predIdx, succIdx, predRow, succRow }) => {
                       const isViolation = violations.has(dep.id);
                       const predEndX =
-                        LABEL_W +
+                        labelW +
                         ((predRow.startCol ?? 0) + (predRow.spanCols ?? 1)) *
                           dayW;
                       const predMidY = predIdx * ROW_H + ROW_H / 2;
                       const succStartX =
-                        LABEL_W + (succRow.startCol ?? 0) * dayW;
+                        labelW + (succRow.startCol ?? 0) * dayW;
                       const succMidY = succIdx * ROW_H + ROW_H / 2;
                       const mx = (predEndX + succStartX) / 2;
                       const d = `M${predEndX},${predMidY} C${mx},${predMidY} ${mx},${succMidY} ${succStartX},${succMidY}`;
@@ -418,11 +453,13 @@ export function GanttCanvas({
 function SectionBand({
   row,
   totalW,
+  labelW,
   expanded,
   onToggle,
 }: {
   row: GanttRow;
   totalW: number;
+  labelW: number;
   expanded: boolean;
   onToggle?: (itemId: string) => void;
 }) {
@@ -431,6 +468,7 @@ function SectionBand({
     <span
       role="heading"
       aria-level={isBoard ? 3 : 4}
+      title={row.name}
       className={cn(
         "min-w-0 truncate text-xs",
         isBoard
@@ -448,7 +486,7 @@ function SectionBand({
         "flex border-b",
         isBoard ? "bg-surface-muted" : "bg-surface",
       )}
-      style={{ height: ROW_H, width: LABEL_W + totalW }}
+      style={{ height: ROW_H, width: labelW + totalW }}
     >
       <div
         className={cn(
@@ -456,7 +494,7 @@ function SectionBand({
           isBoard ? "bg-surface-muted" : "bg-surface",
         )}
         style={{
-          width: LABEL_W,
+          width: labelW,
           paddingLeft: isBoard && onToggle ? 8 : isBoard ? 16 : 32,
         }}
       >

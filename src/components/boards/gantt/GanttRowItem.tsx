@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BAR_H,
-  LABEL_W,
   MILESTONE,
   MIN_BAR_W,
   ROW_H,
@@ -49,6 +48,7 @@ export function GanttRowItem({
   criticalLabel,
   rowIdx,
   totalW,
+  labelW,
   dayW,
   todayOffset,
   dayCount,
@@ -72,6 +72,8 @@ export function GanttRowItem({
   criticalLabel: string | null;
   rowIdx: number;
   totalW: number;
+  /** Width of the sticky name rail in px (resizable; owned by the canvas). */
+  labelW: number;
   /** Pixels per day at the active zoom (see PX_PER_DAY). */
   dayW: number;
   todayOffset: number;
@@ -303,7 +305,7 @@ export function GanttRowItem({
           "bg-background sticky left-0 z-10 flex shrink-0 items-center border-r pr-2",
           depth > 0 && "bg-surface-sunken",
         )}
-        style={{ width: LABEL_W, paddingLeft: 16 + depth * 16 }}
+        style={{ width: labelW, paddingLeft: 16 + depth * 16 }}
       >
         {intelMatch === true && (
           <span aria-hidden data-testid="intel-rule" className="intel-rule" />
@@ -345,7 +347,10 @@ export function GanttRowItem({
             <span className="sr-only">{criticalLabel}</span>
           </span>
         )}
-        <span className="text-foreground min-w-0 flex-1 truncate text-xs">
+        <span
+          title={row.name}
+          className="text-foreground min-w-0 flex-1 truncate text-xs"
+        >
           {row.name}
         </span>
         {row.hasChildren && row.childCount ? (
