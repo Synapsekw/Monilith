@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 const MIN = 80;
 const MAX = 1200;
+const DRAG_THRESHOLD = 3;
 
 /**
  * Drag/reorder wiring passed down by the owning sortable wrapper (the header
@@ -95,6 +96,9 @@ export function ColumnHeader({
     let last = width;
     let moved = false;
     const move = (ev: PointerEvent) => {
+      // A few px of jitter during a click (or either press of a double-click)
+      // is not a drag: it must not persist a width and pin the column.
+      if (!moved && Math.abs(ev.clientX - startX) < DRAG_THRESHOLD) return;
       last = clampDragWidth(startW + (ev.clientX - startX), MIN, MAX);
       moved = true;
       throttledResize(last); // live, at most once per animation frame

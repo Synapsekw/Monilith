@@ -365,6 +365,37 @@ describe("ColumnHeader — resize is frame-throttled", () => {
     expect(onResize).toHaveBeenCalledTimes(calls);
   });
 
+  it("a 1px jitter before release is not a drag: nothing live, nothing persisted", () => {
+    const { onResize, onResizeEnd, handle } = setup();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    move(101);
+    release();
+    act(() => void vi.advanceTimersToNextFrame());
+    expect(onResize).not.toHaveBeenCalled();
+    expect(onResizeEnd).not.toHaveBeenCalled();
+  });
+
+  it("a drag from a 72px (auto-fit floor) column persists at least 80", () => {
+    const onResizeEnd = vi.fn();
+    render(
+      <ColumnHeader
+        column={col()}
+        width={72}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={onResizeEnd}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByLabelText("Resize Notes"), {
+      clientX: 100,
+    });
+    move(95);
+    release();
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd.mock.calls[0][0]).toBeGreaterThanOrEqual(80);
+  });
+
   it("a press on the handle without a move is not a resize: nothing live, nothing persisted", () => {
     const { onResize, onResizeEnd, handle } = setup();
     fireEvent.pointerDown(handle, { clientX: 100 });

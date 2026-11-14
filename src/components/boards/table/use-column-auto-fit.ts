@@ -8,6 +8,7 @@ import {
   type FitMeasure,
   type FitMember,
 } from "@/lib/boards/fit-column-width";
+import { useFontsReady } from "@/lib/hooks/use-fonts-ready";
 
 const NO_WIDTHS: Record<string, number> = {};
 const SANS_FALLBACK = "ui-sans-serif, system-ui, sans-serif";
@@ -108,12 +109,17 @@ export function useColumnAutoFit({
    *  differently on the server would stick on the header after hydration. */
   enabled: boolean;
 }): Record<string, number> {
-  const measure = useMemo(() => createCanvasMeasure(), []);
+  // Canvas text measurement is only right once the web fonts have loaded: until
+  // then it measures the fallback face and nothing would refit. So the fit is
+  // held back until `document.fonts.ready`.
+  const fontsReady = useFontsReady();
+  const active = enabled && fontsReady;
   return useMemo(() => {
-    if (!enabled) return NO_WIDTHS;
-    return fitBoardColumns(columns, cellValues, measure, members);
+    if (!active) return NO_WIDTHS;
+    // Built here, on an active run only (never during the hydration render).
+    return fitBoardColumns(columns, cellValues, createCanvasMeasure(), members);
     // `cellValues` deliberately omitted and `itemCount` deliberately present:
     // see the "WHEN it runs" note above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, columns, itemCount, members, measure]);
+  }, [active, columns, itemCount, members]);
 }

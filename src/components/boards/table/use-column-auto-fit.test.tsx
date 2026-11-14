@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FIT_FONT_SIZES,
@@ -80,6 +80,35 @@ describe("useColumnAutoFit", () => {
       columns: [...columns, { ...columns[0], id: "c3", name: "Extra" }],
     });
     expect(Object.keys(result.current).sort()).toEqual(["c1", "c3"]);
+  });
+});
+
+describe("useColumnAutoFit - web fonts", () => {
+  const original = Object.getOwnPropertyDescriptor(document, "fonts");
+  afterEach(() => {
+    if (original) Object.defineProperty(document, "fonts", original);
+    else delete (document as unknown as Record<string, unknown>).fonts;
+  });
+
+  it("does not fit while fonts are pending, and fits once when they resolve", async () => {
+    let resolve!: () => void;
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: {
+        status: "loading",
+        ready: new Promise<void>((r) => (resolve = r)),
+      },
+    });
+    const getContext = HTMLCanvasElement.prototype
+      .getContext as unknown as ReturnType<typeof vi.fn>;
+    const { result } = renderHook(() => useColumnAutoFit(base));
+    expect(result.current).toEqual({});
+    expect(getContext).not.toHaveBeenCalled(); // no measurer built yet
+    await act(async () => {
+      resolve();
+    });
+    expect(result.current).toEqual({ c1: 93 });
+    expect(getContext).toHaveBeenCalledTimes(1);
   });
 });
 

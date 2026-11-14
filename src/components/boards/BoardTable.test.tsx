@@ -2024,6 +2024,50 @@ describe("BoardTable density", () => {
 });
 
 describe("BoardTable column fit", () => {
+  // Status is the first value column: the header grid's second track.
+  const statusTrack = () =>
+    (
+      screen.getByTestId("board-column-header").style.gridTemplateColumns || ""
+    ).split(" ")[1];
+  async function dragStatusWider() {
+    const handle = screen.getByRole("separator", { name: "Resize Status" });
+    const before = statusTrack();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX: 340 }));
+    });
+    await waitFor(() => expect(statusTrack()).not.toBe(before));
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointerup"));
+    });
+    return before;
+  }
+
+  it("double-click drops the live drag width so the track returns to the fitted value", async () => {
+    resizeColumn.mockResolvedValue({ ok: true, data: undefined });
+    renderBoardWithColumns();
+    const before = await dragStatusWider();
+    resizeColumn.mockClear();
+    fireEvent.doubleClick(
+      screen.getByRole("separator", { name: "Resize Status" }),
+    );
+    await waitFor(() => expect(statusTrack()).toBe(before));
+    expect(resizeColumn).toHaveBeenCalledWith({
+      columnId: "c_status",
+      width: null,
+    });
+  });
+
+  it("Fit all columns drops live drag widths too", async () => {
+    resizeColumn.mockResolvedValue({ ok: true, data: undefined });
+    resetColumnWidths.mockResolvedValue({ ok: true, data: undefined });
+    renderBoardWithColumns();
+    const before = await dragStatusWider();
+    fireEvent.click(screen.getByTestId("board-header-fit"));
+    await waitFor(() => expect(statusTrack()).toBe(before));
+    expect(resetColumnWidths).toHaveBeenCalledTimes(1);
+  });
+
   it("double-clicking a column's resize handle clears its saved width", async () => {
     resizeColumn.mockResolvedValue({ ok: true, data: undefined });
     renderBoardWithColumns();
