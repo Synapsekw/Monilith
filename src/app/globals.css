@@ -26,12 +26,13 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   /* The two-accent fill (`bg-brand-gradient`) and the primary Button's hover
-     (`bg-brand-gradient-hover`): the same two stops at 80% alpha, which for a
-     single-accent preset is exactly the old `hover:bg-primary/80`. */
+     (`bg-brand-gradient-hover`): the same three stops at 80% alpha, which for
+     a single-accent preset is exactly the old `hover:bg-primary/80`. */
   --background-image-brand-gradient: var(--brand-gradient);
   --background-image-brand-gradient-hover: linear-gradient(
     90deg,
     color-mix(in oklab, var(--brand) 80%, transparent),
+    color-mix(in oklab, var(--brand-mid) 80%, transparent),
     color-mix(in oklab, var(--brand-2) 80%, transparent)
   );
 
@@ -287,16 +288,29 @@
   /* The second accent — a SEED token. Single-accent presets (this one
      included) declare it equal to their own --brand, a degenerate gradient;
      aurora / sunset / nebula give it a second hue. It only ever appears as
-     the far stop of --brand-gradient and of the chart spectrum, and as the
-     header glow's second bloom. --ring, links and text stay on --brand. */
+     the far stop of --brand-gradient and of the chart spectrum, as the header
+     glow's second bloom and as the wash's second mesh bloom. --ring, links
+     and text stay on --brand. */
   --brand-2: #5a6ed5;
   --brand-foreground: #ffffff;
-  /* Derived ONCE, here — never in a preset block and not in .dark. Both
-     stops are seeds every block re-declares on <html>, so this follows the
-     mode and the preset by itself. Sanctioned in exactly four places: the
-     primary Button fill, the active sidebar indicator, progress-bar fills
-     and the chart spectrum below. Utility: `bg-brand-gradient`. */
-  --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
+  /* The gradient's middle stop. Derived, not a seed: the even sRGB mix of
+     the two accents, which is exactly the colour a two-stop gradient already
+     paints at its centre — so naming it changes nothing. A preset MAY
+     redeclare it to bend the gradient through a third hue (only Prism does).
+     Mixed `in srgb` so globals.contrast.test.ts can reproduce it. */
+  --brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));
+  /* Derived ONCE, here — never in a preset block and not in .dark. The outer
+     stops are seeds every block re-declares on <html> and the middle follows
+     them, so this tracks the mode and the preset by itself. Sanctioned in
+     exactly four places: the primary Button fill, the active sidebar
+     indicator, progress-bar fills and the chart spectrum below. Utility:
+     `bg-brand-gradient`. */
+  --brand-gradient: linear-gradient(
+    90deg,
+    var(--brand),
+    var(--brand-mid),
+    var(--brand-2)
+  );
 
   --background: #f6f6f8;
   --foreground: #1a1a1f;
@@ -342,18 +356,44 @@
      sits slightly below the bloom so the bloom has visible range (the Aug 27
      tint had collapsed the two onto the same value — a no-op bloom). */
   --app-wash: linear-gradient(168deg, #dde2f2 0%, #d6dbee 46%, #cfd4e6 100%);
-  /* Brand-derived, lighter than every wash stop: raises contrast against dark
-     text (see globals.contrast.test.ts) and lets theme presets inherit it. */
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
+  /* Mesh bloom — three radials, one per accent stop, derived ONCE per mode.
+     Not a seed: preset blocks must not redeclare it. Mixed `in srgb` so
+     globals.contrast.test.ts can reproduce the painted colour. The light
+     blooms are a pale tint of each accent, lighter than every wash stop, so
+     they raise contrast against dark text. The first radial is the original
+     single bloom; the other two sit in the lower corners and do not overlap
+     it. */
+  --app-bloom:
+    radial-gradient(
+      110% 85% at 8% -6%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand) 12%, white) 70%,
+          transparent
+        )
+        0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      90% 60% at 100% 100%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand-2) 12%, white) 60%,
+          transparent
+        )
+        0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 0% 80%,
+      color-mix(
+          in srgb,
+          color-mix(in srgb, var(--brand-mid) 12%, white) 45%,
+          transparent
+        )
+        0%,
+      transparent 60%
+    );
   --content-surface: #ffffff;
   --content-edge: rgb(0 0 0 / 12%);
   --content-lift:
@@ -534,11 +574,27 @@
 
   /* Periwinkle Dusk — dark. Chrome only; content stays neutral. */
   --app-wash: linear-gradient(168deg, #212540 0%, #141728 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
+  /* Mesh bloom, dark — the accents themselves at low alpha. The first radial
+     is the original single bloom (same geometry, same 22% peak); --brand-2
+     lights the far corner and --brand-mid the lower-left edge. The alphas are
+     bound by globals.contrast.test.ts: muted text must clear AA with the two
+     left-edge radials stacked at full peak. */
+  --app-bloom:
+    radial-gradient(
+      110% 85% at 8% -6%,
+      color-mix(in srgb, var(--brand) 22%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      90% 60% at 100% 100%,
+      color-mix(in srgb, var(--brand-2) 18%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 0% 80%,
+      color-mix(in srgb, var(--brand-mid) 12%, transparent) 0%,
+      transparent 60%
+    );
   --content-surface: #0e0e10;
   --content-edge: rgb(255 255 255 / 8%);
   --content-lift:
@@ -813,16 +869,6 @@
   --accent-foreground: #1a1a1e;
   --glow-primary: 0 0 30px -8px rgba(75, 75, 85, 0.35);
   --app-wash: linear-gradient(168deg, #e2e2e6 0%, #dadade 46%, #d1d1d6 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
   --content-surface: #ffffff;
 }
 
@@ -847,11 +893,6 @@
   --accent: #1d1d1e;
   --accent-foreground: #f4f4f6;
   --app-wash: linear-gradient(168deg, #26262b 0%, #16161a 46%, #09090b 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0f0f10;
 }
 
@@ -889,16 +930,6 @@
   --accent-foreground: #141a19;
   --glow-primary: 0 0 30px -8px rgba(15, 125, 113, 0.35);
   --app-wash: linear-gradient(168deg, #d9ebe7 0%, #d5dfe9 46%, #d0d3e8 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
   --content-surface: #ffffff;
 }
 
@@ -923,11 +954,6 @@
   --accent: #1c1f1f;
   --accent-foreground: #f1f6f5;
   --app-wash: linear-gradient(168deg, #182f2d 0%, #17192c 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0e1111;
 }
 
@@ -956,16 +982,6 @@
   --accent-foreground: #1e1613;
   --glow-primary: 0 0 30px -8px rgba(182, 83, 24, 0.35);
   --app-wash: linear-gradient(168deg, #f0e3d9 0%, #ead8d6 46%, #e1cad2 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
   --content-surface: #ffffff;
 }
 
@@ -990,11 +1006,6 @@
   --accent: #201e1d;
   --accent-foreground: #f6f2f1;
   --app-wash: linear-gradient(168deg, #33231a 0%, #23151b 46%, #0d0809 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #12100f;
 }
 
@@ -1023,16 +1034,6 @@
   --accent-foreground: #19171f;
   --glow-primary: 0 0 30px -8px rgba(116, 80, 214, 0.35);
   --app-wash: linear-gradient(168deg, #e2dcf2 0%, #d9dcef 46%, #cdd6e8 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(
-        in oklab,
-        color-mix(in oklab, var(--brand) 12%, white) 70%,
-        transparent
-      )
-      0%,
-    transparent 58%
-  );
   --content-surface: #ffffff;
 }
 
@@ -1057,11 +1058,6 @@
   --accent: #1d1c21;
   --accent-foreground: #f4f3f7;
   --app-wash: linear-gradient(168deg, #261f40 0%, #131a2c 46%, #08090d 100%);
-  --app-bloom: radial-gradient(
-    110% 85% at 8% -6%,
-    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
-    transparent 58%
-  );
   --content-surface: #0f0e12;
 }
 
@@ -1442,9 +1438,15 @@
     --card: #ffffff;
     --brand: #5a6ed5;
     --brand-2: #5a6ed5;
-    /* Re-derived: the :root declaration resolved on <html>, against the
+    /* Re-derived: the :root declarations resolved on <html>, against the
        SCREEN preset's stops. */
-    --brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));
+    --brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));
+    --brand-gradient: linear-gradient(
+      90deg,
+      var(--brand),
+      var(--brand-mid),
+      var(--brand-2)
+    );
     --primary: var(--brand);
     /* Reach off: the surface aliases mix --brand into the seeds above, and
        paper must stay white whatever reach the screen is on. */

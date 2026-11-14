@@ -19,10 +19,17 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
  *
  * Direction of the bloom matters and is why the two themes have different
  * worst cases:
- *   - light bloom is WHITE, so it lightens the surface and RAISES contrast
- *     against dark text → worst case is the darkest stop, bloom ignored.
- *   - dark bloom is --brand, so it lightens the surface and LOWERS contrast
- *     against light text → worst case is the lightest stop at full bloom.
+ *   - light bloom is near-WHITE, so it lightens the surface and RAISES
+ *     contrast against dark text → worst case is the darkest stop, bloom
+ *     ignored.
+ *   - dark bloom is the accent itself, so it lightens the surface and LOWERS
+ *     contrast against light text → worst case is the lightest stop at full
+ *     bloom.
+ *
+ * The bloom is a MESH of three radials, one per accent stop (--brand,
+ * --brand-2, --brand-mid), declared once per mode in `:root` / `.dark` and
+ * never in a preset block — so the alphas are read from the mode block and the
+ * colours from the palette block under test. See `darkBloomed`.
  *
  * Every describe below is parameterized over the theme-preset override blocks
  * as well as the base palette: a preset re-seeds exactly the tokens these
@@ -92,13 +99,157 @@ function washStops(selector: string): string[] {
   return stops;
 }
 
-/** The declared peak of `color-mix(in oklab, var(--brand) N%, transparent)`. */
-function darkBloomPeak(selector: string): number {
-  const m = declaration(selector, "--app-bloom").match(
-    /var\(--brand\)\s+(\d+)%/,
-  );
-  if (!m) throw new Error(`could not read the bloom percentage in ${selector}`);
-  return Number(m[1]) / 100;
+/** `--brand-mid` is derived, not seeded: `color-mix(in srgb, --brand, --brand-2)`. */
+const BRAND_MID_RECIPE = "color-mix(in srgb, var(--brand), var(--brand-2))";
+
+/** `color-mix(in srgb, a pct%, b)` for two opaque colours. */
+function mixSrgb(a: RGB, b: RGB, pct: number): RGB {
+  const t = pct / 100;
+  return a.map((c, i) => Math.round(t * c + (1 - t) * b[i])) as RGB;
+}
+
+/** Does this block declare the token itself (rather than inherit it)? */
+function declares(selector: string, token: string): boolean {
+  return new RegExp(`^\\s{2}${token}:`, "m").test(blockOf(selector));
+}
+
+/**
+ * The three bloom colours of a palette block, in the radials' declaration
+ * order: --brand, --brand-2, --brand-mid. The middle is the `:root` recipe
+ * unless the block seeds its own (only Prism does).
+ */
+function bloomColours(selector: string): RGB[] {
+  const a = hex(declaration(selector, "--brand"));
+  const b = hex(declaration(selector, "--brand-2"));
+  const mid = declares(selector, "--brand-mid")
+    ? hex(declaration(selector, "--brand-mid"))
+    : mixSrgb(a, b, 50);
+  return [a, b, mid];
+}
+
+/** One dark bloom radial: an ellipse in fractions of the `.app-wash` box. */
+type BloomRadial = {
+  /** Horizontal and vertical radius of the ending shape. */
+  rx: number;
+  ry: number;
+  /** Centre. */
+  cx: number;
+  cy: number;
+  /** Declared alpha at the centre. */
+  peak: number;
+  /** Where the radial reaches `transparent`, as a fraction of the radius. */
+  reach: number;
+};
+
+/**
+ * The dark bloom radials, in declaration order — each is
+ * `radial-gradient(RX% RY% at CX% CY%, color-mix(in srgb, var(--brand|--brand-2|--brand-mid) N%, transparent) 0%, transparent T%)`.
+ * Declared per MODE (`.dark`), not per preset.
+ */
+function darkBloomRadials(): BloomRadial[] {
+  const pct = "(-?\\d+(?:\\.\\d+)?)%";
+  const radials = [
+    ...declaration(".dark", "--app-bloom").matchAll(
+      new RegExp(
+        `radial-gradient\\(\\s*${pct} ${pct} at ${pct} ${pct},\\s*` +
+          `color-mix\\(in srgb, var\\(--brand(-2|-mid)?\\) ${pct}, transparent\\) 0%,\\s*` +
+          `transparent ${pct}\\s*\\)`,
+        "g",
+      ),
+    ),
+  ];
+  if (radials.map((m) => m[5] ?? "").join() !== ",-2,-mid") {
+    throw new Error(
+      "the dark bloom must be three radials: --brand, --brand-2, --brand-mid",
+    );
+  }
+  return radials.map((m) => ({
+    rx: Number(m[1]) / 100,
+    ry: Number(m[2]) / 100,
+    cx: Number(m[3]) / 100,
+    cy: Number(m[4]) / 100,
+    peak: Number(m[6]) / 100,
+    reach: Number(m[7]) / 100,
+  }));
+}
+
+/** Peak alpha of each dark bloom radial, in declaration order. */
+function darkBloomPeaks(): number[] {
+  return darkBloomRadials().map((r) => r.peak);
+}
+
+/**
+ * Which radials can light the SAME pixel: every maximal set of radial indices
+ * whose lit ellipses intersect inside the box, found by sampling the box on a
+ * 0.5% grid. The radii and centres are percentages of the box, so the answer
+ * does not depend on the viewport's aspect ratio.
+ *
+ * This is what decides how the peaks stack below. It is read off the declared
+ * geometry rather than assumed: move a radial so that it overlaps another and
+ * the stacked ground appears in every check on its own.
+ */
+function overlappingBloomRadials(radials: BloomRadial[]): number[][] {
+  const STEPS = 200;
+  const masks = new Set<number>();
+  for (let i = 0; i <= STEPS; i++) {
+    for (let j = 0; j <= STEPS; j++) {
+      const [x, y] = [i / STEPS, j / STEPS];
+      let mask = 0;
+      radials.forEach((r, n) => {
+        if (Math.hypot((x - r.cx) / r.rx, (y - r.cy) / r.ry) < r.reach) {
+          mask |= 1 << n;
+        }
+      });
+      if (mask) masks.add(mask);
+    }
+  }
+  return [...masks]
+    .filter((m) => ![...masks].some((o) => o !== m && (o & m) === m))
+    .sort((a, b) => a - b)
+    .map((m) => radials.map((_, n) => n).filter((n) => m & (1 << n)));
+}
+
+let darkBloomGroups: number[][] | undefined;
+
+/**
+ * Every worst-case dark chrome ground a wash stop can become under the bloom:
+ * one per set of radials that can light the same pixel, with every radial of
+ * the set STACKED at its full declared peak — conservative twice over, since
+ * the peaks sit at the centres (the first one is outside the box) and the
+ * lightest wash stop is not under every radial.
+ *
+ * Today the three lit ellipses are disjoint (top-left, bottom-right,
+ * lower-left: the first ends at 43% of the height on the left edge, the third
+ * starts at 56%), so this is three grounds — the sidebar under radial 1, the
+ * sidebar under radial 3, the dock side under radial 2.
+ */
+function darkBloomed(selector: string, stop: string): Array<[string, RGB]> {
+  const peaks = darkBloomPeaks();
+  const colours = bloomColours(selector);
+  darkBloomGroups ??= overlappingBloomRadials(darkBloomRadials());
+  return darkBloomGroups.map((group) => [
+    `bloom radial ${group.map((n) => n + 1).join("+")}`,
+    group.reduce<RGB>((bg, n) => over(colours[n], peaks[n], bg), hex(stop)),
+  ]);
+}
+
+/**
+ * The light bloom radials, in declaration order — each is
+ * `color-mix(in srgb, color-mix(in srgb, var(--brand…) P%, white) A%, transparent)`:
+ * a pale tint of the accent (`tint`) at an alpha (`alpha`). Declared per MODE.
+ */
+function lightBloom(): Array<{ tint: number; alpha: number }> {
+  const stops = [
+    ...declaration(":root", "--app-bloom").matchAll(
+      /var\(--brand(-2|-mid)?\)\s+(\d+)%,\s*white\)\s+(\d+)%,\s*transparent\s*\)/g,
+    ),
+  ];
+  if (stops.map((m) => m[1] ?? "").join() !== ",-2,-mid") {
+    throw new Error(
+      "the light bloom must be three radials of color-mix(in srgb, var(--brand…) P%, white) at A%",
+    );
+  }
+  return stops.map((m) => ({ tint: Number(m[2]), alpha: Number(m[3]) / 100 }));
 }
 
 /**
@@ -128,11 +279,6 @@ function modeOf(selector: string): Mode {
 
 const DARK_VIVID = '.dark[data-theme-reach="vivid"]';
 
-/** Does this block declare the token itself (rather than inherit it)? */
-function declares(selector: string, token: string): boolean {
-  return new RegExp(`^\\s{2}${token}:`, "m").test(blockOf(selector));
-}
-
 /**
  * The block that decides a reach token for a mode × level, mirroring the
  * cascade on <html>. Tinted is the default and lives in `:root`; subtle and
@@ -161,12 +307,6 @@ function reachPct(level: ReachLevel, token: ReachToken, mode: Mode): number {
   const m = raw.match(/^(\d+(?:\.\d+)?)%$/);
   if (!m) throw new Error(`${token} at ${level} is not a percentage: ${raw}`);
   return Number(m[1]);
-}
-
-/** `color-mix(in srgb, a pct%, b)` for two opaque colours. */
-function mixSrgb(a: RGB, b: RGB, pct: number): RGB {
-  const t = pct / 100;
-  return a.map((c, i) => Math.round(t * c + (1 - t) * b[i])) as RGB;
 }
 
 /**
@@ -469,12 +609,12 @@ function rowGrounds(
     ),
   ];
   if (mode === "dark") {
-    // …and under the brand bloom at its declared peak (dark only; the light
+    // …and under the mesh bloom at its declared peaks (dark only; the light
     // bloom is near-white and is the easier case for both checks).
-    const brand = hex(declaration(selector, "--brand"));
-    const peak = darkBloomPeak(selector);
     for (const stop of washStops(selector)) {
-      grounds.push([`bloomed wash ${stop}`, over(brand, peak, hex(stop))]);
+      for (const [where, ground] of darkBloomed(selector, stop)) {
+        grounds.push([`bloomed wash ${stop} (${where})`, ground]);
+      }
     }
   }
   return grounds;
@@ -621,8 +761,6 @@ describe.each(DARK_SELECTORS)(
   "muted text clears WCAG AA on the wash — dark %s",
   (selector) => {
     const fg = hex(declaration(selector, "--muted-foreground"));
-    const brand = hex(declaration(selector, "--brand"));
-    const bloomPeak = darkBloomPeak(selector);
 
     it.each(washStops(selector))(
       "clears AA on the %s stop, unbloomed",
@@ -634,9 +772,9 @@ describe.each(DARK_SELECTORS)(
     it.each(washStops(selector))(
       "clears AA on the %s stop under the bloom at its declared peak",
       (stop) => {
-        expect(
-          contrast(fg, over(brand, bloomPeak, hex(stop))),
-        ).toBeGreaterThanOrEqual(AA);
+        for (const [where, ground] of darkBloomed(selector, stop)) {
+          expect(contrast(fg, ground), where).toBeGreaterThanOrEqual(AA);
+        }
       },
     );
 
@@ -665,46 +803,100 @@ describe.each(DARK_SELECTORS)(
   "kicker text clears WCAG AA on the wash — dark %s",
   (selector) => {
     const fg = hex(declaration(selector, "--kicker"));
-    const brand = hex(declaration(selector, "--brand"));
-    const bloomPeak = darkBloomPeak(selector);
     it.each(washStops(selector))(
       "clears AA on the %s stop under the bloom",
       (stop) => {
-        expect(
-          contrast(fg, over(brand, bloomPeak, hex(stop))),
-        ).toBeGreaterThanOrEqual(AA);
+        for (const [where, ground] of darkBloomed(selector, stop)) {
+          expect(contrast(fg, ground), where).toBeGreaterThanOrEqual(AA);
+        }
       },
     );
   },
 );
 
+describe("the mesh bloom is derived per mode, never per preset", () => {
+  it.each([...LIGHT_SELECTORS, ...DARK_SELECTORS].filter((s) => /\[/.test(s)))(
+    "%s inherits --app-bloom",
+    (selector) => {
+      expect(declares(selector, "--app-bloom")).toBe(false);
+    },
+  );
+
+  it("dark keeps the original first radial: 22% --brand, 110% 85% at 8% -6%, out at 58%", () => {
+    expect(darkBloomRadials()[0]).toEqual({
+      rx: 1.1,
+      ry: 0.85,
+      cx: 0.08,
+      cy: -0.06,
+      peak: 0.22,
+      reach: 0.58,
+    });
+  });
+
+  it("stacks radials that light the same pixel, and only those", () => {
+    const at = (cx: number, cy: number): BloomRadial => ({
+      rx: 0.5,
+      ry: 0.5,
+      cx,
+      cy,
+      peak: 0.2,
+      reach: 1,
+    });
+    // Two disjoint discs → two grounds; a third bridging both → two stacks.
+    expect(overlappingBloomRadials([at(0, 0), at(1, 1)])).toEqual([[0], [1]]);
+    expect(overlappingBloomRadials([at(0, 0), at(1, 1), at(0.5, 0.5)])).toEqual(
+      [
+        [0, 2],
+        [1, 2],
+      ],
+    );
+    expect(overlappingBloomRadials([at(0.5, 0.5), at(0.5, 0.5)])).toEqual([
+      [0, 1],
+    ]);
+  });
+
+  it("light reads as three pale accent tints", () => {
+    expect(lightBloom()).toHaveLength(3);
+  });
+});
+
+describe("--brand-gradient middle stop", () => {
+  it("is derived in :root as the even sRGB mix of the two accents", () => {
+    expect(declaration(":root", "--brand-mid")).toBe(BRAND_MID_RECIPE);
+  });
+
+  it.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
+    "the derived middle of %s is the sRGB midpoint, so the gradient is unchanged",
+    (selector) => {
+      if (declares(selector, "--brand-mid")) return; // Prism sets its own
+      const a = hex(declaration(selector, "--brand"));
+      const b = hex(declaration(selector, "--brand-2"));
+      const mid = bloomColours(selector)[2];
+      mid.forEach((c, i) =>
+        expect(Math.abs(c - (a[i] + b[i]) / 2)).toBeLessThanOrEqual(0.5),
+      );
+    },
+  );
+});
+
 describe.each(LIGHT_SELECTORS)(
   "light chrome separates from the content card — %s",
   (selector) => {
-    // The bloom source is `color-mix(in oklab, var(--brand) P%, white)` at alpha A
-    // over the FIRST wash stop (top-left is where the header band lives).
-    // Approximate the oklab mix with an sRGB mix — conservative for this check.
+    // The header band lives top-left, under the FIRST bloom radial only (the
+    // other two sit in the lower corners and never reach it). Its source is
+    // `color-mix(in srgb, var(--brand) P%, white)` at alpha A over the FIRST
+    // wash stop. The recipe is declared once, in `:root`; the brand and the
+    // wash come from the palette block under test.
     // Reach tints the card with the brand, which in light mode DARKENS it
     // towards the chrome. This floor is what caps light --reach-content (see
     // the "Theme reach" comment in globals.css) — far below the dark values.
     it.each(REACH_LEVELS)(
       "bloomed header band vs the content card ≥ 1.15:1 at reach %s",
       (level) => {
-        const bloom = declaration(selector, "--app-bloom");
-        const pm = bloom.match(
-          /var\(--brand\)\s+(\d+)%,\s*white\)\s*\/?\s*(\d+)%/,
-        );
-        if (!pm)
-          throw new Error(
-            "light bloom must be color-mix(in oklab, var(--brand) P%, white) / A%",
-          );
+        const [{ tint, alpha }] = lightBloom();
         const brand = hex(declaration(selector, "--brand"));
-        const src = over(brand, Number(pm[1]) / 100, [255, 255, 255]);
-        const band = over(
-          src,
-          Number(pm[2]) / 100,
-          hex(washStops(selector)[0]),
-        );
+        const src = mixSrgb(brand, [255, 255, 255], tint);
+        const band = over(src, alpha, hex(washStops(selector)[0]));
         expect(
           contrast(band, contentCard(selector, level)),
         ).toBeGreaterThanOrEqual(1.15);

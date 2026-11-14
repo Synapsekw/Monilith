@@ -24,16 +24,17 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 /**
  * The seed set: every token a preset is allowed to move. Anything alpha-based
  * (`--border`, `--state-*`, `--chrome-fill`) or brand-derived (`--primary`,
- * `--ring`, `--sidebar-primary`) follows on its own and must NOT be redeclared —
- * a preset block that lists more or fewer tokens than this fails, which is what
- * keeps a new preset from silently forgetting half the palette.
+ * `--ring`, `--sidebar-primary`, `--brand-gradient`, `--app-bloom`) follows on
+ * its own and must NOT be redeclared — a preset block that lists more or fewer
+ * tokens than this fails, which is what keeps a new preset from silently
+ * forgetting half the palette. One token is optional: `--brand-mid`, the
+ * gradient's middle stop, is derived in `:root` and only Prism declares it.
  */
 const SEEDS = [
   "--brand",
   "--brand-2",
   "--brand-foreground",
   "--app-wash",
-  "--app-bloom",
   "--background",
   "--foreground",
   "--surface",
@@ -52,6 +53,10 @@ const SEEDS = [
   "--accent-foreground",
   "--content-surface",
 ];
+
+/** Presets allowed to seed the optional `--brand-mid` (typed as strings: the
+ *  id joins `THEME_PRESET_IDS` with the gradient presets). */
+const OWN_BRAND_MID: readonly string[] = ["prism"];
 
 function block(sel: string) {
   const s = CSS.indexOf(`${sel} {`);
@@ -79,7 +84,9 @@ describe("theme presets", () => {
         const want = [
           ...SEEDS,
           ...(sel.startsWith(":root") ? ["--glow-primary"] : []),
-        ].sort();
+        ];
+        if (OWN_BRAND_MID.includes(id)) want.push("--brand-mid");
+        want.sort();
         expect(t, sel).toEqual(want);
       }
     }
@@ -156,14 +163,26 @@ describe("theme presets", () => {
     expect([...THEME_PRESET_IDS].slice(-3)).toEqual(twoAccent);
   });
 
-  it("derives --brand-gradient once, in :root, from the two brand seeds", () => {
+  it("derives --brand-mid, --brand-gradient and --app-bloom from the seeds, never in a preset block", () => {
     expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(2); // :root + print root
     expect(block(":root")).toContain(
-      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));",
+      "--brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));",
     );
-    expect(block(".dark")).not.toMatch(/--brand-gradient:/);
+    expect(block(":root")).toContain(
+      "--brand-gradient: linear-gradient(\n    90deg,\n    var(--brand),\n    var(--brand-mid),\n    var(--brand-2)\n  );",
+    );
+    expect(block(".dark")).not.toMatch(/--brand-gradient:|--brand-mid:/);
     expect(block(":root")).toMatch(/^\s{2}--brand-2:/m);
     expect(block(".dark")).toMatch(/^\s{2}--brand-2:/m);
+    for (const sel of [":root", ".dark"])
+      expect(block(sel), sel).toMatch(/^\s{2}--app-bloom:/m);
+    for (const id of THEME_PRESET_IDS.filter((i) => i !== DEFAULT_THEME_PRESET))
+      for (const base of [":root", ".dark"]) {
+        const b = block(`${base}[data-theme-preset="${id}"]`)!;
+        expect(b, id).not.toMatch(/--app-bloom:|--brand-gradient:/);
+        if (!OWN_BRAND_MID.includes(id))
+          expect(b, id).not.toMatch(/--brand-mid:/);
+      }
   });
 
   it("narrows unknown stored values", () => {

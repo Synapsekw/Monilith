@@ -51,6 +51,9 @@ const THEME_INVARIANT = new Set([
   // Derived from --brand and --brand-2, which every mode and preset block
   // re-seeds on <html> — so one declaration follows them all.
   "--brand-gradient",
+  // The gradient's middle stop — likewise derived from the two brand seeds on
+  // <html>, and `.dark` is the same element.
+  "--brand-mid",
 ]);
 
 describe("Keystone token contract", () => {
@@ -422,9 +425,9 @@ describe("brand gradient tokens", () => {
     );
   });
 
-  it("the hover fill is the same two stops at the old bg-primary/80 alpha", () => {
+  it("the hover fill is the same three stops at the old bg-primary/80 alpha", () => {
     expect(FLAT).toContain(
-      "--background-image-brand-gradient-hover: linear-gradient(90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent));",
+      "--background-image-brand-gradient-hover: linear-gradient(90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-mid) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent));",
     );
   });
 
@@ -452,13 +455,16 @@ describe("brand gradient tokens", () => {
     }
   });
 
-  it("re-seeds both stops and the gradient inside the print root", () => {
+  it("re-seeds both stops, the middle stop and the gradient inside the print root", () => {
     const print = FLAT.split("@media print")[1] ?? "";
     const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
     expect(printRoot).toContain("--brand: #5a6ed5;");
     expect(printRoot).toContain("--brand-2: #5a6ed5;");
     expect(printRoot).toContain(
-      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));",
+      "--brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));",
+    );
+    expect(printRoot).toContain(
+      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-mid), var(--brand-2));",
     );
   });
 });
