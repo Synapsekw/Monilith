@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     kind: "improved",
+    title: "Faster settings navigation",
+    description:
+      "Switching between settings sections now responds instantly, and the settings menu stays in place while a section loads.",
+  },
+  {
+    date: "2026-11-13",
+    kind: "improved",
     title: "A simpler AI setup",
     description:
       "Agent setup, Autopilot and agent personas are gone. Ask and the board's assistant dock now run one assistant for your whole organization, which can act on any board you can open, and the sidebar entry that used to say Agents now says Ask.",
