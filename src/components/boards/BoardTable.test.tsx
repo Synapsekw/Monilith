@@ -114,20 +114,36 @@ vi.mock("@/lib/boards/view-prefs-actions", () => ({
   saveBoardViewPrefs: vi.fn(async () => ({ ok: true, data: undefined })),
 }));
 
-// Spy on the shared touch-aware sensor hook (still delegating to the real
-// implementation so dnd-kit gets valid sensors). Lets us assert the three
-// DndContexts (group / item / subitem reorder) each consume it. See the
-// TOUCH Batch-2 table spec §5.
-const touchSensorsSpy = vi.fn();
+// Identity check for the shared touch-aware sensor hook. When `sensorsSentinel`
+// is set, the mocked hook hands that one object to every caller (still running
+// the real hook so hook order and dnd-kit stay valid), and the DndContext
+// wrapper below records the `sensors` prop each context receives. A context
+// that stops using the shared hook therefore fails an identity assertion, which
+// a render count could not catch. See the TOUCH Batch-2 table spec §5.
+let sensorsSentinel: unknown = null;
+const dndContextProps: { id?: string; sensors?: unknown }[] = [];
 vi.mock("@/lib/dnd/sensors", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/dnd/sensors")>(
       "@/lib/dnd/sensors",
     );
   return {
-    useTouchAwareSensors: () => {
-      touchSensorsSpy();
-      return actual.useTouchAwareSensors();
+    useTouchAwareSensors: (
+      ...args: Parameters<typeof actual.useTouchAwareSensors>
+    ) => {
+      const real = actual.useTouchAwareSensors(...args);
+      return sensorsSentinel ?? real;
+    },
+  };
+});
+vi.mock("@dnd-kit/core", async () => {
+  const actual =
+    await vi.importActual<typeof import("@dnd-kit/core")>("@dnd-kit/core");
+  return {
+    ...actual,
+    DndContext: (props: React.ComponentProps<typeof actual.DndContext>) => {
+      dndContextProps.push({ id: props.id, sensors: props.sensors });
+      return <actual.DndContext {...props} />;
     },
   };
 });
@@ -172,7 +188,8 @@ beforeEach(() => {
   archiveItem.mockReset();
   reorderItem.mockReset();
   updateColumnSettings.mockReset();
-  touchSensorsSpy.mockReset();
+  sensorsSentinel = null;
+  dndContextProps.length = 0;
 });
 
 describe("BoardTable add group", () => {
@@ -1810,14 +1827,23 @@ describe("BoardTable column reorder (pure position math)", () => {
 // resolves in a real browser), mirroring ui/button.touch.test.tsx.
 
 describe("BoardTable touch reorder sensors", () => {
-  it("consumes the shared touch-aware sensors for each DndContext (group + item + subitem)", () => {
-    // nestedPayload has a group, a top-level item, and two subitems. The group
-    // reorder (BoardTableInner), the board's column reorder (BoardColumnHeader)
-    // and — once the parent is expanded — the subitem reorder (SubitemBlock)
-    // each call the hook, so at least three calls.
+  it("gives the board, column-header and subitem DndContexts the shared touch-aware sensors", () => {
+    // `[]` is a valid dnd-kit sensors value and a unique identity to look for.
+    const sentinel: unknown[] = [];
+    sensorsSentinel = sentinel;
     renderNested();
     fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
-    expect(touchSensorsSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+    const latest = (match: (id: string) => boolean) =>
+      dndContextProps.filter((c) => c.id && match(c.id)).at(-1);
+    for (const [label, ctx] of [
+      ["board-dnd", latest((id) => id === "board-dnd")],
+      ["board-columns", latest((id) => id === "board-columns")],
+      ["subitems-*", latest((id) => id.startsWith("subitems-"))],
+    ] as const) {
+      expect(ctx, `${label} context mounted`).toBeDefined();
+      expect(ctx?.sensors, `${label} sensors`).toBe(sentinel);
+    }
   });
 });
 

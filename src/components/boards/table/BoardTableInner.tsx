@@ -558,9 +558,9 @@ export function BoardTableInner({
   );
 
   // Board-level column-management surface used by the board's single column
-  // header (columns are board-scoped). Width state stays here so a resize/add/rename
-  // from any group reflows all groups + the footer. Memoized on the width state
-  // alone — every callback below is stable (the `m` proxy / setState setters) —
+  // header (columns are board-scoped). Width state stays here so a
+  // resize/add/rename reflows every group + the footer. Memoized on the width
+  // state alone — every callback below is stable (the `m` proxy / setState setters) —
   // so a dialog, a scroll or a cell edit no longer re-creates it.
   const columnControls: ColumnHeaderControls = useMemo(
     () => ({

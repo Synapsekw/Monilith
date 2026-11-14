@@ -117,7 +117,7 @@ export function GroupHeaderRow({
               }
             }}
             aria-label={`Rename ${group.name}`}
-            className="h-6 max-w-xs px-1.5 pointer-coarse:h-8"
+            className="h-6 max-w-xs px-1.5 pointer-coarse:h-11"
           />
         ) : (
           <button
