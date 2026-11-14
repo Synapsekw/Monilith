@@ -11,7 +11,7 @@ describe("dependencyErrorMessage", () => {
     ],
     [
       { code: "42501", message: "not authenticated" },
-      "You can't edit the board that item is on.",
+      "Your session has ended. Sign in again to add dependencies.",
     ],
     [
       { code: "P0001", message: "this would create a dependency cycle" },

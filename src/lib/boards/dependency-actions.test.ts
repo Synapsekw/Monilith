@@ -6,16 +6,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc, from }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-const searchItems = vi.fn();
-vi.mock("@/lib/search/item-search", () => ({
-  searchItems: (q: string) => searchItems(q),
-}));
 
 import {
   createDependency,
   deleteDependency,
   getBoardDependencyContext,
-  searchDependencyTargets,
+  editableBoardIds,
 } from "@/lib/boards/dependency-actions";
 
 const PRED_ID = "11111111-1111-4111-8111-111111111111";
@@ -24,7 +20,6 @@ const DEP_ID = "33333333-3333-4333-8333-333333333333";
 const BOARD_ID = "44444444-4444-4444-8444-444444444444";
 
 beforeEach(() => {
-  searchItems.mockReset();
   rpc.mockReset();
   from.mockReset();
 });
@@ -186,41 +181,37 @@ describe("getBoardDependencyContext", () => {
   });
 });
 
-describe("searchDependencyTargets", () => {
+describe("editableBoardIds", () => {
   const OTHER = "55555555-5555-4555-8555-555555555555";
 
-  it("flags each hit with editability, one check per distinct board", async () => {
-    searchItems.mockResolvedValue([
-      { id: "a", name: "A", boardId: BOARD_ID, boardName: "Mine" },
-      { id: "b", name: "B", boardId: BOARD_ID, boardName: "Mine" },
-      { id: "c", name: "C", boardId: OTHER, boardName: "Theirs" },
-    ]);
+  it("returns the editable subset, one check per distinct board", async () => {
     rpc.mockImplementation(async (_fn: string, args: { p_board_id: string }) =>
       args.p_board_id === BOARD_ID
         ? { data: true, error: null }
         : { data: false, error: null },
     );
-    const res = await searchDependencyTargets("ab");
-    expect(searchItems).toHaveBeenCalledWith("ab");
+    const res = await editableBoardIds({
+      boardIds: [BOARD_ID, BOARD_ID, OTHER],
+    });
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc).toHaveBeenCalledWith("can_edit_board", { p_board_id: OTHER });
-    expect(res.map((r) => [r.id, r.canEdit])).toEqual([
-      ["a", true],
-      ["b", true],
-      ["c", false],
-    ]);
+    expect(res).toEqual({ ok: true, data: [BOARD_ID] });
   });
 
-  it("treats a failed check as not editable and skips checks with no hits", async () => {
-    searchItems.mockResolvedValueOnce([]);
-    expect(await searchDependencyTargets("zz")).toEqual([]);
-    expect(rpc).not.toHaveBeenCalled();
-
-    searchItems.mockResolvedValueOnce([
-      { id: "c", name: "C", boardId: OTHER, boardName: "Theirs" },
-    ]);
+  it("treats a failed check as not editable", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "x" } });
-    const res = await searchDependencyTargets("cc");
-    expect(res[0]?.canEdit).toBe(false);
+    expect(await editableBoardIds({ boardIds: [OTHER] })).toEqual({
+      ok: true,
+      data: [],
+    });
+  });
+
+  it("rejects bad or unbounded input without calling rpc", async () => {
+    expect((await editableBoardIds({ boardIds: ["nope"] })).ok).toBe(false);
+    expect((await editableBoardIds({ boardIds: [] })).ok).toBe(false);
+    expect(
+      (await editableBoardIds({ boardIds: Array(26).fill(OTHER) })).ok,
+    ).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

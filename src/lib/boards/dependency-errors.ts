@@ -9,6 +9,8 @@ export function dependencyErrorMessage(
 ): string {
   const code = error?.code ?? "";
   const message = (error?.message ?? "").toLowerCase();
+  if (message.includes("not authenticated"))
+    return "Your session has ended. Sign in again to add dependencies.";
   if (code === "42501" || message.includes("no edit access"))
     return "You can't edit the board that item is on.";
   if (message.includes("cycle")) return "That would create a dependency loop.";

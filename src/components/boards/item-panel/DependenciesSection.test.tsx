@@ -134,6 +134,9 @@ async function openSearch(direction: "Waiting on" | "Blocking") {
   return user;
 }
 
+const editChecks = () =>
+  db.rpc.mock.calls.filter(([fn]) => fn === "can_edit_board");
+
 const createCalls = () =>
   db.rpc.mock.calls.filter(([fn]) => fn === "create_item_dependency");
 
@@ -219,6 +222,27 @@ describe("DependenciesSection", () => {
     expect(
       screen.getByRole("button", { name: "Permit · Regulatory" }),
     ).toBeEnabled();
+  });
+
+  it("never checks edit access in Waiting on mode", async () => {
+    renderSection();
+    await openSearch("Waiting on");
+    await screen.findByRole("button", { name: "Permit · Regulatory" });
+    expect(editChecks()).toEqual([]);
+  });
+
+  it("checks each board once, across keystrokes and direction switches", async () => {
+    renderSection();
+    const user = await openSearch("Blocking");
+    await screen.findByRole("button", { name: "Permit · Regulatory" });
+    await waitFor(() => expect(editChecks()).toHaveLength(1));
+    await user.type(screen.getByRole("searchbox"), "m");
+    await waitFor(() => expect(db.searchItems).toHaveBeenCalledWith("perm"));
+    await user.click(screen.getByRole("radio", { name: "Waiting on" }));
+    await user.click(screen.getByRole("radio", { name: "Blocking" }));
+    expect(editChecks()).toEqual([
+      ["can_edit_board", { p_board_id: OTHER_BOARD }],
+    ]);
   });
 
   it("toasts mapped copy for the real cycle error", async () => {

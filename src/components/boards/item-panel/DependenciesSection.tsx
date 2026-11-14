@@ -24,8 +24,7 @@ import { useDependencyContext } from "@/lib/boards/use-dependency-context";
 import {
   createDependency,
   deleteDependency,
-  searchDependencyTargets,
-  type DependencyTarget,
+  editableBoardIds,
 } from "@/lib/boards/dependency-actions";
 import {
   isSyntheticDateSource,
@@ -44,6 +43,7 @@ import {
 } from "@/lib/boards/dependency-list";
 import { isoToLocalDate } from "@/lib/boards/iso-date";
 import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
+import { searchItems, type ItemSearchResult } from "@/lib/search/item-search";
 
 type Direction = "waitingOn" | "blocking";
 
@@ -352,6 +352,44 @@ function DependencyRow({
   );
 }
 
+const canEditBoardKey = (boardId: string) =>
+  ["board-can-edit", boardId] as const;
+
+/**
+ * Per-board "can I edit it?" answers for the Blocking picker, cached in the
+ * query client so each board is checked at most once while the entry lives
+ * (unobserved entries are kept for the default 5-minute gcTime, renewed on
+ * each read-through). Only unknown boards are sent, in ONE batched action call.
+ */
+function useBoardEditability() {
+  const qc = useQueryClient();
+  const [, rerender] = useState(0);
+  const inFlight = useRef(new Set<string>());
+  const known = (boardId: string) =>
+    qc.getQueryData<boolean>(canEditBoardKey(boardId));
+  async function ensure(boardIds: readonly string[]) {
+    const missing = [...new Set(boardIds)].filter(
+      (id) => known(id) === undefined && !inFlight.current.has(id),
+    );
+    if (missing.length === 0) return;
+    for (const id of missing) inFlight.current.add(id);
+    try {
+      const res = await editableBoardIds({ boardIds: missing });
+      if (res.ok) {
+        const editable = new Set(res.data);
+        for (const id of missing)
+          qc.setQueryData(canEditBoardKey(id), editable.has(id));
+      }
+    } catch {
+      // Unknown stays unknown; the create RPC is still the gate.
+    } finally {
+      for (const id of missing) inFlight.current.delete(id);
+      rerender((n) => n + 1);
+    }
+  }
+  return { known, ensure };
+}
+
 function AddDependency({
   itemId,
   excludeIds,
@@ -362,24 +400,29 @@ function AddDependency({
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<Direction>("waitingOn");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<DependencyTarget[]>([]);
+  const [results, setResults] = useState<ItemSearchResult[]>([]);
   // The term `results` belong to — "No items found." only once it matches.
   const [resolvedTerm, setResolvedTerm] = useState("");
   const [pending, setPending] = useState(false);
   // Only the latest issued search may commit its results.
   const requestId = useRef(0);
+  const editability = useBoardEditability();
+  // Only Blocking needs editability (the picked item becomes the successor).
+  const checkBoards = (hits: readonly ItemSearchResult[]) =>
+    void editability.ensure(hits.map((h) => h.boardId));
 
   const runSearch = useDebouncedCallback(async (term: string) => {
     const id = ++requestId.current;
-    let hits: DependencyTarget[];
+    let hits: ItemSearchResult[];
     try {
-      hits = await searchDependencyTargets(term);
+      hits = await searchItems(term);
     } catch {
       hits = [];
     }
     if (requestId.current !== id) return;
     setResults(hits);
     setResolvedTerm(term);
+    if (direction === "blocking") checkBoards(hits);
   }, 200);
 
   function onQuery(value: string) {
@@ -405,7 +448,12 @@ function AddDependency({
     }
   }
 
-  async function pick(hit: DependencyTarget) {
+  function chooseDirection(next: Direction) {
+    setDirection(next);
+    if (next === "blocking") checkBoards(results);
+  }
+
+  async function pick(hit: ItemSearchResult) {
     setPending(true);
     try {
       const res = await createDependency(
@@ -460,7 +508,7 @@ function AddDependency({
                 type="button"
                 role="radio"
                 aria-checked={direction === value}
-                onClick={() => setDirection(value)}
+                onClick={() => chooseDirection(value)}
                 className={cn(
                   "focus-visible:ring-ring ease-keystone rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11",
                   direction === value
@@ -492,7 +540,10 @@ function AddDependency({
           {visible.map((hit) => {
             // Blocking makes the picked item the successor, and the server
             // requires edit access on the successor's board.
-            const readOnly = direction === "blocking" && !hit.canEdit;
+            // Unknown (still checking) stays pickable; the RPC still gates.
+            const readOnly =
+              direction === "blocking" &&
+              editability.known(hit.boardId) === false;
             return (
               <li key={hit.id}>
                 <button
@@ -522,11 +573,12 @@ function AddDependency({
               </li>
             );
           })}
-          {direction === "blocking" && visible.some((h) => !h.canEdit) && (
-            <li className="text-muted-foreground border-t px-3 py-2 text-xs">
-              Only items on boards you can edit can wait on this one.
-            </li>
-          )}
+          {direction === "blocking" &&
+            visible.some((h) => editability.known(h.boardId) === false) && (
+              <li className="text-muted-foreground border-t px-3 py-2 text-xs">
+                Only items on boards you can edit can wait on this one.
+              </li>
+            )}
           {visible.length === 0 && (
             <li className="text-muted-foreground px-3 py-3 text-xs">
               {emptyText}

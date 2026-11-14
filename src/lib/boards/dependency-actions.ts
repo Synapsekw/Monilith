@@ -13,7 +13,6 @@ import {
 } from "@/lib/validations/dependency-actions";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { dependencyErrorMessage } from "@/lib/boards/dependency-errors";
-import { searchItems, type ItemSearchResult } from "@/lib/search/item-search";
 
 export async function createDependency(input: {
   predecessorId: string;
@@ -73,32 +72,34 @@ export async function getBoardDependencyContext(input: {
   return { ok: true, data: ctx.data };
 }
 
-/** A search hit for a new link, plus whether the caller can edit its board. */
-export type DependencyTarget = ItemSearchResult & { canEdit: boolean };
+const editableBoardIdsSchema = z.object({
+  boardIds: z.array(z.string().uuid()).min(1).max(25),
+});
 
 /**
- * Org-wide item search for the "Add dependency" picker. Same bounded,
- * RLS-scoped read as the command palette (`searchItems`, max 25 rows), plus
- * one `can_edit_board` check per DISTINCT board in the results, run in
- * parallel — a single client round-trip. Editability matters for "Blocking"
- * links, where the picked item is the successor and the RPC requires edit on
- * its board. A failed check reads as not editable (the RPC stays the gate).
+ * Which of these boards the caller can edit — for the "Blocking" picker, where
+ * the picked item is the successor and `create_item_dependency` requires edit
+ * on its board. There is no batched editability RPC, and re-implementing
+ * `can_edit_board`'s rules here would drift, so this runs one `can_edit_board`
+ * per distinct board in parallel inside ONE action call. Bounded to 25 ids
+ * (one search page); the client caches answers per board for the session and
+ * only asks about boards it hasn't seen. A failed check reads as not editable
+ * (the RPC stays the real gate).
  */
-export async function searchDependencyTargets(
-  query: string,
-): Promise<DependencyTarget[]> {
-  const hits = await searchItems(query);
-  if (hits.length === 0) return [];
+export async function editableBoardIds(input: {
+  boardIds: string[];
+}): Promise<ActionResult<string[]>> {
+  const parsed = editableBoardIdsSchema.safeParse(input);
+  if (!parsed.success) return fail("Invalid boards.");
   const supabase = await createClient();
-  const boardIds = [...new Set(hits.map((h) => h.boardId))];
+  const ids = [...new Set(parsed.data.boardIds)];
   const checks = await Promise.all(
-    boardIds.map(async (id) => {
+    ids.map(async (id) => {
       const { data, error } = await typedRpc(supabase, "can_edit_board", {
         p_board_id: id,
       });
-      return [id, !error && data === true] as const;
+      return !error && data === true ? id : null;
     }),
   );
-  const editable = new Map(checks);
-  return hits.map((h) => ({ ...h, canEdit: editable.get(h.boardId) ?? false }));
+  return { ok: true, data: checks.filter((id): id is string => id !== null) };
 }
