@@ -90,7 +90,9 @@ export function BatchConfirmCard({
   return (
     <section
       aria-label="Changes waiting for your confirmation"
-      className="bg-surface hover:border-border-hover rounded-lg border p-3 text-sm transition-colors"
+      // `chrome-reset`: an opaque card that also renders in the board dock,
+      // inside its chrome scope (inert on the content card).
+      className="chrome-reset bg-surface hover:border-border-hover rounded-lg border p-3 text-sm transition-colors"
     >
       <Kicker>
         {calls.length} {calls.length === 1 ? "change" : "changes"}

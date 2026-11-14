@@ -110,13 +110,13 @@ describe("SignOutForm", () => {
     // change deliberately leaves that as it was.
     it("leaves the theme preset exactly as it was", async () => {
       signInAsVividCelebrator();
-      localStorage.setItem(THEME_PRESET_STORAGE_KEY, "ocean");
-      root.setAttribute(THEME_PRESET_ATTR, "ocean");
+      localStorage.setItem(THEME_PRESET_STORAGE_KEY, "graphite");
+      root.setAttribute(THEME_PRESET_ATTR, "graphite");
       render(<SignOutForm />);
       await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
-      expect(localStorage.getItem(THEME_PRESET_STORAGE_KEY)).toBe("ocean");
-      expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("ocean");
+      expect(localStorage.getItem(THEME_PRESET_STORAGE_KEY)).toBe("graphite");
+      expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("graphite");
     });
   });
 });

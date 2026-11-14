@@ -717,7 +717,10 @@ export function BoardDock({
       data-animating={animating || undefined}
       onTransitionEnd={onTransitionEnd}
       className={cn(
-        "relative flex min-w-0 shrink-0 flex-col overflow-hidden",
+        // `chrome-scope`: the dock sits on the wash as the sidebar's twin, and
+        // it is portalled into the shell's slot, so it carries the scope
+        // itself. Opaque surfaces inside it carry `chrome-reset`.
+        "chrome-scope relative flex min-w-0 shrink-0 flex-col overflow-hidden",
         animating && "ease-keystone transition-[width] duration-[360ms]",
       )}
       style={{ width: open ? shownWidth : DOCK_RAIL_WIDTH }}

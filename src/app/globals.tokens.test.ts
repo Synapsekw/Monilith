@@ -51,6 +51,12 @@ const THEME_INVARIANT = new Set([
   // Derived from --brand and --brand-2, which every mode and preset block
   // re-seeds on <html> — so one declaration follows them all.
   "--brand-gradient",
+  // The primary Button's hover image: the same three stops at 80% alpha,
+  // derived from the same seeds on the same element.
+  "--brand-gradient-hover",
+  // The gradient's middle stop — likewise derived from the two brand seeds on
+  // <html>, and `.dark` is the same element.
+  "--brand-mid",
 ]);
 
 describe("Keystone token contract", () => {
@@ -66,8 +72,17 @@ describe("Keystone token contract", () => {
   it("keeps light and dark palettes at parity", () => {
     const root = tokensIn(":root");
     const dark = tokensIn(".dark");
+    // The `--base-*` aliases are `.chrome-reset`'s copy of every token
+    // `.chrome-scope` moves (`--base-foreground: var(--foreground)`, …). They
+    // are captured ONCE, in `:root`, because `:root` and `.dark` are the same
+    // <html> element: each alias computes from whichever value won the
+    // cascade there, so a second copy in `.dark` would be the same string
+    // twice. Exempt by prefix rather than listed, so the scope can move one
+    // more token without touching this file — globals.contrast.test.ts pins
+    // the set to the scope's own token list.
     const onlyLight = [...root].filter(
-      (t) => !dark.has(t) && !THEME_INVARIANT.has(t),
+      (t) =>
+        !dark.has(t) && !THEME_INVARIANT.has(t) && !t.startsWith("--base-"),
     );
     const onlyDark = [...dark].filter(
       (t) => !root.has(t) && !THEME_INVARIANT.has(t),
@@ -422,9 +437,23 @@ describe("brand gradient tokens", () => {
     );
   });
 
-  it("the hover fill is the same two stops at the old bg-primary/80 alpha", () => {
+  it("the hover fill is the same three stops at the old bg-primary/80 alpha", () => {
+    // The recipe is a TOKEN (`--brand-gradient-hover`, derived once in :root
+    // like --brand-gradient) and the utility reads it, so the light chrome
+    // scope can re-seed the hover image: derived from the scope's white brand
+    // it was white at 80% and the label failed AA on it.
     expect(FLAT).toContain(
-      "--background-image-brand-gradient-hover: linear-gradient(90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent));",
+      "--background-image-brand-gradient-hover: var(--brand-gradient-hover);",
+    );
+    expect(
+      valueIn(":root", "--brand-gradient-hover").replace(/\s+/g, " "),
+    ).toBe(
+      "linear-gradient( 90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-mid) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent) )",
+    );
+    // Derived once: `.dark` and the preset blocks are the same <html>.
+    expect(CSS.match(/^\s*--brand-gradient-hover:/gm)).toHaveLength(4);
+    expect(valueIn(".chrome-scope", "--brand-gradient-hover")).toBe(
+      "linear-gradient(90deg, #ffffff, #ffffff)",
     );
   });
 
@@ -452,13 +481,16 @@ describe("brand gradient tokens", () => {
     }
   });
 
-  it("re-seeds both stops and the gradient inside the print root", () => {
+  it("re-seeds both stops, the middle stop and the gradient inside the print root", () => {
     const print = FLAT.split("@media print")[1] ?? "";
     const printRoot = print.match(/\[data-print-root\] \{[^}]*\}/)?.[0] ?? "";
     expect(printRoot).toContain("--brand: #5a6ed5;");
     expect(printRoot).toContain("--brand-2: #5a6ed5;");
     expect(printRoot).toContain(
-      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-2));",
+      "--brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));",
+    );
+    expect(printRoot).toContain(
+      "--brand-gradient: linear-gradient(90deg, var(--brand), var(--brand-mid), var(--brand-2));",
     );
   });
 });

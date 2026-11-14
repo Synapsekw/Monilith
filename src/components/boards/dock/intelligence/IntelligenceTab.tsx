@@ -15,7 +15,11 @@ import { SuggestionCard } from "./SuggestionCard";
 import { useIntelligenceRun } from "./use-intelligence-run";
 import type { QaPair } from "./use-intelligence-ask";
 
-/** The shape of the answer, not a spinner: three brief lines and two cards. */
+/**
+ * The shape of the answer, not a spinner: three brief lines and two cards.
+ * `variant="chrome"` because the dock is painted on the wash, like the rest of
+ * the dock's skeletons — an opaque `bg-muted` block is a grey patch there.
+ */
 function Reading() {
   return (
     <div
@@ -25,13 +29,13 @@ function Reading() {
       className="flex flex-col gap-4"
     >
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-11/12" />
-        <Skeleton className="h-3 w-2/3" />
+        <Skeleton variant="chrome" className="h-3 w-full" />
+        <Skeleton variant="chrome" className="h-3 w-11/12" />
+        <Skeleton variant="chrome" className="h-3 w-2/3" />
       </div>
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-20 w-full rounded-lg" />
-        <Skeleton className="h-20 w-full rounded-lg" />
+        <Skeleton variant="chrome" className="h-20 w-full rounded-lg" />
+        <Skeleton variant="chrome" className="h-20 w-full rounded-lg" />
       </div>
     </div>
   );

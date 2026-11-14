@@ -148,6 +148,26 @@ describe("ContextSwitcher", () => {
     expect(trigger.className).not.toContain("card-lift");
   });
 
+  it("the workspace initial is a solid tile in light, the 18% tint in dark", () => {
+    // On the light frame the chip is already a white alpha fill, and a white
+    // glyph on an 18% white tile stacked on it measured 3.5–4.2:1. Solid, the
+    // tile is white with the brand as its glyph there (and the brand with its
+    // own label anywhere else in light) — both pinned ≥ 4.5 by
+    // globals.contrast.test.ts. Dark keeps the tint exactly.
+    renderIt();
+    const tile = screen
+      .getByRole("button", { name: "Switch workspace" })
+      .querySelector("span")!;
+    expect(tile).toHaveTextContent("P");
+    const classes = tile.className.split(/\s+/);
+    expect(classes).toContain("bg-primary");
+    expect(classes).toContain("text-primary-foreground");
+    expect(classes).toContain("dark:bg-primary/[0.18]");
+    expect(classes).toContain("dark:text-primary");
+    expect(classes).not.toContain("bg-primary/[0.18]");
+    expect(classes).not.toContain("text-primary");
+  });
+
   it("collapsed: a 36px chip with the workspace initial", () => {
     renderIt({ collapsed: true, orgs, activeOrgId: "o1" });
     const trigger = screen.getByRole("button", {

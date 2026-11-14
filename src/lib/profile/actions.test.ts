@@ -217,11 +217,11 @@ describe("updateProfileThemePreset", () => {
     const eq = vi.fn(async () => ({ error: null }));
     update.mockReturnValue({ eq });
 
-    const res = await updateProfileThemePreset({ themePreset: "ocean" });
+    const res = await updateProfileThemePreset({ themePreset: "graphite" });
 
     expect(res.ok).toBe(true);
     expect(from).toHaveBeenCalledWith("profiles");
-    expect(update).toHaveBeenCalledWith({ theme_preset: "ocean" });
+    expect(update).toHaveBeenCalledWith({ theme_preset: "graphite" });
     expect(eq).toHaveBeenCalledWith("id", "user-1");
     expect(updateTag).toHaveBeenCalledWith("profile:user:user-1");
   });
@@ -246,7 +246,7 @@ describe("updateProfileThemePreset", () => {
       eq: async () => ({ error: { message: "nope" } }),
     });
 
-    const res = await updateProfileThemePreset({ themePreset: "forest" });
+    const res = await updateProfileThemePreset({ themePreset: "aurora" });
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toBe("Could not update theme.");
@@ -256,7 +256,7 @@ describe("updateProfileThemePreset", () => {
   it("refuses when there is no session", async () => {
     getUser.mockResolvedValue({ data: { user: null } });
 
-    const res = await updateProfileThemePreset({ themePreset: "ember" });
+    const res = await updateProfileThemePreset({ themePreset: "graphite" });
 
     expect(res.ok).toBe(false);
     expect(update).not.toHaveBeenCalled();

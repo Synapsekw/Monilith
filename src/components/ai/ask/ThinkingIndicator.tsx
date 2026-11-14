@@ -50,7 +50,9 @@ export function ThinkingIndicator({
 }) {
   return (
     <div className={cn("animate-fadein flex items-start gap-3", className)}>
-      <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
+      {/* `chrome-reset`: an opaque tile that also renders in the board dock,
+          inside its chrome scope (inert on the content card). */}
+      <span className="chrome-reset bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
         {mark ? (
           <span aria-hidden="true">{mark}</span>
         ) : (

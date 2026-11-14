@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-14",
     kind: "new",
+    title: "Twelve new colour themes and a bolder light mode",
+    description:
+      "Pick from twelve new themes in Settings: Lagoon, Tropic, Orchid, Peach, Glacier, Dusk, Berry, Candy, Citrus, Prism, Mocha and Neon. Light mode now wraps your work in a bold coloured frame with white text, and every theme has soft colour glows behind the sidebar. Ocean, Forest, Ember and Rose have been retired: if you used one, Monolith switches you to the closest new theme automatically (Ocean to Lagoon, Forest to Tropic, Ember to Peach, Rose to Orchid).",
+  },
+  {
+    date: "2026-11-14",
+    kind: "new",
     title: "Dependencies across boards",
     description:
       "Link an item to work on any board in your organisation from the item panel's new Waiting on / Blocking section, with a Late marker when the dates clash.",

@@ -38,7 +38,8 @@ export function AppShell({
       <Sidebar navSlot={sidebarNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-4">
+        {/* `chrome-scope`: the band is painted on the wash, like the rail. */}
+        <header className="chrome-scope flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-1 md:hidden">
             {mobileNav}
             <Brand />

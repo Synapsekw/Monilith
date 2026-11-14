@@ -5,7 +5,7 @@ import { updateProfileThemePreset } from "@/lib/profile/actions";
 import {
   applyThemePreset,
   DEFAULT_THEME_PRESET,
-  isThemePresetId,
+  resolveThemePresetId,
   THEME_PRESET_ATTR,
   THEME_PRESET_STORAGE_KEY,
   type ThemePresetId,
@@ -15,7 +15,7 @@ import {
 function attributePreset(): ThemePresetId {
   if (typeof document === "undefined") return DEFAULT_THEME_PRESET;
   const v = document.documentElement.getAttribute(THEME_PRESET_ATTR);
-  return isThemePresetId(v) ? v : DEFAULT_THEME_PRESET;
+  return resolveThemePresetId(v);
 }
 
 function remember(id: ThemePresetId): void {

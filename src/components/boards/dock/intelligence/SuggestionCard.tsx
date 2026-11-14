@@ -68,7 +68,8 @@ export function SuggestionCard({
   return (
     <li
       aria-labelledby={titleId}
-      className="bg-surface border-border hover:border-border-hover ease-keystone rounded-lg border p-3 transition-colors"
+      // `chrome-reset`: an opaque card inside the dock's chrome scope.
+      className="chrome-reset bg-surface border-border hover:border-border-hover ease-keystone rounded-lg border p-3 transition-colors"
     >
       <div className="flex items-start gap-2">
         <span

@@ -190,7 +190,11 @@ export function ContextSwitcher({
 
 function Avatar({ initial }: { initial: string }) {
   return (
-    <span className="bg-primary/[0.18] text-primary flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
+    // Solid in light, the 18% tint in dark. The tile sits on the chip's own
+    // `bg-chrome-fill`; on the light frame both were white alphas and a white
+    // glyph on the stack measured 3.5–4.2:1. Solid, it is a white tile with
+    // the brand as its glyph there (≥ 4.5, globals.contrast.test.ts).
+    <span className="bg-primary text-primary-foreground dark:bg-primary/[0.18] dark:text-primary flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
       {initial}
     </span>
   );

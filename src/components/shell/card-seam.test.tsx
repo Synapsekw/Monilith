@@ -105,6 +105,20 @@ describe("CardSeam", () => {
   });
 });
 
+describe("the seam on the light frame", () => {
+  it("carries the chrome scope, and its opaque cap the reset", () => {
+    // The seam is drawn in #app-card-frame, outside the rail and the dock, so
+    // without the scope it stroked the root's ink on the saturated frame.
+    // Both classes are inert in dark mode.
+    const { root } = renderSeam();
+    expect(root).toHaveClass("seam", "chrome-scope");
+    const cap = SEAM_CAP.split(/\s+/);
+    expect(cap).toContain("chrome-reset");
+    expect(cap).toContain("bg-surface");
+    expect(cap).toContain("text-muted-foreground");
+  });
+});
+
 describe("seamHitClasses", () => {
   it("runs the full edge for a mouse and shrinks to a 44px target for touch", () => {
     // Full height is right for a pointer — the whole edge is the control — but

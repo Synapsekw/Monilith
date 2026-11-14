@@ -37,11 +37,11 @@ afterEach(() => {
 
 describe("ThemePresetSync", () => {
   it("stamps the server preset and reach and stores both", async () => {
-    await mount("ocean", "vivid");
+    await mount("graphite", "vivid");
 
-    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("ocean");
+    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("graphite");
     expect(root.getAttribute(THEME_REACH_ATTR)).toBe("vivid");
-    expect(localStorage.getItem(THEME_PRESET_STORAGE_KEY)).toBe("ocean");
+    expect(localStorage.getItem(THEME_PRESET_STORAGE_KEY)).toBe("graphite");
     expect(localStorage.getItem(THEME_REACH_STORAGE_KEY)).toBe("vivid");
   });
 
@@ -70,9 +70,9 @@ describe("ThemePresetSync", () => {
       throw new DOMException("denied", "SecurityError");
     });
 
-    await mount("rose", "subtle");
+    await mount("aurora", "subtle");
 
-    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("rose");
+    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("aurora");
     expect(root.getAttribute(THEME_REACH_ATTR)).toBe("subtle");
   });
 });
