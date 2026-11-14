@@ -26,6 +26,7 @@ import {
   type FolderTimelineData,
 } from "@/lib/boards/timeline-context";
 import { buildFolderTimeline, folderTimelineKey } from "@/lib/folders/timeline";
+import type { RollupRow } from "@/lib/folders/types";
 import type { TimelineZoom } from "@/components/boards/gantt/utils";
 import { GanttCanvas } from "@/components/boards/gantt/GanttCanvas";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -41,7 +42,14 @@ const ZOOM_LABEL: Record<(typeof ZOOMS)[number], string> = {
 const MAX_SHOWN = 5000;
 const MAX_LINK_CANDIDATES = 200;
 
-type Props = { folderId: string; stage: string | null; board: string | null };
+type Props = {
+  folderId: string;
+  stage: string | null;
+  board: string | null;
+  /** The Command Center's rollup rows under the same stage/board filter —
+   * the source of each band's "% done · N late". */
+  rollup?: readonly RollupRow[];
+};
 
 /**
  * The folder's boards on one editable timeline. One Server Action fetch when
@@ -49,7 +57,7 @@ type Props = { folderId: string; stage: string | null; board: string | null };
  * stage/board filters re-derive from that cache. Writes patch the cache
  * optimistically and roll back on failure — never a refetch or refresh.
  */
-export function TimelineInner({ folderId, stage, board }: Props) {
+export function TimelineInner({ folderId, stage, board, rollup }: Props) {
   const q = useQuery({
     queryKey: folderTimelineKey(folderId),
     queryFn: async () => {
@@ -73,6 +81,7 @@ export function TimelineInner({ folderId, stage, board }: Props) {
       data={q.data}
       stage={stage}
       board={board}
+      rollup={rollup}
     />
   );
 }
@@ -111,17 +120,24 @@ function FolderTimelineChart({
   data,
   stage,
   board,
+  rollup,
 }: {
   folderId: string;
   data: FolderTimelineData;
   stage: string | null;
   board: string | null;
+  rollup?: readonly RollupRow[];
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [zoom, setZoom] = useState<TimelineZoom>("month");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [collapsedBoards, setCollapsedBoards] = useState<ReadonlySet<string>>(
+  // Roll-up first: both sets start empty, so the chart opens as one row per
+  // board. Deliberately not persisted.
+  const [expandedBoards, setExpandedBoards] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
 
@@ -132,9 +148,20 @@ function FolderTimelineChart({
         boardId: board,
         expanded,
         zoom,
-        collapsedBoards,
+        expandedBoards,
+        expandedGroups,
+        rollup,
       }),
-    [data, stage, board, expanded, zoom, collapsedBoards],
+    [
+      data,
+      stage,
+      board,
+      expanded,
+      zoom,
+      expandedBoards,
+      expandedGroups,
+      rollup,
+    ],
   );
 
   const boards = useMemo(
@@ -168,13 +195,8 @@ function FolderTimelineChart({
     [rows],
   );
 
-  // Late links: in-view arrows that break finish-to-start, plus late stubs.
-  const lateCount = useMemo(() => {
-    const late = new Set(view.violations);
-    for (const stubs of view.externalLinks.values())
-      for (const s of stubs) if (s.late) late.add(s.dependencyId);
-    return late.size;
-  }, [view.violations, view.externalLinks]);
+  // Late links across everything charted — independent of what is open.
+  const lateCount = view.totals.lateLinks;
 
   const cellMutation = useMutation({
     mutationFn: async (v: SetCellArg) => {
@@ -353,7 +375,9 @@ function FolderTimelineChart({
 
   function isExpanded(id: string): boolean {
     if (id.startsWith("board:"))
-      return !collapsedBoards.has(id.slice("board:".length));
+      return expandedBoards.has(id.slice("board:".length));
+    if (id.startsWith("group:"))
+      return expandedGroups.has(id.slice("group:".length));
     return expanded.has(id);
   }
   function toggle(id: string) {
@@ -364,7 +388,9 @@ function FolderTimelineChart({
       return next;
     };
     if (id.startsWith("board:"))
-      setCollapsedBoards((s) => flip(s, id.slice("board:".length)));
+      setExpandedBoards((s) => flip(s, id.slice("board:".length)));
+    else if (id.startsWith("group:"))
+      setExpandedGroups((s) => flip(s, id.slice("group:".length)));
     else setExpanded((s) => flip(s, id));
   }
 

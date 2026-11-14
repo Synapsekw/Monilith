@@ -10,6 +10,8 @@ import {
 import {
   buildGanttRows,
   detectViolations,
+  rangeIncludingToday,
+  spanOfRows,
   timelineDayCount,
   visibleRows,
   type GanttDependency,
@@ -28,6 +30,7 @@ import {
   type TimelineItem,
 } from "@/lib/boards/timeline-context";
 import { ALL_ITEMS_KEY, stageKey } from "@/lib/folders/stages";
+import type { RollupRow } from "@/lib/folders/types";
 
 /** TanStack Query key for the folder Timeline tab's one payload. */
 export const folderTimelineKey = (folderId: string) =>
@@ -44,27 +47,52 @@ export type FolderTimelineView = {
   boardOfItem: Map<string, string>;
   /** Boards shown as a band with nothing dated under it. */
   noDateBoards: Set<string>;
-  /** Boards / items on the chart under the current filters — independent of
-   * which boards or parents are collapsed, so the header doesn't jump. */
-  totals: { boards: number; items: number };
+  /** Boards / items / late links on the chart under the current filters —
+   * independent of which boards, groups or parents are open, so the header
+   * doesn't jump and a closed folder still reports its late links. */
+  totals: { boards: number; items: number; lateLinks: number };
 };
 
+type Counts = { total: number; done: number; overdue: number };
+
+/** A band's progress from the folder rollup; unknown when no row matched. */
+function progressOf(c: Counts | undefined): {
+  donePct: number | null;
+  lateCount: number | null;
+} {
+  if (!c) return { donePct: null, lateCount: null };
+  return {
+    donePct: c.total > 0 ? Math.round((c.done / c.total) * 100) : null,
+    lateCount: c.overdue,
+  };
+}
+
 /**
- * Lay a folder's boards out on one timeline: a band per board (folder order),
- * a band per group, then that group's scheduled items — each board read
- * through its own date sources. Links with both ends in view become arrows;
- * links to anything else (another folder, or filtered out by stage/board)
- * become stubs on the local bar. Pure, so every zoom / filter / collapse
- * toggle is a re-derive with no server round-trip.
+ * Lay a folder's boards out on one timeline, roll-up first: a band per board
+ * (folder order); under an EXPANDED board a band per group; under an EXPANDED
+ * group that group's scheduled items — each board read through its own date
+ * sources. Every band carries a summary (the span of what is under it, plus
+ * progress joined from the folder rollup by board id + group id), computed
+ * whether or not the band is open. Links with both ends in view become arrows;
+ * links to anything else become stubs on the local bar. Pure, so every zoom /
+ * filter / expand toggle is a re-derive with no server round-trip.
  */
 export function buildFolderTimeline(
   data: FolderTimelineData,
   opts: {
     stageKey: string | null;
     boardId: string | null;
+    /** Parent items whose sub-items are shown. */
     expanded: ReadonlySet<string>;
     zoom: TimelineZoom;
-    collapsedBoards: ReadonlySet<string>;
+    /** Boards showing their group bands. Empty = the roll-up view. */
+    expandedBoards: ReadonlySet<string>;
+    /** Groups showing their items. */
+    expandedGroups: ReadonlySet<string>;
+    /** Folder rollup rows, already filtered by stage/board by the caller. */
+    rollup?: readonly RollupRow[];
+    /** Injected in tests; defaults to the viewer's today. */
+    todayISO?: string;
   },
 ): FolderTimelineView {
   const boards = new Map(data.boards.map((b) => [b.id, b]));
@@ -72,8 +100,9 @@ export function buildFolderTimeline(
   const local = data.items.filter((i) => !external.has(i.id));
   const spans = contextSpans({ boards: data.boards, items: data.items });
 
-  // One shared axis for every board: earliest local start (or today) to the
-  // latest local end, never narrower than the zoom window.
+  // One shared axis for every board: earliest local start to latest local
+  // end, widened so today (− 14 / + 30 days) is always on the grid, and never
+  // narrower than the zoom window.
   let min: string | null = null;
   let max: string | null = null;
   for (const it of local) {
@@ -82,10 +111,11 @@ export function buildFolderTimeline(
     if (min === null || s.start < min) min = s.start;
     if (max === null || s.end > max) max = s.end;
   }
-  const rangeStartISO = min ?? todayISO();
+  const range = rangeIncludingToday(min, max, opts.todayISO ?? todayISO());
+  const rangeStartISO = range.startISO;
   const dayCount = timelineDayCount(
     rangeStartISO,
-    max ?? rangeStartISO,
+    range.endISO,
     ZOOM_DAY_COUNT[opts.zoom],
   );
 
@@ -98,12 +128,33 @@ export function buildFolderTimeline(
     else byGroup.set(k, [it]);
   }
 
+  // Rollup rows are one per board × group. Key them the way items are keyed
+  // (board id + group id); a board band sums every row passed for its board.
+  const groupCounts = new Map<string, Counts>();
+  const boardCounts = new Map<string, Counts>();
+  for (const r of opts.rollup ?? []) {
+    if (r.groupId !== null)
+      groupCounts.set(`${r.boardId}:${r.groupId}`, {
+        total: r.total,
+        done: r.done,
+        overdue: r.overdue,
+      });
+    const b = boardCounts.get(r.boardId) ?? { total: 0, done: 0, overdue: 0 };
+    boardCounts.set(r.boardId, {
+      total: b.total + r.total,
+      done: b.done + r.done,
+      overdue: b.overdue + r.overdue,
+    });
+  }
+
   const stageFilter = opts.stageKey === ALL_ITEMS_KEY ? null : opts.stageKey;
   const rows: GanttRow[] = [];
   let totalBoards = 0;
   let totalItems = 0;
   const boardOfItem = new Map<string, string>();
   const noDateBoards = new Set<string>();
+  // Every row on the chart under the current filters, open or not.
+  const chartedRows: GanttRow[] = [];
   for (const boardId of data.board_order) {
     if (opts.boardId && boardId !== opts.boardId) continue;
     const board = boards.get(boardId);
@@ -115,17 +166,18 @@ export function buildFolderTimeline(
       .filter((g) => stageFilter === null || stageKey(g.name) === stageFilter)
       .sort((a, b) => a.position - b.position);
     if (groups.length === 0) continue;
-    rows.push({
+    const boardBand: GanttRow = {
       itemId: `board:${boardId}`,
       name: board.name,
       scheduled: false,
       kind: "section",
       level: 0,
-    });
+    };
+    rows.push(boardBand);
     totalBoards++;
-    // A collapsed board is still laid out (for the totals and its "no dates"
-    // note), its rows just aren't emitted.
-    const collapsed = opts.collapsedBoards.has(boardId);
+    // A closed board is still laid out (for the totals, its summary and its
+    // "no dates" note); its group bands just aren't emitted.
+    const boardOpen = opts.expandedBoards.has(boardId);
     const schedule = boardScheduleOf(board);
     if (!schedule.startSourceId) {
       noDateBoards.add(boardId);
@@ -134,7 +186,7 @@ export function buildFolderTimeline(
     const synthetic = [schedule.startSourceId, schedule.endSourceId].filter(
       (id): id is string => isSyntheticDateSource(id),
     );
-    let dated = false;
+    const boardRows: GanttRow[] = [];
     for (const g of groups) {
       const groupItems = byGroup.get(`${boardId}:${g.id}`) ?? [];
       if (groupItems.length === 0) continue;
@@ -160,22 +212,40 @@ export function buildFolderTimeline(
       // carry a dated sub-item. Undated leaves stay off the folder chart.
       const onTimeline = built.filter((r) => r.scheduled || r.hasChildren);
       if (onTimeline.length === 0) continue;
-      dated = true;
       totalItems += onTimeline.length;
-      if (collapsed) continue;
-      rows.push({
+      boardRows.push(...onTimeline);
+      if (!boardOpen) continue;
+      const groupBand: GanttRow = {
         itemId: `group:${g.id}`,
         name: g.name,
         scheduled: false,
         kind: "section",
         level: 1,
-      });
+      };
+      const groupSpan = spanOfRows(onTimeline);
+      if (groupSpan)
+        groupBand.summary = {
+          ...groupSpan,
+          ...progressOf(groupCounts.get(`${boardId}:${g.id}`)),
+        };
+      rows.push(groupBand);
+      if (!opts.expandedGroups.has(g.id)) continue;
       for (const r of visibleRows(onTimeline, opts.expanded)) {
         rows.push(r);
         boardOfItem.set(r.itemId, boardId);
       }
     }
-    if (!dated) noDateBoards.add(boardId);
+    if (boardRows.length === 0) {
+      noDateBoards.add(boardId);
+      continue;
+    }
+    chartedRows.push(...boardRows);
+    const boardSpan = spanOfRows(boardRows);
+    if (boardSpan)
+      boardBand.summary = {
+        ...boardSpan,
+        ...progressOf(boardCounts.get(boardId)),
+      };
   }
 
   const inView = new Set(boardOfItem.keys());
@@ -194,6 +264,31 @@ export function buildFolderTimeline(
     context: { boards: data.boards, items: externalItems },
     contextSpans: spans,
   });
+
+  // Late links over everything charted, NOT just what is in view: with every
+  // board closed there are no item rows, and the header must still say how
+  // many links are late. Same two rules as above (detectViolations for links
+  // inside the chart, a late stub for links leaving it), keyed by link id.
+  const charted = new Set(chartedRows.map((r) => r.itemId));
+  const lateLinks = detectViolations(
+    chartedRows,
+    data.dependencies.filter(
+      (d) => charted.has(d.predecessor_id) && charted.has(d.successor_id),
+    ),
+  );
+  const offChart = crossBoardStubs({
+    dependencies: data.dependencies,
+    localItemIds: charted,
+    localSpans: spans,
+    context: {
+      boards: data.boards,
+      items: data.items.filter((i) => !charted.has(i.id)),
+    },
+    contextSpans: spans,
+  });
+  for (const stubs of offChart.values())
+    for (const s of stubs) if (s.late) lateLinks.add(s.dependencyId);
+
   return {
     rows,
     dependencies,
@@ -203,6 +298,10 @@ export function buildFolderTimeline(
     dayCount,
     boardOfItem,
     noDateBoards,
-    totals: { boards: totalBoards, items: totalItems },
+    totals: {
+      boards: totalBoards,
+      items: totalItems,
+      lateLinks: lateLinks.size,
+    },
   };
 }
