@@ -207,6 +207,9 @@ export function spanOfRows(
     : { startCol: min, spanCols: max - min };
 }
 
+/** A group band's canvas row id is `${GROUP_ROW_PREFIX}<groupId>`. */
+export const GROUP_ROW_PREFIX = "group:";
+
 /** Band id for rows whose group is not in the board's group list. */
 export const UNGROUPED_GROUP_ID = "__ungrouped__";
 
@@ -260,7 +263,7 @@ export function groupTimelineRows(
     const groupRows = byGroup.get(g.id);
     if (!groupRows || groupRows.length === 0) continue;
     const band: GanttRow = {
-      itemId: `group:${g.id}`,
+      itemId: `${GROUP_ROW_PREFIX}${g.id}`,
       name: g.name,
       scheduled: false,
       kind: "section",

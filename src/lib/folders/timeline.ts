@@ -9,6 +9,7 @@ import {
 } from "@/lib/boards/dates";
 import {
   buildGanttRows,
+  GROUP_ROW_PREFIX,
   detectViolations,
   rangeIncludingToday,
   spanOfRows,
@@ -216,7 +217,7 @@ export function buildFolderTimeline(
       boardRows.push(...onTimeline);
       if (!boardOpen) continue;
       const groupBand: GanttRow = {
-        itemId: `group:${g.id}`,
+        itemId: `${GROUP_ROW_PREFIX}${g.id}`,
         name: g.name,
         scheduled: false,
         kind: "section",

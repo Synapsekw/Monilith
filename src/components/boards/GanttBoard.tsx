@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useTransition, useMemo } from "react";
+import { memo, useRef, useState, useTransition, useMemo } from "react";
 import { CalendarDays, GanttChartSquare } from "lucide-react";
 
 import { useRouter } from "next/navigation";
@@ -19,6 +19,7 @@ import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
 import { useIntelItemIds } from "@/lib/boards/intelligence/context";
 import { narrowItemsToSignal } from "@/lib/boards/intelligence/signals";
 import {
+  GROUP_ROW_PREFIX,
   UNGROUPED_GROUP_ID,
   buildGanttRows,
   detectViolations,
@@ -49,11 +50,18 @@ import {
   type QuickEditTarget,
 } from "@/components/boards/quick-edit/ItemQuickEdit";
 import {
+  DEFAULT_LABEL_W,
+  LABEL_W_MAX,
+  LABEL_W_MIN,
   ZOOM_DAY_COUNT,
   effectiveCriticalLabel,
   type TimelineZoom,
 } from "@/components/boards/gantt/utils";
-import { GanttCanvas } from "@/components/boards/gantt/GanttCanvas";
+import {
+  GanttCanvas,
+  type GanttCanvasHandle,
+} from "@/components/boards/gantt/GanttCanvas";
+import { Button } from "@/components/ui/button";
 import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection";
 
 // ---------------------------------------------------------------------------
@@ -64,9 +72,6 @@ import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection
 // real cache changes via its own useBoardCache subscription, and every prop
 // BoardViews passes is referentially stable, so it can skip the parent
 // re-renders driven by presence heartbeats.
-/** `groupTimelineRows` ids a group band `group:<groupId>`. */
-const GROUP_ROW_PREFIX = "group:";
-
 export const GanttBoard = memo(GanttBoardInner);
 
 function GanttBoardInner({
@@ -98,6 +103,7 @@ function GanttBoardInner({
     end_column_id?: string | null;
     color_column_id?: string | null;
     zoom?: TimelineZoom;
+    label_width?: number;
   } | null;
 
   const dateColumns = useMemo(
@@ -123,6 +129,20 @@ function GanttBoardInner({
   const [colorColId, setColorColId] = useState<string | null>(
     config?.color_column_id ?? null,
   );
+  // Name-rail width: seeded from the view config, saved back on drag end.
+  // Clamped and rounded on the way in, so an out-of-range stored value renders
+  // clamped and is never written back unclamped (the schema would reject the
+  // whole config).
+  const [labelWidth, setLabelWidth] = useState<number>(
+    typeof config?.label_width === "number" &&
+      Number.isFinite(config.label_width)
+      ? Math.min(
+          LABEL_W_MAX,
+          Math.max(LABEL_W_MIN, Math.round(config.label_width)),
+        )
+      : DEFAULT_LABEL_W,
+  );
+  const canvasRef = useRef<GanttCanvasHandle>(null);
 
   const dateColumn =
     dateColumns.find((c) => c.id === startColId) ?? dateColumns[0] ?? null;
@@ -446,11 +466,6 @@ function GanttBoardInner({
     window.history.pushState({}, "", url);
   }
 
-  /**
-   * Tap on a bar / milestone / unscheduled row: open the quick-edit peek when
-   * the board has a status or percent column to edit; otherwise fall back to
-   * the ItemPanel so the peek never renders empty.
-   */
   // A canvas row id is an item id (a parent: its sub-items) or `group:<id>`.
   function isRowExpanded(id: string): boolean {
     if (!id.startsWith(GROUP_ROW_PREFIX)) return expanded.has(id);
@@ -469,6 +484,11 @@ function GanttBoardInner({
     else toggleGroupCollapsed(groupId);
   }
 
+  /**
+   * Tap on a bar / milestone / unscheduled row: open the quick-edit peek when
+   * the board has a status or percent column to edit; otherwise fall back to
+   * the ItemPanel so the peek never renders empty.
+   */
   function handleItemTap(itemId: string, anchorRect: DOMRect) {
     if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
     else openItemPanel(itemId);
@@ -479,12 +499,16 @@ function GanttBoardInner({
     end_column_id?: string | null;
     color_column_id?: string | null;
     zoom?: TimelineZoom;
+    label_width?: number;
   }) {
     const merged = {
       date_column_id: startColId,
       end_column_id: endColId,
       color_column_id: colorColId,
       zoom,
+      // updateBoardView REPLACES the stored config, so the rail width has to
+      // ride along on every save or a zoom change would erase it.
+      label_width: labelWidth,
       ...next,
     };
     // In-page change over already-loaded data: update local state instantly
@@ -521,6 +545,15 @@ function GanttBoardInner({
     const next = columnId === "" ? null : columnId;
     setColorColId(next);
     persistConfig({ color_column_id: next });
+  }
+
+  function handleLabelWidthChange(width: number) {
+    // Synchronous: the canvas has already dropped its live drag width, so the
+    // rail must not flash back to the old width for a frame.
+    setLabelWidth(width);
+    // One write, on drag end (the canvas never calls this mid-drag). A viewer
+    // resizes for the session only: the view config is not theirs to write.
+    if (access !== "viewer") persistConfig({ label_width: width });
   }
 
   // Bar move / resize write back through the board's date source(s).
@@ -585,6 +618,16 @@ function GanttBoardInner({
             </button>
           ))}
         </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          onClick={() => canvasRef.current?.scrollToToday()}
+        >
+          Today
+        </Button>
 
         <div className="ml-auto flex items-center gap-3">
           <label
@@ -661,6 +704,9 @@ function GanttBoardInner({
         rangeStartISO={rangeStartISO}
         dayCount={dayCount}
         zoom={zoom}
+        handleRef={canvasRef}
+        labelWidth={labelWidth}
+        onLabelWidthChange={handleLabelWidthChange}
         colorFor={(row) => rowColors.get(row.itemId) ?? null}
         criticalLabelFor={(itemId) =>
           effectiveCriticalLabel(

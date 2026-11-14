@@ -8,7 +8,13 @@ import {
   afterEach,
 } from "vitest";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -89,6 +95,18 @@ const { depContext } = vi.hoisted(() => ({
 vi.mock("@/lib/boards/use-dependency-context", () => ({
   useDependencyContext: () => depContext.value,
 }));
+
+const { updateBoardView } = vi.hoisted(() => ({
+  updateBoardView: vi.fn(async (_input: unknown) => ({
+    ok: true as const,
+    data: undefined,
+  })),
+}));
+vi.mock("@/lib/boards/view-actions", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/boards/view-actions")>();
+  return { ...actual, updateBoardView };
+});
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -183,7 +201,8 @@ function payloadFixture() {
  * bars are late; match either form so these tests do not depend on the date.
  */
 function barLabel(name: string): RegExp {
-  return new RegExp(`^${name}(, \\d+d late)?$`);
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}(, \\d+d late)?$`);
 }
 
 function renderGantt(payload = payloadFixture()) {
@@ -719,7 +738,7 @@ describe("GanttBoard — touch ergonomics (Batch 2)", () => {
 
   it("gives the bar resize handle a coarse hit area and touch-none", () => {
     renderGantt();
-    const handle = screen.getAllByLabelText(/^resize /i)[0];
+    const handle = screen.getAllByLabelText(/^resize (?!name rail)/i)[0];
     expect(handle.className).toContain("touch-none");
     expect(handle.className).toContain("pointer-coarse:w-11");
   });
@@ -905,12 +924,16 @@ describe("GanttBoard — timestamp date sources", () => {
   it("makes bars read-only (no resize handle) when start is a timestamp source", () => {
     renderGantt(datedPayload());
     // A real date column → bars are resizable.
-    expect(screen.getAllByLabelText(/^resize /i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByLabelText(/^resize (?!name rail)/i).length,
+    ).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText("Start date column"), {
       target: { value: "__created_at__" },
     });
     // Timestamp-sourced bars can't be resized — the handle is gone.
-    expect(screen.queryByLabelText(/^resize /i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/^resize (?!name rail)/i),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1282,5 +1305,142 @@ describe("GanttBoard — late bars and range", () => {
     base.dependencies = [];
     const { container } = renderGantt(base as never);
     expect(container.querySelector('[aria-label="Today"]')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Today button + persisted name-rail width
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — Today and the name rail", () => {
+  beforeEach(() => {
+    updateBoardView.mockClear();
+    refresh.mockReset();
+    push.mockReset();
+  });
+
+  const railHeader = () => screen.getByTestId("gantt-rail-header");
+  const railHandle = () =>
+    screen.getByRole("separator", { name: /Resize name rail/ });
+
+  it("scrolls the canvas to today from the Today button, with no navigation", () => {
+    const { container } = renderGantt();
+    const scroller = container.querySelector(
+      "[data-scroll-container]",
+    ) as HTMLElement;
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as typeof scroller.scrollTo;
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    const arg = scrollTo.mock.calls[0]![0] as {
+      left: number;
+      behavior: string;
+    };
+    expect(arg.behavior).toBe("smooth");
+    // The fixture starts in June 2026, so today is well to the right of x = 0.
+    expect(arg.left).toBeGreaterThan(0);
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("gives the Today button a coarse-pointer target through the Button primitive", () => {
+    renderGantt();
+    // size="sm" of the app Button: 28px on a mouse, 44px on a finger.
+    expect(screen.getByRole("button", { name: "Today" }).className).toContain(
+      "pointer-coarse:h-11",
+    );
+  });
+
+  it("opens the rail at 300px, or at the width saved in the view config", () => {
+    const { unmount } = renderGantt();
+    expect(railHeader()).toHaveStyle({ width: "300px" });
+    unmount();
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 220,
+    };
+    renderGantt(base as never);
+    expect(railHeader()).toHaveStyle({ width: "220px" });
+  });
+
+  it("saves the rail width once, on drag end, with the rest of the config", async () => {
+    renderGantt();
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 340 });
+    fireEvent.pointerMove(window, { clientX: 380 });
+    expect(updateBoardView).not.toHaveBeenCalled();
+    fireEvent.pointerUp(window);
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({
+        date_column_id: DATE_COL_ID,
+        zoom: "month",
+        label_width: 380,
+      }),
+    });
+    expect(railHeader()).toHaveStyle({ width: "380px" });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps the saved width when another setting is saved", async () => {
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 220,
+    };
+    renderGantt(base as never);
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({ zoom: "week", label_width: 220 }),
+    });
+  });
+
+  it("lets a viewer resize for the session without writing", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <GanttBoard
+          payload={payloadFixture()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+          access="viewer"
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 400 });
+    fireEvent.pointerUp(window);
+    expect(railHeader()).toHaveStyle({ width: "400px" });
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("renders an out-of-range stored width clamped and writes it back clamped", async () => {
+    const base = payloadFixture() as unknown as {
+      views: Array<{ config: Record<string, unknown> }>;
+    };
+    base.views[0]!.config = {
+      date_column_id: DATE_COL_ID,
+      zoom: "month",
+      label_width: 9999,
+    };
+    renderGantt(base as never);
+    expect(railHeader()).toHaveStyle({ width: "520px" });
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    await waitFor(() => expect(updateBoardView).toHaveBeenCalledTimes(1));
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: expect.objectContaining({ zoom: "week", label_width: 520 }),
+    });
   });
 });
