@@ -85,4 +85,28 @@ describe("BurnChartInner", () => {
     );
     expect(container.querySelectorAll(".recharts-line").length).toBe(2);
   });
+  it("draws no forecast line in weekly mode even when one is supplied", () => {
+    const { container } = render(
+      <BurnChartInner
+        points={points}
+        mode="weekly"
+        forecast={[
+          { weekStart: points[1]!.weekStart, value: 3 },
+          { weekStart: points[2]!.weekStart, value: 5 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll(".recharts-line").length).toBe(0);
+    expect(container.querySelector(".recharts-bar")).not.toBeNull();
+  });
+  it.each([
+    ["empty", []],
+    ["single-point", [{ weekStart: "2026-09-14", value: 3 }]],
+  ])("draws no forecast line for an %s forecast", (_n, forecast) => {
+    const { container } = render(
+      <BurnChartInner points={points} mode="cumulative" forecast={forecast} />,
+    );
+    // Only the planned line remains.
+    expect(container.querySelectorAll(".recharts-line").length).toBe(1);
+  });
 });

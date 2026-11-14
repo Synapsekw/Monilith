@@ -8,7 +8,7 @@ import type { StageBar } from "@/lib/folders/tower";
 export function StageBars({ bars }: { bars: StageBar[] }) {
   if (bars.length === 0)
     return <EmptyState variant="inline">No items yet.</EmptyState>;
-  const max = Math.max(...bars.map((b) => b.total));
+  const max = Math.max(1, ...bars.map((b) => b.total));
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2">

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/folders/charts/BurnChart", () => ({
@@ -56,7 +56,7 @@ describe("BurnPanel", () => {
         forecast={forecast}
       />,
     );
-    expect(screen.getByTestId("burn-reading")).toHaveTextContent(
+    expect(screen.getByTestId("burn-reading").textContent).toBe(
       "7 behind plan today. At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
     );
     expect(screen.getByTestId("burn-chart")).toHaveAttribute(
@@ -76,8 +76,8 @@ describe("BurnPanel", () => {
         forecast={{ ...forecast, gapNow: 4 }}
       />,
     );
-    expect(screen.getByTestId("burn-reading")).toHaveTextContent(
-      "4 ahead of plan today.",
+    expect(screen.getByTestId("burn-reading").textContent).toBe(
+      "4 ahead of plan today. At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
     );
     rerender(
       <BurnPanel
@@ -89,8 +89,8 @@ describe("BurnPanel", () => {
         forecast={{ ...forecast, gapNow: 0 }}
       />,
     );
-    expect(screen.getByTestId("burn-reading")).not.toHaveTextContent(
-      "plan today",
+    expect(screen.getByTestId("burn-reading").textContent).toBe(
+      "At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
     );
   });
 
@@ -112,12 +112,44 @@ describe("BurnPanel", () => {
         }}
       />,
     );
-    expect(screen.getByTestId("burn-reading")).toHaveTextContent(
+    // Exactly this sentence: the gap (-7 here) must not precede it.
+    expect(screen.getByTestId("burn-reading").textContent).toBe(
       "Not enough history yet to forecast.",
     );
     expect(screen.getByTestId("burn-chart")).toHaveAttribute(
       "data-forecast",
       "0",
+    );
+  });
+
+  it("shows the reading and forecast only in cumulative mode", () => {
+    render(
+      <BurnPanel
+        kicker="02"
+        board={null}
+        burn={points}
+        anyDue
+        onRetry={vi.fn()}
+        forecast={forecast}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "Cumulative" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Weekly" }));
+    expect(screen.getByRole("radio", { name: "Weekly" })).toBeChecked();
+    expect(screen.getByTestId("burn-chart")).toHaveAttribute(
+      "data-mode",
+      "weekly",
+    );
+    expect(screen.queryByTestId("burn-reading")).toBeNull();
+    expect(screen.getByTestId("burn-chart")).toHaveAttribute(
+      "data-forecast",
+      "0",
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Cumulative" }));
+    expect(screen.getByTestId("burn-reading")).toBeInTheDocument();
+    expect(screen.getByTestId("burn-chart")).toHaveAttribute(
+      "data-forecast",
+      "1",
     );
   });
 

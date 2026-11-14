@@ -38,4 +38,18 @@ describe("StageBars", () => {
     render(<StageBars bars={[]} />);
     expect(screen.getByText("No items yet.")).toBeInTheDocument();
   });
+
+  it("keeps widths finite when every stage is empty", () => {
+    render(
+      <StageBars
+        bars={[
+          { key: "a", name: "A", color: "#000", total: 0, done: 0, stale: 0 },
+          { key: "b", name: "B", color: "#000", total: 0, done: 0, stale: 0 },
+        ]}
+      />,
+    );
+    for (const el of screen.getAllByTestId("stage-bar-stale"))
+      expect(el.style.width).toBe("0%");
+    expect(document.body.innerHTML).not.toContain("NaN");
+  });
 });

@@ -15,6 +15,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Failed, Panel } from "./Panel";
 
+const NOT_ENOUGH_HISTORY = "Not enough history yet to forecast.";
+
 function gapSentence(gap: number): string {
   if (gap === 0) return "";
   return gap < 0
@@ -86,10 +88,11 @@ export function BurnPanel({
         ))}
       </div>
       <BurnScopeNote board={board} />
-      {charted && forecast ? (
+      {charted && forecast && mode === "cumulative" ? (
         <p data-testid="burn-reading" className="text-muted-foreground text-xs">
-          {gapSentence(forecast.gapNow)}
-          {forecastReading(forecast)}
+          {forecast.insufficientHistory
+            ? NOT_ENOUGH_HISTORY
+            : `${gapSentence(forecast.gapNow)}${forecastReading(forecast)}`}
         </p>
       ) : null}
       {burn === null ? (
@@ -99,7 +102,11 @@ export function BurnPanel({
           Add due dates to see planned vs completed
         </EmptyState>
       ) : (
-        <BurnChart points={burn} mode={mode} forecast={forecast?.line} />
+        <BurnChart
+          points={burn}
+          mode={mode}
+          forecast={mode === "cumulative" ? forecast?.line : undefined}
+        />
       )}
     </Panel>
   );
