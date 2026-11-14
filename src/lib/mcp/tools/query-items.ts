@@ -6,6 +6,7 @@ import {
   type OrgMemberProfile,
 } from "@/lib/mcp/org-scope";
 import { todayInTimeZone } from "@/lib/focus/today";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 import { nameMap, personName } from "./names";
@@ -133,7 +134,10 @@ export async function queryItemsHandler(
         .eq("id", actorId)
         .maybeSingle();
       if (profileErr) return err(profileErr.message);
-      const day = todayInTimeZone(profile?.timezone ?? null, now);
+      const day = todayInTimeZone(
+        effectiveTimeZone(profile?.timezone, scope.org.timezone),
+        now,
+      );
       const today = day.today;
       timezoneAssumed = day.timezoneAssumed;
       dueTo = new Date(Date.parse(`${today}T00:00:00Z`) - DAY_MS)

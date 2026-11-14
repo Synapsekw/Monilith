@@ -7,6 +7,7 @@ import { getUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { todayInTimeZone } from "@/lib/focus/today";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
 import { getFocusTodayCore, type FocusResult } from "@/lib/focus/queries";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
@@ -91,7 +92,7 @@ async function aiAvailable(orgId: string): Promise<boolean> {
 /**
  * Page-level read: the ranked Today list, the assigned items bucketed by due
  * date, and whether to offer "Ask about my day". `today` is the member's own
- * calendar day (profile time zone, UTC when unset) which the list uses to tint
+ * calendar day (profile zone, then org zone, then UTC) which the list uses to tint
  * overdue rows. The clock and the bucketing live here (a server module) so
  * the RSC page stays a pure render.
  *
@@ -108,13 +109,21 @@ export async function getMyWorkPageData(): Promise<{
   const user = await getUser();
   const org = user ? await resolveActiveOrg() : null;
   const tz = user ? await getUserTimeZoneCached(user.id) : null;
-  const { today } = todayInTimeZone(tz, Date.now());
+  const orgTimeZone = org?.timezone ?? null;
+  const { today } = todayInTimeZone(
+    effectiveTimeZone(tz, orgTimeZone),
+    Date.now(),
+  );
   if (!user || !org) return { today, groups: [], focus: null, canAsk: false };
 
   const supabase = await createClient();
   const [list, focus, canAsk] = await Promise.all([
     getMyWorkItemsCore(supabase, { orgId: org.id }),
-    getFocusTodayCore(supabase, { orgId: org.id, userId: user.id }),
+    getFocusTodayCore(supabase, {
+      orgId: org.id,
+      userId: user.id,
+      orgTimeZone,
+    }),
     aiAvailable(org.id),
   ]);
   return {

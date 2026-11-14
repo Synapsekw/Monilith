@@ -2,6 +2,7 @@ import "server-only";
 
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { resolveActiveOrg } from "@/lib/org/active";
+import { effectiveTimeZone } from "./timezone";
 
 /**
  * The effective IANA timezone used to bucket a user's time entries into local
@@ -21,5 +22,5 @@ export async function resolveUserTimeZone(userId: string): Promise<string> {
     getUserTimeZoneCached(userId),
     resolveActiveOrg(),
   ]);
-  return profileTz ?? activeOrg?.timezone ?? "UTC";
+  return effectiveTimeZone(profileTz, activeOrg?.timezone) ?? "UTC";
 }

@@ -34,6 +34,7 @@ export async function getFocusTodayHandler(
   const res = await getFocusTodayCore(supabase, {
     orgId: scope.org.id,
     userId: actorId,
+    orgTimeZone: scope.org.timezone ?? null,
     ...(args.folderId ? { folderId: args.folderId } : {}),
   });
   if (!res.ok)

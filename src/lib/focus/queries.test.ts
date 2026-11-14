@@ -131,6 +131,35 @@ describe("getFocusTodayCore", () => {
     });
   });
 
+  it("uses the org's zone when the member has none (review I5)", async () => {
+    const { supabase, rpc } = fixture([], null);
+    const res = await getFocusTodayCore(supabase, {
+      orgId: "o1",
+      userId: "u1",
+      orgTimeZone: "Asia/Tokyo",
+      now: NOW,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "get_focus_today",
+      expect.objectContaining({ p_today: "2026-11-15" }),
+    );
+    expect(res.ok && res.data.timezoneAssumed).toBe(false);
+  });
+
+  it("the member's own zone wins over the org's", async () => {
+    const { supabase, rpc } = fixture([], "UTC");
+    await getFocusTodayCore(supabase, {
+      orgId: "o1",
+      userId: "u1",
+      orgTimeZone: "Asia/Tokyo",
+      now: NOW,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "get_focus_today",
+      expect.objectContaining({ p_today: "2026-11-14" }),
+    );
+  });
+
   it("maps rows, resolves waiting names and reports totals per tier", async () => {
     const { supabase } = fixture([ROW], null);
     const res = await getFocusTodayCore(supabase, {

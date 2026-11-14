@@ -45,6 +45,7 @@ describe("getFocusTodayHandler", () => {
     expect(getFocusTodayCore).toHaveBeenCalledWith(supabase, {
       orgId: "o1",
       userId: "u1",
+      orgTimeZone: null,
       folderId: "f1",
     });
   });
@@ -69,6 +70,18 @@ describe("getFocusTodayHandler", () => {
     expect(getFocusTodayCore).toHaveBeenCalledWith(
       supabase,
       expect.objectContaining({ orgId: "o2", folderId: "f2" }),
+    );
+  });
+
+  it("passes the org's zone so the day matches the member's org (review I5)", async () => {
+    resolveOrgForScope.mockResolvedValue({
+      org: { id: "o1", name: "Acme", timezone: "Asia/Tokyo" },
+    });
+    getFocusTodayCore.mockResolvedValue({ ok: false, error: "x" });
+    await getFocusTodayHandler(getClient, "u1", {});
+    expect(getFocusTodayCore).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ orgTimeZone: "Asia/Tokyo" }),
     );
   });
 

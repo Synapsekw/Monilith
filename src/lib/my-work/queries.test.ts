@@ -209,6 +209,26 @@ describe("getMyWorkPageData", () => {
     }
   });
 
+  it("uses the org's zone when the member has none (review I5)", async () => {
+    rpc.mockReset();
+    getUser.mockResolvedValue({ id: "u1" });
+    resolveActiveOrg.mockResolvedValue({ id: "o1", timezone: "Asia/Tokyo" });
+    getUserTimeZoneCached.mockResolvedValue(null);
+    serveRows([{ ...ROW, due_date: "2026-11-14" }]);
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.UTC(2026, 10, 14, 22, 30)); // the 15th in Tokyo
+    try {
+      const { today, groups } = await getMyWorkPageData();
+      expect(today).toBe("2026-11-15");
+      expect(groups.map((g) => g.bucket)).toEqual(["overdue"]);
+      expect(getFocusTodayCore.mock.calls[0][1]).toMatchObject({
+        orgTimeZone: "Asia/Tokyo",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("falls back to the UTC date when the member has no zone", async () => {
     rpc.mockReset();
     getUser.mockResolvedValue({ id: "u1" });
@@ -255,6 +275,7 @@ describe("getMyWorkPageData focus and ask", () => {
     expect(getFocusTodayCore.mock.calls[0][1]).toEqual({
       orgId: "o1",
       userId: "u1",
+      orgTimeZone: null,
     });
   });
 

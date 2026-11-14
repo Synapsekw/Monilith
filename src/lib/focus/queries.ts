@@ -6,6 +6,7 @@ import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import { nameMap, personName } from "@/lib/mcp/tools/names";
 import { STALL_DAYS } from "@/lib/boards/intelligence/constants";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
 import { todayInTimeZone } from "./today";
 import { focusReason, type FocusTier } from "./reason";
 
@@ -75,6 +76,8 @@ export async function getFocusTodayCore(
   args: {
     orgId: string;
     userId: string;
+    /** The org's zone, used when the member has none (then UTC). */
+    orgTimeZone?: string | null;
     folderId?: string;
     limit?: number;
     now?: number;
@@ -86,7 +89,7 @@ export async function getFocusTodayCore(
     .eq("id", args.userId)
     .maybeSingle();
   const { today, timezoneAssumed } = todayInTimeZone(
-    profile?.timezone ?? null,
+    effectiveTimeZone(profile?.timezone, args.orgTimeZone),
     args.now ?? Date.now(),
   );
 

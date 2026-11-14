@@ -3,6 +3,7 @@ import { getMyWorkItemsCore } from "@/lib/my-work/queries";
 import { bucketMyWork } from "@/lib/my-work/bucket";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import { todayInTimeZone } from "@/lib/focus/today";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
@@ -38,7 +39,7 @@ export async function getMyWorkHandler(
       .maybeSingle();
     if (profileErr) return err(profileErr.message);
     const { today, timezoneAssumed } = todayInTimeZone(
-      profile?.timezone ?? null,
+      effectiveTimeZone(profile?.timezone, scope.org.timezone),
       now,
     );
 

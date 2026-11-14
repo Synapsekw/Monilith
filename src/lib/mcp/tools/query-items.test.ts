@@ -231,6 +231,25 @@ describe("queryItemsHandler", () => {
     );
   });
 
+  it("uses the org's zone when the member has none (review I5)", async () => {
+    const { rpc, getClient } = fixture({
+      tables: {
+        organizations: [{ id: "o1", name: "Acme", timezone: "Asia/Tokyo" }],
+      },
+    });
+    const result = await queryItemsHandler(
+      getClient,
+      "u2",
+      { orgId: "o1", overdue: true },
+      NOW,
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_due_to: "2026-11-14" }),
+    );
+    expect(JSON.parse(text(result)).timezoneAssumed).toBeUndefined();
+  });
+
   it("resolves `assignee: me` to the actor and returns names, not ids", async () => {
     const { rpc, getClient } = fixture();
     const result = await queryItemsHandler(
@@ -455,8 +474,12 @@ describe("queryItemsHandler", () => {
   });
 
   describe("timezoneAssumed", () => {
+    // organizations.timezone is NOT NULL; only a blank value reaches UTC.
+    const NO_ORG_ZONE = {
+      tables: { organizations: [{ id: "o1", name: "Acme", timezone: "" }] },
+    };
     it("is reported when `overdue` falls back to the UTC day", async () => {
-      const { getClient } = fixture();
+      const { getClient } = fixture(NO_ORG_ZONE);
       const parsed = JSON.parse(
         text(
           await queryItemsHandler(
@@ -491,7 +514,7 @@ describe("queryItemsHandler", () => {
     });
 
     it("is reported on counts too", async () => {
-      const { getClient } = fixture({ countRows: [] });
+      const { getClient } = fixture({ ...NO_ORG_ZONE, countRows: [] });
       const parsed = JSON.parse(
         text(
           await queryItemsHandler(

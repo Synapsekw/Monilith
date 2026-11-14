@@ -32,7 +32,12 @@ const ROW_WITH_STATUS = {
  */
 function fixture(
   rpcRows: Row[],
-  opts: { rpcError?: string; profileError?: string; timezone?: string } = {},
+  opts: {
+    rpcError?: string;
+    profileError?: string;
+    timezone?: string;
+    orgTimezone?: string;
+  } = {},
 ) {
   const rpc = vi.fn(async (_fn: string, a: { p_limit: number }) =>
     opts.rpcError
@@ -40,7 +45,9 @@ function fixture(
       : { data: rpcRows.slice(0, a.p_limit), error: null },
   );
   const tables: Record<string, Row[]> = {
-    organizations: [{ id: "o1", name: "Acme", timezone: "UTC" }],
+    organizations: [
+      { id: "o1", name: "Acme", timezone: opts.orgTimezone ?? "UTC" },
+    ],
     profiles: [
       { id: "u2", timezone: null },
       { id: "u1", timezone: opts.timezone ?? null },
@@ -145,7 +152,11 @@ describe("getMyWorkHandler", () => {
     ]);
     expect(parsed.timezoneAssumed).toBeUndefined();
 
-    const noZone = fixture([{ ...ROW, due_date: "2026-11-14" }]);
+    // No zone anywhere (organizations.timezone is NOT NULL, so only a blank
+    // value gets here): the UTC day, flagged as assumed.
+    const noZone = fixture([{ ...ROW, due_date: "2026-11-14" }], {
+      orgTimezone: "",
+    });
     const assumed = JSON.parse(
       text(await getMyWorkHandler(noZone.getClient, "u1", {}, NOW)),
     );
@@ -154,6 +165,17 @@ describe("getMyWorkHandler", () => {
     expect(assumed.groups.map((g: { bucket: string }) => g.bucket)).toEqual([
       "today",
     ]);
+  });
+
+  it("uses the org's zone when the member has none, and does not call it assumed (review I5)", async () => {
+    const orgZone = fixture([{ ...ROW, due_date: "2026-11-14" }], {
+      orgTimezone: "Asia/Tokyo",
+    });
+    const parsed = JSON.parse(
+      text(await getMyWorkHandler(orgZone.getClient, "u1", {}, NOW)),
+    );
+    expect(parsed.today).toBe("2026-11-15");
+    expect(parsed.timezoneAssumed).toBeUndefined();
   });
 
   it("surfaces a failed profile read instead of guessing the day", async () => {
