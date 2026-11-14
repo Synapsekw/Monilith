@@ -69,7 +69,11 @@ export function GroupHeaderRow({
   return (
     <div
       data-testid={`group-header-${group.id}`}
-      className="group/grouphdr bg-surface sticky top-[30px] z-30 flex h-[30px] w-full items-center pointer-coarse:top-11 pointer-coarse:h-11"
+      // Theme-reactive surface: 8% of the preset's brand mixed into the raised
+      // surface (Board Total uses 14%, so the two read as one family with the
+      // total heavier). Opaque on purpose, never an alpha tint: this row is
+      // sticky and rows scroll beneath it.
+      className="group/grouphdr sticky top-[30px] z-30 flex h-[30px] w-full items-center bg-[color-mix(in_srgb,var(--color-brand)_8%,var(--color-surface))] pointer-coarse:top-11 pointer-coarse:h-11"
     >
       <div className="sticky left-0 flex h-full w-[var(--board-viewport-w,100%)] min-w-0 items-center gap-1.5 px-2">
         {selectAll}

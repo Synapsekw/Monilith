@@ -1735,6 +1735,19 @@ describe("BoardTable group row", () => {
     expect(classes).toContain("z-30");
   });
 
+  it("tints the row with the theme's brand on an opaque surface", () => {
+    renderBoardWithColumns();
+    const classes = screen
+      .getByTestId("group-header-g1")
+      .className.split(/\s+/);
+    // color-mix into the surface, not an alpha tint: the row is sticky and
+    // must hide the rows scrolling beneath it.
+    expect(classes).toContain(
+      "bg-[color-mix(in_srgb,var(--color-brand)_8%,var(--color-surface))]",
+    );
+    expect(classes).not.toContain("bg-surface");
+  });
+
   it("holds its content in a block pinned to the visible width of the scroller", () => {
     renderBoardWithColumns();
     const inner = screen.getByTestId("group-header-g1")
