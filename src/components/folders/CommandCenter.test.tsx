@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { folderFixture, folderFixtureWithPreset } from "@/lib/folders/fixture";
@@ -119,6 +120,34 @@ describe("CommandCenter", () => {
     expect(routerPush).not.toHaveBeenCalled();
     expect(routerRefresh).not.toHaveBeenCalled();
   });
+
+  it("a folder with more than eight stages filters through the Stages menu and still writes ?stage=", async () => {
+    const user = userEvent.setup();
+    const payload = folderFixture();
+    const seed = payload.rollup![0]!;
+    // The fixture has 4 stages; six more makes 10.
+    payload.rollup = [
+      ...payload.rollup!,
+      ...Array.from({ length: 6 }, (_, i) => ({
+        ...seed,
+        groupId: `b1:extra-${i}`,
+        groupName: `Extra ${i}`,
+        groupPosition: 10 + i,
+      })),
+    ];
+    render(wrap({ payload }));
+    expect(
+      screen.queryByRole("group", { name: "Stage" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Stage" }));
+    await user.click(await screen.findByRole("option", { name: /Extra 3/ }));
+    expect(new URLSearchParams(window.location.search).get("stage")).toBe(
+      "extra 3",
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+    expect(getFolderWorkload).not.toHaveBeenCalled();
+  }, 15_000);
 
   it("loads the timeline only when its tab opens, and only once", async () => {
     // Tab state lives in the (mocked) search params, so "opening" a tab is a
