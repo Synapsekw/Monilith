@@ -33,7 +33,10 @@ export const TOOL_PROSE: Record<ToolName, string> = {
   get_board: "Read a board's metadata, columns, and groups.",
   list_items: "Read a board's items and their cell values.",
   search_items: "Find items by name within a board.",
-  get_item: "Read one item's fields and cell values.",
+  get_item:
+    "Read one item's fields and cell values, plus what blocks it and what it blocks.",
+  get_item_thread:
+    "Read one item's comments and field changes as a single timeline.",
   create_item: "Add a new item to a group, optionally setting field values.",
   update_item: "Rename an item and/or change its field values.",
   create_attachment_upload:

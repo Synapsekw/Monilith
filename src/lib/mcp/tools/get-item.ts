@@ -4,6 +4,72 @@ import type { ToolDescriptor } from "./descriptor";
 
 const getItemInput = { itemId: z.string().uuid() };
 
+export const DEPENDENCY_LIMIT = 20;
+
+type DepItem = {
+  id: string;
+  name: string;
+  boardId: string;
+  boardName: string;
+};
+
+async function loadDependencies(
+  supabase: Awaited<ReturnType<GetClient>>,
+  itemId: string,
+): Promise<{
+  blockedBy: DepItem[];
+  blocking: DepItem[];
+  hiddenDependencies: number;
+}> {
+  const [pred, succ] = await Promise.all([
+    supabase
+      .from("item_dependencies")
+      .select("predecessor_id")
+      .eq("successor_id", itemId)
+      .limit(DEPENDENCY_LIMIT),
+    supabase
+      .from("item_dependencies")
+      .select("successor_id")
+      .eq("predecessor_id", itemId)
+      .limit(DEPENDENCY_LIMIT),
+  ]);
+  const predIds = (pred.data ?? []).map((r) => r.predecessor_id);
+  const succIds = (succ.data ?? []).map((r) => r.successor_id);
+  const ids = [...new Set([...predIds, ...succIds])];
+  if (ids.length === 0)
+    return { blockedBy: [], blocking: [], hiddenDependencies: 0 };
+
+  const { data: items } = await supabase
+    .from("items")
+    .select("id, name, board_id")
+    .in("id", ids)
+    .is("archived_at", null);
+  const boardIds = [...new Set((items ?? []).map((i) => i.board_id))];
+  const { data: boards } = await supabase
+    .from("boards")
+    .select("id, name")
+    .in("id", boardIds);
+  const boardName = new Map((boards ?? []).map((b) => [b.id, b.name]));
+  const byId = new Map(
+    (items ?? []).map((i) => [
+      i.id,
+      {
+        id: i.id,
+        name: i.name,
+        boardId: i.board_id,
+        boardName: boardName.get(i.board_id) ?? "Unknown board",
+      },
+    ]),
+  );
+  const pick = (list: string[]) =>
+    list.map((id) => byId.get(id)).filter((d): d is DepItem => Boolean(d));
+  return {
+    blockedBy: pick(predIds),
+    blocking: pick(succIds),
+    hiddenDependencies: ids.length - byId.size,
+  };
+}
+
 export async function getItemHandler(
   getClient: GetClient,
   input: { itemId: string },
@@ -39,9 +105,13 @@ export async function getItemHandler(
     columnId: c.column_id,
     value: c.value,
   }));
+  const deps = await loadDependencies(supabase, input.itemId);
   return {
     content: [
-      { type: "text" as const, text: JSON.stringify({ item, cellValues }) },
+      {
+        type: "text" as const,
+        text: JSON.stringify({ item, cellValues, ...deps }),
+      },
     ],
   };
 }
@@ -49,7 +119,8 @@ export async function getItemHandler(
 export const getItemDescriptor: ToolDescriptor = {
   name: "get_item",
   title: "Get item",
-  description: "Get an item's fields and cell values.",
+  description:
+    "Get an item's fields and cell values, plus the items it is blocked by and the items it is blocking (at most 20 each). hiddenDependencies counts linked items you cannot see.",
   inputSchema: getItemInput,
   capability: null,
   scope: "itemId",

@@ -4,6 +4,7 @@ import { getBoardDescriptor } from "./get-board";
 import { listItemsDescriptor } from "./list-items";
 import { searchItemsDescriptor } from "./search-items";
 import { getItemDescriptor } from "./get-item";
+import { getItemThreadDescriptor } from "./get-item-thread";
 import { createItemDescriptor } from "./create-item";
 import { updateItemDescriptor } from "./update-item";
 import { manageItemDescriptor } from "./manage-item";
@@ -84,4 +85,6 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   manageGoalDescriptor,
   managePortfolioDescriptor,
   manageReportDescriptor,
+  // Story tools — appended so existing tools keep their listing positions.
+  getItemThreadDescriptor,
 ];
