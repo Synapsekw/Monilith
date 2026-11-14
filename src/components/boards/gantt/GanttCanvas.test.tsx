@@ -328,8 +328,30 @@ describe("GanttCanvas name rail", () => {
     expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
       width: "220px",
     });
-    // A band spans the rail plus the 300px track (30 days × 10px, unmeasured).
-    expect(screen.getByTestId("gantt-section")).toHaveStyle({ width: "520px" });
+    // A band spans the rail plus the timeline track, whatever the day scale.
+    const rail = parseFloat(
+      screen.getByTestId("gantt-rail-header").style.width,
+    );
+    const track = parseFloat(
+      screen.getByTestId("gantt-track-header").style.width,
+    );
+    expect(track).toBeGreaterThan(0);
+    expect(parseFloat(screen.getByTestId("gantt-section").style.width)).toBe(
+      rail + track,
+    );
+  });
+
+  it("clamps an out-of-range labelWidth prop", () => {
+    const { rerender } = render(
+      <GanttCanvas {...props({ labelWidth: 9999 })} />,
+    );
+    expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
+      width: "520px",
+    });
+    rerender(<GanttCanvas {...props({ labelWidth: 10 })} />);
+    expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
+      width: "160px",
+    });
   });
 
   it("shows no resize handle unless onLabelWidthChange is given", () => {

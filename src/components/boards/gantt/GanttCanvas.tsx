@@ -130,16 +130,19 @@ export function GanttCanvas({
       : buildMonthTicks(rangeStartISO, dayCount);
   }, [rangeStartISO, dayCount, zoom]);
 
+  // Live width while the rail handle is dragged (local state only — the parent
+  // hears about it once, on release).
+  const [liveLabelW, setLiveLabelW] = useState<number | null>(null);
+  const labelW =
+    liveLabelW ??
+    Math.min(LABEL_W_MAX, Math.max(LABEL_W_MIN, labelWidth ?? DEFAULT_LABEL_W));
+
   // Pixels per day at the active zoom. Row day-offsets are scale-independent;
   // this multiplier is the only thing that turns them into on-screen width. The
   // zoom scale is a floor: when the date range is shorter than the visible
   // track, px/day stretches to fill the width (no dead space to the right);
   // when it overflows, the base scale wins and the grid scrolls. trackWidth is
   // the measured width available to the timeline (scroller minus the name rail).
-  // Live width while the rail handle is dragged (local state only — the parent
-  // hears about it once, on release).
-  const [liveLabelW, setLiveLabelW] = useState<number | null>(null);
-  const labelW = liveLabelW ?? labelWidth ?? DEFAULT_LABEL_W;
   const [trackWidth, setTrackWidth] = useState(0);
   const dayW = fittedDayW(PX_PER_DAY[zoom], trackWidth, dayCount);
   const totalW = dayCount * dayW;
@@ -297,7 +300,11 @@ export function GanttCanvas({
                 )}
               </div>
               {/* Timeline header */}
-              <div className="relative" style={{ width: totalW, height: 38 }}>
+              <div
+                data-testid="gantt-track-header"
+                className="relative"
+                style={{ width: totalW, height: 38 }}
+              >
                 {/* Header tick labels (month, or quarter at Year zoom) */}
                 {headerTicks.map((tick) => (
                   <div
