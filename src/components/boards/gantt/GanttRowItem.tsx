@@ -174,6 +174,10 @@ export function GanttRowItem({
       ? resizePreview.deltaDays
       : 0;
 
+  // Lateness is part of the bar's name, so it is never colour alone.
+  const barName =
+    lateDays !== null ? `${row.name}, ${lateDays}d late` : row.name;
+
   const barWidth = row.isMilestone
     ? BAR_H // diamond
     : Math.max(MIN_BAR_W, ((row.spanCols ?? 1) + previewDays) * dayW);
@@ -231,7 +235,7 @@ export function GanttRowItem({
     [measureLabel, metaText],
   );
   const metaSide =
-    meta && row.scheduled && !isDragging
+    meta && row.scheduled && !isDragging && !resizePreview
       ? outsideLabelSide({
           barStartX,
           barEndX,
@@ -474,8 +478,8 @@ export function GanttRowItem({
             {...dragHandlers}
             role="button"
             tabIndex={0}
-            title={row.name}
-            aria-label={row.name}
+            title={barName}
+            aria-label={barName}
             onClick={handleTap}
             onKeyDown={handleTapKeyDown}
           >
@@ -515,7 +519,7 @@ export function GanttRowItem({
               {...dragHandlers}
               role="button"
               tabIndex={0}
-              aria-label={row.name}
+              aria-label={barName}
               onClick={handleTap}
               onKeyDown={handleTapKeyDown}
               className="flex h-full flex-1 items-center overflow-hidden px-2"

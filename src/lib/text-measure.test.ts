@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildMeasureFont, createTextMeasurer } from "@/lib/text-measure";
+import { act, renderHook } from "@testing-library/react";
+import {
+  buildMeasureFont,
+  createTextMeasurer,
+  useTextMeasurer,
+} from "@/lib/text-measure";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -34,5 +39,67 @@ describe("createTextMeasurer", () => {
     expect(ctx.font).toBe(
       "500 11px Inter, ui-sans-serif, system-ui, sans-serif",
     );
+  });
+});
+
+describe("useTextMeasurer", () => {
+  function fakeFonts(status: "loading" | "loaded") {
+    const target = new EventTarget();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => (resolve = r));
+    const fonts = Object.assign(target, { status, ready });
+    Object.defineProperty(document, "fonts", {
+      value: fonts,
+      configurable: true,
+    });
+    return { target, resolve };
+  }
+  afterEach(() => {
+    delete (document as unknown as { fonts?: unknown }).fonts;
+  });
+
+  it("keeps the same measurer when nothing loads", () => {
+    fakeFonts("loaded");
+    const { result, rerender } = renderHook(() =>
+      useTextMeasurer("500", "11px"),
+    );
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+  });
+
+  it("returns a fresh measurer (empty cache) after loadingdone", () => {
+    const { target } = fakeFonts("loaded");
+    const measureText = vi.fn((t: string) => ({ width: t.length }));
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      font: "",
+      measureText,
+    } as never);
+    const { result } = renderHook(() => useTextMeasurer("500", "11px"));
+    const first = result.current;
+    first("abc");
+    first("abc");
+    expect(measureText).toHaveBeenCalledTimes(1); // cached
+    act(() => {
+      target.dispatchEvent(new Event("loadingdone"));
+    });
+    expect(result.current).not.toBe(first);
+    result.current("abc");
+    expect(measureText).toHaveBeenCalledTimes(2); // re-measured
+  });
+
+  it("re-creates once fonts.ready resolves after mount", async () => {
+    const { resolve } = fakeFonts("loading");
+    const { result } = renderHook(() => useTextMeasurer("500", "11px"));
+    const first = result.current;
+    await act(async () => {
+      resolve();
+    });
+    expect(result.current).not.toBe(first);
+  });
+
+  it("works where document.fonts does not exist", () => {
+    const { result } = renderHook(() => useTextMeasurer("500", "11px"));
+    expect(result.current("abc")).toBe(0);
   });
 });

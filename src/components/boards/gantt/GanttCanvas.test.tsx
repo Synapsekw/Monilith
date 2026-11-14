@@ -595,7 +595,9 @@ describe("GanttCanvas bar labels", () => {
         {...props({ lateFor: (r) => (r.itemId === "i1" ? 21 : null) })}
       />,
     );
-    const bar = screen.getByLabelText("PO raised").parentElement as HTMLElement;
+    // The bar's accessible name carries the lateness too.
+    const handle = screen.getByLabelText("PO raised, 21d late");
+    const bar = handle.parentElement as HTMLElement;
     expect(bar).toHaveClass("border", "border-destructive");
     const meta = within(firstRow()).getByTestId("gantt-bar-meta");
     expect(meta).toHaveTextContent("21d late");
@@ -624,8 +626,24 @@ describe("GanttCanvas bar labels", () => {
         {...props({ rows: dot, dependencies: [], lateFor: () => 3 })}
       />,
     );
-    expect(screen.getByLabelText("Gate")).toHaveClass("border-destructive");
+    const diamond = screen.getByLabelText("Gate, 3d late");
+    expect(diamond).toHaveClass("border-destructive");
+    expect(diamond).toHaveAttribute("title", "Gate, 3d late");
     expect(screen.getByTestId("gantt-bar-meta")).toHaveTextContent("3d late");
+  });
+
+  it("hides the label beside the bar while the bar is being resized", () => {
+    HTMLElement.prototype.setPointerCapture = () => {};
+    render(<GanttCanvas {...props()} />);
+    expect(
+      within(firstRow()).getByTestId("gantt-bar-meta"),
+    ).toBeInTheDocument();
+    const handle = screen.getByLabelText("Resize PO raised");
+    fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 130, pointerId: 1 });
+    expect(
+      within(firstRow()).queryByTestId("gantt-bar-meta"),
+    ).not.toBeInTheDocument();
   });
 
   it("leaves the after side to link stubs", () => {

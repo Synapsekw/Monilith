@@ -18,7 +18,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
-import { createTextMeasurer } from "@/lib/text-measure";
+import { useTextMeasurer } from "@/lib/text-measure";
 import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
 import { Kicker } from "@/components/ui/kicker";
 import {
@@ -319,8 +319,8 @@ export function GanttCanvas({
   );
 
   // Measures bar labels at the label's own type: text-2xs (11px), medium.
-  // Created once per mount and caches per string, so rows never re-measure.
-  const measureLabel = useMemo(() => createTextMeasurer("500", "11px"), []);
+  // Caches per string, so rows never re-measure; re-created after font load.
+  const measureLabel = useTextMeasurer("500", "11px");
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, delta } = event;

@@ -78,7 +78,7 @@ import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { useColumnAutoFit } from "./use-column-auto-fit";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
-import { createTextMeasurer } from "@/lib/text-measure";
+import { useTextMeasurer } from "@/lib/text-measure";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 import { AddGroupRow } from "./AddGroupRow";
@@ -457,12 +457,12 @@ export function BoardTableInner({
   // Offscreen canvas measurer at the Name cell font (500 13px Inter /
   // text-item), used to auto-fit the Name column to the longest item name
   // across ALL items (not just the virtualized rows). Pure measurement — no
-  // server round-trip. createTextMeasurer reads the LIVE `--font-inter`
-  // variable next/font sets on <html>, so it is created once per mount here,
-  // never at module scope; it measures 0 where there is no canvas (SSR, jsdom).
-  const measureName = useMemo(
-    () => createTextMeasurer(NAME_MEASURE_FONT_WEIGHT, NAME_MEASURE_FONT_SIZE),
-    [],
+  // server round-trip. useTextMeasurer reads the LIVE `--font-inter`
+  // variable next/font sets on <html>, so it is created per mount (and again
+  // once web fonts finish loading), never at module scope; it measures 0 where there is no canvas (SSR, jsdom).
+  const measureName = useTextMeasurer(
+    NAME_MEASURE_FONT_WEIGHT,
+    NAME_MEASURE_FONT_SIZE,
   );
   // `items` is the FULL flat list of every item on the board — top-level rows
   // AND subitems alike (see useBoardCache / bucketItems, which partitions this
