@@ -6,6 +6,7 @@ import { searchItemsDescriptor } from "./search-items";
 import { getItemDescriptor } from "./get-item";
 import { getItemThreadDescriptor } from "./get-item-thread";
 import { queryItemsDescriptor } from "./query-items";
+import { getFocusTodayDescriptor } from "./get-focus-today";
 import { createItemDescriptor } from "./create-item";
 import { updateItemDescriptor } from "./update-item";
 import { manageItemDescriptor } from "./manage-item";
@@ -89,4 +90,5 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   // Story tools — appended so existing tools keep their listing positions.
   getItemThreadDescriptor,
   queryItemsDescriptor,
+  getFocusTodayDescriptor,
 ];

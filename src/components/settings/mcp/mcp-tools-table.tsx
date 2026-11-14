@@ -40,6 +40,8 @@ export const TOOL_PROSE: Record<ToolName, string> = {
     "Read one item's comments and field changes as a single timeline.",
   query_items:
     "Filter items across a board, a project folder or the whole organization by assignee, state, due date and recent change, or count them.",
+  get_focus_today:
+    "See what to work on first today: your overdue, blocking, due-soon, awaiting-reply and stalled items, ranked, with the reason for each.",
   create_item: "Add a new item to a group, optionally setting field values.",
   update_item: "Rename an item and/or change its field values.",
   create_attachment_upload:
