@@ -3,11 +3,14 @@
 import {
   useEffect,
   useId,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
@@ -28,6 +31,8 @@ import {
   buildQuarterTicks,
   parseISO,
   todayISO,
+  todayScrollLeft,
+  weekendStripes,
   type BarDragData,
   type TimelineZoom,
 } from "@/components/boards/gantt/utils";
@@ -39,6 +44,12 @@ import type { ExternalLinkStub } from "@/components/boards/gantt/LinkStubs";
 // the server, so fall back to useEffect there (same guard as GroupSection).
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/** What a toolbar may ask of the canvas without reaching into its scroller. */
+export type GanttCanvasHandle = {
+  /** Smooth-scroll so today sits TODAY_ANCHOR across the visible track. */
+  scrollToToday: () => void;
+};
 
 export type GanttCanvasProps = {
   /** Rows already in display order (items, optionally section rows). */
@@ -82,6 +93,8 @@ export type GanttCanvasProps = {
    * an integer clamped to LABEL_W_MIN..LABEL_W_MAX, and with DEFAULT_LABEL_W on
    * double-click. Never called while dragging. */
   onLabelWidthChange?: (width: number) => void;
+  /** Imperative handle (a plain prop, not `ref`): the toolbar's Today button. */
+  handleRef?: Ref<GanttCanvasHandle>;
 };
 
 /**
@@ -115,6 +128,7 @@ export function GanttCanvas({
   footer,
   labelWidth,
   onLabelWidthChange,
+  handleRef,
 }: GanttCanvasProps) {
   const dndId = useId();
   // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
@@ -252,6 +266,47 @@ export function GanttCanvas({
   const todayOffset = rangeStartISO
     ? Math.round((parseISO(today) - parseISO(rangeStartISO)) / 86_400_000)
     : -1;
+  const todayInRange = todayOffset >= 0 && todayOffset <= dayCount;
+
+  // Open on today. Runs after the first layout that has a real track width,
+  // and again when the zoom changes (a new dayW makes the old offset
+  // meaningless). Keyed by zoom through a ref — NOT by the data — so a drag,
+  // a collapse or a realtime edit that shifts the range never moves the
+  // viewport out from under the user.
+  const scrolledForZoom = useRef<TimelineZoom | null>(null);
+  useIsoLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || trackWidth <= 0 || !todayInRange) return;
+    if (scrolledForZoom.current === zoom) return;
+    scrolledForZoom.current = zoom;
+    scroller.scrollLeft = todayScrollLeft(todayOffset, dayW, trackWidth);
+  }, [zoom, trackWidth, todayInRange, todayOffset, dayW]);
+
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      scrollToToday() {
+        const scroller = scrollRef.current;
+        if (!scroller || !todayInRange) return;
+        const left = todayScrollLeft(
+          todayOffset,
+          dayW,
+          Math.max(0, trackWidth),
+        );
+        // Element.scrollTo is missing in some embedded webviews (and jsdom).
+        if (typeof scroller.scrollTo === "function")
+          scroller.scrollTo({ left, behavior: "smooth" });
+        else scroller.scrollLeft = left;
+      },
+    }),
+    [todayInRange, todayOffset, dayW, trackWidth],
+  );
+
+  // Weekend shading, computed once per canvas and handed to every track.
+  const trackStyle = useMemo(
+    () => weekendStripes(rangeStartISO, dayW, zoom),
+    [rangeStartISO, dayW, zoom],
+  );
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, delta } = event;
@@ -351,6 +406,10 @@ export function GanttCanvas({
                         row={row}
                         totalW={totalW}
                         labelW={labelW}
+                        dayW={dayW}
+                        todayOffset={todayOffset}
+                        dayCount={dayCount}
+                        trackStyle={trackStyle}
                         expanded={isExpanded?.(row.itemId) ?? true}
                         onToggle={onToggleExpand}
                       />
@@ -361,6 +420,7 @@ export function GanttCanvas({
                         rowIdx={vr.index}
                         totalW={totalW}
                         labelW={labelW}
+                        trackStyle={trackStyle}
                         dayW={dayW}
                         todayOffset={todayOffset}
                         dayCount={dayCount}
@@ -461,12 +521,20 @@ function SectionBand({
   row,
   totalW,
   labelW,
+  dayW,
+  todayOffset,
+  dayCount,
+  trackStyle,
   expanded,
   onToggle,
 }: {
   row: GanttRow;
   totalW: number;
   labelW: number;
+  dayW: number;
+  todayOffset: number;
+  dayCount: number;
+  trackStyle?: CSSProperties;
   expanded: boolean;
   onToggle?: (itemId: string) => void;
 }) {
@@ -497,7 +565,7 @@ function SectionBand({
     >
       <div
         className={cn(
-          "sticky left-0 z-10 flex min-w-0 items-center pr-2",
+          "sticky left-0 z-10 flex min-w-0 shrink-0 items-center pr-2",
           isBoard ? "bg-surface-muted" : "bg-surface",
         )}
         style={{
@@ -528,6 +596,22 @@ function SectionBand({
           </button>
         ) : (
           label
+        )}
+      </div>
+      {/* The band's track: same weekend tint and today hairline as an item
+          row, so the today line reads as one unbroken rule down the chart. */}
+      <div
+        data-testid="gantt-section-track"
+        className="relative shrink-0"
+        style={{ width: totalW, height: ROW_H, ...trackStyle }}
+      >
+        {todayOffset >= 0 && todayOffset <= dayCount && (
+          <div
+            data-today-line
+            className="bg-destructive/30 absolute top-0 h-full w-px"
+            style={{ left: todayOffset * dayW }}
+            aria-hidden
+          />
         )}
       </div>
     </div>

@@ -1,8 +1,10 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { createRef } from "react";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   GanttCanvas,
+  type GanttCanvasHandle,
   type GanttCanvasProps,
 } from "@/components/boards/gantt/GanttCanvas";
 import {
@@ -12,6 +14,14 @@ import {
 import type { GanttRow } from "@/lib/boards/gantt";
 
 vi.mock("@/lib/dnd/sensors", () => ({ useTouchAwareSensors: () => [] }));
+
+// Pin "today" for the whole file: the today line and the open-on-today scroll
+// read todayISO(). The fixtures below sit in November 2026.
+vi.mock("@/components/boards/gantt/utils", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/boards/gantt/utils")>();
+  return { ...actual, todayISO: () => "2026-11-14" };
+});
 
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
@@ -400,5 +410,117 @@ describe("GanttCanvas name rail", () => {
     ).toHaveAttribute("title", "Procurement");
     const first = screen.getAllByTestId("gantt-row")[0]!;
     expect(within(first).getByTitle("PO raised")).toBeInTheDocument();
+  });
+});
+
+describe("GanttCanvas today line and weekends", () => {
+  it("draws the today hairline on section bands as well as item rows", () => {
+    render(<GanttCanvas {...props()} />);
+    // Range starts 2026-11-01; today is the 14th → day 13 × 10px.
+    const band = screen.getByTestId("gantt-section");
+    expect(band.querySelector("[data-today-line]")).toHaveStyle({
+      left: "130px",
+    });
+    for (const row of screen.getAllByTestId("gantt-row")) {
+      expect(row.querySelector("[data-today-line]")).toHaveStyle({
+        left: "130px",
+      });
+    }
+  });
+
+  it("shades weekends on item and band tracks at month zoom, not at quarter", () => {
+    const { rerender } = render(<GanttCanvas {...props()} />);
+    expect(screen.getAllByTestId("gantt-track")[0]!.style.backgroundSize).toBe(
+      "70px 100%",
+    );
+    expect(screen.getByTestId("gantt-section-track").style.backgroundSize).toBe(
+      "70px 100%",
+    );
+    rerender(<GanttCanvas {...props({ zoom: "quarter" })} />);
+    expect(screen.getAllByTestId("gantt-track")[0]!.style.backgroundSize).toBe(
+      "",
+    );
+  });
+});
+
+describe("GanttCanvas opens on today", () => {
+  // jsdom has no layout. Give every element a 1300px client width so the
+  // scroller measures a 1300 − 300 (rail) = 1000px track. Scoped to this block
+  // and removed afterwards: the suites above rely on the unmeasured track.
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get: () => 1300,
+    });
+  });
+  afterAll(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  });
+
+  // 2026-05-01 → 2026-11-14 is 197 days. 400 days at month zoom overflows the
+  // track, so the base scale (10px/day) holds and the grid scrolls.
+  const wide = { rangeStartISO: "2026-05-01", dayCount: 400 };
+  const scrollerOf = (container: HTMLElement) =>
+    container.querySelector("[data-scroll-container]") as HTMLElement;
+
+  it("parks today 34% across the track once the track has a width", () => {
+    const { container } = render(<GanttCanvas {...props(wide)} />);
+    expect(scrollerOf(container).scrollLeft).toBe(197 * 10 - 340);
+  });
+
+  it("does not move the viewport when the data changes", () => {
+    const { container, rerender } = render(<GanttCanvas {...props(wide)} />);
+    const scroller = scrollerOf(container);
+    scroller.scrollLeft = 40; // the user scrolled away
+    rerender(<GanttCanvas {...props({ ...wide, rows: rows.slice(0, 2) })} />);
+    expect(scroller.scrollLeft).toBe(40);
+    // An earlier item moved the range start: today's offset changes, the
+    // viewport still must not jump.
+    rerender(
+      <GanttCanvas
+        {...props({ rangeStartISO: "2026-04-01", dayCount: 430 })}
+      />,
+    );
+    expect(scroller.scrollLeft).toBe(40);
+  });
+
+  it("re-centres on today when the zoom changes", () => {
+    const { container, rerender } = render(<GanttCanvas {...props(wide)} />);
+    const scroller = scrollerOf(container);
+    scroller.scrollLeft = 40;
+    rerender(<GanttCanvas {...props({ ...wide, zoom: "week" })} />);
+    expect(scroller.scrollLeft).toBe(197 * 28 - 340);
+  });
+
+  it("leaves the viewport alone when today is outside the range", () => {
+    const { container } = render(
+      <GanttCanvas
+        {...props({ rangeStartISO: "2027-01-01", dayCount: 400 })}
+      />,
+    );
+    expect(scrollerOf(container).scrollLeft).toBe(0);
+  });
+
+  it("smooth-scrolls to today through the handle", () => {
+    const handleRef = createRef<GanttCanvasHandle>();
+    const { container } = render(
+      <GanttCanvas {...props({ ...wide, handleRef })} />,
+    );
+    const scroller = scrollerOf(container);
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as typeof scroller.scrollTo;
+    act(() => handleRef.current?.scrollToToday());
+    expect(scrollTo).toHaveBeenCalledWith({ left: 1630, behavior: "smooth" });
+  });
+
+  it("falls back to an instant scroll where scrollTo is missing", () => {
+    const handleRef = createRef<GanttCanvasHandle>();
+    const { container } = render(
+      <GanttCanvas {...props({ ...wide, handleRef })} />,
+    );
+    const scroller = scrollerOf(container);
+    scroller.scrollLeft = 0;
+    act(() => handleRef.current?.scrollToToday());
+    expect(scroller.scrollLeft).toBe(1630);
   });
 });

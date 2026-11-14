@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { effectivePriority } from "@/lib/boards/priority";
 
 // ---------------------------------------------------------------------------
@@ -173,4 +174,47 @@ export function effectiveCriticalLabel(
   return auto
     ? `Critical (auto) — ${dependents} items depend on this`
     : "Critical";
+}
+
+// ---------------------------------------------------------------------------
+// Today anchor + weekend shading
+// ---------------------------------------------------------------------------
+
+/** Share of the visible track left of today when a timeline opens: a little
+ * recent past for context, most of the screen for what is coming. */
+export const TODAY_ANCHOR = 0.34;
+
+/** scrollLeft that puts today TODAY_ANCHOR of the way across the visible
+ * track. `trackWidth` is the scroller's width minus the sticky name rail. */
+export function todayScrollLeft(
+  todayOffset: number,
+  dayW: number,
+  trackWidth: number,
+): number {
+  return Math.max(
+    0,
+    Math.round(todayOffset * dayW - trackWidth * TODAY_ANCHOR),
+  );
+}
+
+/**
+ * Weekend shading for a track, as ONE repeating background: a seven-day tile
+ * (Monday first) whose last two days are tinted, shifted by the weekday the
+ * range starts on. Week and Month zoom only — at Quarter and Year a day is 4px
+ * or less and the stripes would be noise. The tint is the alpha-on-parent
+ * hover token, so it reads on every surface, theme and reach.
+ */
+export function weekendStripes(
+  rangeStartISO: string,
+  dayW: number,
+  zoom: TimelineZoom,
+): CSSProperties | undefined {
+  if (!rangeStartISO || (zoom !== "week" && zoom !== "month")) return undefined;
+  const sinceMonday = (new Date(parseISO(rangeStartISO)).getUTCDay() + 6) % 7;
+  const workdays = 5 * dayW;
+  return {
+    backgroundImage: `linear-gradient(to right, transparent ${workdays}px, var(--color-state-hover) ${workdays}px)`,
+    backgroundSize: `${7 * dayW}px 100%`,
+    backgroundPosition: `${-sinceMonday * dayW}px 0`,
+  };
 }

@@ -9,6 +9,8 @@ import {
   DEFAULT_LABEL_W,
   LABEL_W_MIN,
   LABEL_W_MAX,
+  todayScrollLeft,
+  weekendStripes,
 } from "@/components/boards/gantt/utils";
 
 describe("fittedDayW", () => {
@@ -95,5 +97,37 @@ describe("row geometry constants", () => {
     expect(BAR_H).toBe(20);
     expect(DEFAULT_LABEL_W).toBe(300);
     expect([LABEL_W_MIN, LABEL_W_MAX]).toEqual([160, 520]);
+  });
+});
+
+describe("todayScrollLeft", () => {
+  it("puts today 34% of the way across the visible track", () => {
+    expect(todayScrollLeft(200, 10, 1000)).toBe(1660);
+  });
+  it("never scrolls to a negative offset", () => {
+    expect(todayScrollLeft(10, 10, 1000)).toBe(0);
+  });
+});
+
+describe("weekendStripes", () => {
+  it("shades Saturday and Sunday on a Monday-first seven-day tile", () => {
+    // 2026-11-02 is a Monday.
+    expect(weekendStripes("2026-11-02", 10, "month")).toEqual({
+      backgroundImage:
+        "linear-gradient(to right, transparent 50px, var(--color-state-hover) 50px)",
+      backgroundSize: "70px 100%",
+      backgroundPosition: "0px 0",
+    });
+  });
+  it("offsets the tile by the weekday the range starts on", () => {
+    // 2026-11-01 is a Sunday: six days after Monday, at 28px a day.
+    expect(weekendStripes("2026-11-01", 28, "week")?.backgroundPosition).toBe(
+      "-168px 0",
+    );
+  });
+  it("draws nothing at quarter and year zoom, or without a range", () => {
+    expect(weekendStripes("2026-11-02", 4, "quarter")).toBeUndefined();
+    expect(weekendStripes("2026-11-02", 1.5, "year")).toBeUndefined();
+    expect(weekendStripes("", 10, "month")).toBeUndefined();
   });
 });

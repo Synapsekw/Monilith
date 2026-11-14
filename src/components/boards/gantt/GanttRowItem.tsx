@@ -49,6 +49,7 @@ export function GanttRowItem({
   rowIdx,
   totalW,
   labelW,
+  trackStyle,
   dayW,
   todayOffset,
   dayCount,
@@ -74,6 +75,8 @@ export function GanttRowItem({
   totalW: number;
   /** Width of the sticky name rail in px (resizable; owned by the canvas). */
   labelW: number;
+  /** Weekend shading for the track (see weekendStripes); undefined = none. */
+  trackStyle?: CSSProperties;
   /** Pixels per day at the active zoom (see PX_PER_DAY). */
   dayW: number;
   todayOffset: number;
@@ -394,12 +397,14 @@ export function GanttRowItem({
 
       {/* Timeline track */}
       <div
+        data-testid="gantt-track"
         className="relative overflow-hidden"
-        style={{ width: totalW, height: ROW_H }}
+        style={{ width: totalW, height: ROW_H, ...trackStyle }}
       >
         {/* Today hairline */}
         {todayOffset >= 0 && todayOffset <= dayCount && (
           <div
+            data-today-line
             className="bg-destructive/30 absolute top-0 h-full w-px"
             style={{ left: todayOffset * dayW }}
             aria-hidden
