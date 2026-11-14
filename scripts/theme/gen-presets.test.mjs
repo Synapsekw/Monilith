@@ -221,6 +221,23 @@ describe("generated presets", () => {
     },
   );
 
+  it.each(NEW_PRESETS.map((p) => [p.id, p]))(
+    "the registry swatch of %s is the first and last wash stop and both accents, per mode",
+    (_id, p) => {
+      const values = presetValues(p);
+      const { swatch } = registryValue(p);
+      for (const mode of ["light", "dark"]) {
+        expect(values[mode].wash).toHaveLength(3);
+        expect(swatch[mode]).toEqual({
+          chrome: values[mode].wash[0],
+          chrome2: values[mode].wash[2],
+          accent: values[mode].brand,
+          accent2: values[mode].brand2,
+        });
+      }
+    },
+  );
+
   it("only Prism carries a third, middle accent", () => {
     expect(NEW_PRESETS.filter((p) => p.mid != null).map((p) => p.id)).toEqual([
       "prism",

@@ -523,17 +523,20 @@ ${mid(d.mid)}  --brand-foreground: ${LABEL.dark};
 `;
 }
 
-/** One preset's entry in THEME_PRESETS: the swatch mirrors the mid wash stop
- *  (light) / top wash stop (dark) and the two accents. */
+/** One preset's entry in THEME_PRESETS: per mode, the swatch mirrors the
+ *  first and last wash stop (the tile's ground) and the two accents. */
 export function registryValue(p) {
   const { light: l, dark: d } = presetValues(p);
+  const mode = (v) => ({
+    chrome: v.wash[0],
+    chrome2: v.wash[2],
+    accent: v.brand,
+    accent2: v.brand2,
+  });
   return {
     id: p.id,
     label: p.label,
-    swatch: {
-      light: { chrome: l.wash[1], accent: l.brand, accent2: l.brand2 },
-      dark: { chrome: d.wash[0], accent: d.brand, accent2: d.brand2 },
-    },
+    swatch: { light: mode(l), dark: mode(d) },
   };
 }
 
@@ -541,7 +544,12 @@ export function registryValue(p) {
 export function registryEntry(p) {
   const { id, label, swatch } = registryValue(p);
   const mode = (m) =>
-    `      ${m}: { chrome: "${swatch[m].chrome}", accent: "${swatch[m].accent}", accent2: "${swatch[m].accent2}" },`;
+    `      ${m}: {
+        chrome: "${swatch[m].chrome}",
+        chrome2: "${swatch[m].chrome2}",
+        accent: "${swatch[m].accent}",
+        accent2: "${swatch[m].accent2}",
+      },`;
   return `  {
     id: "${id}",
     label: "${label}",

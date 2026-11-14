@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { contrastRatio } from "@/lib/boards/contrast";
 import {
   THEME_PRESET_IDS,
   type ThemePresetId,
@@ -12,6 +13,11 @@ import {
   LEGACY_THEME_PRESET_ALIASES,
   resolveThemePresetId,
   swatchAccentFill,
+  swatchAccentRing,
+  swatchChromeFill,
+  SWATCH_MIN_CONTRAST,
+  SWATCH_RING_ALPHA,
+  type ThemePresetSwatch,
   THEME_REACH_IDS,
   DEFAULT_THEME_REACH,
   THEME_REACH_STORAGE_KEY,
@@ -111,6 +117,7 @@ describe("theme presets", () => {
     for (const p of THEME_PRESETS)
       for (const m of ["light", "dark"] as const) {
         expect(p.swatch[m].chrome).toMatch(/^#[0-9a-f]{6}$/);
+        expect(p.swatch[m].chrome2).toMatch(/^#[0-9a-f]{6}$/);
         expect(p.swatch[m].accent).toMatch(/^#[0-9a-f]{6}$/);
         const { accent2 } = p.swatch[m];
         if (accent2 !== undefined) expect(accent2).toMatch(/^#[0-9a-f]{6}$/);
@@ -142,17 +149,127 @@ describe("theme presets", () => {
       }
   });
 
+  it("swatch chrome mirrors the first and last wash stop of each mode", () => {
+    for (const p of THEME_PRESETS)
+      for (const m of ["light", "dark"] as const) {
+        const stops = seed(p.id, m, "--app-wash")!.match(/#[0-9a-f]{6}/gi)!;
+        expect(stops, `${p.id} ${m}`).toHaveLength(3);
+        expect(p.swatch[m].chrome, `${p.id} ${m}`).toBe(stops[0]);
+        expect(p.swatch[m].chrome2, `${p.id} ${m}`).toBe(
+          stops[stops.length - 1],
+        );
+      }
+  });
+
+  it("swatchChromeFill is a diagonal gradient of the two chrome stops", () => {
+    expect(
+      swatchChromeFill({
+        chrome: "#111111",
+        chrome2: "#222222",
+        accent: "#333333",
+      }),
+    ).toBe("linear-gradient(135deg, #111111, #222222)");
+  });
+
   it("swatchAccentFill is flat for one accent and a 90deg gradient for two", () => {
-    expect(swatchAccentFill({ chrome: "#000000", accent: "#112233" })).toBe(
-      "#112233",
-    );
     expect(
       swatchAccentFill({
         chrome: "#000000",
+        chrome2: "#000000",
+        accent: "#112233",
+      }),
+    ).toBe("#112233");
+    expect(
+      swatchAccentFill({
+        chrome: "#000000",
+        chrome2: "#000000",
         accent: "#112233",
         accent2: "#445566",
       }),
     ).toBe("linear-gradient(90deg, #112233, #445566)");
+  });
+
+  describe("swatchAccentRing", () => {
+    const RING = `0 0 0 1px rgba(255, 255, 255, ${SWATCH_RING_ALPHA})`;
+    const rgb = (hex: string) =>
+      [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    /** `fg` at `alpha` over an opaque `bg`. */
+    const over = (fg: string, alpha: number, bg: string) =>
+      "#" +
+      rgb(fg)
+        .map((c, i) =>
+          Math.round(alpha * c + (1 - alpha) * rgb(bg)[i])
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("");
+    const accentsOf = (s: ThemePresetSwatch) =>
+      s.accent2 === undefined ? [s.accent] : [s.accent, s.accent2];
+    /** Everything the dot can sit on: both ends of the tile's gradient and
+     *  the even mix between them, which is what is under a centred dot. */
+    const groundsOf = (s: ThemePresetSwatch) => [
+      s.chrome,
+      s.chrome2,
+      over(s.chrome, 0.5, s.chrome2),
+    ];
+
+    it("rings a dot exactly when an accent is under 3:1 on either chrome stop", () => {
+      const base = { chrome: "#202020", chrome2: "#101010" };
+      // Pale accent on a near-black ground: carries itself.
+      expect(swatchAccentRing({ ...base, accent: "#dddddd" })).toBeUndefined();
+      // Same ground, an accent as dark as the ground: sinks.
+      expect(swatchAccentRing({ ...base, accent: "#303030" })).toBe(RING);
+      // One sinking accent out of two is enough …
+      expect(
+        swatchAccentRing({ ...base, accent: "#dddddd", accent2: "#303030" }),
+      ).toBe(RING);
+      // … and so is one stop out of two.
+      expect(
+        swatchAccentRing({
+          chrome: "#202020",
+          chrome2: "#bbbbbb",
+          accent: "#dddddd",
+        }),
+      ).toBe(RING);
+      expect(SWATCH_MIN_CONTRAST).toBe(3);
+    });
+
+    it("every dot is legible on its own wash: by its fill, or by a ring that clears 3:1 on both sides", () => {
+      for (const p of THEME_PRESETS)
+        for (const m of ["light", "dark"] as const) {
+          const s = p.swatch[m];
+          const where = `${p.id} ${m}`;
+          if (swatchAccentRing(s) === undefined) {
+            for (const a of accentsOf(s))
+              for (const g of groundsOf(s))
+                expect(
+                  contrastRatio(a, g),
+                  `${where}: ${a} on ${g}`,
+                ).toBeGreaterThanOrEqual(SWATCH_MIN_CONTRAST);
+            continue;
+          }
+          expect(swatchAccentRing(s), where).toBe(RING);
+          for (const g of groundsOf(s)) {
+            const ring = over("#ffffff", SWATCH_RING_ALPHA, g);
+            expect(
+              contrastRatio(ring, g),
+              `${where}: ring on ${g}`,
+            ).toBeGreaterThanOrEqual(SWATCH_MIN_CONTRAST);
+            for (const a of accentsOf(s))
+              expect(
+                contrastRatio(ring, a),
+                `${where}: ring around ${a} on ${g}`,
+              ).toBeGreaterThanOrEqual(SWATCH_MIN_CONTRAST);
+          }
+        }
+    });
+
+    it("today: every light dot is ringed and no dark one is", () => {
+      for (const p of THEME_PRESETS) {
+        expect(swatchAccentRing(p.swatch.light), p.id).toBe(RING);
+        expect(swatchAccentRing(p.swatch.dark), p.id).toBeUndefined();
+      }
+    });
   });
 
   it("ships fifteen two-accent presets after the two single-accent ones", () => {

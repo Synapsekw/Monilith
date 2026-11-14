@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { THEME_PRESET_ATTR } from "@/lib/theme/presets";
+import { THEME_PRESET_ATTR, THEME_PRESETS } from "@/lib/theme/presets";
 import { ThemePresetForm } from "./theme-preset-form";
 
 const updateProfileThemePreset = vi.fn();
@@ -41,6 +41,70 @@ describe("ThemePresetForm", () => {
       expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("radio", { name: "Keystone" })).toBeChecked();
+    expect(screen.getAllByRole("radio")).toHaveLength(17);
+    expect(screen.getAllByRole("radio")).toHaveLength(THEME_PRESETS.length);
+    // One group, announced as such.
+    expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
+  });
+
+  it("paints each half with that mode's wash, first stop to last", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const ground = (name: string, mode: string) =>
+      screen
+        .getByRole("radio", { name })
+        .closest("label")!
+        .querySelector<HTMLElement>(`[data-swatch-chrome="${mode}"]`)!;
+
+    // Keystone has no preset block: its washes are `:root` / `.dark`.
+    expect(ground("Keystone", "light").style.background).toBe(
+      "linear-gradient(135deg, rgb(54, 67, 167), rgb(34, 44, 114))",
+    );
+    expect(ground("Keystone", "dark").style.background).toBe(
+      "linear-gradient(135deg, rgb(33, 37, 64), rgb(8, 9, 13))",
+    );
+    expect(ground("Aurora", "light").style.background).toBe(
+      "linear-gradient(135deg, rgb(1, 90, 79), rgb(54, 35, 108))",
+    );
+    expect(ground("Neon", "dark").style.background).toBe(
+      "linear-gradient(135deg, rgb(2, 48, 20), rgb(7, 5, 9))",
+    );
+    expect(document.querySelectorAll("[data-swatch-chrome]")).toHaveLength(34);
+  });
+
+  it("rings the accent with a white hairline on the light wash, where it would sink, and not on the dark", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    for (const p of THEME_PRESETS) {
+      const tile = screen
+        .getByRole("radio", { name: p.label })
+        .closest("label")!;
+      const dot = (mode: string) =>
+        tile.querySelector<HTMLElement>(`[data-swatch-accent="${mode}"]`)!;
+      expect(dot("light").style.boxShadow, p.id).toBe(
+        "0 0 0 1px rgba(255, 255, 255, 0.9)",
+      );
+      expect(dot("dark").style.boxShadow, p.id).toBe("");
+    }
+  });
+
+  it("lays the tiles out in a grid that fits as many 84px tiles as its column holds", () => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const grid = screen
+      .getByRole("radio", { name: "Keystone" })
+      .closest("label")!.parentElement!;
+    expect(grid.querySelectorAll("label")).toHaveLength(17);
+    expect(grid).toHaveClass(
+      "grid",
+      "gap-2",
+      "grid-cols-[repeat(auto-fill,minmax(5.25rem,1fr))]",
+    );
+    // Touch target and focus ring are untouched by the new layout.
+    for (const tile of grid.querySelectorAll("label")) {
+      expect(tile).toHaveClass(
+        "pointer-coarse:min-h-11",
+        "has-[:focus-visible]:ring-2",
+        "has-[:focus-visible]:ring-ring/50",
+      );
+    }
   });
 
   it("draws a two-stop gradient PILL for a two-accent preset, in both modes", () => {
