@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   THEME_PRESET_IDS,
+  type ThemePresetId,
   DEFAULT_THEME_PRESET,
   THEME_PRESETS,
   THEME_PRESET_ATTR,
@@ -54,9 +55,8 @@ const SEEDS = [
   "--content-surface",
 ];
 
-/** Presets allowed to seed the optional `--brand-mid` (typed as strings: the
- *  id joins `THEME_PRESET_IDS` with the gradient presets). */
-const OWN_BRAND_MID: readonly string[] = ["prism"];
+/** Presets allowed to seed the optional `--brand-mid`. */
+const OWN_BRAND_MID: readonly ThemePresetId[] = ["prism"];
 
 function block(sel: string) {
   const s = CSS.indexOf(`${sel} {`);
@@ -155,12 +155,30 @@ describe("theme presets", () => {
     ).toBe("linear-gradient(90deg, #112233, #445566)");
   });
 
-  it("ships exactly three two-accent presets, after the single-accent ones", () => {
+  it("ships fifteen two-accent presets after the two single-accent ones", () => {
+    expect([...THEME_PRESET_IDS]).toEqual([
+      "keystone",
+      "graphite",
+      "aurora",
+      "sunset",
+      "nebula",
+      "lagoon",
+      "tropic",
+      "orchid",
+      "peach",
+      "glacier",
+      "dusk",
+      "berry",
+      "candy",
+      "citrus",
+      "prism",
+      "mocha",
+      "neon",
+    ]);
     const twoAccent = THEME_PRESETS.filter(
       (p) => p.swatch.light.accent2 && p.swatch.dark.accent2,
     ).map((p) => p.id);
-    expect(twoAccent).toEqual(["aurora", "sunset", "nebula"]);
-    expect([...THEME_PRESET_IDS].slice(-3)).toEqual(twoAccent);
+    expect(twoAccent).toEqual([...THEME_PRESET_IDS].slice(2));
   });
 
   it("derives --brand-mid, --brand-gradient and --app-bloom from the seeds, never in a preset block", () => {
@@ -196,6 +214,7 @@ describe("theme presets", () => {
   it("narrows unknown stored values", () => {
     expect(isThemePresetId("graphite")).toBe(true);
     expect(isThemePresetId("aurora")).toBe(true);
+    expect(isThemePresetId("neon")).toBe(true);
     expect(isThemePresetId("teal")).toBe(false);
     expect(isThemePresetId(null)).toBe(false);
   });
@@ -231,6 +250,10 @@ describe("legacy preset aliases", () => {
 
   it("resolveThemePresetId returns current ids, follows aliases that exist, and defaults otherwise", () => {
     expect(resolveThemePresetId("aurora")).toBe("aurora");
+    expect(resolveThemePresetId("ocean")).toBe("lagoon");
+    expect(resolveThemePresetId("forest")).toBe("tropic");
+    expect(resolveThemePresetId("ember")).toBe("peach");
+    expect(resolveThemePresetId("rose")).toBe("orchid");
     expect(resolveThemePresetId("teal")).toBe(DEFAULT_THEME_PRESET);
     expect(resolveThemePresetId(null)).toBe(DEFAULT_THEME_PRESET);
     for (const [legacy, target] of Object.entries(LEGACY_THEME_PRESET_ALIASES))

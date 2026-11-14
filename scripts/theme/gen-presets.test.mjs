@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BASE_WASHES,
+  BLOOM_VISIBLE,
   CHROME_DESTRUCTIVE,
   CHROME_MUTED_ALPHA,
   CHROME_SELECTED_ALPHA,
@@ -10,7 +11,13 @@ import {
   contrastHex,
   oklchToHex,
   MIN_STEPS,
+  NEW_PRESETS,
   TARGET,
+  cssBlocks,
+  faintestBloom,
+  presetValues,
+  registryEntry,
+  registryValue,
   overlappingRadials,
   solveBoldWash,
   solveBoldWashDetailed,
@@ -18,13 +25,16 @@ import {
   washDeclaration,
   worstChromeContrast,
 } from "./gen-presets.mjs";
+import { THEME_PRESET_IDS, THEME_PRESETS } from "../../src/lib/theme/presets";
 
 /**
  * The generator restates three things the stylesheet owns — the chrome
  * scope's muted and selected alphas and the light bloom — because it has to
  * solve against them. These tests read globals.css and fail when either side
- * moves alone, and pin the five shipped light washes to the solver's output,
- * so "regenerate and paste" stays a true description of how they were made.
+ * moves alone, and pin the five shipped light washes and the twelve generated
+ * presets (both blocks and the registry entry of each) to the script's
+ * output, so "regenerate and paste" stays a true description of how they
+ * were made.
  */
 const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 
@@ -127,6 +137,9 @@ describe("solveBoldWash", () => {
         expect(worstChromeContrast(stop, accents), stop).toBeGreaterThanOrEqual(
           TARGET,
         );
+        expect(faintestBloom(stop, accents), stop).toBeGreaterThanOrEqual(
+          BLOOM_VISIBLE,
+        );
       }
       expect(solved[0].L - solved[1].L).toBeGreaterThanOrEqual(
         MIN_STEPS[0] - 1e-9,
@@ -150,6 +163,68 @@ describe("solveBoldWash", () => {
   it("stacks only the radials whose lit ellipses meet", () => {
     // Today none do, so every ground is one radial at its own peak.
     expect(overlappingRadials(LIGHT_BLOOM.radials)).toEqual([[0], [1], [2]]);
+  });
+});
+
+describe("generated presets", () => {
+  const PRESETS_TS = readFileSync(
+    resolve(process.cwd(), "src/lib/theme/presets.ts"),
+    "utf8",
+  );
+
+  it("are the twelve ids after nebula, in registry order", () => {
+    expect(NEW_PRESETS.map((p) => p.id)).toEqual(
+      [...THEME_PRESET_IDS].slice(THEME_PRESET_IDS.indexOf("nebula") + 1),
+    );
+    expect(NEW_PRESETS).toHaveLength(12);
+  });
+
+  it.each(NEW_PRESETS.map((p) => [p.id, p]))(
+    "reproduces both shipped blocks of %s, comment and all",
+    (_id, p) => {
+      expect(CSS).toContain(cssBlocks(p));
+    },
+  );
+
+  it.each(NEW_PRESETS.map((p) => [p.id, p]))(
+    "reproduces the shipped registry entry of %s",
+    (id, p) => {
+      expect(THEME_PRESETS.find((entry) => entry.id === id)).toEqual(
+        registryValue(p),
+      );
+      expect(PRESETS_TS).toContain(registryEntry(p));
+    },
+  );
+
+  it.each(NEW_PRESETS.map((p) => [p.id, p]))(
+    "solves the light wash of %s under its own generated accents",
+    (_id, p) => {
+      const { light } = presetValues(p);
+      const accents = [light.brand, light.brand2, light.mid].filter(Boolean);
+      expect(accents).toHaveLength(p.mid == null ? 2 : 3);
+      const solved = solveBoldWashDetailed(p.h1, p.h2, p.cs ?? 1, accents);
+      expect(solved.map((s) => s.stop)).toEqual(light.wash);
+      for (const { stop } of solved) {
+        expect(worstChromeContrast(stop, accents), stop).toBeGreaterThanOrEqual(
+          TARGET,
+        );
+        expect(faintestBloom(stop, accents), stop).toBeGreaterThanOrEqual(
+          BLOOM_VISIBLE,
+        );
+      }
+      expect(solved[0].L - solved[1].L).toBeGreaterThanOrEqual(
+        MIN_STEPS[0] - 1e-9,
+      );
+      expect(solved[1].L - solved[2].L).toBeGreaterThanOrEqual(
+        MIN_STEPS[1] - 1e-9,
+      );
+    },
+  );
+
+  it("only Prism carries a third, middle accent", () => {
+    expect(NEW_PRESETS.filter((p) => p.mid != null).map((p) => p.id)).toEqual([
+      "prism",
+    ]);
   });
 });
 

@@ -3,6 +3,7 @@
 // is the judge of every value, not this script.
 //
 //   node scripts/theme/gen-presets.mjs wash <h1> <h2> [chroma scale]
+//   node scripts/theme/gen-presets.mjs presets
 import { pathToFileURL } from "node:url";
 
 const toLin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -92,6 +93,11 @@ export const TARGET = 4.6;
  *  (first → middle, middle → last), so no wash has a flat half. Bound by
  *  globals.contrast.test.ts. */
 export const MIN_STEPS = [0.04, 0.05];
+/** Visibility: every bloom radial at its peak lifts a stop by at least this
+ *  contrast ratio. globals.contrast.test.ts asserts 1.12; the 0.005 absorbs
+ *  8-bit rounding. A glow in a hue far from the stop's (a teal bloom on a
+ *  pink stop) barely moves its luminance, so the stop has to sit darker. */
+export const BLOOM_VISIBLE = 1.125;
 /** How far the solver lowers a stop's lightness per try. */
 const STEP = 0.005;
 
@@ -180,6 +186,18 @@ export function worstChromeContrast(stop, accents) {
 }
 
 /**
+ * The faintest bloom radial on a wash stop: the smallest contrast ratio
+ * between the bare stop and any ground the bloom turns it into.
+ */
+export function faintestBloom(stop, accents) {
+  return Math.min(
+    ...groundsOf(stop, accents)
+      .slice(1)
+      .map((ground) => contrastHex(ground, stop)),
+  );
+}
+
+/**
  * A wash stop's hue. A dark amber is brown, so a WASH stop (never the brand)
  * whose hue falls in 50–95 is pulled to 45, burnt orange. Lime and olive
  * (95–135) are left alone.
@@ -192,7 +210,8 @@ export function washHue(h) {
 /**
  * Three wash stops, hue1 → hue2: a saturated mid-tone frame, each stop as
  * light as it can be while white chrome text still clears TARGET on it under
- * the preset's own bloom, then stepped so the three descend in lightness.
+ * the preset's own bloom and every bloom radial stays visible on it
+ * (BLOOM_VISIBLE), then stepped so the three descend in lightness.
  * `accents` is `[brand, brand2, brandMid?]` (see `bloomColours`). Returns the
  * stops with the lightness each one was solved at.
  */
@@ -213,7 +232,11 @@ export function solveBoldWashDetailed(h1, h2, cs = 1, accents) {
         ? L0
         : Math.min(L0, solved[i - 1].L - MIN_STEPS[i - 1] - STEP / 2);
     let stop = at(L, C, h);
-    while (worstChromeContrast(stop, accents) < TARGET && L > 0.15) {
+    while (
+      (worstChromeContrast(stop, accents) < TARGET ||
+        faintestBloom(stop, accents) < BLOOM_VISIBLE) &&
+      L > 0.15
+    ) {
       L -= STEP;
       stop = at(L, C, h);
     }
@@ -248,9 +271,291 @@ export function washDeclaration([a, b, c]) {
   return `--app-wash: linear-gradient(168deg, ${a} 0%, ${b} 46%, ${c} 100%);`;
 }
 
+/**
+ * The twelve generated two-accent presets, in registry order (after Nebula).
+ * `h1`/`h2` are the OKLCH hues of --brand / --brand-2; `mid` is the hue of an
+ * own --brand-mid (Prism only); `cs` scales every chroma in the recipe. Their
+ * blocks in globals.css and entries in presets.ts are `presets` output,
+ * pasted; gen-presets.test.mjs fails when either drifts from this table.
+ */
+export const NEW_PRESETS = [
+  {
+    id: "lagoon",
+    label: "Lagoon",
+    h1: 200,
+    h2: 258,
+    note: "cyan into blue over a deep-water wash",
+  },
+  {
+    id: "tropic",
+    label: "Tropic",
+    h1: 172,
+    h2: 128,
+    note: "teal into lime over a palm-green wash",
+  },
+  {
+    id: "orchid",
+    label: "Orchid",
+    h1: 335,
+    h2: 292,
+    note: "magenta into violet over a plum wash",
+  },
+  {
+    id: "peach",
+    label: "Peach",
+    h1: 32,
+    h2: 82,
+    note: "coral into gold over a warm clay wash",
+  },
+  {
+    id: "glacier",
+    label: "Glacier",
+    h1: 228,
+    h2: 188,
+    cs: 0.6,
+    note: "ice blue into mint, low chroma",
+  },
+  {
+    id: "dusk",
+    label: "Dusk",
+    h1: 275,
+    h2: 8,
+    note: "indigo into rose over a twilight wash",
+  },
+  {
+    id: "berry",
+    label: "Berry",
+    h1: 15,
+    h2: 318,
+    note: "crimson into purple over a wine wash",
+  },
+  {
+    id: "candy",
+    label: "Candy",
+    h1: 350,
+    h2: 215,
+    cs: 0.75,
+    note: "pastel pink into cyan",
+  },
+  {
+    id: "citrus",
+    label: "Citrus",
+    h1: 118,
+    h2: 68,
+    note: "lime into orange over an olive wash",
+  },
+  {
+    id: "prism",
+    label: "Prism",
+    h1: 208,
+    h2: 350,
+    mid: 292,
+    note: "cyan through violet into pink, the one three-stop preset",
+  },
+  {
+    id: "mocha",
+    label: "Mocha",
+    h1: 58,
+    h2: 28,
+    cs: 0.55,
+    note: "caramel into terracotta, earthy and low chroma",
+  },
+  {
+    id: "neon",
+    label: "Neon",
+    h1: 152,
+    h2: 312,
+    cs: 1.15,
+    note: "green into fuchsia, high chroma",
+  },
+];
+
+/** The label a brand fill carries, per mode (--brand-foreground). */
+const LABEL = { light: "#ffffff", dark: "#0e0e10" };
+
+/**
+ * The value recipe: `[lightness, chroma]` per token, taken from the shipped
+ * Nebula block. Brand chroma is scaled by the preset's `cs`; the neutrals'
+ * tint is scaled by `max(cs, NEUTRAL_CS_FLOOR)`, so a low-chroma preset still
+ * tints its greys. globals.contrast.test.ts judges the result — a failure is
+ * fixed here or in a preset's row, then regenerated.
+ */
+export const RECIPE = {
+  light: {
+    brand: [0.52, 0.16],
+    brand2: [0.52, 0.17],
+    mid: [0.52, 0.17],
+    background: [0.972, 0.005],
+    foreground: [0.21, 0.015],
+    muted: [0.952, 0.009],
+    mutedFg: [0.45, 0.025],
+  },
+  dark: {
+    brand: [0.8, 0.125],
+    brand2: [0.77, 0.135],
+    mid: [0.78, 0.13],
+    background: [0.165, 0.006],
+    foreground: [0.965, 0.005],
+    surface: [0.205, 0.006],
+    muted: [0.232, 0.007],
+    secondary: [0.272, 0.008],
+    mutedFg: [0.8, 0.022],
+    wash: [
+      [0.27, 0.06],
+      [0.2, 0.05],
+      [0.12, 0.012],
+    ],
+  },
+};
+const NEUTRAL_CS_FLOOR = 0.5;
+
+/**
+ * A brand fill: the recipe's colour, moved away from its label (darker under
+ * a white label, lighter under a dark one) until the label clears TARGET.
+ */
+function brandFor([L0, C], cs, h, mode) {
+  const dir = mode === "light" ? -1 : 1;
+  let L = L0;
+  let hex = oklchToHex(L, C * cs, h);
+  while (contrastHex(hex, LABEL[mode]) < TARGET && L > 0.3 && L < 0.95) {
+    L += dir * STEP;
+    hex = oklchToHex(L, C * cs, h);
+  }
+  return hex;
+}
+
+/** Every generated value of one preset, per mode. */
+export function presetValues(p) {
+  const cs = p.cs ?? 1;
+  const { light: rl, dark: rd } = RECIPE;
+  const neutral = ([L, C]) =>
+    oklchToHex(L, C * Math.max(cs, NEUTRAL_CS_FLOOR), p.h1);
+  const accents = (r, mode) => ({
+    brand: brandFor(r.brand, cs, p.h1, mode),
+    brand2: brandFor(r.brand2, cs, p.h2, mode),
+    mid: p.mid != null ? brandFor(r.mid, cs, p.mid, mode) : null,
+  });
+  const light = {
+    ...accents(rl, "light"),
+    background: neutral(rl.background),
+    foreground: neutral(rl.foreground),
+    muted: neutral(rl.muted),
+    mutedFg: neutral(rl.mutedFg),
+  };
+  // The bold frame, solved under this preset's own light bloom.
+  light.wash = solveBoldWash(
+    p.h1,
+    p.h2,
+    cs,
+    [light.brand, light.brand2, light.mid].filter(Boolean),
+  );
+  const dark = {
+    ...accents(rd, "dark"),
+    background: neutral(rd.background),
+    foreground: neutral(rd.foreground),
+    surface: neutral(rd.surface),
+    muted: neutral(rd.muted),
+    secondary: neutral(rd.secondary),
+    mutedFg: neutral(rd.mutedFg),
+    wash: rd.wash.map(([L, C], i) =>
+      oklchToHex(L, C * cs, i === 0 ? p.h1 : p.h2),
+    ),
+  };
+  return { light, dark };
+}
+
+/** The two override blocks of one preset, exactly as prettier leaves them. */
+export function cssBlocks(p) {
+  const { light: l, dark: d } = presetValues(p);
+  const mid = (v) => (v ? `  --brand-mid: ${v};\n` : "");
+  return `/* ${p.label} — ${p.note}.
+   Generated by scripts/theme/gen-presets.mjs (\`presets\`) — never edit by
+   hand. Only the tokens a preset can move are declared; everything
+   alpha-based or brand-derived follows. */
+:root[data-theme-preset="${p.id}"] {
+  --brand: ${l.brand};
+  --brand-2: ${l.brand2};
+${mid(l.mid)}  --brand-foreground: ${LABEL.light};
+  --background: ${l.background};
+  --foreground: ${l.foreground};
+  --surface: #ffffff;
+  --surface-muted: ${l.muted};
+  --surface-sunken: ${l.muted};
+  --card: #ffffff;
+  --card-foreground: ${l.foreground};
+  --popover: #ffffff;
+  --popover-foreground: ${l.foreground};
+  --secondary: ${l.muted};
+  --secondary-foreground: ${l.foreground};
+  --muted: ${l.muted};
+  --muted-foreground: ${l.mutedFg};
+  --kicker: ${l.mutedFg};
+  --accent: ${l.muted};
+  --accent-foreground: ${l.foreground};
+  --glow-primary: 0 0 30px -8px rgba(${rgbOf(l.brand).join(", ")}, 0.35);
+  ${washDeclaration(l.wash)}
+  --content-surface: #ffffff;
+}
+
+.dark[data-theme-preset="${p.id}"] {
+  --brand: ${d.brand};
+  --brand-2: ${d.brand2};
+${mid(d.mid)}  --brand-foreground: ${LABEL.dark};
+  --background: ${d.background};
+  --foreground: ${d.foreground};
+  --surface: ${d.surface};
+  --surface-muted: ${d.muted};
+  --surface-sunken: ${d.muted};
+  --card: ${d.surface};
+  --card-foreground: ${d.foreground};
+  --popover: ${d.muted};
+  --popover-foreground: ${d.foreground};
+  --secondary: ${d.secondary};
+  --secondary-foreground: ${d.foreground};
+  --muted: ${d.muted};
+  --muted-foreground: ${d.mutedFg};
+  --kicker: ${d.mutedFg};
+  --accent: ${d.muted};
+  --accent-foreground: ${d.foreground};
+  ${washDeclaration(d.wash)}
+  --content-surface: ${d.background};
+}
+`;
+}
+
+/** One preset's entry in THEME_PRESETS: the swatch mirrors the mid wash stop
+ *  (light) / top wash stop (dark) and the two accents. */
+export function registryValue(p) {
+  const { light: l, dark: d } = presetValues(p);
+  return {
+    id: p.id,
+    label: p.label,
+    swatch: {
+      light: { chrome: l.wash[1], accent: l.brand, accent2: l.brand2 },
+      dark: { chrome: d.wash[0], accent: d.brand, accent2: d.brand2 },
+    },
+  };
+}
+
+/** `registryValue` as presets.ts source, exactly as prettier leaves it. */
+export function registryEntry(p) {
+  const { id, label, swatch } = registryValue(p);
+  const mode = (m) =>
+    `      ${m}: { chrome: "${swatch[m].chrome}", accent: "${swatch[m].accent}", accent2: "${swatch[m].accent2}" },`;
+  return `  {
+    id: "${id}",
+    label: "${label}",
+    swatch: {
+${mode("light")}
+${mode("dark")}
+    },
+  },`;
+}
+
 // CLI — only when run directly, never when a test imports the module.
 //   wash <h1> <h2> [cs] [brand] [brand2] [brandMid]   one wash
 //   base                                              the five shipped washes
+//   presets                                           the twelve generated presets
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -276,9 +581,13 @@ if (
         `${id.padEnd(9)} ${washDeclaration(solved.map((s) => s.stop))}  L ${solved.map((s) => s.L).join(" / ")}`,
       );
     }
+  } else if (command === "presets") {
+    for (const p of NEW_PRESETS) console.log(cssBlocks(p));
+    console.log("// ---- presets.ts ----");
+    for (const p of NEW_PRESETS) console.log(registryEntry(p));
   } else {
     console.error(
-      "usage: node scripts/theme/gen-presets.mjs wash <h1> <h2> [cs] [brand brand2 [brandMid]] | base",
+      "usage: node scripts/theme/gen-presets.mjs wash <h1> <h2> [cs] [brand brand2 [brandMid]] | base | presets",
     );
     process.exitCode = 1;
   }

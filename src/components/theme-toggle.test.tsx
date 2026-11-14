@@ -46,7 +46,26 @@ describe("ThemeToggle", () => {
 
     const radios = screen.getAllByRole("menuitemradio");
     expect(radios).toHaveLength(THEME_PRESETS.length);
-    for (const label of ["Aurora", "Sunset", "Nebula"]) {
+    expect(radios).toHaveLength(17);
+    for (const label of [
+      "Keystone",
+      "Graphite",
+      "Aurora",
+      "Sunset",
+      "Nebula",
+      "Lagoon",
+      "Tropic",
+      "Orchid",
+      "Peach",
+      "Glacier",
+      "Dusk",
+      "Berry",
+      "Candy",
+      "Citrus",
+      "Prism",
+      "Mocha",
+      "Neon",
+    ]) {
       expect(
         screen.getByRole("menuitemradio", { name: label }),
       ).toBeInTheDocument();

@@ -25,6 +25,18 @@ describe("ThemePresetForm", () => {
       "Aurora",
       "Sunset",
       "Nebula",
+      "Lagoon",
+      "Tropic",
+      "Orchid",
+      "Peach",
+      "Glacier",
+      "Dusk",
+      "Berry",
+      "Candy",
+      "Citrus",
+      "Prism",
+      "Mocha",
+      "Neon",
     ]) {
       expect(screen.getByRole("radio", { name: label })).toBeInTheDocument();
     }
@@ -53,16 +65,27 @@ describe("ThemePresetForm", () => {
     }
   });
 
-  it.each(["Aurora", "Sunset", "Nebula"])(
-    "%s is a pill — every two-accent preset is",
-    (label) => {
-      render(<ThemePresetForm currentPreset="keystone" />);
-      const tile = screen.getByRole("radio", { name: label }).closest("label")!;
-      expect(tile.querySelectorAll('[data-swatch-shape="pill"]')).toHaveLength(
-        2,
-      );
-    },
-  );
+  it.each([
+    "Aurora",
+    "Sunset",
+    "Nebula",
+    "Lagoon",
+    "Tropic",
+    "Orchid",
+    "Peach",
+    "Glacier",
+    "Dusk",
+    "Berry",
+    "Candy",
+    "Citrus",
+    "Prism",
+    "Mocha",
+    "Neon",
+  ])("%s is a pill — every two-accent preset is", (label) => {
+    render(<ThemePresetForm currentPreset="keystone" />);
+    const tile = screen.getByRole("radio", { name: label }).closest("label")!;
+    expect(tile.querySelectorAll('[data-swatch-shape="pill"]')).toHaveLength(2);
+  });
 
   it("keeps a flat round dot for a single-accent preset", () => {
     render(<ThemePresetForm currentPreset="keystone" />);

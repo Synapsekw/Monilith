@@ -12,9 +12,12 @@
  * on its own.
  *
  * `--brand-2` is one of those seeds. Keystone and Graphite are single-accent and
- * declare it equal to `--brand`; `aurora`, `sunset` and `nebula` give it a second hue,
+ * declare it equal to `--brand`; every other preset gives it a second hue,
  * which is all that makes them "gradient" presets — `--brand-gradient` is
- * derived once in `:root` from the two.
+ * derived once in `:root` from the two. The twelve after `nebula` are
+ * generated: their blocks and entries are the output of
+ * `node scripts/theme/gen-presets.mjs presets`, pasted, and
+ * `scripts/theme/gen-presets.test.mjs` fails when either is edited by hand.
  *
  * Adding a preset means three things, all guarded by tests: an entry here, the
  * two CSS blocks (`presets.test.ts` checks the token sets match exactly), and a
@@ -27,6 +30,18 @@ export const THEME_PRESET_IDS = [
   "aurora",
   "sunset",
   "nebula",
+  "lagoon",
+  "tropic",
+  "orchid",
+  "peach",
+  "glacier",
+  "dusk",
+  "berry",
+  "candy",
+  "citrus",
+  "prism",
+  "mocha",
+  "neon",
 ] as const;
 
 export type ThemePresetId = (typeof THEME_PRESET_IDS)[number];
@@ -48,8 +63,8 @@ export const KEYSTONE_BRAND_HEX = {
 } as const;
 
 /** One mode's preview. `accent2` mirrors `--brand-2` and is set ONLY by the
- *  two-accent presets (aurora, sunset, nebula): its presence is what turns the
- *  accent dot into a two-stop gradient. */
+ *  two-accent presets (everything but Keystone and Graphite): its presence is
+ *  what turns the accent dot into a two-stop gradient. */
 export type ThemePresetSwatch = {
   chrome: string;
   accent: string;
@@ -116,6 +131,102 @@ export const THEME_PRESETS: ReadonlyArray<ThemePreset> = [
     swatch: {
       light: { chrome: "#d9dcef", accent: "#7450d6", accent2: "#2f6cc0" },
       dark: { chrome: "#261f40", accent: "#b79cf7", accent2: "#6fa8ee" },
+    },
+  },
+  {
+    id: "lagoon",
+    label: "Lagoon",
+    swatch: {
+      light: { chrome: "#024967", accent: "#02787d", accent2: "#1c65c8" },
+      dark: { chrome: "#002d2f", accent: "#37d6dd", accent2: "#85b6fe" },
+    },
+  },
+  {
+    id: "tropic",
+    label: "Tropic",
+    swatch: {
+      light: { chrome: "#015114", accent: "#047b62", accent2: "#527700" },
+      dark: { chrome: "#002e23", accent: "#57d8b4", accent2: "#9bc462" },
+    },
+  },
+  {
+    id: "orchid",
+    label: "Orchid",
+    swatch: {
+      light: { chrome: "#692c8f", accent: "#9d3d8d", accent2: "#6e4fc1" },
+      dark: { chrome: "#381a32", accent: "#ef9ede", accent2: "#b6a5fe" },
+    },
+  },
+  {
+    id: "peach",
+    label: "Peach",
+    swatch: {
+      light: { chrome: "#742c00", accent: "#b23a26", accent2: "#876204" },
+      dark: { chrome: "#3f1a13", accent: "#ffa28f", accent2: "#dfab40" },
+    },
+  },
+  {
+    id: "glacier",
+    label: "Glacier",
+    swatch: {
+      light: { chrome: "#004e54", accent: "#147394", accent2: "#027972" },
+      dark: { chrome: "#112a34", accent: "#8ac8e4", accent2: "#74c5be" },
+    },
+  },
+  {
+    id: "dusk",
+    label: "Dusk",
+    swatch: {
+      light: { chrome: "#70126b", accent: "#515bc3", accent2: "#b42f56" },
+      dark: { chrome: "#1e2343", accent: "#aab9ff", accent2: "#fc8ea4" },
+    },
+  },
+  {
+    id: "berry",
+    label: "Berry",
+    swatch: {
+      light: { chrome: "#770a5d", accent: "#b2354a", accent2: "#9041a7" },
+      dark: { chrome: "#3f181d", accent: "#ff9ea6", accent2: "#d898ec" },
+    },
+  },
+  {
+    id: "candy",
+    label: "Candy",
+    swatch: {
+      light: { chrome: "#283b80", accent: "#9a4873", accent2: "#02768a" },
+      dark: { chrome: "#371d29", accent: "#eca5c6", accent2: "#5dc5dc" },
+    },
+  },
+  {
+    id: "citrus",
+    label: "Citrus",
+    swatch: {
+      light: { chrome: "#6e2a00", accent: "#637103", accent2: "#935a00" },
+      dark: { chrome: "#242a02", accent: "#b7c967", accent2: "#eca24a" },
+    },
+  },
+  {
+    id: "prism",
+    label: "Prism",
+    swatch: {
+      light: { chrome: "#401981", accent: "#077783", accent2: "#ab3276" },
+      dark: { chrome: "#012c32", accent: "#3bd4e8", accent2: "#f48fc0" },
+    },
+  },
+  {
+    id: "mocha",
+    label: "Mocha",
+    swatch: {
+      light: { chrome: "#6c331e", accent: "#8f5b32", accent2: "#97524a" },
+      dark: { chrome: "#332216", accent: "#e0b392", accent2: "#e0a39a" },
+    },
+  },
+  {
+    id: "neon",
+    label: "Neon",
+    swatch: {
+      light: { chrome: "#003b65", accent: "#037e3f", accent2: "#8e3ab8" },
+      dark: { chrome: "#023014", accent: "#6ed88f", accent2: "#d595fb" },
     },
   },
 ];
