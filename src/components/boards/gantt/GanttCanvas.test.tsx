@@ -659,3 +659,135 @@ describe("GanttCanvas bar labels", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("GanttCanvas section summaries and group bands", () => {
+  const groupBand = (summary?: GanttRow["summary"]): GanttRow => ({
+    itemId: "group:g1",
+    name: "Phase 1",
+    scheduled: false,
+    kind: "section",
+    level: 1,
+    ...(summary ? { summary } : {}),
+  });
+  // Row order: 0 board band, 1 group band, 2 i1, 3 i2.
+  const grouped = (summary?: GanttRow["summary"]): GanttRow[] => [
+    rows[0]!,
+    groupBand(summary),
+    rows[1]!,
+    rows[2]!,
+  ];
+  const full = { startCol: 2, spanCols: 10, donePct: 35, lateCount: 8 };
+  const bandOf = (name: string) =>
+    screen
+      .getByRole("heading", { name })
+      .closest('[data-testid="gantt-section"]') as HTMLElement;
+
+  it("makes a group band a toggle too when onToggleExpand is given", () => {
+    const onToggleExpand = vi.fn();
+    render(
+      <GanttCanvas
+        {...props({
+          rows: grouped(full),
+          onToggleExpand,
+          isExpanded: () => true,
+        })}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: "Collapse Phase 1" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle.className).toContain("pointer-coarse:h-11");
+    fireEvent.click(toggle);
+    expect(onToggleExpand).toHaveBeenCalledWith("group:g1");
+  });
+
+  it("leaves a group band a plain level-4 heading without onToggleExpand", () => {
+    render(<GanttCanvas {...props({ rows: grouped(full) })} />);
+    expect(
+      screen.getByRole("heading", { level: 4, name: "Phase 1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Phase 1/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("draws the summary span, its done share and the meta text", () => {
+    render(<GanttCanvas {...props({ rows: grouped(full) })} />);
+    const band = bandOf("Phase 1");
+    // Day 2 → 20px; 10 days × 10px.
+    expect(within(band).getByTestId("gantt-summary")).toHaveStyle({
+      left: "20px",
+      width: "100px",
+    });
+    expect(within(band).getByTestId("gantt-summary-fill")).toHaveStyle({
+      width: "35%",
+    });
+    expect(within(band).getByTestId("gantt-section-meta")).toHaveTextContent(
+      "35% · 8 late",
+    );
+  });
+
+  it("gives the band a text equivalent of the summary bar", () => {
+    render(
+      <GanttCanvas
+        {...props({
+          rows: grouped(full),
+          onToggleExpand: vi.fn(),
+          isExpanded: () => true,
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Collapse Phase 1" }),
+    ).toHaveAccessibleDescription("35% done, 8 late");
+  });
+
+  it("draws an unknown-progress span without a fill or meta text", () => {
+    render(
+      <GanttCanvas
+        {...props({
+          rows: grouped({ ...full, donePct: null, lateCount: null }),
+        })}
+      />,
+    );
+    const band = bandOf("Phase 1");
+    expect(within(band).getByTestId("gantt-summary")).toBeInTheDocument();
+    expect(
+      within(band).queryByTestId("gantt-summary-fill"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(band).queryByTestId("gantt-section-meta"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("omits the late part when nothing is late", () => {
+    render(
+      <GanttCanvas
+        {...props({ rows: grouped({ ...full, donePct: 100, lateCount: 0 }) })}
+      />,
+    );
+    const meta = within(bandOf("Phase 1")).getByTestId("gantt-section-meta");
+    expect(meta).toHaveTextContent("100%");
+    expect(meta).not.toHaveTextContent("late");
+  });
+
+  it("draws no summary on a band that has none", () => {
+    render(<GanttCanvas {...props({ rows: grouped(full) })} />);
+    expect(
+      within(bandOf("Procurement")).queryByTestId("gantt-summary"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps every band one row tall and arrows on the right rows", () => {
+    const { container } = render(
+      <GanttCanvas {...props({ rows: grouped(full) })} />,
+    );
+    for (const band of screen.getAllByTestId("gantt-section")) {
+      expect(band).toHaveStyle({ height: "32px" });
+    }
+    // i1 is row 2, i2 row 3. Rail 300px, 10px/day, 32px rows:
+    // from (300 + 5×10, 2×32 + 16) to (300 + 6×10, 3×32 + 16).
+    expect(
+      container.querySelector("svg path[marker-end]")?.getAttribute("d"),
+    ).toBe("M350,80 C355,80 355,112 360,112");
+  });
+});

@@ -25,6 +25,7 @@ import {
   DEFAULT_LABEL_W,
   LABEL_W_MAX,
   LABEL_W_MIN,
+  MIN_BAR_W,
   ROW_H,
   PX_PER_DAY,
   fittedDayW,
@@ -529,9 +530,13 @@ export function GanttCanvas({
 
 /**
  * A label band spanning the whole row — a board (level 0, the stronger surface
- * step) or a group (level 1, lighter, indented). No bar, no picker; the name
- * stays pinned to the rail while the track scrolls sideways. A board band
- * becomes a collapse toggle when the canvas is given `onToggleExpand`.
+ * step) or a group (level 1, lighter, indented). No draggable bar, no picker;
+ * the name stays pinned to the rail while the track scrolls sideways. Any band
+ * becomes a collapse toggle when the canvas is given `onToggleExpand` (the
+ * caller decides what a band id means). A band with a `summary` draws the span
+ * of everything under it as a thin bar, filled to its done share, with
+ * "35% · 8 late" in the rail. Always exactly ROW_H tall: the arrow overlay
+ * computes y from the row index.
  */
 function SectionBand({
   row,
@@ -555,6 +560,16 @@ function SectionBand({
   onToggle?: (itemId: string) => void;
 }) {
   const isBoard = (row.level ?? 0) === 0;
+  const summaryId = useId();
+  const summary = row.summary;
+  const pct =
+    summary && summary.donePct !== null ? `${summary.donePct}%` : null;
+  const late =
+    summary && summary.lateCount !== null && summary.lateCount > 0
+      ? `${summary.lateCount} late`
+      : null;
+  // Text equivalent of the (aria-hidden) span bar and the visual meta text.
+  const summaryText = [pct && `${pct} done`, late].filter(Boolean).join(", ");
   const label = (
     <span
       role="heading"
@@ -586,15 +601,17 @@ function SectionBand({
         )}
         style={{
           width: labelW,
-          paddingLeft: isBoard && onToggle ? 8 : isBoard ? 16 : 32,
+          // The toggle carries its own 4px of padding; a plain label does not.
+          paddingLeft: onToggle ? (isBoard ? 8 : 24) : isBoard ? 16 : 32,
         }}
       >
-        {isBoard && onToggle ? (
+        {onToggle ? (
           <button
             type="button"
             onClick={() => onToggle(row.itemId)}
             aria-expanded={expanded}
             aria-label={`${expanded ? "Collapse" : "Expand"} ${row.name}`}
+            aria-describedby={summaryText ? summaryId : undefined}
             className="hover:bg-state-hover focus-visible:ring-ring flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
           >
             {expanded ? (
@@ -613,6 +630,22 @@ function SectionBand({
         ) : (
           label
         )}
+        {summaryText && (
+          <span id={summaryId} className="sr-only">
+            {summaryText}
+          </span>
+        )}
+        {(pct || late) && (
+          <span
+            data-testid="gantt-section-meta"
+            aria-hidden
+            className="text-muted-foreground text-2xs ml-auto shrink-0 pl-2 tabular-nums"
+          >
+            {pct}
+            {pct && late ? " · " : null}
+            {late ? <span className="text-destructive">{late}</span> : null}
+          </span>
+        )}
       </div>
       {/* The band's track: same weekend tint and today hairline as an item
           row, so the today line reads as one unbroken rule down the chart. */}
@@ -621,6 +654,26 @@ function SectionBand({
         className="relative shrink-0"
         style={{ width: totalW, height: ROW_H, ...trackStyle }}
       >
+        {summary && (
+          <div
+            data-testid="gantt-summary"
+            aria-hidden
+            className="bg-muted-foreground/20 absolute h-2 overflow-hidden rounded-full"
+            style={{
+              left: summary.startCol * dayW,
+              width: Math.max(MIN_BAR_W, summary.spanCols * dayW),
+              top: ROW_H / 2 - 4,
+            }}
+          >
+            {summary.donePct !== null && (
+              <div
+                data-testid="gantt-summary-fill"
+                className="bg-brand-gradient h-full"
+                style={{ width: `${summary.donePct}%` }}
+              />
+            )}
+          </div>
+        )}
         {todayInRange && (
           <div
             data-today-line
