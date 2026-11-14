@@ -4,6 +4,11 @@
  * A read that can exceed it must page with `.range()`, or the caller gets an
  * arbitrary first 1000 rows and no error. The query MUST have a total order
  * (end with a unique key) or rows can repeat or vanish across pages.
+ *
+ * A short page is read as the end of the data, so `pageSize` must equal the
+ * hosted `max_rows` (Dashboard > API settings). Verified 1000 on DEV
+ * (2026-11-14); check PROD at the cutover. Pages are not one snapshot: a write
+ * landing between waves can shift offsets by a row until the next refetch.
  */
 export const POSTGREST_MAX_ROWS = 1000;
 

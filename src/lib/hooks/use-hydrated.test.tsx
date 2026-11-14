@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToString } from "react-dom/server";
-import { renderHook } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
 import { useHydrated } from "@/lib/hooks/use-hydrated";
 
 function Probe() {
@@ -15,5 +16,18 @@ describe("useHydrated", () => {
   it("is true after a client render", () => {
     const { result } = renderHook(() => useHydrated());
     expect(result.current).toBe(true);
+  });
+
+  it("hydrates without a mismatch, then flips to true", async () => {
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<Probe />);
+    const errors: unknown[] = [];
+    await act(async () => {
+      hydrateRoot(container, <Probe />, {
+        onRecoverableError: (e) => errors.push(e),
+      });
+    });
+    expect(errors).toEqual([]);
+    expect(container.textContent).toBe("client");
   });
 });

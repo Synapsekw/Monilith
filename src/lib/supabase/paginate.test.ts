@@ -84,4 +84,17 @@ describe("fetchAllRows", () => {
     expect(res.data).toBeNull();
     expect(res.error?.message).toBe("boom");
   });
+
+  it("clamps the only page to a cap smaller than the page size", async () => {
+    const t = fakeTable(5000);
+    const res = await fetchAllRows(t.page, { cap: 300, pageSize: 1000 });
+    expect(res.data).toHaveLength(300);
+    expect(t.calls).toEqual([[0, 299]]);
+  });
+
+  it("surfaces an error on the first page", async () => {
+    const t = fakeTable(5000, 0);
+    const res = await fetchAllRows(t.page, { cap: 60000 });
+    expect(res).toEqual({ data: null, error: { message: "boom" } });
+  });
 });
