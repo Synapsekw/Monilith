@@ -62,6 +62,33 @@ const board = {
 };
 
 describe("SidebarNav", () => {
+  it("shows a guest only the Folders link in Planning", () => {
+    renderNav(
+      <SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} isGuest />,
+    );
+    expect(screen.getByRole("link", { name: "Folders" })).toBeInTheDocument();
+    for (const label of ["Goals", "Portfolios", "Reports", "Workload"]) {
+      expect(
+        screen.queryByRole("link", { name: label }),
+      ).not.toBeInTheDocument();
+    }
+    // Their own surfaces stay.
+    expect(screen.getByRole("link", { name: "My Work" })).toBeInTheDocument();
+  });
+
+  it("shows a regular member every Planning link", () => {
+    renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
+    for (const label of [
+      "Folders",
+      "Goals",
+      "Portfolios",
+      "Reports",
+      "Workload",
+    ]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
+  });
+
   it("renders the empty boards state when none are passed", () => {
     renderNav(<SidebarNav boards={[]} sharedBoards={[]} workspaces={[]} />);
     expect(screen.getByText("No boards yet")).toBeInTheDocument();

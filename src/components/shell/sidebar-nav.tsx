@@ -121,11 +121,13 @@ export function SidebarNav({
   placements,
   workspaces,
   activeWorkspaceId = "",
+  isGuest = false,
   forceExpanded = false,
 }: {
-  /** The caller is an org guest (set by the loader). Carried for the follow-up
-   *  that hides Goals, Portfolios, Reports and Workload for guests; not read
-   *  here yet. Optional so every existing call site stays valid. */
+  /** A guest of the active org sees only what they were given: the org-wide
+   *  planning surfaces (goals, portfolios, reports, workload) are empty for
+   *  them, so their links are not offered. Optional so every existing call
+   *  site stays valid. */
   isGuest?: boolean;
   orgs?: { id: string; name: string }[];
   activeOrgId?: string;
@@ -144,6 +146,9 @@ export function SidebarNav({
   const isCollapsed = !forceExpanded && hasHydrated && collapsed;
   const coarse = useCoarsePointer();
   const isActive = useActive();
+  const planning = isGuest
+    ? PLANNING.filter((item) => item.href === "/dashboards")
+    : PLANNING;
 
   const boardsNav = (
     <BoardsNav
@@ -188,7 +193,7 @@ export function SidebarNav({
                 />
               ))}
               <RailDivider />
-              {PLANNING.map((item) => (
+              {planning.map((item) => (
                 <RailLink
                   key={item.href}
                   item={item}
@@ -219,7 +224,7 @@ export function SidebarNav({
               ))}
             </nav>
             <NavSection storageKey="planning" title="Planning">
-              {PLANNING.map((item) => (
+              {planning.map((item) => (
                 <SidebarLink
                   key={item.href}
                   href={item.href}
