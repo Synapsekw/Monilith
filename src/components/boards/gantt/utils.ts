@@ -5,12 +5,9 @@ import { effectivePriority } from "@/lib/boards/priority";
 // Constants
 // ---------------------------------------------------------------------------
 
-// The left name rail is resizable: this is the width it opens at and the
-// width a double-click on its handle restores. Renamed from LABEL_W so a
-// stale use of the old constant fails typecheck.
-export const DEFAULT_LABEL_W = 300;
-export const LABEL_W_MIN = 160;
-export const LABEL_W_MAX = 520;
+// The name-rail bounds live in the lib (the server-side view schema needs them
+// too); re-exported so existing component imports keep working.
+export { DEFAULT_LABEL_W, LABEL_W_MIN, LABEL_W_MAX } from "@/lib/boards/gantt";
 // One height for EVERY row kind (item, sub-item, section band): the arrow
 // overlay and the rows-area height both compute from index * ROW_H.
 export const ROW_H = 32;

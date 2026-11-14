@@ -19,7 +19,13 @@ import {
 } from "@/lib/boards/dependency-actions";
 import { itemDateRange } from "@/lib/boards/dates";
 import { addDependencyToBoardCaches } from "@/lib/boards/use-board-cache";
-import { onBarMoved, onBarResized, type SetCellArg } from "@/lib/boards/gantt";
+import {
+  BOARD_ROW_PREFIX,
+  GROUP_ROW_PREFIX,
+  onBarMoved,
+  onBarResized,
+  type SetCellArg,
+} from "@/lib/boards/gantt";
 import {
   boardScheduleOf,
   contextCellValues,
@@ -227,8 +233,8 @@ function FolderTimelineChart({
     () =>
       view.rows.map((r) =>
         r.kind === "section" &&
-        r.itemId.startsWith("board:") &&
-        view.noDateBoards.has(r.itemId.slice("board:".length))
+        r.itemId.startsWith(BOARD_ROW_PREFIX) &&
+        view.noDateBoards.has(r.itemId.slice(BOARD_ROW_PREFIX.length))
           ? { ...r, name: `${r.name} · No dates on this board` }
           : r,
       ),
@@ -418,10 +424,10 @@ function FolderTimelineChart({
   }
 
   function isExpanded(id: string): boolean {
-    if (id.startsWith("board:"))
-      return expandedBoards.has(id.slice("board:".length));
-    if (id.startsWith("group:"))
-      return expandedGroups.has(id.slice("group:".length));
+    if (id.startsWith(BOARD_ROW_PREFIX))
+      return expandedBoards.has(id.slice(BOARD_ROW_PREFIX.length));
+    if (id.startsWith(GROUP_ROW_PREFIX))
+      return expandedGroups.has(id.slice(GROUP_ROW_PREFIX.length));
     return expanded.has(id);
   }
   function toggle(id: string) {
@@ -431,10 +437,10 @@ function FolderTimelineChart({
       else next.add(key);
       return next;
     };
-    if (id.startsWith("board:"))
-      setExpandedBoards((s) => flip(s, id.slice("board:".length)));
-    else if (id.startsWith("group:"))
-      setExpandedGroups((s) => flip(s, id.slice("group:".length)));
+    if (id.startsWith(BOARD_ROW_PREFIX))
+      setExpandedBoards((s) => flip(s, id.slice(BOARD_ROW_PREFIX.length)));
+    else if (id.startsWith(GROUP_ROW_PREFIX))
+      setExpandedGroups((s) => flip(s, id.slice(GROUP_ROW_PREFIX.length)));
     else setExpanded((s) => flip(s, id));
   }
 
@@ -484,6 +490,7 @@ function FolderTimelineChart({
             variant="outline"
             size="sm"
             className="text-xs"
+            disabled={rows.length === 0}
             onClick={() => canvasRef.current?.scrollToToday()}
           >
             Today

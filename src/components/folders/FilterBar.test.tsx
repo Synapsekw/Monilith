@@ -88,6 +88,35 @@ describe("FilterBar stage control", () => {
     expect(onStage).toHaveBeenCalledWith(null);
   }, 15_000);
 
+  it("keeps a stage literally named 'All stages' separate from the clear item", async () => {
+    const user = userEvent.setup();
+    const onStage = vi.fn();
+    const list = stages(9);
+    list[0] = { ...list[0]!, key: "all stages", name: "All stages" };
+    render(
+      <FilterBar
+        stages={list}
+        boards={[{ id: "b1", name: "Backend", position: 0 }]}
+        stage="stage 3"
+        board={null}
+        itemCount={9}
+        onStage={onStage}
+        onBoard={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("combobox", { name: "Stage" }));
+    const options = await screen.findAllByRole("option", {
+      name: "All stages",
+    });
+    expect(options).toHaveLength(2);
+    await user.click(options[1]!);
+    expect(onStage).toHaveBeenLastCalledWith("all stages");
+    await user.click(screen.getByRole("combobox", { name: "Stage" }));
+    const again = await screen.findAllByRole("option", { name: "All stages" });
+    await user.click(again[0]!);
+    expect(onStage).toHaveBeenLastCalledWith(null);
+  }, 15_000);
+
   it("still hides the stage control with a single stage", () => {
     renderBar(1);
     expect(

@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { CREATED_AT_SOURCE, UPDATED_AT_SOURCE } from "@/lib/boards/dates";
-import { LABEL_W_MAX, LABEL_W_MIN } from "@/components/boards/gantt/utils";
+import { LABEL_W_MAX, LABEL_W_MIN } from "@/lib/boards/gantt";
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(100);

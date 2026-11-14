@@ -329,6 +329,34 @@ describe("GanttCanvas callbacks", () => {
   });
 });
 
+describe("GanttCanvas non-collapsible bands", () => {
+  it("draws a band with collapsible: false as a plain heading, not a toggle", () => {
+    const onToggleExpand = vi.fn();
+    render(
+      <GanttCanvas
+        {...props({
+          onToggleExpand,
+          isExpanded: () => false,
+          rows: [
+            {
+              itemId: "sec-empty",
+              name: "Sites · No dates on this board",
+              scheduled: false,
+              kind: "section",
+              level: 0,
+              collapsible: false,
+            },
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sites · No dates on this board" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("GanttCanvas name rail", () => {
   it("draws every row kind at the same 32px height", () => {
     render(<GanttCanvas {...props()} />);
@@ -410,6 +438,57 @@ describe("GanttCanvas name rail", () => {
       screen.getByRole("separator", { name: /Resize name rail/ }),
     );
     expect(onLabelWidthChange).toHaveBeenCalledWith(300);
+  });
+
+  it("reports nothing for a click on the handle that never moved", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 300, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerUp(window);
+    expect(onLabelWidthChange).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing for a double-click when the rail is already the default", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 300, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.doubleClick(handle);
+    expect(onLabelWidthChange).not.toHaveBeenCalled();
+  });
+
+  it("reports the default exactly once for a double-click on a custom rail", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 420, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    fireEvent.pointerDown(handle, { clientX: 420 });
+    fireEvent.pointerUp(window);
+    fireEvent.pointerDown(handle, { clientX: 420 });
+    fireEvent.pointerUp(window);
+    fireEvent.doubleClick(handle);
+    expect(onLabelWidthChange).toHaveBeenCalledTimes(1);
+    expect(onLabelWidthChange).toHaveBeenCalledWith(300);
+  });
+
+  it("drops a cancelled drag without committing, and later pointerups do nothing", () => {
+    const onLabelWidthChange = vi.fn();
+    render(<GanttCanvas {...props({ labelWidth: 300, onLabelWidthChange })} />);
+    const handle = screen.getByRole("separator", { name: /Resize name rail/ });
+    expect(handle).toHaveClass("touch-none");
+    fireEvent.pointerDown(handle, { clientX: 300 });
+    fireEvent.pointerMove(window, { clientX: 500 });
+    fireEvent.pointerCancel(window);
+    expect(screen.getByTestId("gantt-rail-header")).toHaveStyle({
+      width: "300px",
+    });
+    // The next tap anywhere must not commit the abandoned drag.
+    fireEvent.pointerMove(window, { clientX: 900 });
+    fireEvent.pointerUp(window);
+    expect(onLabelWidthChange).not.toHaveBeenCalled();
   });
 
   it("gives rail names a title with the full name", () => {

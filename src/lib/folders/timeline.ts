@@ -9,6 +9,7 @@ import {
 } from "@/lib/boards/dates";
 import {
   buildGanttRows,
+  BOARD_ROW_PREFIX,
   GROUP_ROW_PREFIX,
   detectViolations,
   rangeIncludingToday,
@@ -168,7 +169,7 @@ export function buildFolderTimeline(
       .sort((a, b) => a.position - b.position);
     if (groups.length === 0) continue;
     const boardBand: GanttRow = {
-      itemId: `board:${boardId}`,
+      itemId: `${BOARD_ROW_PREFIX}${boardId}`,
       name: board.name,
       scheduled: false,
       kind: "section",
@@ -182,6 +183,7 @@ export function buildFolderTimeline(
     const schedule = boardScheduleOf(board);
     if (!schedule.startSourceId) {
       noDateBoards.add(boardId);
+      boardBand.collapsible = false;
       continue;
     }
     const synthetic = [schedule.startSourceId, schedule.endSourceId].filter(
@@ -238,6 +240,7 @@ export function buildFolderTimeline(
     }
     if (boardRows.length === 0) {
       noDateBoards.add(boardId);
+      boardBand.collapsible = false;
       continue;
     }
     chartedRows.push(...boardRows);

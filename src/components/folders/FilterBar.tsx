@@ -85,7 +85,11 @@ function StageMenu({
           <CommandList className="max-h-72">
             <CommandEmpty>No stage found.</CommandEmpty>
             <CommandGroup>
-              <CommandItem value="All stages" onSelect={() => pick(null)}>
+              <CommandItem
+                value="__all__"
+                keywords={["All stages"]}
+                onSelect={() => pick(null)}
+              >
                 <Check
                   className={cn(
                     "size-4",

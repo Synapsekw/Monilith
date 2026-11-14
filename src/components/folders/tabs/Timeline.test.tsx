@@ -485,6 +485,27 @@ describe("TimelineInner", () => {
     expect(screen.getByText("1 late link")).toBeInTheDocument();
   });
 
+  it("marks a no-dates board band as not collapsible", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    const rows = canvas().rows;
+    expect(rows.find((r) => r.itemId === `board:${B}`)?.collapsible).toBe(
+      false,
+    );
+    expect(rows.find((r) => r.itemId === `board:${A}`)?.collapsible).not.toBe(
+      false,
+    );
+  });
+
+  it("disables the Today button when there is nothing on the timeline", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data: empty });
+    renderTab();
+    await screen.findByText("No boards match these filters.");
+    const today = await screen.findByRole("button", { name: "Today" });
+    expect(today).toBeDisabled();
+  });
+
   it("has a Today button that asks the canvas to scroll, with no fetch", async () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
     renderTab();

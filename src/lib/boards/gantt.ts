@@ -28,6 +28,9 @@ export type GanttRow = {
   kind?: "item" | "section";
   /** Section depth: 0 = board band, 1 = group band. */
   level?: 0 | 1;
+  /** Section rows only: false when the band has nothing to expand into (no
+   * toggle is drawn). Absent means collapsible. */
+  collapsible?: boolean;
   /** Section rows only: the span of everything under the band and its
    * progress. Drawn as a thin summary bar; a section still has no draggable
    * bar and no `startCol` of its own (so arrows keep skipping it). */
@@ -209,6 +212,15 @@ export function spanOfRows(
 
 /** A group band's canvas row id is `${GROUP_ROW_PREFIX}<groupId>`. */
 export const GROUP_ROW_PREFIX = "group:";
+
+/** A folder-timeline board band's row id is `${BOARD_ROW_PREFIX}<boardId>`. */
+export const BOARD_ROW_PREFIX = "board:";
+
+// The left name rail is resizable: this is the width it opens at and the
+// width a double-click on its handle restores, and the persisted bounds.
+export const DEFAULT_LABEL_W = 300;
+export const LABEL_W_MIN = 160;
+export const LABEL_W_MAX = 520;
 
 /** Band id for rows whose group is not in the board's group list. */
 export const UNGROUPED_GROUP_ID = "__ungrouped__";

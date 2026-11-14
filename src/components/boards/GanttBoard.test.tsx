@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -1366,6 +1367,20 @@ describe("GanttBoard — Today and the name rail", () => {
     };
     renderGantt(base as never);
     expect(railHeader()).toHaveStyle({ width: "220px" });
+  });
+
+  it("makes no server write for a click or double-click on the rail handle", async () => {
+    renderGantt();
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.pointerDown(railHandle(), { clientX: 300 });
+    fireEvent.pointerUp(window);
+    fireEvent.doubleClick(railHandle());
+    // Let any (wrongly) queued save flush before asserting there was none.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(updateBoardView).not.toHaveBeenCalled();
   });
 
   it("saves the rail width once, on drag end, with the rest of the config", async () => {

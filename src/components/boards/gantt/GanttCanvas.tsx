@@ -358,13 +358,17 @@ export function GanttCanvas({
                     max={LABEL_W_MAX}
                     label="Resize name rail (double-click to reset)"
                     onResize={setLiveLabelW}
+                    onResizeCancel={() => setLiveLabelW(null)}
                     onResizeEnd={(w) => {
                       setLiveLabelW(null);
-                      onLabelWidthChange(w);
+                      // A click that never moved ends at the current width:
+                      // nothing to persist.
+                      if (w !== labelW) onLabelWidthChange(w);
                     }}
                     onAutoFit={() => {
                       setLiveLabelW(null);
-                      onLabelWidthChange(DEFAULT_LABEL_W);
+                      if (labelW !== DEFAULT_LABEL_W)
+                        onLabelWidthChange(DEFAULT_LABEL_W);
                     }}
                   />
                 )}
@@ -547,7 +551,7 @@ function SectionBand({
   todayInRange,
   trackStyle,
   expanded,
-  onToggle,
+  onToggle: onToggleProp,
 }: {
   row: GanttRow;
   totalW: number;
@@ -560,6 +564,8 @@ function SectionBand({
   onToggle?: (itemId: string) => void;
 }) {
   const isBoard = (row.level ?? 0) === 0;
+  // A band with nothing under it is a plain heading, not a dead toggle.
+  const onToggle = row.collapsible === false ? undefined : onToggleProp;
   const summaryId = useId();
   const summary = row.summary;
   const pct =
