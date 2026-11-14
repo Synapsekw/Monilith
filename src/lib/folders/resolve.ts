@@ -53,11 +53,15 @@ const rollupRowSchema = z.object({
   max_due: z.string().nullable(),
 });
 
+/** `imported_done` / `overdue_open` default to 0 so this still parses against
+ *  a database that has not had the folder_tower migration yet. */
 const burnRowSchema = z.object({
   stage_key: z.string(),
   week_start: z.string(),
   planned: z.number(),
   completed: z.number(),
+  imported_done: z.number().default(0),
+  overdue_open: z.number().default(0),
 });
 
 /** Replaces the old hand-rolled reason guard — an unrecognized `reason`
@@ -193,6 +197,8 @@ export async function resolveFolderBurn(
       weekStart: r.week_start,
       planned: r.planned,
       completed: r.completed,
+      importedDone: r.imported_done,
+      overdueOpen: r.overdue_open,
     })),
   };
 }

@@ -32,7 +32,7 @@ export function MilestonesPanel({
             >
               <span className="font-medium">{m.name}</span>
               <span className="text-muted-foreground font-mono">
-                {fmtDate(m.endDate)} · {m.openBefore} open
+                {fmtDate(m.endDate)} · {m.open} open
               </span>
             </li>
           ))}

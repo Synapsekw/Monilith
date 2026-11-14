@@ -183,6 +183,11 @@ export function folderFixture(): FolderPayload {
       { stageKey: "qa", weekStart: "2026-09-21", planned: 0, completed: 0 },
       { stageKey: "qa", weekStart: "2026-09-28", planned: 0, completed: 0 },
     ],
+    load: [
+      { boardId: "b1", stageKey: "build", weekStart: "2026-08-24", openDue: 2 },
+      { boardId: "b1", stageKey: "build", weekStart: "2026-09-14", openDue: 3 },
+      { boardId: "b2", stageKey: "build", weekStart: "2026-09-21", openDue: 4 },
+    ],
     attention: [
       {
         itemId: "i1",

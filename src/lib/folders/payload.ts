@@ -62,6 +62,7 @@ export async function buildFolderPayload(
     boards: head.boards,
     rollup: rollup.ok ? rollup.rows : null,
     burn: burn && burn.ok ? burn.rows : null,
+    load: null,
     attention: attention.ok ? attention.rows : null,
     briefs,
     members: members.map((m) => ({

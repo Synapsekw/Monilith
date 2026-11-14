@@ -36,13 +36,14 @@ export type BurnPoint = {
   completed: number;
   plannedCum: number;
   completedCum: number;
+  importedDone: number;
   isPast: boolean;
 };
 export type Milestone = {
   stageKey: string;
   name: string;
   endDate: string;
-  openBefore: number;
+  open: number;
 };
 
 /** Whole days from `fromISO` to `toISO` (both `YYYY-MM-DD`); negative when reversed. */
@@ -206,7 +207,7 @@ export function band(pct: number): MatrixBand {
   return "gray";
 }
 
-/** Next `n` stage end dates (latest due inside the stage) on/after today, with the open count before each. */
+/** Next `n` stage end dates on/after today, with the open items in that stage. */
 export function nextMilestones(
   stages: StageSummary[],
   todayISO: string,
@@ -218,15 +219,11 @@ export function nextMilestones(
     .filter((s) => s.maxDue !== null && s.maxDue >= todayISO)
     .sort((a, b) => (a.maxDue as string).localeCompare(b.maxDue as string));
   for (const s of upcoming.slice(0, n)) {
-    const idx = ordered.findIndex((x) => x.key === s.key);
-    const openBefore = ordered
-      .slice(0, idx + 1)
-      .reduce((acc, x) => acc + (x.total - x.done), 0);
     out.push({
       stageKey: s.key,
       name: s.name,
       endDate: s.maxDue as string,
-      openBefore,
+      open: s.total - s.done,
     });
   }
   return out;
@@ -285,12 +282,20 @@ export function burnSeries(
   stage: string | null,
   todayISO: string,
 ): BurnPoint[] {
-  const weeks = new Map<string, { planned: number; completed: number }>();
+  const weeks = new Map<
+    string,
+    { planned: number; completed: number; importedDone: number }
+  >();
   for (const r of rows) {
     if (stage !== null && r.stageKey !== stage) continue;
-    const w = weeks.get(r.weekStart) ?? { planned: 0, completed: 0 };
+    const w = weeks.get(r.weekStart) ?? {
+      planned: 0,
+      completed: 0,
+      importedDone: 0,
+    };
     w.planned += r.planned;
     w.completed += r.completed;
+    w.importedDone += r.importedDone ?? 0;
     weeks.set(r.weekStart, w);
   }
   const thisWeek =
@@ -311,6 +316,7 @@ export function burnSeries(
         completed: w.completed,
         plannedCum: pc,
         completedCum: cc,
+        importedDone: w.importedDone,
         isPast: thisWeek !== null && weekStart <= thisWeek,
       };
     });

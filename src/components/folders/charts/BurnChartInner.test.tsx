@@ -32,6 +32,7 @@ const points: BurnPoint[] = [
     completed: 1,
     plannedCum: 2,
     completedCum: 1,
+    importedDone: 0,
     isPast: true,
   },
   {
@@ -40,6 +41,7 @@ const points: BurnPoint[] = [
     completed: 1,
     plannedCum: 5,
     completedCum: 2,
+    importedDone: 0,
     isPast: true,
   },
   {
@@ -48,6 +50,7 @@ const points: BurnPoint[] = [
     completed: 0,
     plannedCum: 6,
     completedCum: 2,
+    importedDone: 0,
     isPast: false,
   },
 ];

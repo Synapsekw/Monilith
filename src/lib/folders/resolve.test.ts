@@ -140,6 +140,8 @@ describe("resolveFolderBurn", () => {
           weekStart: "2026-09-07",
           planned: 4,
           completed: 2,
+          importedDone: 0,
+          overdueOpen: 0,
         },
       ],
     });

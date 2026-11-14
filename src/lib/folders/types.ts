@@ -73,6 +73,19 @@ export type BurnRow = {
   weekStart: string;
   planned: number;
   completed: number;
+  /** Completions that happened on the item's creation day (arrived done). */
+  importedDone?: number;
+  /** Items overdue as of the end of that week; 0 for future weeks. */
+  overdueOpen?: number;
+};
+
+/** Open items by board, stage and the week they are planned for. Weeks older
+ *  than the window are folded into its first week by the RPC. */
+export type LoadRow = {
+  boardId: string;
+  stageKey: string;
+  weekStart: string;
+  openDue: number;
 };
 
 export type AttentionReason = "overdue" | "blocked" | "unassigned" | "stale";
@@ -128,6 +141,8 @@ export type FolderPayload = {
   boards: FolderBoardRef[];
   rollup: RollupRow[] | null;
   burn: BurnRow[] | null;
+  /** Board × week load grid. Null when not requested or the read failed. */
+  load: LoadRow[] | null;
   attention: AttentionRow[] | null;
   briefs: IntelligenceBrief[];
   members: FolderMember[];
