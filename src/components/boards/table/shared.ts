@@ -228,10 +228,14 @@ export const ROW_HAIRLINE =
 /**
  * Horizontal centering for a VALUE cell's wrapper (never the Name cell).
  * Append it to the wrapper's own class string.
- *  - `justify-center` centers the wrapper's flex child (pill, avatars, date...).
+ *  - `justify-center-safe` centers the wrapper's flex child (pill, avatars,
+ *    date...). "safe" matters: a child wider than a narrow column would be
+ *    clipped on BOTH sides by plain centering (measured in a browser on a
+ *    115px Status column holding "Decision Required"); safe centering falls
+ *    back to start alignment so the beginning stays readable.
  *  - `text-center` is inherited by a truncating text span: short text is
  *    centered, overflowing text still fills the cell and ends in an ellipsis.
- *  - `*:justify-center` centers the content of a child that is itself a
+ *  - `*:justify-center-safe` centers the content of a child that is itself a
  *    full-width flex box (PercentBar's `flex w-full`, a wrapped DropdownCell).
  *
  * It lives on the table's wrappers, NOT in cells/index.tsx: those renderers
@@ -239,7 +243,8 @@ export const ROW_HAIRLINE =
  * are. A literal, never assembled at runtime: Tailwind only emits classes it
  * can read in source.
  */
-export const CELL_CENTER = "justify-center text-center *:justify-center";
+export const CELL_CENTER =
+  "justify-center-safe text-center *:justify-center-safe";
 
 /**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what

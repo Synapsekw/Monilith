@@ -64,7 +64,7 @@ describe("RollupValueCell", () => {
     const classes = (
       container.firstElementChild as HTMLElement
     ).className.split(/\s+/);
-    expect(classes).toContain("justify-center");
+    expect(classes).toContain("justify-center-safe");
     expect(classes).toContain("text-center");
     expect(classes).toContain("px-2");
   });

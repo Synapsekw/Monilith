@@ -2125,16 +2125,16 @@ describe("BoardTable centered value columns", () => {
     const classes = screen
       .getByLabelText("Item 1 Status")
       .className.split(/\s+/);
-    expect(classes).toContain("justify-center");
+    expect(classes).toContain("justify-center-safe");
     expect(classes).toContain("text-center");
-    expect(classes).toContain("*:justify-center");
+    expect(classes).toContain("*:justify-center-safe");
   });
 
   it("centers the Created cells", () => {
     renderBoardWithColumns();
     // The fixture item has no creator, so Created by reads "Unknown".
     const createdBy = screen.getByText("Unknown").parentElement as HTMLElement;
-    expect(createdBy.className.split(/\s+/)).toContain("justify-center");
+    expect(createdBy.className.split(/\s+/)).toContain("justify-center-safe");
   });
 
   it("leaves the Name column left-aligned", () => {
