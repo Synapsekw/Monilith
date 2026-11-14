@@ -13,7 +13,16 @@ type Result = { data: unknown; error: { message: string } | null };
 /** Chainable, thenable stand-in for a PostgREST builder. */
 function tableMock(result: Result) {
   const chain: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "is", "order", "limit", "not", "in"])
+  for (const m of [
+    "select",
+    "eq",
+    "is",
+    "order",
+    "limit",
+    "range",
+    "not",
+    "in",
+  ])
     chain[m] = () => chain;
   chain.maybeSingle = async () => result;
   (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
@@ -64,21 +73,21 @@ describe("getBoardPayload error contract", () => {
     expect(payload?.items).toEqual([]);
   });
 
-  it("bounds the items and cell_values reads with .limit(...)", async () => {
-    // Record every .limit(n) call, keyed by table. With an all-empty fixture the
-    // mirror branch never fires (no mirror columns), so cell_values is read once —
-    // the board-scoped read — and its only limit is 20000.
-    const limits: Record<string, number[]> = {};
+  it("pages the items and cell_values reads in 1000-row ranges", async () => {
+    // PostgREST truncates every response to max_rows (1000) whatever .limit()
+    // says, so the big reads must ask for explicit ranges. With an all-empty
+    // fixture each read stops after its first page.
+    const ranges: Record<string, [number, number][]> = {};
     from.mockImplementation((table: string) => {
       const result: Result =
         table === "boards"
           ? { data: BOARD_ROW, error: null }
           : { data: [], error: null };
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "is", "order", "not", "in"])
+      for (const m of ["select", "eq", "is", "order", "limit", "not", "in"])
         chain[m] = () => chain;
-      chain.limit = (n: number) => {
-        (limits[table] ??= []).push(n);
+      chain.range = (a: number, b: number) => {
+        (ranges[table] ??= []).push([a, b]);
         return chain;
       };
       chain.maybeSingle = async () => result;
@@ -89,16 +98,54 @@ describe("getBoardPayload error contract", () => {
 
     await getBoardPayload("b5");
 
-    expect(limits["items"]).toContain(5000);
-    expect(limits["cell_values"]).toContain(20000);
-    // Only the board-scoped cell_values read fires (no mirror columns).
-    expect(limits["cell_values"]).toEqual([20000]);
+    expect(ranges["items"]).toEqual([[0, 999]]);
+    expect(ranges["cell_values"]).toEqual([[0, 999]]);
+    expect(ranges["item_dependencies"]).toEqual([[0, 999]]);
+  });
+
+  it("returns every cell of a board with more than 1000 cells", async () => {
+    // Regression: a 116-item board (1,988 cells) rendered blank rows because
+    // only the first 1000 cells came back.
+    const TOTAL = 2500;
+    const cell = (i: number) => ({
+      item_id: `i${String(i).padStart(5, "0")}`,
+      column_id: "c1",
+      value: { text: String(i) },
+      updated_at: "2026-11-14T00:00:00Z",
+    });
+    from.mockImplementation((table: string) => {
+      const chain: Record<string, unknown> = {};
+      let range: [number, number] | null = null;
+      for (const m of ["select", "eq", "is", "order", "limit", "not", "in"])
+        chain[m] = () => chain;
+      chain.range = (a: number, b: number) => {
+        range = [a, b];
+        return chain;
+      };
+      const resolveData = () => {
+        if (table === "boards") return BOARD_ROW;
+        if (table !== "cell_values" || !range) return [];
+        const [a, b] = range;
+        const end = Math.min(b, TOTAL - 1);
+        return a > end
+          ? []
+          : Array.from({ length: end - a + 1 }, (_, k) => cell(a + k));
+      };
+      chain.maybeSingle = async () => ({ data: resolveData(), error: null });
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve({ data: resolveData(), error: null });
+      return chain;
+    });
+
+    const payload = await getBoardPayload("b11");
+    expect(payload?.cellValues).toHaveLength(TOTAL);
+    expect(new Set(payload?.cellValues.map((c) => c.item_id)).size).toBe(TOTAL);
   });
 
   it("selects exactly the narrowed cell columns, ordered deterministically", async () => {
     // Record every .select(...) and .order(...) call on cell_values so a
     // regression (widening back to `*`, or dropping the PK order that makes
-    // truncation at the 20000 cap deterministic) is caught here instead of by
+    // truncation at the cell cap deterministic) is caught here instead of by
     // a payload-size incident in prod. All-empty fixture ⇒ no mirror columns ⇒
     // cell_values is read once (the board-scoped read), same as the .limit(...)
     // test above.
@@ -110,7 +157,7 @@ describe("getBoardPayload error contract", () => {
           ? { data: BOARD_ROW, error: null }
           : { data: [], error: null };
       const chain: Record<string, unknown> = {};
-      for (const m of ["eq", "is", "limit", "not", "in"])
+      for (const m of ["eq", "is", "limit", "range", "not", "in"])
         chain[m] = () => chain;
       chain.select = (cols: string) => {
         (selects[table] ??= []).push(cols);
@@ -171,7 +218,7 @@ describe("getBoardPayload error contract", () => {
               : [];
       const result: Result = { data, error: null };
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "is", "limit", "not", "in"])
+      for (const m of ["select", "eq", "is", "limit", "range", "not", "in"])
         chain[m] = () => chain;
       chain.order = (col: string, opts: unknown) => {
         (orders[table] ??= []).push([col, opts]);
@@ -231,6 +278,7 @@ describe("getBoardPayload dependencies read", () => {
         "is",
         "order",
         "limit",
+        "range",
         "not",
         "in",
         "or",
@@ -257,7 +305,8 @@ describe("getBoardPayload dependencies read", () => {
       [`board_id.eq.${id},predecessor_board_id.eq.${id}`],
     ]);
     expect(deps.some(([m]) => m === "eq")).toBe(false);
-    expect(deps).toContainEqual(["limit", [5000]]);
+    expect(deps).toContainEqual(["range", [0, 999]]);
+    expect(deps).toContainEqual(["order", ["id", { ascending: true }]]);
   });
 
   it("never interpolates a non-uuid board id into the .or() filter", async () => {
