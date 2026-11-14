@@ -78,24 +78,36 @@ export function PeoplePanel({
   let body;
   if (q.isError)
     body = (
-      <EmptyState variant="inline">
-        Couldn&apos;t load workload. {q.error.message}
-      </EmptyState>
+      <div className="flex flex-col items-start gap-2">
+        <EmptyState variant="inline">
+          Couldn&apos;t load workload. {q.error.message}
+        </EmptyState>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void q.refetch()}
+        >
+          Retry
+        </Button>
+      </div>
     );
-  else if (!q.data) body = <Skeleton className="h-40 w-full" />;
+  else if (!q.data)
+    body = <Skeleton data-testid="people-skeleton" className="h-40 w-full" />;
   else {
     const people = peopleFromWorkload(q.data, stage, members);
     const loose = q.data.filter(
       (r) => r.userId === null && (stage === null || r.stageKey === stage),
     );
+    const looseOpen = loose.reduce((s, r) => s + r.open, 0);
     const unassigned: WorkloadPerson | null =
-      loose.length === 0
+      looseOpen === 0
         ? null
         : {
             userId: null,
             name: "Unassigned",
             avatarUrl: null,
-            open: loose.reduce((s, r) => s + r.open, 0),
+            open: looseOpen,
             overdue: loose.reduce((s, r) => s + r.overdue, 0),
           };
     const shown = people.slice(0, PEOPLE_SHOWN);
