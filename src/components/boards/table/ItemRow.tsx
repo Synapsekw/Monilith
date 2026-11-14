@@ -16,6 +16,7 @@ import {
 } from "@/lib/boards/overdue";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { isOptimisticId } from "@/lib/boards/optimistic-id";
+import { boardHasSubitems } from "@/lib/boards/item-tree";
 import {
   intelRowClasses,
   useIntelMatch,
@@ -29,11 +30,12 @@ import { RowMenu } from "./RowMenu";
 import { RowSelectCheckbox } from "./RowSelectCheckbox";
 import {
   ROW_HAIRLINE,
-  ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
+  CELL_CENTER,
 } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 type ItemRowProps = {
   item: Item;
@@ -143,6 +145,7 @@ export const ItemRow = memo(function ItemRow({
   // via a lazy initializer (same idiom as TimeTrackingCell): the Σ of a running
   // child's elapsed time is approximate while collapsed — the live tick happens in
   // the expanded child cell — and it refreshes whenever this (virtualized) row remounts.
+  const rowHeight = useRowHeight();
   const [rollupNowMs] = useState(() => Date.now());
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as rollupNowMs; virtualized rows remount as they scroll).
@@ -187,6 +190,10 @@ export const ItemRow = memo(function ItemRow({
     data: { type: "item", groupId: item.group_id },
   });
 
+  // No row reserves the chevron slot on a board without subitems, so names
+  // start further left and still line up with each other.
+  const reserveChevron = boardHasSubitems(controls.cache.items);
+
   const dragHandle = (
     <button
       type="button"
@@ -194,7 +201,7 @@ export const ItemRow = memo(function ItemRow({
       aria-label={`Reorder ${item.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+      className="text-muted-foreground hover:text-foreground grid h-6 w-4 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -208,7 +215,7 @@ export const ItemRow = memo(function ItemRow({
           aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
           aria-expanded={isExpanded}
           onClick={() => onToggleExpand(item.id)}
-          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
+          className="text-muted-foreground hover:text-foreground grid size-5 shrink-0 place-items-center rounded"
         >
           {isExpanded ? (
             <ChevronDown className="size-3.5" />
@@ -220,10 +227,14 @@ export const ItemRow = memo(function ItemRow({
           ({childCount})
         </span>
       </>
-    ) : (
-      // Spacer to keep name text aligned
-      <span className="inline-block size-6 shrink-0" aria-hidden />
-    );
+    ) : reserveChevron ? (
+      // Spacer: keeps this childless row's name aligned with the parents'.
+      <span
+        data-chevron-slot=""
+        className="inline-block size-5 shrink-0"
+        aria-hidden
+      />
+    ) : null;
 
   const trailing = (
     <>
@@ -243,7 +254,7 @@ export const ItemRow = memo(function ItemRow({
               onSuccess: (id) => onSubitemAdded?.(id),
             });
           }}
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
+          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 group-data-[peek=true]/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <Plus className="size-3.5" />
         </button>
@@ -269,7 +280,7 @@ export const ItemRow = memo(function ItemRow({
       )}
       data-intel-rule="cell"
       style={{
-        height: ROW_HEIGHT,
+        height: rowHeight.item,
         gridTemplateColumns: template,
         transform: CSS.Translate.toString(transform),
         transition,
@@ -280,12 +291,13 @@ export const ItemRow = memo(function ItemRow({
         controls={controls}
         selected={selected}
         intelMatch={intelMatch}
+        peekDisabled={isDragging}
         leading={
           <>
+            {dragHandle}
             {selectable && (
               <RowSelectCheckbox itemId={item.id} name={item.name} />
             )}
-            {dragHandle}
             {chevron}
           </>
         }
@@ -336,14 +348,18 @@ export const ItemRow = memo(function ItemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center px-4">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
                 mono={creator?.mono}
               />
             </div>
-            <div className="flex h-full items-center px-4">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>

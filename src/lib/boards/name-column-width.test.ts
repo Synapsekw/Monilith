@@ -5,81 +5,129 @@ import {
   NAME_COL_MIN,
   NAME_COL_MAX,
   NAME_COL_AUTOFIT_MAX,
+  COARSE_SUBITEM_CHROME,
+  COARSE_TOP_LEVEL_CHROME_EDITOR,
+  COARSE_TOP_LEVEL_CHROME_VIEWER,
+  SUBITEM_CHROME,
+  SUBITEM_SLOT_CHROME,
+  TOP_LEVEL_CHROME_EDITOR,
+  TOP_LEVEL_CHROME_VIEWER,
 } from "@/lib/boards/name-column-width";
 
 // stub measurer: 7px per char (real canvas measureText returns 0 in jsdom)
 const measure = (s: string) => s.length * 7;
 
-// The real, measured chrome reserves fitNameColumnWidth adds on top of the
-// text width (see the constants' own comments for how these were measured).
-const TOP_LEVEL_EDITOR_CHROME = 197;
-const TOP_LEVEL_VIEWER_CHROME = 173;
-const SUBITEM_CHROME = 129;
+describe("name-cell chrome reserves", () => {
+  it("are the dense gutter sums, with no hover buttons in them", () => {
+    // cell pl-1 (4) + drag handle w-4 (16) + checkbox size-5 (20)
+    // + name pl-1 + pr-2 (12) + NAME_FREEZE_RULE border (1)
+    expect(TOP_LEVEL_CHROME_EDITOR).toBe(53);
+    // same, without the checkbox
+    expect(TOP_LEVEL_CHROME_VIEWER).toBe(33);
+    // chevron size-5 (20) + "(n)" label: ml-1 (4) + up to "(99)" (24)
+    expect(SUBITEM_SLOT_CHROME).toBe(48);
+    // cell pl-1 (4) + drag handle (16) + name pl-10 (40) + pr-2 (8) + border (1)
+    expect(SUBITEM_CHROME).toBe(69);
+  });
+});
+
+describe("coarse-pointer chrome reserves", () => {
+  it("are the sums of the 44px in-flow controls", () => {
+    // cell pl-1 4 + pr-2 8 + handle 44 + checkbox 44 + name pl-1/pr-2 12
+    // + border 1 = 113, + open/add-subitem/menu in flow 3 x 44 = 245
+    expect(COARSE_TOP_LEVEL_CHROME_EDITOR).toBe(245);
+    expect(COARSE_TOP_LEVEL_CHROME_VIEWER).toBe(201);
+    // 4 + 8 + 44 + name pl-10/pr-2 48 + 1 = 105, + open + menu 88
+    expect(COARSE_SUBITEM_CHROME).toBe(193);
+  });
+});
 
 describe("fitNameColumnWidth", () => {
-  it("clamps a short subitem name to the floor (text + its chrome is still under it)", () => {
-    // "abcdef" → 42px text + 129px subitem chrome = 171 < NAME_COL_MIN (180)
-    const short = "abcdef";
-    expect(short.length * 7 + 129).toBeLessThan(NAME_COL_MIN); // sanity
+  it("coarse reserves the wider in-flow chrome; fine is unchanged", () => {
+    const long = "x".repeat(40); // 280px
+    expect(fitNameColumnWidth([{ name: long }], measure, true)).toBe(333);
+    expect(fitNameColumnWidth([{ name: long }], measure, true, false)).toBe(
+      333,
+    );
+    expect(fitNameColumnWidth([{ name: long }], measure, true, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_EDITOR,
+    );
+    expect(fitNameColumnWidth([{ name: long }], measure, false, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_VIEWER,
+    );
     expect(
-      fitNameColumnWidth([{ name: short, indented: true }], measure, true),
+      fitNameColumnWidth([{ name: long, indented: true }], measure, true, true),
+    ).toBe(280 + COARSE_SUBITEM_CHROME);
+  });
+
+  it("coarse adds the chevron reserve on a board with subitems", () => {
+    const items = [{ name: "x".repeat(40) }, { name: "s", indented: true }];
+    expect(fitNameColumnWidth(items, measure, true, true)).toBe(
+      280 + COARSE_TOP_LEVEL_CHROME_EDITOR + SUBITEM_SLOT_CHROME,
+    );
+  });
+
+  it("clamps a short subitem name to the floor", () => {
+    // "abcdef" → 42px text + 69px subitem chrome = 111 < NAME_COL_MIN (180)
+    expect(
+      fitNameColumnWidth([{ name: "abcdef", indented: true }], measure, true),
     ).toBe(NAME_COL_MIN);
   });
 
-  it("a top-level row's own chrome alone can exceed the floor even for a tiny name", () => {
-    // The real top-level chrome (197 for an editor) is bigger than the floor
-    // (180) on its own — unlike the old flat 60px PADDING, a short top-level
-    // name no longer risks being measured as narrower than its own chrome.
-    expect(fitNameColumnWidth([{ name: "a" }], measure, true)).toBe(7 + 197);
+  it("clamps a tiny top-level name to the floor now that the hover buttons are not reserved", () => {
+    // 7 + 53 = 60. Before this change the chrome alone (197) beat the floor.
+    expect(fitNameColumnWidth([{ name: "a" }], measure, true)).toBe(
+      NAME_COL_MIN,
+    );
   });
 
-  it("grows a top-level (editor) name by exactly text width + measured chrome", () => {
+  it("grows a top-level (editor) name by exactly text width + chrome", () => {
     const long = "x".repeat(60); // 420px text
-    const expected = 420 + TOP_LEVEL_EDITOR_CHROME;
-    expect(expected).toBeGreaterThan(NAME_COL_MIN); // sanity: not floor-clamped
-    expect(fitNameColumnWidth([{ name: long }], measure, true)).toBe(expected);
+    expect(fitNameColumnWidth([{ name: long }], measure, true)).toBe(
+      420 + TOP_LEVEL_CHROME_EDITOR,
+    );
+  });
+
+  it("no longer counts the three hover buttons", () => {
+    // The old reserve was 197 (it held 92px open for open / add / menu).
+    const name = "x".repeat(40); // 280px text
+    const width = fitNameColumnWidth([{ name }], measure, true);
+    expect(width).toBe(280 + 53);
+    expect(width).toBeLessThan(280 + 197 - 92);
   });
 
   it("reserves less chrome for a viewer (no bulk-select checkbox)", () => {
     const long = "x".repeat(60);
     const editorWidth = fitNameColumnWidth([{ name: long }], measure, true);
     const viewerWidth = fitNameColumnWidth([{ name: long }], measure, false);
-    expect(editorWidth - viewerWidth).toBe(
-      TOP_LEVEL_EDITOR_CHROME - TOP_LEVEL_VIEWER_CHROME,
-    );
-    expect(viewerWidth).toBe(420 + TOP_LEVEL_VIEWER_CHROME);
+    expect(editorWidth - viewerWidth).toBe(20);
+    expect(viewerWidth).toBe(420 + TOP_LEVEL_CHROME_VIEWER);
   });
 
-  it("reserves the indented subitem chrome (its pl-10 indent) for a subitem-length name", () => {
+  it("reserves the chevron slot on top-level rows only when the board has a subitem", () => {
     const long = "x".repeat(60); // 420px text
-    const topLevel = fitNameColumnWidth(
-      [{ name: long, indented: false }],
+    const without = fitNameColumnWidth([{ name: long }], measure, true);
+    const withSub = fitNameColumnWidth(
+      [{ name: long }, { name: "s", indented: true }],
       measure,
       true,
     );
-    const subitem = fitNameColumnWidth(
-      [{ name: long, indented: true }],
-      measure,
-      true,
-    );
-    // Same text, different row shape — the deltas must be EXACTLY the
-    // measured chrome deltas, not a restated guess.
-    expect(subitem).toBe(420 + SUBITEM_CHROME);
-    expect(topLevel - subitem).toBe(TOP_LEVEL_EDITOR_CHROME - SUBITEM_CHROME);
+    expect(withSub - without).toBe(SUBITEM_SLOT_CHROME);
+  });
+
+  it("reserves the indented subitem chrome for a subitem-length name", () => {
+    const long = "x".repeat(60); // 420px text
+    expect(
+      fitNameColumnWidth([{ name: long, indented: true }], measure, true),
+    ).toBe(420 + SUBITEM_CHROME);
   });
 
   it("picks the widest across a mix of top-level and subitem names", () => {
-    // The subitem name is longer once its own chrome is added, even though
-    // the raw top-level name is longer as plain text.
     const items = [
-      { name: "x".repeat(50), indented: false }, // 350 + 197 = 547
-      { name: "x".repeat(48), indented: true }, //  336 + 129 = 465
+      { name: "x".repeat(50), indented: false }, // 350 + 53 + 48 = 451
+      { name: "x".repeat(48), indented: true }, //  336 + 69      = 405
     ];
-    const widest = Math.max(
-      50 * 7 + TOP_LEVEL_EDITOR_CHROME,
-      48 * 7 + SUBITEM_CHROME,
-    );
-    expect(fitNameColumnWidth(items, measure, true)).toBe(widest);
+    expect(fitNameColumnWidth(items, measure, true)).toBe(451);
   });
 
   it("clamps to the tighter auto-fit ceiling, not the drag-resize max", () => {
@@ -87,8 +135,6 @@ describe("fitNameColumnWidth", () => {
     expect(fitNameColumnWidth([{ name: huge }], measure, true)).toBe(
       NAME_COL_AUTOFIT_MAX,
     );
-    // The auto-fit ceiling is strictly tighter than the manual-resize ceiling
-    // — a user can still drag past it.
     expect(NAME_COL_AUTOFIT_MAX).toBeLessThan(NAME_COL_MAX);
   });
 

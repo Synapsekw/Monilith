@@ -8,6 +8,7 @@ import {
   type CacheCellValue,
   type CacheColumn,
 } from "@/lib/boards/cache";
+import { COLUMN_FIT_DEFAULT } from "@/lib/boards/fit-column-width";
 import type { Column } from "@/lib/boards/queries";
 import { type RelationLink } from "@/lib/boards/relations";
 import type { AggregationId, ColumnKind } from "@/lib/validations/boards";
@@ -171,11 +172,22 @@ export function rowCellsEqual(
   return true;
 }
 
-/** Item-row height. Quiet Grid density (was 36 — "direction C"). */
-export const ROW_HEIGHT = 42;
+/**
+ * Item-row height on a fine pointer (mouse / trackpad). Dense 28 (was 42).
+ * Do not read this in a component: rows and the virtualizer take their height
+ * from `useRowHeight()` (./use-row-height), which returns COARSE_ROW_HEIGHT on
+ * touch. This constant is the fine-pointer value and the SSR / skeleton value.
+ */
+export const ROW_HEIGHT = 28;
 
 /** Subitem rows sit one step tighter than their parent. */
-export const SUBITEM_ROW_HEIGHT = 38;
+export const SUBITEM_ROW_HEIGHT = 26;
+
+/**
+ * Row height on a coarse pointer, for item AND subitem rows: the row controls
+ * are 44px targets there (`pointer-coarse:size-11`) and cannot fit in less.
+ */
+export const COARSE_ROW_HEIGHT = 44;
 
 /**
  * The row separator. Quiet Grid has NO vertical rules, so the horizontal one
@@ -214,13 +226,34 @@ export const ROW_HAIRLINE =
   "relative before:pointer-events-none before:absolute before:top-0 before:right-0 before:left-4 before:z-20 before:h-px before:bg-border before:opacity-70 before:content-['']";
 
 /**
+ * Horizontal centering for a VALUE cell's wrapper (never the Name cell).
+ * Append it to the wrapper's own class string.
+ *  - `justify-center-safe` centers the wrapper's flex child (pill, avatars,
+ *    date...). "safe" matters: a child wider than a narrow column would be
+ *    clipped on BOTH sides by plain centering (measured in a browser on a
+ *    115px Status column holding "Decision Required"); safe centering falls
+ *    back to start alignment so the beginning stays readable.
+ *  - `text-center` is inherited by a truncating text span: short text is
+ *    centered, overflowing text still fills the cell and ends in an ellipsis.
+ *  - `*:justify-center-safe` centers the content of a child that is itself a
+ *    full-width flex box (PercentBar's `flex w-full`, a wrapped DropdownCell).
+ *
+ * It lives on the table's wrappers, NOT in cells/index.tsx: those renderers
+ * are shared with Kanban cards and the Calendar agenda, which stay as they
+ * are. A literal, never assembled at runtime: Tailwind only emits classes it
+ * can read in source.
+ */
+export const CELL_CENTER =
+  "justify-center-safe text-center *:justify-center-safe";
+
+/**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what
  * NameCell actually renders (`text-item font-medium`) — a drift here mis-sizes
  * the frozen column's auto-fit width, and nothing in typecheck or jsdom
  * catches it.
  */
 export const NAME_MEASURE_FONT_WEIGHT = "500";
-export const NAME_MEASURE_FONT_SIZE = "13.5px";
+export const NAME_MEASURE_FONT_SIZE = "13px";
 
 /** The generic fallback stack `font-sans` itself falls back to. */
 const NAME_MEASURE_FONT_FALLBACK_STACK = "ui-sans-serif, system-ui, sans-serif";
@@ -250,20 +283,48 @@ export function buildNameMeasureFont(fontInterVar: string): string {
   return `${NAME_MEASURE_FONT_WEIGHT} ${NAME_MEASURE_FONT_SIZE} ${family}, ${NAME_MEASURE_FONT_FALLBACK_STACK}`;
 }
 
-export const VALUE_COL_WIDTH = 180;
+/** Width of a value column that has neither a saved nor a fitted width yet. */
+export const VALUE_COL_WIDTH = COLUMN_FIT_DEFAULT;
 const ADD_COL_WIDTH = 44;
 
-const CREATED_BY_WIDTH = 180;
-const CREATED_AT_WIDTH = 180;
+// The two virtual creation-metadata columns are fixed: an avatar plus a
+// truncating name, and "Nov 14, 2026, 10:32 AM" in the 12px mono face.
+const CREATED_BY_WIDTH = 160;
+const CREATED_AT_WIDTH = 176;
+
+const NO_AUTO_FIT: Record<string, number> = {};
+
+/**
+ * The width a value column renders at, in priority order:
+ *   1. the live width of a drag in progress,
+ *   2. the width the user saved by dragging (`columns.width`),
+ *   3. the auto-fitted width (no saved width = fit the content, exactly like
+ *      the Name column - see table/use-column-auto-fit),
+ *   4. 180, before hydration, when nothing has been measured yet.
+ * The header and every row must resolve through this one function.
+ */
+export function resolveColumnWidth(
+  column: { id: string; width: number | null },
+  liveWidths: Record<string, number>,
+  autoFitWidths: Record<string, number> = NO_AUTO_FIT,
+): number {
+  return (
+    liveWidths[column.id] ??
+    column.width ??
+    autoFitWidths[column.id] ??
+    VALUE_COL_WIDTH
+  );
+}
 
 /** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
 export function gridTemplate(
   columns: { id: string; width: number | null }[],
   liveWidths: Record<string, number>,
   nameWidth: number,
+  autoFitWidths: Record<string, number> = NO_AUTO_FIT,
 ): string {
   const tracks = columns
-    .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
+    .map((c) => `${resolveColumnWidth(c, liveWidths, autoFitWidths)}px`)
     .join(" ");
   return `${nameWidth}px ${tracks} ${CREATED_BY_WIDTH}px ${CREATED_AT_WIDTH}px ${ADD_COL_WIDTH}px`;
 }
@@ -308,11 +369,13 @@ export type GroupSummaryControls = {
 export type ColumnHeaderControls = {
   nameWidth: number;
   liveWidths: Record<string, number>;
+  autoFitWidths: Record<string, number>;
   setLiveWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   setLiveNameWidth: (w: number | null) => void;
   renameColumn: (id: string, name: string) => void;
   deleteColumn: (id: string) => void;
-  resizeColumn: (id: string, w: number) => void;
+  /** `null` clears the saved width: the column goes back to auto-fit. */
+  resizeColumn: (id: string, w: number | null) => void;
   reorderColumn: (id: string, position: number) => void;
   resizeNameColumn: (w: number | null) => void;
   onAddColumn: (kind: ColumnKind) => void;

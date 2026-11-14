@@ -29,7 +29,7 @@ export const RowSelectCheckbox = memo(function RowSelectCheckbox({
   return (
     <label
       className={cn(
-        "grid size-6 shrink-0 cursor-pointer place-items-center rounded transition-opacity pointer-coarse:size-11 pointer-coarse:opacity-100",
+        "grid size-5 shrink-0 cursor-pointer place-items-center rounded transition-opacity pointer-coarse:size-11 pointer-coarse:opacity-100",
         selected
           ? "opacity-100"
           : "opacity-0 group-hover/name:opacity-100 focus-within:opacity-100",

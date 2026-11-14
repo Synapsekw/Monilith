@@ -19,7 +19,7 @@ import {
   type StatusColor,
 } from "@/components/ui/status-pill";
 
-/** 24px — the largest disc that still breathes inside a 36px board row. */
+/** 24px — fits the dense 28px board row with 2px to spare top and bottom. */
 const AVATAR_PX = 24;
 
 /** The pebble is drawn this much larger than the disc and cropped by it. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketItems, withSubitems } from "./item-tree";
+import { boardHasSubitems, bucketItems, withSubitems } from "./item-tree";
 import type { CacheItem } from "./cache";
 
 function item(id: string, parent: string | null, position: number): CacheItem {
@@ -68,5 +68,31 @@ describe("withSubitems", () => {
 
   it("returns an empty array for empty input", () => {
     expect(withSubitems([], new Map())).toEqual([]);
+  });
+});
+
+describe("boardHasSubitems", () => {
+  it("is false for a board with only top-level items", () => {
+    expect(boardHasSubitems([item("a", null, 1), item("b", null, 2)])).toBe(
+      false,
+    );
+  });
+
+  it("is true as soon as one item has a parent", () => {
+    expect(boardHasSubitems([item("a", null, 1), item("a1", "a", 1)])).toBe(
+      true,
+    );
+  });
+
+  it("is false for an empty board", () => {
+    expect(boardHasSubitems([])).toBe(false);
+  });
+
+  it("answers per array, so a new items array is re-read", () => {
+    const before = [item("a", null, 1)];
+    expect(boardHasSubitems(before)).toBe(false);
+    const after = [...before, item("a1", "a", 1)];
+    expect(boardHasSubitems(after)).toBe(true);
+    expect(boardHasSubitems(before)).toBe(false);
   });
 });

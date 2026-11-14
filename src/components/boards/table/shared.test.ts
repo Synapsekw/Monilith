@@ -11,6 +11,8 @@ import {
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
+  gridTemplate,
+  resolveColumnWidth,
 } from "./shared";
 
 function emptyCache(): BoardCache {
@@ -153,25 +155,56 @@ describe("rowCellsEqual", () => {
 });
 
 import {
+  COARSE_ROW_HEIGHT,
   ROW_HEIGHT,
   SUBITEM_ROW_HEIGHT,
   NAME_MEASURE_FONT,
+  NAME_MEASURE_FONT_SIZE,
   buildNameMeasureFont,
   ROW_HAIRLINE,
 } from "./shared";
 
 describe("Quiet Grid geometry", () => {
-  it("uses 42px item rows and 38px subitem rows", () => {
-    expect(ROW_HEIGHT).toBe(42);
-    expect(SUBITEM_ROW_HEIGHT).toBe(38);
+  it("uses 28px item rows and 26px subitem rows, 44px on coarse pointers", () => {
+    expect(ROW_HEIGHT).toBe(28);
+    expect(SUBITEM_ROW_HEIGHT).toBe(26);
+    expect(COARSE_ROW_HEIGHT).toBe(44);
   });
 
   it("measures the name column with the rendered name font", () => {
     // A drifted measurer silently mis-sizes the frozen column; typecheck and
     // jsdom both stay green, so this string is asserted explicitly.
-    expect(NAME_MEASURE_FONT).toContain("13.5px");
+    expect(NAME_MEASURE_FONT).toContain("13px");
     expect(NAME_MEASURE_FONT).toContain("Inter");
-    expect(NAME_MEASURE_FONT).not.toContain("14px");
+    expect(NAME_MEASURE_FONT).not.toContain("13.5px");
+  });
+
+  it("keeps the measuring size in step with the --text-item token", () => {
+    // NameCell renders item names with `text-item`. The token lives in
+    // globals.css as rem; the canvas measurer needs px. Read the real token so
+    // changing one without the other fails here.
+    const css = fs.readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    const token = css.match(/--text-item:\s*([\d.]+)rem/);
+    expect(token).not.toBeNull();
+    expect(`${Number(token![1]) * 16}px`).toBe(NAME_MEASURE_FONT_SIZE);
+  });
+
+  it("scopes the 12.5px cell size to the board table and leaves the shared token alone", () => {
+    // `text-cell` also renders in Kanban cards and the Calendar agenda (via
+    // CellRenderer). Only the table goes to 12.5px.
+    const css = fs.readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    expect(css).toMatch(/--text-cell:\s*0\.8125rem/);
+    const scoped = css.match(
+      /\[data-board-table\]\s+\.text-cell\s*\{\s*font-size:\s*([\d.]+)rem/,
+    );
+    expect(scoped).not.toBeNull();
+    expect(Number(scoped![1]) * 16).toBe(12.5);
   });
 
   it("insets the row hairline so it starts at the name text", () => {
@@ -225,7 +258,7 @@ describe("Quiet Grid geometry", () => {
       const generated = "'__Inter_1a2b3c', '__Inter_Fallback_1a2b3c'";
       const font = buildNameMeasureFont(generated);
       expect(font).toContain(generated);
-      expect(font).toContain("13.5px");
+      expect(font).toContain("13px");
       expect(font).toContain("500");
       expect(font).not.toBe(NAME_MEASURE_FONT);
     });
@@ -236,5 +269,35 @@ describe("Quiet Grid geometry", () => {
       expect(buildNameMeasureFont("")).toBe(NAME_MEASURE_FONT);
       expect(buildNameMeasureFont("   ")).toBe(NAME_MEASURE_FONT);
     });
+  });
+});
+
+describe("column widths: live → saved → auto-fit → 180", () => {
+  const column = (id: string, width: number | null) => ({ id, width });
+
+  it("prefers the live drag width, then the saved width, then the fitted width", () => {
+    expect(resolveColumnWidth(column("a", 240), { a: 310 }, { a: 96 })).toBe(
+      310,
+    );
+    expect(resolveColumnWidth(column("a", 240), {}, { a: 96 })).toBe(240);
+    expect(resolveColumnWidth(column("a", null), {}, { a: 96 })).toBe(96);
+  });
+
+  it("falls back to 180 before hydration, when nothing has been fitted", () => {
+    expect(resolveColumnWidth(column("a", null), {}, {})).toBe(180);
+    expect(resolveColumnWidth(column("a", null), {})).toBe(180);
+  });
+
+  it("builds the grid template from the same resolution", () => {
+    const columns = [column("a", null), column("b", 240), column("c", null)];
+    expect(gridTemplate(columns, { c: 200 }, 320, { a: 96, c: 120 })).toBe(
+      "320px 96px 240px 200px 160px 176px 44px",
+    );
+  });
+
+  it("keeps every unsaved column at 180 when no fitted widths are passed", () => {
+    expect(gridTemplate([column("a", null)], {}, 320)).toBe(
+      "320px 180px 160px 176px 44px",
+    );
   });
 });

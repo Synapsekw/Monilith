@@ -26,11 +26,12 @@ import { NameCell } from "./NameCell";
 import { RowMenu } from "./RowMenu";
 import {
   ROW_HAIRLINE,
-  SUBITEM_ROW_HEIGHT,
   cellControlsEqual,
   rowCellsEqual,
   type CellControls,
+  CELL_CENTER,
 } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 type SubitemRowProps = {
   sub: Item;
@@ -100,6 +101,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
 }: SubitemRowProps) {
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
+  const rowHeight = useRowHeight();
   const [todayISO] = useState(() => localTodayISO());
   // Intelligence chip: true → 2px tone rule, false → dimmed, null → no chip.
   // Same context read as ItemRow — see the note there.
@@ -132,7 +134,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
       aria-label={`Reorder ${sub.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+      className="text-muted-foreground hover:text-foreground grid h-6 w-4 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -160,7 +162,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         // rows don't stretch/squish during drag (gotcha-20).
         transform: CSS.Translate.toString(transform),
         transition,
-        height: SUBITEM_ROW_HEIGHT,
+        height: rowHeight.subitem,
         gridTemplateColumns: template,
       }}
       className={cn(
@@ -176,6 +178,7 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         controls={controls}
         leading={threadedLeading}
         indented
+        peekDisabled={isDragging}
         intelMatch={intelMatch}
         autoFocusRename={sub.id === renamingItemId}
         onRenameSettled={onRenameSettled}
@@ -218,14 +221,18 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
             {/* Read-only system columns — dimmed (via the cell renderers) to
                 signal they can't be edited. Created-by shows the member avatar
                 (from the cached board payload — first paint, no fetch). */}
-            <div className="flex h-full items-center px-4">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
                 mono={creator?.mono}
               />
             </div>
-            <div className="flex h-full items-center px-4">
+            <div
+              className={`flex h-full min-w-0 items-center px-2 ${CELL_CENTER}`}
+            >
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>

@@ -148,7 +148,7 @@ function rowControls(over: Partial<CellControls> = {}): CellControls {
   return controls({
     dependentsByItem: new Map<string, number>(),
     statusColumn: null,
-    cache: { cellValues: [], attachments: [], timeEntries: [] },
+    cache: { items: [], cellValues: [], attachments: [], timeEntries: [] },
     ...over,
   } as Partial<CellControls>);
 }

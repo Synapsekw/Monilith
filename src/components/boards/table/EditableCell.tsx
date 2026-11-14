@@ -32,7 +32,7 @@ import {
 import { isStatusValueComplete } from "@/lib/boards/overdue";
 import { celebrateStatusEdit } from "@/components/ui/done-burst";
 import { useIsCellEditing } from "./editing-store";
-import type { CellControls } from "./shared";
+import { CELL_CENTER, type CellControls } from "./shared";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -98,7 +98,7 @@ export const EditableCell = memo(function EditableCell({
       <div
         aria-label={accessibleName}
         aria-disabled
-        className="flex h-full items-center truncate px-4 opacity-50"
+        className={`flex h-full items-center truncate px-2 opacity-50 ${CELL_CENTER}`}
       >
         <CellRenderer
           kind={column.kind}
@@ -118,7 +118,7 @@ export const EditableCell = memo(function EditableCell({
   if (column.kind === "files") {
     const files = filesForCell(controls.cache, item.id, column.id);
     return (
-      <div className="flex h-full items-center px-4">
+      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
         <FilesCell
           files={files}
           previewUrls={controls.filesPreviewUrls ?? {}}
@@ -137,7 +137,7 @@ export const EditableCell = memo(function EditableCell({
     const estimate =
       (value as { estimateSeconds?: number } | null)?.estimateSeconds ?? null;
     return (
-      <div className="flex h-full items-center px-4">
+      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
         <TimeTrackingCell
           entries={entries}
           estimateSeconds={estimate}
@@ -167,7 +167,7 @@ export const EditableCell = memo(function EditableCell({
     };
     const targetBoardId = relSettings.target_board_id ?? "";
     return (
-      <div className="flex h-full items-center px-1">
+      <div className={`flex h-full items-center px-1 ${CELL_CENTER}`}>
         <RelationCell
           links={links}
           allowMultiple={relSettings.allow_multiple ?? true}
@@ -202,7 +202,7 @@ export const EditableCell = memo(function EditableCell({
     const values = mirrorValuesForCell(controls.cache, item.id, column);
     const target = mirrorTargetColumnFor(controls.cache, column);
     return (
-      <div className="flex h-full items-center px-4">
+      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
         {target ? (
           <MirrorCell
             values={values}
@@ -218,7 +218,10 @@ export const EditableCell = memo(function EditableCell({
 
   if (isEditing) {
     return (
-      <div ref={cellRef} className="relative flex items-center px-4">
+      <div
+        ref={cellRef}
+        className={`relative flex items-center px-2 ${CELL_CENTER}`}
+      >
         <CellEditor
           kind={column.kind}
           value={value}
@@ -272,7 +275,7 @@ export const EditableCell = memo(function EditableCell({
           setEditing({ itemId: item.id, columnId: column.id });
         }
       }}
-      className="focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-4 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className={`focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-2 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${CELL_CENTER}`}
     >
       <CellRenderer
         kind={column.kind}

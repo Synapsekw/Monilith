@@ -1,49 +1,36 @@
 "use client";
 
-import {
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  GripVertical,
-  User,
-} from "lucide-react";
-import { DndContext, type DragEndEvent } from "@dnd-kit/core";
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
-import { useTouchAwareSensors } from "@/lib/dnd/sensors";
-import { reorderPosition } from "@/lib/boards/group-reorder";
-import type { Column, Group } from "@/lib/boards/queries";
-import {
-  NAME_FREEZE_EDGE,
-  NAME_FREEZE_RULE,
-} from "@/components/boards/SummaryRow";
+import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
+import type { useSortable } from "@dnd-kit/sortable";
+import type { Group } from "@/lib/boards/queries";
+import type { GroupProgress } from "@/lib/boards/group-progress";
 import { Input } from "@/components/ui/input";
-import { Kicker } from "@/components/ui/kicker";
-import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 import { cn } from "@/lib/utils";
-import { CreatedHeaderCell } from "./CreatedHeaderCell";
 import { GroupMenu } from "./GroupMenu";
-import { NameResizeHandle } from "./NameResizeHandle";
-import { SortableColumnHeader } from "./SortableColumnHeader";
-import type { ColumnHeaderControls } from "./shared";
 
 /**
- * A group's header row (Monday-style): a grid aligned to the shared column
- * `template`, with the group controls in a frozen Name cell and an interactive
- * {@link ColumnHeader} per board column + {@link AddColumnMenu}. Rendered by
- * EVERY group (there is no single global header), so empty/new groups still
- * show the board's columns. Column width/options/dialog state is shared via
- * {@link ColumnHeaderControls} so a change from any group reflows all groups.
+ * A group's row: a 30px divider that spans the table (44px on coarse
+ * pointers). It is NOT a grid on the column template any more — the board's
+ * columns live in the single {@link BoardColumnHeader}.
+ *
+ * Sticky twice:
+ *  - the row is `sticky top-[30px]` (the column header's height) inside its
+ *    own <section>, so the current group's title stays pinned under the
+ *    column header while its rows scroll, and the next group pushes it out;
+ *  - its content sits in an inner block that is `sticky left-0` and exactly as
+ *    wide as the VISIBLE scroller (`--board-viewport-w`, published by
+ *    BoardTableInner), so the title, count, meter and menu stay in view
+ *    during horizontal scroll.
+ *
+ * Stacking: `z-30` — above every row, the frozen Name cells (z-10) and the row
+ * hairlines (z-20); below the column header (z-40).
+ *
+ * The title is the group's name as the user typed it, in Inter at the
+ * `text-group` size. No mono kicker, no index number, same tone for every
+ * group.
  */
 export function GroupHeaderRow({
   group,
-  groupIndex,
-  columns,
-  template,
   selectAll,
   collapsed,
   onToggleCollapse,
@@ -54,18 +41,14 @@ export function GroupHeaderRow({
   onCancelRename,
   onOpenRename,
   itemCount,
+  progress,
   dragAttributes,
   dragListeners,
   onSetColor,
   onDelete,
-  col,
 }: {
   group: Group;
-  /** Zero-based position among visible groups — powers the Keystone head kicker. */
-  groupIndex: number;
-  columns: Column[];
-  template: string;
-  /** Group-header "select all visible" checkbox, or null for viewers/empty groups. */
+  /** Group "select all visible" checkbox, or null for viewers/empty groups. */
   selectAll: React.ReactNode;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -76,69 +59,26 @@ export function GroupHeaderRow({
   onCancelRename: () => void;
   onOpenRename: () => void;
   itemCount: number;
+  /** Done-rule progress over the group's visible rows; null = no meter. */
+  progress: GroupProgress | null;
   dragAttributes: ReturnType<typeof useSortable>["attributes"];
   dragListeners: ReturnType<typeof useSortable>["listeners"];
   onSetColor: (color: string) => void;
   onDelete: () => void;
-  col: ColumnHeaderControls;
 }) {
-  const columnSensors = useTouchAwareSensors();
-
-  function columnMovePosition(index: number, dir: -1 | 1): number | null {
-    const over = columns[index + dir];
-    if (!over) return null;
-    return reorderPosition(
-      columns.map((c) => ({ id: c.id, position: c.position })),
-      columns[index].id,
-      over.id,
-    );
-  }
-
-  function handleColumnDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const position = reorderPosition(
-      columns.map((c) => ({ id: c.id, position: c.position })),
-      String(active.id),
-      String(over.id),
-    );
-    if (position !== null) col.reorderColumn(String(active.id), position);
-  }
-
   return (
     <div
-      // No border-b here: Quiet Grid rows draw their OWN top hairline (see
-      // ROW_HAIRLINE), so the line under this header comes from whatever
-      // follows it (an item row, GroupRollupRow, SummaryRow or AddItemRow) —
-      // a border-b here would double up with that inset top hairline.
-      className="group/grouphdr bg-surface text-muted-foreground grid text-xs font-medium"
-      style={{ gridTemplateColumns: template }}
+      data-testid={`group-header-${group.id}`}
+      className="group/grouphdr bg-surface sticky top-[30px] z-30 flex h-[30px] w-full items-center pointer-coarse:top-11 pointer-coarse:h-11"
     >
-      {/* Frozen group/Name cell — group controls + Name-column resize handle. */}
-      <div
-        // `text-item` is kept OUT of the cn() call on purpose: tailwind-merge
-        // 3.6.0 classifies `text-item` (a custom `--text-*` theme key, meant to
-        // set font-size) as belonging to the text-COLOR group, since custom
-        // `--text-*` keys are invisible to its size-group detection. Passed
-        // through cn() alongside `text-foreground`, twMerge treats them as
-        // conflicting members of one group and drops whichever came first —
-        // here it silently deleted `text-foreground`, so this cell inherited
-        // the parent row's `text-muted-foreground` and every group name
-        // rendered muted grey instead of full foreground. See
-        // TimeTrackingCell.tsx for the same fix.
-        className={`text-item ${cn(
-          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
-          NAME_FREEZE_EDGE,
-          NAME_FREEZE_RULE,
-        )}`}
-      >
+      <div className="sticky left-0 flex h-full w-[var(--board-viewport-w,100%)] min-w-0 items-center gap-1.5 px-2">
         {selectAll}
         <button
           type="button"
           aria-label={`Reorder ${group.name}`}
           {...dragAttributes}
           {...dragListeners}
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <GripVertical className="size-4" />
         </button>
@@ -147,7 +87,7 @@ export function GroupHeaderRow({
           onClick={onToggleCollapse}
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-6 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11"
         >
           {collapsed ? (
             <ChevronRight className="size-4" />
@@ -155,9 +95,7 @@ export function GroupHeaderRow({
             <ChevronDown className="size-4" />
           )}
         </button>
-        {/* Group color, right next to the name it labels — not left of the
-            drag/collapse controls, which would read as attached to the
-            select-all checkbox instead. */}
+        {/* Group colour, right next to the name it labels. */}
         <span
           aria-hidden
           className="size-2 shrink-0 rounded-full"
@@ -179,94 +117,55 @@ export function GroupHeaderRow({
               }
             }}
             aria-label={`Rename ${group.name}`}
-            className="h-7 max-w-xs"
+            className="h-6 max-w-xs px-1.5 pointer-coarse:h-11"
           />
         ) : (
           <button
             type="button"
             onClick={onOpenRename}
             aria-label={group.name}
-            className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+            // `text-group` stays OUT of cn(): tailwind-merge 3.6 treats custom
+            // `--text-*` size tokens as text COLORS and would drop
+            // `text-foreground` (see text-size-token-cn-merge.test.ts).
+            className={`text-group ${cn(
+              "text-foreground focus-visible:ring-ring min-w-0 truncate rounded-sm text-left font-semibold focus-visible:ring-2 focus-visible:outline-none",
+            )}`}
           >
-            {/* Keystone group head: mono "NN / NAME" kicker; the first group
-                reads bright, the rest dim — hierarchy by weight/tone, not color
-                (title text stays monochrome). */}
-            <Kicker
-              index={String(groupIndex + 1).padStart(2, "0")}
-              className={cn(
-                "truncate",
-                groupIndex === 0 ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {group.name}
-            </Kicker>
+            {group.name}
           </button>
         )}
-        <span className="text-muted-foreground text-xs font-normal">
+        <span className="bg-surface-muted text-muted-foreground text-2xs shrink-0 rounded-sm px-1.5 py-px tabular-nums">
           {itemCount}
         </span>
+        {progress ? (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span
+              role="progressbar"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${group.name}: ${progress.done} of ${progress.total} done`}
+              className="bg-foreground/[0.07] relative h-1 w-16 overflow-hidden rounded-full"
+            >
+              {/* Progress fill: one of the four sanctioned uses of the brand
+                  gradient (pulse-ui → "Second accent and the brand gradient"). */}
+              <span
+                className="bg-brand-gradient absolute inset-y-0 left-0 rounded-full"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </span>
+            <span className="text-muted-foreground text-2xs tabular-nums">
+              {progress.percent}% done
+            </span>
+          </span>
+        ) : null}
         <GroupMenu
           group={group}
           onRename={onOpenRename}
           onSetColor={onSetColor}
           onDelete={onDelete}
         />
-        <NameResizeHandle
-          width={col.nameWidth}
-          onResize={(w) => col.setLiveNameWidth(w)}
-          onResizeEnd={(w) => {
-            col.setLiveNameWidth(null);
-            col.resizeNameColumn(w);
-          }}
-          onAutoFit={() => {
-            col.setLiveNameWidth(null);
-            col.resizeNameColumn(null);
-          }}
-        />
       </div>
-
-      {/* DndContext/SortableContext render no DOM, so headers stay direct
-          grid children. The frozen Name cell before this block and the
-          Created/Add cells after it sit OUTSIDE the sortable set — that is
-          what makes the Name column immovable by construction. */}
-      <DndContext
-        id={`group-columns-${group.id}`}
-        sensors={columnSensors}
-        modifiers={[restrictToHorizontalAxis]}
-        onDragEnd={handleColumnDragEnd}
-      >
-        <SortableContext
-          items={columns.map((c) => c.id)}
-          strategy={horizontalListSortingStrategy}
-        >
-          {columns.map((c, i) => (
-            <SortableColumnHeader
-              key={c.id}
-              column={c}
-              col={col}
-              onMoveLeft={
-                i > 0
-                  ? () => {
-                      const p = columnMovePosition(i, -1);
-                      if (p !== null) col.reorderColumn(c.id, p);
-                    }
-                  : null
-              }
-              onMoveRight={
-                i < columns.length - 1
-                  ? () => {
-                      const p = columnMovePosition(i, 1);
-                      if (p !== null) col.reorderColumn(c.id, p);
-                    }
-                  : null
-              }
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
-      <CreatedHeaderCell icon={User} label="Created by" />
-      <CreatedHeaderCell icon={Clock} label="Created at" />
-      <AddColumnMenu onAdd={col.onAddColumn} />
     </div>
   );
 }

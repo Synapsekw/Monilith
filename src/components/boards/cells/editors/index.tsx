@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
@@ -108,7 +108,7 @@ export function NumbersEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-8 tabular-nums"
+      className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -138,7 +138,7 @@ export function PercentEditor({
       onChange={(e) => setRaw(e.target.value)}
       onKeyDown={onKey}
       onBlur={commit}
-      className="h-8 tabular-nums"
+      className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
     />
   );
 }
@@ -163,7 +163,7 @@ export function CurrencyEditor({
   }
   const onKey = useCommitKeys(commit, onCancel);
   return (
-    <div className="flex h-8 items-center gap-1.5">
+    <div className="flex h-6 items-center gap-1.5 pointer-coarse:h-8">
       <span className="text-muted-foreground shrink-0 text-xs">
         {dirhamSignEnabled(settings) ? <DirhamSign /> : code}
       </span>
@@ -175,7 +175,7 @@ export function CurrencyEditor({
         onChange={(e) => setRaw(e.target.value)}
         onKeyDown={onKey}
         onBlur={commit}
-        className="h-8 tabular-nums"
+        className="h-6 px-1.5 text-center text-xs tabular-nums md:text-xs pointer-coarse:h-8"
       />
     </div>
   );
@@ -370,7 +370,7 @@ export function CheckboxEditor({
 }: EditorProps<{ checked: boolean }>) {
   const checked = value?.checked ?? false;
   return (
-    <div className="flex h-8 items-center px-1">
+    <div className="flex h-6 items-center px-1 pointer-coarse:h-11">
       {/* The native checkbox stays visually `size-4`; on a coarse pointer the
           surrounding label is a ≥44px tap target so a finger can toggle it. */}
       <label className="grid cursor-pointer place-items-center pointer-coarse:size-11">
@@ -491,38 +491,65 @@ function TextLikeEditor({
   const [s, setS] = useState(initial);
   const [err, setErr] = useState<string | null>(null);
   const status = useFieldStatus(err);
+  // Enter and blur can both fire for one edit (the committed editor unmounts
+  // while focused); only the first settles it.
+  const settled = useRef(false);
   const commit = () => {
+    if (settled.current) return;
     const e = validate(s);
     if (e) {
       setErr(e);
       return;
     }
+    settled.current = true;
     onCommit(build(s));
   };
-  const onKey = useCommitKeys(commit, onCancel);
+  const onKey = useCommitKeys(commit, () => {
+    settled.current = true;
+    onCancel();
+  });
+  // One 24px line, like every other inline editor: the row is 28px, so a
+  // stacked message / Save button was painted over by the next row. The error
+  // goes in a popover (portalled, so no row or scroller clips it); Enter and
+  // blur commit. Blur on an invalid value cancels, as the numeric editors do.
   return (
-    <div className="flex flex-col gap-1">
-      <Input
-        autoFocus
-        aria-label={label}
-        value={s}
-        onChange={(e) => {
-          setS(e.target.value);
-          setErr(null);
-        }}
-        onKeyDown={onKey}
-        className="h-8"
-        {...status.controlProps}
-      />
-      {status.message && (
+    <Popover open={status.message !== null}>
+      <PopoverAnchor asChild>
+        <Input
+          autoFocus
+          aria-label={label}
+          value={s}
+          onChange={(e) => {
+            setS(e.target.value);
+            setErr(null);
+          }}
+          onKeyDown={onKey}
+          onBlur={() => {
+            if (settled.current) return;
+            if (validate(s)) {
+              settled.current = true;
+              onCancel();
+              return;
+            }
+            commit();
+          }}
+          className="h-6 px-1.5 text-center text-xs md:text-xs pointer-coarse:h-8"
+          {...status.controlProps}
+        />
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        // The input keeps focus; the hint is read through aria-describedby.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="w-auto p-2"
+      >
         <span {...status.messageProps} className="text-destructive text-xs">
           {status.message}
         </span>
-      )}
-      <button type="button" className="self-end text-xs" onClick={commit}>
-        Save
-      </button>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

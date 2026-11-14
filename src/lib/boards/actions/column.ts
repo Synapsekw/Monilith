@@ -8,6 +8,7 @@ import {
   resizeColumnSchema,
   reorderColumnSchema,
   resizeNameColumnSchema,
+  resetColumnWidthsSchema,
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
@@ -79,9 +80,10 @@ export async function renameColumn(input: {
   return renameColumnCore(await createClient(), parsed.data);
 }
 
+/** Persist a dragged column width, or clear it with `width: null` so the client auto-fits the column again. */
 export async function resizeColumn(input: {
   columnId: string;
-  width: number;
+  width: number | null;
 }): Promise<ActionResult> {
   const parsed = resizeColumnSchema.safeParse(input);
   if (!parsed.success)
@@ -119,6 +121,44 @@ export async function resizeNameColumn(input: {
     .from("boards")
     .update({ name_column_width: parsed.data.width })
     .eq("id", parsed.data.boardId);
+  if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * "Fit all columns": clear every saved column width on a board AND the saved
+ * Name width, so the whole table returns to auto-fit. One action, two
+ * RLS-scoped writes, no revalidation (the caller patches its cache
+ * optimistically, like `resizeNameColumn`).
+ *
+ * The board write goes first and reads its row back. Under RLS an update the
+ * caller may not make (a viewer, or a board in another org) matches no row and
+ * returns no data rather than an error, so `data === null` is the fail-closed
+ * signal — the same shape as `reorderColumnCore`. Only then are the board's
+ * columns cleared (`columns_board_id_idx`).
+ *
+ * Writes to `boards` as well as `columns`, and has no MCP tool action — so it
+ * lives here beside `resizeNameColumn`, not in the core.
+ */
+export async function resetColumnWidths(input: {
+  boardId: string;
+}): Promise<ActionResult> {
+  const parsed = resetColumnWidthsSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { data: board, error: boardError } = await supabase
+    .from("boards")
+    .update({ name_column_width: null })
+    .eq("id", parsed.data.boardId)
+    .select("id")
+    .maybeSingle();
+  if (boardError) return fail(boardError.message);
+  if (!board) return fail("Board not found.");
+  const { error } = await supabase
+    .from("columns")
+    .update({ width: null })
+    .eq("board_id", parsed.data.boardId);
   if (error) return fail(error.message);
   return { ok: true, data: undefined };
 }

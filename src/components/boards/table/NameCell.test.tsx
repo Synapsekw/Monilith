@@ -1,6 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { NameCell } from "@/components/boards/table/NameCell";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+
+let coarse = false;
+vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
+  useCoarsePointer: () => coarse,
+}));
+
+import {
+  NAME_PEEK_DELAY_MS,
+  NameCell,
+} from "@/components/boards/table/NameCell";
 import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
 import type { Item } from "@/lib/boards/queries";
 import type { CellControls } from "@/components/boards/table/shared";
@@ -19,7 +28,7 @@ const controls = {
 } as unknown as CellControls;
 
 describe("NameCell — Quiet Grid", () => {
-  it("renders the name at the 13.5px table scale", () => {
+  it("renders the name at the item-name table scale", () => {
     render(<NameCell item={item} controls={controls} />);
     expect(screen.getByLabelText(`${item.name} name`).className).toContain(
       "text-item",
@@ -78,5 +87,260 @@ describe("NameCell — Quiet Grid", () => {
     for (const cls of NAME_FREEZE_RULE.split(" ")) {
       expect(wrapper.className).toContain(cls);
     }
+  });
+});
+
+/** jsdom lays nothing out, so truncation is simulated on the text node. */
+function setTruncated(el: HTMLElement, truncated: boolean) {
+  Object.defineProperty(el, "scrollWidth", {
+    configurable: true,
+    value: truncated ? 500 : 100,
+  });
+  Object.defineProperty(el, "clientWidth", {
+    configurable: true,
+    value: 100,
+  });
+}
+
+describe("NameCell — hover buttons overlay", () => {
+  beforeEach(() => {
+    coarse = false;
+  });
+
+  it("takes the buttons out of the layout flow on fine pointers and keeps them in flow on coarse", () => {
+    render(<NameCell item={item} controls={controls} />);
+    const actions = screen.getByTestId("name-actions");
+    const classes = actions.className.split(/\s+/);
+    expect(classes).toContain("absolute");
+    expect(classes).toContain("pointer-coarse:static");
+    expect(classes).toContain("pointer-coarse:opacity-100");
+    expect(actions).toContainElement(
+      screen.getByRole("button", { name: `Open ${item.name}` }),
+    );
+  });
+
+  it("puts the trailing row controls in the same overlay", () => {
+    render(
+      <NameCell
+        item={item}
+        controls={controls}
+        trailing={<button type="button">Row menu</button>}
+      />,
+    );
+    expect(screen.getByTestId("name-actions")).toContainElement(
+      screen.getByRole("button", { name: "Row menu" }),
+    );
+  });
+
+  it("reveals the overlay on row hover and on keyboard focus within", () => {
+    render(<NameCell item={item} controls={controls} />);
+    const classes = screen.getByTestId("name-actions").className.split(/\s+/);
+    expect(classes).toContain("group-hover/name:opacity-100");
+    expect(classes).toContain("focus-within:opacity-100");
+  });
+
+  it("lets clicks pass through the overlay container to the name on fine pointers", () => {
+    render(<NameCell item={item} controls={controls} />);
+    const classes = screen.getByTestId("name-actions").className.split(/\s+/);
+    expect(classes).toContain("pointer-events-none");
+    expect(classes).toContain("[&>*]:pointer-events-auto");
+    expect(classes).toContain("pointer-coarse:pointer-events-auto");
+  });
+
+  it("carries the full name as the name button's title", () => {
+    render(<NameCell item={item} controls={controls} />);
+    expect(screen.getByLabelText(`${item.name} name`)).toHaveAttribute(
+      "title",
+      item.name,
+    );
+  });
+});
+
+describe("NameCell — hover peek", () => {
+  beforeEach(() => {
+    coarse = false;
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("unrolls a truncated name after the pointer rests on the row for 200ms", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+
+    fireEvent.mouseEnter(cell);
+    expect(cell).not.toHaveAttribute("data-peek");
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS - 1);
+    });
+    expect(cell).not.toHaveAttribute("data-peek");
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(cell).toHaveAttribute("data-peek", "true");
+
+    fireEvent.mouseLeave(cell);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("puts the buttons back in flow at the end of the unrolled name", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    const classes = screen.getByTestId("name-actions").className.split(/\s+/);
+    expect(classes).toContain("static");
+    expect(classes).not.toContain("absolute");
+  });
+
+  it("does not peek a name that fits", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), false);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS * 2);
+    });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("cancels a pending peek when the pointer leaves before 200ms", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    fireEvent.mouseLeave(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("does not peek on a coarse pointer", () => {
+    coarse = true;
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("does not peek while the row is being dragged", () => {
+    const { container } = render(
+      <NameCell item={item} controls={controls} peekDisabled />,
+    );
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  function stubFocusVisible(el: HTMLElement, value: boolean) {
+    el.matches = ((sel: string) =>
+      sel === ":focus-visible" ? value : false) as typeof el.matches;
+  }
+
+  it("peeks at once on keyboard focus of a truncated name, and closes when focus leaves the cell", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
+    fireEvent.focus(nameButton);
+    expect(cell).toHaveAttribute("data-peek", "true");
+    fireEvent.blur(nameButton);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("does not peek on a mouse-click focus (not focus-visible)", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, false);
+    fireEvent.focus(nameButton);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("keeps a keyboard peek open when the pointer leaves", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
+    fireEvent.focus(nameButton);
+    fireEvent.mouseLeave(cell);
+    expect(cell).toHaveAttribute("data-peek", "true");
+  });
+
+  it("keeps a keyboard peek open when focus moves to a button inside the cell", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
+    fireEvent.focus(nameButton);
+    const openBtn = screen.getByRole("button", { name: `Open ${item.name}` });
+    fireEvent.blur(nameButton, { relatedTarget: openBtn });
+    expect(cell).toHaveAttribute("data-peek", "true");
+    fireEvent.blur(openBtn, { relatedTarget: document.body });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("closes a hover peek on mouse leave", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).toHaveAttribute("data-peek", "true");
+    // moving focus within the cell must not close a hover peek either way
+    fireEvent.mouseLeave(cell);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("clears a pending peek timer when the row unmounts mid-delay", () => {
+    const { container, unmount } = render(
+      <NameCell item={item} controls={controls} />,
+    );
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
+    expect(vi.getTimerCount()).toBe(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not show the peek again after editing is started and cancelled", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    setTruncated(screen.getByText(item.name), true);
+    const cell = container.firstElementChild as HTMLElement;
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).toHaveAttribute("data-peek", "true");
+    fireEvent.click(screen.getByLabelText(`${item.name} name`));
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    const back = container.firstElementChild as HTMLElement;
+    expect(container.querySelector("input")).toBeNull();
+    expect(back).not.toHaveAttribute("data-peek");
   });
 });

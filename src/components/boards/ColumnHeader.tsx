@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 const MIN = 80;
 const MAX = 1200;
+const DRAG_THRESHOLD = 3;
 
 /**
  * Drag/reorder wiring passed down by the owning sortable wrapper (the header
@@ -59,6 +60,7 @@ export function ColumnHeader({
   onEditOptions,
   onEditCurrency,
   onSmartFill,
+  onAutoFit,
   reorder,
 }: {
   column: CacheColumn;
@@ -70,6 +72,7 @@ export function ColumnHeader({
   onEditOptions?: () => void; // open the option editor (status/dropdown only)
   onEditCurrency?: () => void; // open the currency picker (currency kind only)
   onSmartFill?: () => void; // open the Smart Fill dialog (text columns only)
+  onAutoFit?: () => void; // double-click the resize handle: clear the saved width
   reorder?: ColumnReorder; // drag + move-left/right affordances (optional)
 }) {
   const [editing, setEditing] = useState(false);
@@ -93,6 +96,9 @@ export function ColumnHeader({
     let last = width;
     let moved = false;
     const move = (ev: PointerEvent) => {
+      // A few px of jitter during a click (or either press of a double-click)
+      // is not a drag: it must not persist a width and pin the column.
+      if (!moved && Math.abs(ev.clientX - startX) < DRAG_THRESHOLD) return;
       last = clampDragWidth(startW + (ev.clientX - startX), MIN, MAX);
       moved = true;
       throttledResize(last); // live, at most once per animation frame
@@ -100,11 +106,16 @@ export function ColumnHeader({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      // The last move may still be waiting on its frame: drop it and apply the
-      // final width synchronously so the release never lands on a stale one.
+      // The last move may still be waiting on its frame: drop it.
       cancelThrottledResize();
-      if (moved) onResize(last);
-      onResizeEnd(last); // persist the final width
+      // A press without a move is not a resize. Persisting here would pin an
+      // auto-fitted column at whatever width it happened to have (and an
+      // auto-fit width under 80px would be rejected by the server), and each
+      // press of a double-click would save a width just before the
+      // double-click clears it.
+      if (!moved) return;
+      onResize(last); // apply the final width synchronously
+      onResizeEnd(last); // persist it
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -115,7 +126,11 @@ export function ColumnHeader({
       ref={reorder?.setNodeRef}
       style={reorder?.style}
       className={cn(
-        "group/col relative flex items-center gap-1 px-4 pt-3.5 pb-2.5",
+        // px-6 = the 24px HEADER_CHROME reserves on each side of the label
+        // (fit-column-width.ts): 4px inset + 16px control + 4px gap. The grip
+        // and menu are absolutely pinned inside it, so the label is centered
+        // on the column. Coarse pointers keep the in-flow grip, label, menu.
+        "group/col relative flex h-full min-w-0 items-center justify-center px-6 pointer-coarse:justify-start pointer-coarse:gap-1 pointer-coarse:px-2",
         reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >
@@ -140,14 +155,14 @@ export function ColumnHeader({
               aria-label={`Reorder ${column.name} column`}
               {...reorder.handleAttributes}
               {...(reorder.handleListeners ?? {})}
-              className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/col:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 left-0.5 grid h-6 w-4 -translate-y-1/2 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/col:opacity-100 active:cursor-grabbing pointer-coarse:static pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
             >
               <GripVertical className="size-3.5" />
             </button>
           )}
           <Kicker
             size="xs"
-            className="truncate opacity-[0.74] transition-opacity group-hover/col:opacity-100"
+            className="min-w-0 truncate text-center opacity-[0.74] transition-opacity group-hover/col:opacity-100"
           >
             {column.name}
           </Kicker>
@@ -155,7 +170,7 @@ export function ColumnHeader({
             <DropdownMenuTrigger asChild>
               <button
                 aria-label={`${column.name} column menu`}
-                className="text-muted-foreground hover:text-foreground ml-auto grid place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 grid -translate-y-1/2 place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
               >
                 <MoreHorizontal className="size-4" />
               </button>
@@ -223,6 +238,8 @@ export function ColumnHeader({
         aria-orientation="vertical"
         aria-label={`Resize ${column.name}`}
         onPointerDown={onPointerDown}
+        onDoubleClick={onAutoFit}
+        title="Drag to resize. Double-click to fit the content."
         className="hover:before:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-transparent pointer-coarse:-right-5 pointer-coarse:w-11"
       />
 

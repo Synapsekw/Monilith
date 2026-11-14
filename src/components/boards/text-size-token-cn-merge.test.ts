@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { cn } from "@/lib/utils";
-import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
 
 // Root cause this guards: tailwind-merge 3.6.0 classifies the project's
 // custom `text-cell` / `text-item` utilities (custom `--text-*` theme keys,
@@ -33,13 +32,12 @@ describe("text-cell / text-item survive className composition (tailwind-merge te
     expect(className.split(/\s+/)).toContain("text-foreground");
   });
 
-  it("GroupHeaderRow frozen Name cell: text-item size token + text-foreground color both present", () => {
-    const className = `text-item ${cn(
-      "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-4 pt-3.5 pb-2.5 font-semibold",
-      NAME_FREEZE_EDGE,
+  it("GroupHeaderRow title: text-group size token + text-foreground color both present", () => {
+    const className = `text-group ${cn(
+      "text-foreground focus-visible:ring-ring min-w-0 truncate rounded-sm text-left font-semibold focus-visible:ring-2 focus-visible:outline-none",
     )}`;
 
-    expect(className.split(/\s+/)).toContain("text-item");
+    expect(className.split(/\s+/)).toContain("text-group");
     expect(className.split(/\s+/)).toContain("text-foreground");
   });
 });

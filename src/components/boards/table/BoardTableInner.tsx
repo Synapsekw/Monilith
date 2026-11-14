@@ -75,10 +75,13 @@ import {
 } from "@/lib/boards/board-filter";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useHydrated } from "@/lib/hooks/use-hydrated";
+import { useColumnAutoFit } from "./use-column-auto-fit";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 import { AddGroupRow } from "./AddGroupRow";
+import { BoardColumnHeader } from "./BoardColumnHeader";
 import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
@@ -161,6 +164,24 @@ export function BoardTableInner({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scrolledX, setScrolledX] = useState(false);
+
+  // The slim group rows pin their content to the VISIBLE width of the scroller
+  // (not the full table width), so a group's title stays in view during
+  // horizontal scroll. Published as a CSS variable with a direct style write —
+  // no React state, so resizing the window re-renders nothing.
+  useEffect(() => {
+    const scroller = scrollContainerRef.current;
+    if (!scroller) return;
+    const publish = () =>
+      scroller.style.setProperty(
+        "--board-viewport-w",
+        `${scroller.clientWidth}px`,
+      );
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, []);
 
   // Edit mode lives in its own store, subscribed to per cell — NOT in this
   // component's state and NOT in the `controls` bundle. Holding it here handed
@@ -431,7 +452,7 @@ export function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (500 13.5px Inter /
+  // Offscreen canvas measurer at the Name cell font (500 13px Inter /
   // text-item), used to auto-fit the Name column to the longest item name
   // across ALL items (not just the virtualized rows). Pure measurement — no
   // server round-trip. Reads the LIVE `--font-inter` variable next/font sets
@@ -465,19 +486,23 @@ export function BoardTableInner({
   // same list by `parent_id`) — so a long subitem name is measured too, with
   // its indented row's own (larger) chrome reserve via `indented`.
   // Measure only after hydration. The server has no canvas (every name
-  // measures 0), and React keeps the server's grid template on the group
-  // headers if the client's first render disagrees — so a board with no saved
+  // measures 0), and React keeps the server's grid template on the column
+  // header if the client's first render disagrees — so a board with no saved
   // name width rendered its headers at the minimum while rows (rendered
   // client-side) auto-fit wider, shifting every header off its column.
   const hydrated = useHydrated();
+  // Once here (not per row): touch controls are in flow and 44px, so both fits
+  // reserve more chrome. False on the server and until hydration.
+  const coarse = useCoarsePointer();
   const autoFitWidth = useMemo(
     () =>
       fitNameColumnWidth(
         items.map((it) => ({ name: it.name, indented: it.parent_id != null })),
         hydrated ? measureName : () => 0,
         access !== "viewer",
+        coarse,
       ),
-    [items, measureName, access, hydrated],
+    [items, measureName, access, hydrated, coarse],
   );
 
   // null = follow board.name_column_width (or auto-fit). Set live during a drag.
@@ -495,9 +520,20 @@ export function BoardTableInner({
   // has to land in one go across every grid-row surface — the group header row,
   // the item/subitem rows, the summary rows AND AddItemRow (owned by the
   // optimistic-add work) — all of which read `template`/`nameWidth` today.
+  // Value columns with no saved width fit their content, like the Name column
+  // above. Empty until hydration, so the server and the first client render
+  // agree on 180px tracks.
+  const autoFitWidths = useColumnAutoFit({
+    columns,
+    cellValues,
+    itemCount: items.length,
+    members,
+    enabled: hydrated,
+    coarse,
+  });
   const template = useMemo(
-    () => gridTemplate(columns, liveWidths, nameWidth),
-    [columns, liveWidths, nameWidth],
+    () => gridTemplate(columns, liveWidths, nameWidth, autoFitWidths),
+    [columns, liveWidths, nameWidth, autoFitWidths],
   );
 
   // Board Total scope — stable so SummaryRow's `perColumn` memo survives
@@ -538,15 +574,16 @@ export function BoardTableInner({
     [canEdit, footerNowMs, setColumnSummary],
   );
 
-  // Board-level column-management surface shared by every group's header row
-  // (columns are board-scoped). Width state stays here so a resize/add/rename
-  // from any group reflows all groups + the footer. Memoized on the width state
-  // alone — every callback below is stable (the `m` proxy / setState setters) —
+  // Board-level column-management surface used by the board's single column
+  // header (columns are board-scoped). Width state stays here so a
+  // resize/add/rename reflows every group + the footer. Memoized on the width
+  // state alone — every callback below is stable (the `m` proxy / setState setters) —
   // so a dialog, a scroll or a cell edit no longer re-creates it.
   const columnControls: ColumnHeaderControls = useMemo(
     () => ({
       nameWidth,
       liveWidths,
+      autoFitWidths,
       setLiveWidths,
       setLiveNameWidth,
       renameColumn: m.renameColumn,
@@ -572,8 +609,17 @@ export function BoardTableInner({
       onEditCurrency: (c) => setCurrencyFor(c),
       onSmartFill: (c) => setSmartFillFor(c),
     }),
-    [nameWidth, liveWidths, m],
+    [nameWidth, liveWidths, autoFitWidths, m],
   );
+
+  // "Fit all columns" (board menu): one Server Action clears every saved
+  // column width and the saved Name width; the live drag widths are dropped
+  // here so nothing masks the result. No revalidation, no refetch.
+  const fitAllColumns = useCallback(() => {
+    setLiveWidths({});
+    setLiveNameWidth(null);
+    m.resetColumnWidths();
+  }, [m]);
 
   // Id-keyed group actions, built once for the whole board: the per-group
   // closures these replace were rebuilt every render and defeated
@@ -784,6 +830,7 @@ export function BoardTableInner({
         grants={grants}
         currentUserId={currentUserId}
         filterable
+        onFitAllColumns={canEdit ? fitAllColumns : undefined}
       />
 
       {columnError ? (
@@ -809,6 +856,7 @@ export function BoardTableInner({
         ref={scrollContainerRef}
         data-testid="board-scroll"
         data-scroll-container
+        data-board-table
         data-scrolledx={scrolledX}
         onScroll={(e) => {
           const next = e.currentTarget.scrollLeft > 0;
@@ -816,9 +864,14 @@ export function BoardTableInner({
           // 0 ⇄ >0 boundary (cheap during scroll).
           setScrolledX(next);
         }}
-        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 overflow-auto rounded-lg border transition-colors"
+        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 scroll-pt-[60px] scroll-pb-[38px] overflow-auto rounded-lg border transition-colors pointer-coarse:scroll-pt-[88px]"
       >
         <div ref={contentRef} className="min-w-fit">
+          <BoardColumnHeader
+            columns={columns}
+            template={template}
+            col={columnControls}
+          />
           {groups.length === 0 ? (
             <p className="text-muted-foreground px-4 py-6 text-sm">
               This board has no groups yet.
@@ -856,7 +909,6 @@ export function BoardTableInner({
                     itemIds={itemIdsByGroup.get(group.id) ?? NO_IDS}
                     columns={columns}
                     selectable={canEdit}
-                    col={columnControls}
                     cellMap={cellMap}
                     template={template}
                     controls={controls}
