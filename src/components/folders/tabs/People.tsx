@@ -125,10 +125,11 @@ export function PeopleTab({
           <Kicker>01</Kicker>
           <h2 className="text-sm font-semibold">Workload</h2>
           <p className="text-muted-foreground text-xs">
-            Open items per person · red above {OVERLOAD_THRESHOLD}
+            Open items per person · late share in red · flagged over{" "}
+            {OVERLOAD_THRESHOLD}
           </p>
         </div>
-        <WorkloadBars people={people} />
+        <WorkloadBars people={people} stage={stage} />
       </section>
       <section
         data-testid="owners-section"

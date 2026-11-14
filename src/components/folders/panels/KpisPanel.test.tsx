@@ -204,6 +204,30 @@ describe("KpisPanel", () => {
       .map((n) => n.textContent);
     expect(cardLabels).not.toContain("Gap to plan");
     expect(cardLabels).not.toContain("Overdue");
+    // "No due dates set" already explains it; no "Gap to plan —" chip.
+    const chips = screen.getAllByTestId("kpi-chip").map((c) => c.textContent);
+    expect(chips.some((c) => c?.startsWith("Gap to plan"))).toBe(false);
+  });
+
+  it("lays the cards out so any count from 1 to 6 fills the row", () => {
+    for (const n of [1, 4, 6]) {
+      const { container, unmount } = render(
+        <KpisPanel
+          cards={[...all].slice(0, n)}
+          rows={fx.rollup!}
+          todayISO={FIXTURE_TODAY}
+          failed={false}
+          onRetry={vi.fn()}
+        />,
+      );
+      const grid = container.querySelector("[data-testid='kpi-cards']")!;
+      // auto-fit collapses empty tracks, so live cards stretch to fill.
+      expect(grid.className).toContain(
+        "grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]",
+      );
+      expect(grid.className).not.toMatch(/(^|\s)(md|xl):grid-cols-\d/);
+      unmount();
+    }
   });
 
   it("only considers the cards the layout names", () => {

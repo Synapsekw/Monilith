@@ -113,7 +113,10 @@ export function PeoplePanel({
     const shown = people.slice(0, PEOPLE_SHOWN);
     body = (
       <>
-        <WorkloadBars people={unassigned ? [...shown, unassigned] : shown} />
+        <WorkloadBars
+          people={unassigned ? [...shown, unassigned] : shown}
+          stage={stage}
+        />
         {people.length > PEOPLE_SHOWN && onSeeAll ? (
           <Button
             type="button"

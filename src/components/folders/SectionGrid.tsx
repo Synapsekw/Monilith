@@ -34,6 +34,58 @@ export function groupSections(sections: LayoutSection[]): Group[] {
   return groups;
 }
 
+/** Nothing to draw: what a `render` callback returns for an absent section. */
+function isEmpty(node: ReactNode): boolean {
+  return node === null || node === undefined || node === false;
+}
+
+/**
+ * Render-time fill rule (2026-11-14 browser fix). A section that renders
+ * nothing (load while `payload.load` is null, Intelligence with no briefs)
+ * used to leave its grid cell empty, so its row showed a blank gap. The saved
+ * config is NOT rewritten; only this render's placement changes:
+ *   - a cell whose sections all render nothing is dropped;
+ *   - a ROW is a run of cells laid left to right (a cell starts a new row when
+ *     it is full width, follows a full-width cell, or does not start right of
+ *     the previous cell);
+ *   - in a row that lost a cell, each surviving cell stretches to the next
+ *     survivor's start (the last one to the row's end, the first one from the
+ *     row's start), so neighbours fill the row;
+ *   - a row with every cell present keeps its saved columns exactly.
+ */
+export function fillRows<T extends { x: number; w: number }>(
+  cells: { cell: T; present: boolean }[],
+): T[] {
+  const rows: { cell: T; present: boolean }[][] = [];
+  for (const c of cells) {
+    const row = rows[rows.length - 1];
+    const prev = row?.[row.length - 1]?.cell;
+    const starts =
+      prev === undefined ||
+      c.cell.w === 12 ||
+      prev.w === 12 ||
+      c.cell.x < prev.x + prev.w;
+    if (starts) rows.push([c]);
+    else row!.push(c);
+  }
+  const out: T[] = [];
+  for (const row of rows) {
+    const kept = row.filter((c) => c.present).map((c) => c.cell);
+    if (kept.length === row.length) {
+      out.push(...kept);
+      continue;
+    }
+    const lo = Math.min(...row.map((c) => c.cell.x));
+    const hi = Math.max(...row.map((c) => c.cell.x + c.cell.w));
+    kept.forEach((cell, i) => {
+      const x = i === 0 ? lo : cell.x;
+      const end = i === kept.length - 1 ? hi : kept[i + 1]!.x;
+      out.push({ ...cell, x, w: end - x });
+    });
+  }
+  return out;
+}
+
 /**
  * The Overview canvas: a 12-column CSS Grid at `lg`, one stacked column below.
  *
@@ -57,13 +109,21 @@ export function SectionGrid({
   render: (section: LayoutSection) => ReactNode;
 }) {
   if (sections.length === 0) return null;
-  const groups = groupSections(sections);
+  // Render first, so a section that draws nothing can give its space away.
+  const cells = groupSections(sections).map((g) => {
+    const drawn = g.sections
+      .map((s) => ({ s, node: render(s) }))
+      .filter((d) => !isEmpty(d.node));
+    return { cell: { ...g, drawn }, present: drawn.length > 0 };
+  });
+  const groups = fillRows(cells);
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
       {groups.map((g) => (
         <div
           key={g.sections[0]!.id}
           data-testid="section-group"
+          data-section-ids={g.drawn.map((d) => d.s.id).join(" ")}
           className="flex min-w-0 flex-col gap-4 lg:[grid-column:var(--col)]"
           style={
             {
@@ -71,7 +131,7 @@ export function SectionGrid({
             } as React.CSSProperties
           }
         >
-          {g.sections.map((s) => (
+          {g.drawn.map(({ s, node }) => (
             // Each section keeps its own wrapper so Customize mode's
             // `SectionChrome` still wraps one section at a time, and
             // `data-section-id` still resolves every section individually.
@@ -81,7 +141,7 @@ export function SectionGrid({
               data-section-id={s.id}
               className="min-w-0"
             >
-              {render(s)}
+              {node}
             </div>
           ))}
         </div>

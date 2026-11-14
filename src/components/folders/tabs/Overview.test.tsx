@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
 import { computeKpis } from "@/lib/folders/rollup";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { canvasSections } from "@/lib/folders/layout";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
 
@@ -26,22 +27,29 @@ import { OverviewTab } from "./Overview";
 
 function renderOverview(
   patch: Partial<ReturnType<typeof folderFixture>> = {},
-  opts: { stage?: string | null; board?: string | null } = {},
+  opts: {
+    stage?: string | null;
+    board?: string | null;
+    editing?: boolean;
+  } = {},
 ) {
   const payload = { ...folderFixture(), ...patch };
   const rows = payload.rollup ?? [];
   const stages = buildStages(rows, FIXTURE_TODAY);
   const onRetry = vi.fn();
   render(
-    <OverviewTab
-      payload={payload}
-      rows={rows}
-      stages={stages}
-      stage={opts.stage ?? null}
-      board={opts.board ?? null}
-      sections={canvasSections(payload.layout.config, "overview")}
-      onRetry={onRetry}
-    />,
+    <TooltipProvider>
+      <OverviewTab
+        payload={payload}
+        rows={rows}
+        stages={stages}
+        stage={opts.stage ?? null}
+        board={opts.board ?? null}
+        sections={canvasSections(payload.layout.config, "overview")}
+        onRetry={onRetry}
+        editing={opts.editing ?? false}
+      />
+    </TooltipProvider>,
   );
   return { onRetry };
 }
@@ -225,6 +233,27 @@ describe("OverviewTab", () => {
   it("shows the reading line above the burn chart", () => {
     renderOverview();
     expect(screen.getByTestId("burn-reading")).toBeInTheDocument();
+  });
+
+  it("draws no empty chrome box for an absent section in Customize mode", () => {
+    renderOverview({ load: null, briefs: [] }, { editing: true });
+    expect(
+      screen.queryByRole("button", { name: "Hide Load by board and week" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Hide Intelligence" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Hide Planned vs completed" }),
+    ).toBeInTheDocument();
+  });
+
+  it("lets the burn chart take the whole row while the load map is absent", () => {
+    renderOverview({ load: null });
+    const burn = document
+      .querySelector("[data-section-id='burn']")!
+      .closest("[data-testid='section-group']") as HTMLElement;
+    expect(burn.style.getPropertyValue("--col")).toBe("1 / span 12");
   });
 
   it("states the same gap in the reading as on the Gap card", () => {

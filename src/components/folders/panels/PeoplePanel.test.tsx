@@ -134,10 +134,19 @@ describe("PeoplePanel", () => {
   it("says so when there is no workload at all", async () => {
     getFolderWorkload.mockResolvedValue({ ok: true, data: [] });
     renderPanel();
+    // No stage filter: the sentence must not mention a stage.
+    expect(
+      await screen.findByText("No open items are assigned."),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByTestId("workload-bar")).toHaveLength(0);
+  });
+
+  it("scopes the empty state to the stage while one is selected", async () => {
+    getFolderWorkload.mockResolvedValue({ ok: true, data: [] });
+    renderPanel({ stage: "build" });
     expect(
       await screen.findByText("No open items are assigned in this stage."),
     ).toBeInTheDocument();
-    expect(screen.queryAllByTestId("workload-bar")).toHaveLength(0);
   });
 
   it("shows only Unassigned when nobody is assigned", async () => {

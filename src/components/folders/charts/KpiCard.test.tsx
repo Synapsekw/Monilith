@@ -49,4 +49,25 @@ describe("KpiCard", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
+
+  it("never truncates the change pill; the sparkline wraps below instead", () => {
+    render(
+      <KpiCard
+        label="Complete"
+        value="34%"
+        trend={{
+          points: [0, 34],
+          kind: "line",
+          color: "green",
+          label: "Complete, last 2 weeks",
+          change: { text: "+34 pts this week", color: "green" },
+        }}
+      />,
+    );
+    const pill = screen.getByText("+34 pts this week");
+    expect(pill).not.toHaveClass("truncate");
+    expect(pill).not.toHaveClass("max-w-full");
+    expect(pill).toHaveClass("shrink-0", "whitespace-nowrap");
+    expect(pill.parentElement).toHaveClass("flex-wrap");
+  });
 });

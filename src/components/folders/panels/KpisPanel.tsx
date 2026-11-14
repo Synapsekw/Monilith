@@ -182,13 +182,24 @@ export function KpisPanel({
           overdue: k.overdue,
           dueThisWeek: k.dueThisWeek,
         });
-  const live = cards.filter((key) => !IS_ZERO[key](k));
-  const quiet = cards.filter((key) => IS_ZERO[key](k));
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
+  const live = cards.filter((key) => !IS_ZERO[key](k));
+  // With no dated items the gap is undefined, and the "No due dates set" chip
+  // already says why, so no "Gap to plan —" chip beside it.
+  const quiet = cards.filter(
+    (key) => IS_ZERO[key](k) && !(key === "gap" && !anyDue),
+  );
   return (
     <div className="flex flex-col gap-3">
       {live.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        // auto-fit, not a fixed column count: empty tracks collapse, so 1 to
+        // 6 live cards always fill the row (a card that became a chip used
+        // to leave a hole in a 6-column grid), and narrow screens wrap at the
+        // 10rem minimum (two per row on a phone).
+        <div
+          data-testid="kpi-cards"
+          className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"
+        >
           {live.map((key) => (
             <Fragment key={key}>
               {CARD[key](k, trendProp(key, trends[key]))}

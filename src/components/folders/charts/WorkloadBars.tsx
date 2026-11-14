@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { STATUS_BG } from "@/components/ui/status-pill";
-import { cn } from "@/lib/utils";
 
 export type WorkloadPerson = {
   userId: string | null;
@@ -22,24 +21,39 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
+/**
+ * Open work per person. Bar length is open items scaled to the person with
+ * the most; inside it the late share is a red segment and the rest is the
+ * brand colour, so "how much" and "how much of it is late" read at once. Over
+ * `threshold` open items a person is flagged in words ("over 15"), not by
+ * painting the whole bar red. The "N late" figure repeats the red segment in
+ * text, so colour is never the only signal.
+ */
 export function WorkloadBars({
   people,
   threshold = OVERLOAD_THRESHOLD,
+  stage = null,
 }: {
   people: WorkloadPerson[];
   threshold?: number;
+  /** The active stage filter, for the empty state's wording only. */
+  stage?: string | null;
 }) {
   if (people.length === 0)
     return (
       <EmptyState variant="inline">
-        No open items are assigned in this stage.
+        {stage === null
+          ? "No open items are assigned."
+          : "No open items are assigned in this stage."}
       </EmptyState>
     );
-  const max = Math.max(threshold, ...people.map((p) => p.open));
+  const max = Math.max(1, ...people.map((p) => p.open));
   return (
     <ul className="flex flex-col gap-2">
       {people.map((p) => {
         const overloaded = p.open > threshold;
+        const latePct =
+          p.open === 0 ? 0 : (Math.min(p.overdue, p.open) / p.open) * 100;
         return (
           <li
             key={p.userId ?? "__unassigned"}
@@ -56,27 +70,35 @@ export function WorkloadBars({
               <div
                 data-testid="workload-bar"
                 data-overloaded={overloaded ? "true" : "false"}
-                className={cn(
-                  "h-full rounded-sm",
-                  overloaded ? STATUS_BG.red : STATUS_BG.blue,
-                )}
+                className="bg-primary flex h-full justify-end overflow-hidden rounded-sm"
                 style={{ width: `${(p.open / max) * 100}%` }}
-              />
-              <div
-                aria-hidden
-                className="bg-border-bright absolute inset-y-0 w-px"
-                style={{ left: `${(threshold / max) * 100}%` }}
-              />
+              >
+                {latePct > 0 ? (
+                  <div
+                    data-testid="workload-late"
+                    aria-hidden
+                    className={`h-full ${STATUS_BG.red}`}
+                    style={{ width: `${latePct}%` }}
+                  />
+                ) : null}
+              </div>
             </div>
             <span className="w-8 text-right font-mono tabular-nums">
               {p.open}
             </span>
             {p.overdue > 0 ? (
-              <span className="text-status-red text-2xs font-mono">
+              <span className="text-status-red text-2xs min-w-12 font-mono whitespace-nowrap">
                 {p.overdue} late
               </span>
             ) : (
-              <span className="w-10" />
+              <span className="min-w-12" />
+            )}
+            {overloaded ? (
+              <span className="text-muted-foreground text-2xs min-w-12 font-mono whitespace-nowrap">
+                over {threshold}
+              </span>
+            ) : (
+              <span className="min-w-12" />
             )}
           </li>
         );

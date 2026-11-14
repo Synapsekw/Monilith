@@ -56,8 +56,15 @@ export function KpiCard({
         <p className="text-muted-foreground text-xs">{subFact}</p>
       ) : null}
       {trend ? (
-        <div className="flex items-end justify-between gap-2">
-          <StatusPill color={trend.change.color} variant="soft">
+        // The pill states the change in words, so it must never be clipped
+        // ("+5 pts this wee"): it keeps its full width and, when the card is
+        // too narrow for both, the fixed-width sparkline wraps to a new line.
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <StatusPill
+            color={trend.change.color}
+            variant="soft"
+            className="max-w-none shrink-0 text-clip whitespace-nowrap"
+          >
             {trend.change.text}
           </StatusPill>
           <Sparkline

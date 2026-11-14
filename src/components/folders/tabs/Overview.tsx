@@ -242,7 +242,9 @@ export function OverviewTab({
                 return null;
             }
           })();
-          if (!editing) return node;
+          // An absent section (node null) stays absent in Customize mode too:
+          // no empty chrome box, and SectionGrid lets its neighbour fill the row.
+          if (!editing || node === null) return node;
           const index = sections.findIndex((x) => x.id === s.id);
           return (
             <SectionChrome
