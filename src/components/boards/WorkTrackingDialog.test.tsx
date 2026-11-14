@@ -208,4 +208,26 @@ describe("WorkTrackingDialog", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByLabelText("Status column")).toBeNull();
   });
+
+  it("cannot be closed while a save is pending", async () => {
+    const user = userEvent.setup();
+    let resolve!: (v: unknown) => void;
+    updateBoardWorkSettings.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const { onOpenChange } = setup();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    resolve({ ok: false, error: "late failure" });
+    expect(await screen.findByText("late failure")).toBeInTheDocument();
+    // Settled: closing works again.
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

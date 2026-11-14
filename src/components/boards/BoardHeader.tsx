@@ -135,7 +135,7 @@ export function BoardHeader({
   boardId: string;
   boardName: string;
   /** The board row from the shared cache; only its work-tracking settings are read. */
-  board?: Pick<
+  board: Pick<
     CacheBoard,
     "work_status_column_id" | "work_done_option_ids" | "work_due_column_id"
   >;
@@ -157,7 +157,7 @@ export function BoardHeader({
    *  all columns fit their content. Absent in the other views. */
   onFitAllColumns?: () => void;
 }) {
-  const { renameBoard } = useBoardMutations(boardId);
+  const { renameBoard, applyWorkSettings } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(boardName);
   const [isPending, startTransition] = useTransition();
@@ -166,19 +166,18 @@ export function BoardHeader({
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [workTrackingOpen, setWorkTrackingOpen] = useState(false);
-  // Values just saved from the dialog. The board cache is hydrated once and
-  // not refetched (gotcha-09), so the prop alone would go stale until reload.
-  const [savedWork, setSavedWork] = useState<WorkTrackingSettings | null>(null);
   const [seedDraft, setSeedDraft] = useState<Draft | undefined>();
   const automationsMounted = useEverOpened(automationsOpen);
   const shareMounted = useEverOpened(shareOpen);
   const importMounted = useEverOpened(importOpen);
   const trashMounted = useEverOpened(trashOpen);
   const workTrackingMounted = useEverOpened(workTrackingOpen);
-  const workSettings: WorkTrackingSettings = savedWork ?? {
-    statusColumnId: board?.work_status_column_id ?? null,
-    doneOptionIds: board?.work_done_option_ids ?? null,
-    dueColumnId: board?.work_due_column_id ?? null,
+  // Read straight from the shared board cache; a saved dialog patches it
+  // (applyWorkSettings), so every view's header and any collaborator change agree.
+  const workSettings: WorkTrackingSettings = {
+    statusColumnId: board.work_status_column_id,
+    doneOptionIds: board.work_done_option_ids,
+    dueColumnId: board.work_due_column_id,
   };
 
   // Board Intelligence (spec §2.3): "Always do this" hands the header a
@@ -401,7 +400,7 @@ export function BoardHeader({
             boardId={boardId}
             columns={columns}
             current={workSettings}
-            onSaved={setSavedWork}
+            onSaved={applyWorkSettings}
             open={workTrackingOpen}
             onOpenChange={setWorkTrackingOpen}
           />

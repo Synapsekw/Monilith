@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type TransitionStartFunction } from "react";
 
 import { updateBoardWorkSettings } from "@/lib/boards/actions/work-settings";
 import { Button } from "@/components/ui/button";
@@ -75,9 +75,18 @@ export function WorkTrackingDialog({
   /** Called with the values that were just saved, before the dialog closes. */
   onSaved?: (saved: WorkTrackingSettings) => void;
 }) {
+  const [isPending, startTransition] = useTransition();
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    // While a save is in flight, Escape / outside click / the close button must
+    // not dismiss the dialog, or a failure message would be dropped unseen.
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && isPending) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-md" showCloseButton={!isPending}>
         {/* Radix unmounts the content when closed, so the form re-seeds from
             `current` on every open and abandoned edits are discarded. */}
         <WorkTrackingForm
@@ -86,6 +95,8 @@ export function WorkTrackingDialog({
           current={current}
           onSaved={onSaved}
           onOpenChange={onOpenChange}
+          isPending={isPending}
+          startTransition={startTransition}
         />
       </DialogContent>
     </Dialog>
@@ -98,12 +109,17 @@ function WorkTrackingForm({
   current,
   onSaved,
   onOpenChange,
+  isPending,
+  startTransition,
 }: {
   boardId: string;
   columns: WorkTrackingColumn[];
   current: WorkTrackingSettings;
   onSaved?: (saved: WorkTrackingSettings) => void;
+  /** The unguarded close, used once a save has succeeded. */
   onOpenChange: (open: boolean) => void;
+  isPending: boolean;
+  startTransition: TransitionStartFunction;
 }) {
   const statusColumns = byPosition("status", columns);
   const dateColumns = byPosition("date", columns);
@@ -124,7 +140,6 @@ function WorkTrackingForm({
       : "",
   );
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   const chosenStatus = statusColumns.find((c) => c.id === statusId);
   const guessedStatus = statusColumns[0];
@@ -281,6 +296,7 @@ function WorkTrackingForm({
         <Button
           type="button"
           variant="outline"
+          disabled={isPending}
           onClick={() => onOpenChange(false)}
         >
           Cancel
