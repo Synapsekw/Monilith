@@ -86,6 +86,15 @@ export function buildFolderTimeline(
     ZOOM_DAY_COUNT[opts.zoom],
   );
 
+  // Bucket once: zoom / expand / collapse re-derive this on every toggle.
+  const byGroup = new Map<string, TimelineItem[]>();
+  for (const it of local) {
+    const k = `${it.board_id}:${it.group_id}`;
+    const list = byGroup.get(k);
+    if (list) list.push(it);
+    else byGroup.set(k, [it]);
+  }
+
   const rows: GanttRow[] = [];
   const boardOfItem = new Map<string, string>();
   const noDateBoards = new Set<string>();
@@ -93,6 +102,9 @@ export function buildFolderTimeline(
     if (opts.boardId && boardId !== opts.boardId) continue;
     const board = boards.get(boardId);
     if (!board) continue;
+    // Stage keys are group names. The synthetic ALL_ITEMS_KEY ("__all__")
+    // never matches a group, which is fine: the RPC inner-joins groups, so an
+    // ungrouped item never reaches this builder.
     const groups = board.groups
       .filter(
         (g) => opts.stageKey === null || stageKey(g.name) === opts.stageKey,
@@ -117,9 +129,7 @@ export function buildFolderTimeline(
     );
     let dated = false;
     for (const g of groups) {
-      const groupItems = local.filter(
-        (i) => i.board_id === boardId && i.group_id === g.id,
-      );
+      const groupItems = byGroup.get(`${boardId}:${g.id}`) ?? [];
       if (groupItems.length === 0) continue;
       // buildGanttRows reads id / name / parent_id / position (+ the
       // timestamps for synthetic sources) — all present on a TimelineItem.

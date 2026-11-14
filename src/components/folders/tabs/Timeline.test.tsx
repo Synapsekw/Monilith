@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { GanttCanvasProps } from "@/components/boards/gantt/GanttCanvas";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
@@ -207,7 +213,9 @@ describe("TimelineInner", () => {
     const client = renderTab();
     await screen.findByTestId("canvas");
     await act(async () => canvas().onMoveBar(I1, 2));
-    expect(m.toastError).toHaveBeenCalledWith("No access.");
+    expect(m.toastError).toHaveBeenCalledWith("No access.", {
+      id: `timeline-write:${I1}`,
+    });
     const cached = client.getQueryData<FolderTimelineData>([
       "folder-timeline",
       "f1",
@@ -259,5 +267,112 @@ describe("TimelineInner", () => {
     ]);
     canvas().onItemTap(I1, new DOMRect());
     expect(m.push).toHaveBeenCalledWith(`/boards/${A}?item=${I1}`);
+  });
+
+  it("offers no links and no edits on a board the viewer can only read", async () => {
+    const DB = "f0000000-0000-4000-8000-00000000000b";
+    const I3 = "44444444-4444-4444-8444-444444444444";
+    m.getFolderTimeline.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ...data,
+        boards: data.boards.map((b) =>
+          b.id === B ? { ...b, date_columns: [{ id: DB, name: "Due" }] } : b,
+        ),
+        items: [
+          ...data.items,
+          {
+            ...data.items[0]!,
+            id: I3,
+            board_id: B,
+            group_id: GB,
+            name: "Site survey",
+            dates: { [DB]: { date: "2026-11-05" } },
+          },
+        ],
+      },
+    });
+    renderTab();
+    expect(await screen.findByTestId("canvas")).toHaveTextContent(
+      "Site survey",
+    );
+    const row = canvas().rows.find((r) => r.itemId === I3)!;
+    expect(canvas().canEditItem(I3)).toBe(false);
+    expect(canvas().linkCandidates(row)).toEqual([]);
+    // The editable board still offers the read-only board's items as predecessors.
+    const editable = canvas().rows.find((r) => r.itemId === I1)!;
+    expect(
+      canvas()
+        .linkCandidates(editable)
+        .map((c) => c.itemId),
+    ).toContain(I3);
+  });
+
+  it("leaves existing predecessors out of the link picker", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ...data,
+        dependencies: [
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            predecessor_id: I2,
+            successor_id: I1,
+          },
+        ],
+      },
+    });
+    renderTab();
+    await screen.findByTestId("canvas");
+    const row = canvas().rows.find((r) => r.itemId === I1)!;
+    expect(canvas().linkCandidates(row)).toEqual([]);
+  });
+
+  it("resizes a bar through its board's date cell", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    m.upsertCell.mockResolvedValue({ ok: true, data: { cell: {} } });
+    renderTab();
+    await screen.findByTestId("canvas");
+    await act(async () => canvas().onResizeBar(I1, "2026-11-14"));
+    expect(m.upsertCell).toHaveBeenCalledWith({
+      itemId: I1,
+      columnId: DA,
+      value: { date: "2026-11-10", end: "2026-11-14" },
+    });
+  });
+
+  it("a failed write does not undo a newer drag of the same bar", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    let failFirst: (v: unknown) => void = () => {};
+    m.upsertCell
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            failFirst = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ ok: true, data: { cell: {} } });
+    const client = renderTab();
+    await screen.findByTestId("canvas");
+    await act(async () => canvas().onMoveBar(I1, 1));
+    // TanStack notifies observers on a later tick — let the patch render.
+    await waitFor(() =>
+      expect(canvas().rows.find((r) => r.itemId === I1)?.startISO).toBe(
+        "2026-11-11",
+      ),
+    );
+    await act(async () => canvas().onMoveBar(I1, 1));
+    await act(async () => failFirst({ ok: false, error: "No access." }));
+    const cached = client.getQueryData<FolderTimelineData>([
+      "folder-timeline",
+      "f1",
+    ]);
+    expect(cached?.items.find((i) => i.id === I1)?.dates[DA]).toEqual({
+      date: "2026-11-12",
+      end: "2026-11-12",
+    });
+    expect(m.toastError).toHaveBeenCalledWith("No access.", {
+      id: `timeline-write:${I1}`,
+    });
   });
 });

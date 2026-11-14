@@ -193,11 +193,18 @@ function FolderTimelineChart({
     },
     onError: (err, v, ctx) => {
       // Restore just this cell — a move writes two cells, and the other
-      // write may well have landed.
-      patchData(queryClient, folderId, (d) =>
-        setItemDate(d, v.itemId, v.columnId, ctx?.prev),
-      );
-      toast.error(err.message);
+      // write may well have landed. Only while the cell still holds THIS
+      // write's value: a later drag of the same bar owns it otherwise.
+      patchData(queryClient, folderId, (d) => {
+        const current = d.items.find((i) => i.id === v.itemId)?.dates[
+          v.columnId
+        ];
+        return JSON.stringify(current) === JSON.stringify(v.value)
+          ? setItemDate(d, v.itemId, v.columnId, ctx?.prev)
+          : d;
+      });
+      // A two-cell move fails twice for the same reason — one toast.
+      toast.error(err.message, { id: `timeline-write:${v.itemId}` });
     },
   });
   const setCell = useCallback(
@@ -291,9 +298,18 @@ function FolderTimelineChart({
   }
 
   function linkCandidates(row: { itemId: string }) {
+    // Drawing a link needs edit on the successor's board (the server checks
+    // the same). Synthetic-date boards still take links, so can_edit only.
+    if (!boards.get(view.boardOfItem.get(row.itemId) ?? "")?.can_edit)
+      return [];
+    const already = new Set(
+      data.dependencies
+        .filter((d) => d.successor_id === row.itemId)
+        .map((d) => d.predecessor_id),
+    );
     const out: { itemId: string; name: string }[] = [];
     for (const [itemId, boardId] of view.boardOfItem) {
-      if (itemId === row.itemId) continue;
+      if (itemId === row.itemId || already.has(itemId)) continue;
       out.push({
         itemId,
         name: `${rowName.get(itemId) ?? ""} · ${boards.get(boardId)?.name ?? ""}`,
