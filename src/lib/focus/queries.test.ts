@@ -191,6 +191,68 @@ describe("getFocusTodayCore", () => {
     });
   });
 
+  describe("totals when the limit cuts the list (deferred minor m1)", () => {
+    const row = (id: string, tier: number, total: number) => ({
+      ...ROW,
+      item_id: id,
+      tier,
+      tier_total: total,
+      waiting: [],
+      waiting_count: 0,
+    });
+
+    it("a full list reports tiers after the last returned tier as unknown", async () => {
+      const { supabase } = fixture([row("a", 1, 6), row("b", 2, 4)], null);
+      const res = await getFocusTodayCore(supabase, {
+        orgId: "o1",
+        userId: "u1",
+        limit: 2,
+        now: NOW,
+      });
+      expect(res.ok && res.data.totals).toEqual({
+        1: 6,
+        2: 4,
+        3: null,
+        4: null,
+        5: null,
+      });
+    });
+
+    it("tiers before the last returned one are truly empty, so 0", async () => {
+      const { supabase } = fixture([row("a", 3, 9), row("b", 3, 9)], null);
+      const res = await getFocusTodayCore(supabase, {
+        orgId: "o1",
+        userId: "u1",
+        limit: 2,
+        now: NOW,
+      });
+      expect(res.ok && res.data.totals).toEqual({
+        1: 0,
+        2: 0,
+        3: 9,
+        4: null,
+        5: null,
+      });
+    });
+
+    it("a list shorter than the limit is complete, so missing tiers are 0", async () => {
+      const { supabase } = fixture([row("a", 2, 1)], null);
+      const res = await getFocusTodayCore(supabase, {
+        orgId: "o1",
+        userId: "u1",
+        limit: 2,
+        now: NOW,
+      });
+      expect(res.ok && res.data.totals).toEqual({
+        1: 0,
+        2: 1,
+        3: 0,
+        4: 0,
+        5: 0,
+      });
+    });
+  });
+
   it("fails closed on a row that does not match the schema", async () => {
     const { supabase } = fixture([{ ...ROW, tier: 9 }], null);
     const res = await getFocusTodayCore(supabase, {

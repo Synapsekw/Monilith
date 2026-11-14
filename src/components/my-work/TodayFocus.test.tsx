@@ -108,6 +108,20 @@ describe("TodayFocus", () => {
     expect(within(counts).queryByText(/stalled/)).not.toBeInTheDocument();
   });
 
+  it("leaves out a tier whose total is unknown, never showing it as 0 (deferred minor m1)", () => {
+    render(
+      <TodayFocus
+        focus={focusOf(12, { totals: { 1: 3, 2: 0, 3: 9, 4: null, 5: null } })}
+        canAsk={false}
+        nextDue={null}
+      />,
+    );
+    const counts = screen.getByRole("list", { name: "Today by reason" });
+    expect(within(counts).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(counts).queryByText(/stalled/)).not.toBeInTheDocument();
+    expect(within(counts).queryByText("0")).not.toBeInTheDocument();
+  });
+
   it("shows the empty state with the next due item", () => {
     render(
       <TodayFocus

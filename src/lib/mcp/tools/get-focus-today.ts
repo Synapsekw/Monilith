@@ -41,6 +41,9 @@ export async function getFocusTodayHandler(
     return { content: [{ type: "text", text: res.error }], isError: true };
 
   const { today, timezoneAssumed, items, totals } = res.data;
+  const unknown = ([1, 2, 3, 4, 5] as const)
+    .filter((t) => totals[t] === null)
+    .map((t) => TIER_NAME[t]);
   const body = {
     today,
     ...(timezoneAssumed ? { timezoneAssumed: true } : {}),
@@ -62,6 +65,11 @@ export async function getFocusTodayHandler(
       waitingOnReply: totals[4],
       stalled: totals[5],
     },
+    ...(unknown.length > 0
+      ? {
+          totalsNote: `The list stopped at ${FOCUS_LIMIT} items, so the totals for ${unknown.join(" and ")} are unknown (null), not zero. Do not say those tiers are empty.`,
+        }
+      : {}),
     ...(items.length === 0
       ? {
           note: "Nothing urgent: no open item of theirs is overdue, blocking someone, due within two days, waiting on a reply or stalled. Use get_my_work for the full list.",
@@ -74,7 +82,7 @@ export async function getFocusTodayHandler(
 export const getFocusTodayDescriptor: ToolDescriptor = {
   name: "get_focus_today",
   title: "Get focus for today",
-  description: `What the connected user should work on first, already ranked: overdue, then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports 0). Pass folderId to limit it to one project. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
+  description: `What the connected user should work on first, already ranked: overdue, then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports null, meaning unknown, never 0). Pass folderId to limit it to one project. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
   inputSchema: {
     orgId: z.string().uuid().optional(),
     folderId: z.string().uuid().optional(),

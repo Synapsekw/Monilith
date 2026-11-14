@@ -57,7 +57,12 @@ export type FocusResult = {
   today: string;
   timezoneAssumed: boolean;
   items: FocusItem[];
-  totals: Record<FocusTier, number>;
+  /**
+   * How many items each tier holds. `null` = unknown: the list was cut by the
+   * limit before reaching that tier, so the SQL returned no row to carry its
+   * total. Never reported as 0, which would state a false fact.
+   */
+  totals: Record<FocusTier, number | null>;
 };
 
 const DAY_MS = 86_400_000;
@@ -83,6 +88,7 @@ export async function getFocusTodayCore(
     now?: number;
   },
 ): Promise<ActionResult<FocusResult>> {
+  const limit = args.limit ?? FOCUS_LIMIT;
   const { data: profile } = await supabase
     .from("profiles")
     .select("timezone")
@@ -98,7 +104,7 @@ export async function getFocusTodayCore(
     p_today: today,
     p_folder_id: args.folderId ?? null,
     p_stall_days: STALL_DAYS,
-    p_limit: args.limit ?? FOCUS_LIMIT,
+    p_limit: limit,
   });
   if (error) return fail(error.message);
 
@@ -114,7 +120,14 @@ export async function getFocusTodayCore(
     }
   }
 
-  const totals: Record<FocusTier, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  // Rows come in tier order, one tier per item. A tier before the last
+  // returned one with no rows is truly empty; one after it is empty only when
+  // the list is shorter than the limit, otherwise it was cut off: unknown.
+  const lastTier = parsed.data.at(-1)?.tier ?? 0;
+  const full = parsed.data.length >= limit;
+  const totals = Object.fromEntries(
+    ([1, 2, 3, 4, 5] as const).map((t) => [t, full && t > lastTier ? null : 0]),
+  ) as Record<FocusTier, number | null>;
   const items = parsed.data.map((r): FocusItem => {
     totals[r.tier] = r.tier_total;
     return {

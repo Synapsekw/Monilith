@@ -144,6 +144,30 @@ describe("getFocusTodayHandler", () => {
     });
   });
 
+  it("reports a tier cut off by the limit as unknown, never as 0 (deferred minor m1)", async () => {
+    getFocusTodayCore.mockResolvedValue({
+      ok: true,
+      data: {
+        today: "2026-11-14",
+        timezoneAssumed: false,
+        items: [],
+        totals: { 1: 6, 2: 0, 3: 14, 4: null, 5: null },
+      },
+    });
+    const body = JSON.parse(
+      (await getFocusTodayHandler(getClient, "u1", {})).content[0].text,
+    );
+    expect(body.totals).toEqual({
+      overdue: 6,
+      blocking: 0,
+      dueSoon: 14,
+      waitingOnReply: null,
+      stalled: null,
+    });
+    expect(body.totalsNote).toMatch(/waitingOnReply and stalled/);
+    expect(body.totalsNote).toMatch(/unknown/);
+  });
+
   it("says so when nothing is urgent", async () => {
     getFocusTodayCore.mockResolvedValue({
       ok: true,

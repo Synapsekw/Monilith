@@ -189,7 +189,9 @@ export function TodayFocus({
   const { items } = focus;
   const canExpand = items.length > COLLAPSED_ROWS;
   const visible = expanded ? items : items.slice(0, COLLAPSED_ROWS);
-  const tiers = TIER_ORDER.filter((t) => focus.totals[t] > 0);
+  // A null total is unknown (the list was cut off before that tier): leave it
+  // out rather than show a false 0.
+  const tiers = TIER_ORDER.filter((t) => (focus.totals[t] ?? 0) > 0);
 
   return (
     <section aria-labelledby="today-focus-h" className="px-6 pt-6">
