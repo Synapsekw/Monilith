@@ -392,19 +392,22 @@ describe.skipIf(!integrationTargetReady())(
         const { error } = await userA.anon.from("item_dependencies").insert({
           org_id: userB.orgId,
           board_id: userB.boardId,
+          predecessor_board_id: userB.boardId,
           predecessor_id: userB.itemId,
           successor_id: userB.itemId,
         });
         expect(error).not.toBeNull();
       });
 
-      it("create_item_dependency with items from two different boards raises a same-board error", async () => {
+      it("create_item_dependency links items on two boards of the same org", async () => {
         // itemA1 is on userA.boardId; itemA3OnBoard2 is on a second board in the same org.
-        const { error } = await userA.anon.rpc("create_item_dependency", {
+        // Cross-board links are allowed (20261113190536_cross_board_dependencies).
+        const { data, error } = await userA.anon.rpc("create_item_dependency", {
           p_predecessor: itemA1,
           p_successor: itemA3OnBoard2,
         });
-        expect(error).not.toBeNull();
+        expect(error).toBeNull();
+        expect(data).toMatchObject({ predecessor_board_id: userA.boardId });
       });
     });
 

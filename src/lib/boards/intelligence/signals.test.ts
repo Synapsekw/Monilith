@@ -108,6 +108,7 @@ export function dep(
   return {
     id: `${predecessor_id}->${successor_id}`,
     board_id: "b1",
+    predecessor_board_id: "b1",
     org_id: "o1",
     predecessor_id,
     successor_id,

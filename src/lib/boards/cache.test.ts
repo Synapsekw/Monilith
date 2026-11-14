@@ -310,6 +310,7 @@ const dep1: CacheDependency = {
   id: "dep1",
   org_id: "o1",
   board_id: "b1",
+  predecessor_board_id: "b1",
   predecessor_id: "i1",
   successor_id: "i2",
   type: "FS",
