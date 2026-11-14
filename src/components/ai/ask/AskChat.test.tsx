@@ -149,6 +149,37 @@ function ask(question = "what's overdue?") {
 }
 
 describe("AskChat", () => {
+  it("sends the autoSend message once on a new chat, without any typing", async () => {
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "What should I focus on today?",
+      }),
+    );
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("never auto-sends into an existing conversation", async () => {
+    render(
+      <AskChat
+        conversationId="c9"
+        initialMessages={[USER_ROW, ANSWER_ROW]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await Promise.resolve();
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("sends a first message, streams the answer, and persists both turns", async () => {
     const pushState = vi.spyOn(window.history, "pushState");
     render(<AskChat conversationId={null} initialMessages={[]} />);

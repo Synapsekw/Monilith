@@ -7,6 +7,8 @@ import { getUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { todayInTimeZone } from "@/lib/focus/today";
+import { getFocusTodayCore, type FocusResult } from "@/lib/focus/queries";
+import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   bucketMyWork,
   type MyWorkGroup,
@@ -73,18 +75,52 @@ export async function getMyWorkItems(): Promise<MyWorkItem[]> {
 }
 
 /**
- * Page-level read: the assigned items, bucketed by due date, plus the member's
- * own "today" (their profile time zone, UTC when unset) which the UI uses to
- * tint overdue rows. The clock and the bucketing live here (a server module)
- * so the RSC page stays a pure render.
+ * Whether the member's org may use the assistant. The entitlement check only
+ * has a throwing form (it is the route's gate), so a throw reads as "no" — the
+ * button simply is not offered, and the page never fails over it.
+ */
+async function aiAvailable(orgId: string): Promise<boolean> {
+  try {
+    await requireAiEntitlement(orgId, "ask_pulse");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Page-level read: the ranked Today list, the assigned items bucketed by due
+ * date, and whether to offer "Ask about my day". `today` is the member's own
+ * calendar day (profile time zone, UTC when unset) which the list uses to tint
+ * overdue rows. The clock and the bucketing live here (a server module) so
+ * the RSC page stays a pure render.
+ *
+ * One round of parallel reads on first paint: the list, the focus query and
+ * the entitlement do not wait on each other. A failed focus read degrades to
+ * `focus: null` (the block says so) and never takes the list down with it.
  */
 export async function getMyWorkPageData(): Promise<{
   today: string;
   groups: MyWorkGroup[];
+  focus: FocusResult | null;
+  canAsk: boolean;
 }> {
   const user = await getUser();
+  const org = user ? await resolveActiveOrg() : null;
   const tz = user ? await getUserTimeZoneCached(user.id) : null;
   const { today } = todayInTimeZone(tz, Date.now());
-  const items = await getMyWorkItems();
-  return { today, groups: bucketMyWork(items, today) };
+  if (!user || !org) return { today, groups: [], focus: null, canAsk: false };
+
+  const supabase = await createClient();
+  const [list, focus, canAsk] = await Promise.all([
+    getMyWorkItemsCore(supabase, { orgId: org.id }),
+    getFocusTodayCore(supabase, { orgId: org.id, userId: user.id }),
+    aiAvailable(org.id),
+  ]);
+  return {
+    today,
+    groups: bucketMyWork(list.ok ? list.items : [], today),
+    focus: focus.ok ? focus.data : null,
+    canAsk,
+  };
 }

@@ -1,13 +1,26 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getUser, resolveActiveOrg, getUserTimeZoneCached, rpc } = vi.hoisted(
-  () => ({
-    getUser: vi.fn(),
-    resolveActiveOrg: vi.fn(),
-    getUserTimeZoneCached: vi.fn(),
-    rpc: vi.fn(),
-  }),
-);
+const {
+  getUser,
+  resolveActiveOrg,
+  getUserTimeZoneCached,
+  rpc,
+  getFocusTodayCore,
+  requireAiEntitlement,
+} = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  resolveActiveOrg: vi.fn(),
+  getUserTimeZoneCached: vi.fn(),
+  rpc: vi.fn(),
+  getFocusTodayCore: vi.fn(),
+  requireAiEntitlement: vi.fn(),
+}));
+vi.mock("@/lib/focus/queries", () => ({
+  getFocusTodayCore: (...a: unknown[]) => getFocusTodayCore(...a),
+}));
+vi.mock("@/lib/ai/entitlement", () => ({
+  requireAiEntitlement: (...a: unknown[]) => requireAiEntitlement(...a),
+}));
 vi.mock("@/lib/auth/session", () => ({ getUser: () => getUser() }));
 vi.mock("@/lib/org/active", () => ({
   resolveActiveOrg: () => resolveActiveOrg(),
@@ -18,6 +31,15 @@ vi.mock("@/lib/profile/queries-cached", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc }),
 }));
+
+// Unless a test arranges otherwise, focus and the entitlement are inert, so the
+// pre-existing page tests keep exercising the list alone.
+beforeEach(() => {
+  getFocusTodayCore.mockReset();
+  getFocusTodayCore.mockResolvedValue({ ok: false, error: "unarranged" });
+  requireAiEntitlement.mockReset();
+  requireAiEntitlement.mockResolvedValue(undefined);
+});
 
 import {
   getMyWorkItems,
@@ -202,5 +224,72 @@ describe("getMyWorkPageData", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("getMyWorkPageData focus and ask", () => {
+  const FOCUS = {
+    today: "2026-11-14",
+    timezoneAssumed: false,
+    items: [],
+    totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+  };
+
+  function arrange() {
+    rpc.mockReset();
+    getFocusTodayCore.mockReset();
+    requireAiEntitlement.mockReset();
+    getUser.mockResolvedValue({ id: "u1" });
+    resolveActiveOrg.mockResolvedValue({ id: "o1" });
+    getUserTimeZoneCached.mockResolvedValue("UTC");
+    serveRows([ROW]);
+    requireAiEntitlement.mockResolvedValue(undefined);
+  }
+
+  it("returns the focus result and asks it for this org and user", async () => {
+    arrange();
+    getFocusTodayCore.mockResolvedValue({ ok: true, data: FOCUS });
+    const page = await getMyWorkPageData();
+    expect(page.focus).toBe(FOCUS);
+    expect(getFocusTodayCore).toHaveBeenCalledTimes(1);
+    expect(getFocusTodayCore.mock.calls[0][1]).toEqual({
+      orgId: "o1",
+      userId: "u1",
+    });
+  });
+
+  it("returns focus null when the focus read fails but still returns the list", async () => {
+    arrange();
+    getFocusTodayCore.mockResolvedValue({ ok: false, error: "boom" });
+    const page = await getMyWorkPageData();
+    expect(page.focus).toBeNull();
+    expect(page.groups.flatMap((g) => g.items.map((i) => i.itemId))).toEqual([
+      "i1",
+    ]);
+  });
+
+  it("canAsk is true when the entitlement check passes, for the ask_pulse feature", async () => {
+    arrange();
+    getFocusTodayCore.mockResolvedValue({ ok: true, data: FOCUS });
+    expect((await getMyWorkPageData()).canAsk).toBe(true);
+    expect(requireAiEntitlement).toHaveBeenCalledWith("o1", "ask_pulse");
+  });
+
+  it("canAsk is false when the entitlement check throws, and the page still renders", async () => {
+    arrange();
+    getFocusTodayCore.mockResolvedValue({ ok: true, data: FOCUS });
+    requireAiEntitlement.mockRejectedValue(new Error("disabled"));
+    const page = await getMyWorkPageData();
+    expect(page.canAsk).toBe(false);
+    expect(page.focus).toBe(FOCUS);
+  });
+
+  it("makes no focus or entitlement call for a logged-out caller", async () => {
+    arrange();
+    getUser.mockResolvedValue(null);
+    const page = await getMyWorkPageData();
+    expect(page).toMatchObject({ groups: [], focus: null, canAsk: false });
+    expect(getFocusTodayCore).not.toHaveBeenCalled();
+    expect(requireAiEntitlement).not.toHaveBeenCalled();
   });
 });
