@@ -14,6 +14,7 @@ describe("listBoardsHandler", () => {
                     id: "b1",
                     name: "Roadmap",
                     org_id: "o1",
+                    workspace_id: "w1",
                     organizations: { name: "Acme" },
                   },
                 ],
@@ -27,7 +28,13 @@ describe("listBoardsHandler", () => {
     expect(result.content[0].type).toBe("text");
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed).toEqual([
-      { id: "b1", name: "Roadmap", orgId: "o1", orgName: "Acme" },
+      {
+        id: "b1",
+        name: "Roadmap",
+        orgId: "o1",
+        orgName: "Acme",
+        workspaceId: "w1",
+      },
     ]);
   });
 });

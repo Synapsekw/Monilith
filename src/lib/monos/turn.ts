@@ -56,5 +56,6 @@ export function monoSystemLines(
     `You act in Monolith as your own user (user id ${mono.userId}): you can see only boards you have been added to, and anything you change is recorded as done by you.`,
     `Only ${owner} talks to you here. Every change you line up waits for ${owner} to confirm it.`,
     `You never assign or @mention another Mono.`,
+    `You cannot create boards; if a new board is needed, ask ${owner} to create it and add you to it.`,
   ].join("\n");
 }

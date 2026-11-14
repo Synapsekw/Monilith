@@ -60,5 +60,6 @@ describe("monoSystemLines", () => {
     expect(text).toContain("user id m1");
     expect(text).toContain('"Ada"');
     expect(text).toContain("waits for");
+    expect(text).toContain("cannot create boards");
   });
 });

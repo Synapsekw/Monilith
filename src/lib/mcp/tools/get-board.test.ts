@@ -11,7 +11,7 @@ describe("getBoardHandler", () => {
               return {
                 maybeSingle: () =>
                   Promise.resolve({
-                    data: { id: "b1", name: "Roadmap" },
+                    data: { id: "b1", name: "Roadmap", workspace_id: "w1" },
                     error: null,
                   }),
               };
@@ -54,6 +54,7 @@ describe("getBoardHandler", () => {
     });
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed.board.id).toBe("b1");
+    expect(parsed.board.workspaceId).toBe("w1");
     expect(parsed.columns).toEqual([
       {
         id: "c1",
