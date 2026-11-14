@@ -1005,6 +1005,10 @@ describe.each(LIGHT_SELECTORS)("bold frame chrome text — %s", (selector) => {
     (stop) => {
       const destructive = hex(declaration(CHROME_SCOPE, "--destructive"));
       for (const [where, ground] of chromeGrounds(selector, stop)) {
+        // White body text. The same number covers the white focus ring
+        // (`ring-ring`) and the active indicator, which are non-text marks
+        // with a 3:1 floor — AA is the stricter bound, so they have no case
+        // of their own.
         expect(contrast(WHITE, ground), where).toBeGreaterThanOrEqual(AA);
         for (const token of ["--muted-foreground", "--kicker"]) {
           expect(
@@ -1054,11 +1058,52 @@ describe.each(LIGHT_SELECTORS)("bold frame chrome text — %s", (selector) => {
   );
 
   it.each(washStops(selector))(
-    "the white focus ring and active indicator are ≥ 3:1 marks on %s",
+    "muted and kicker text clear AA on the resting chrome fill on %s",
     (stop) => {
+      // The ⌘K kbd and the org kicker in the context-switcher chip: secondary
+      // text ON `bg-chrome-fill`, not on the bare frame. Both the text and the
+      // fill are white alphas, so the fill eats the text's headroom twice.
+      // scripts/theme/gen-presets.mjs solves against the same case
+      // (CHROME_FILL_ALPHA), so a wash can never be generated that fails it.
       for (const [where, ground] of chromeGrounds(selector, stop)) {
-        expect(contrast(WHITE, ground), where).toBeGreaterThanOrEqual(3);
+        const fill = white("--chrome-fill", ground);
+        for (const token of ["--muted-foreground", "--kicker"]) {
+          expect(
+            contrast(white(token, fill), fill),
+            `${token} on the chrome fill, ${where}`,
+          ).toBeGreaterThanOrEqual(AA);
+        }
       }
+    },
+  );
+
+  it.each(washStops(selector))(
+    "the lit seam is a ≥ 3:1 line on %s, with a haze of the same white",
+    (stop) => {
+      // The card seam (`.seam-line`) carries the scope: it strokes
+      // --border-bright at rest and --foreground when lit, and blooms with
+      // --seam-glow. The lit line is a non-text mark against the frame it
+      // runs beside.
+      const seam = CSS.slice(CSS.indexOf("\n  .seam-line {"));
+      expect(seam.slice(0, seam.indexOf("\n  }"))).toMatch(
+        /\n {4}stroke: var\(--border-bright\);/,
+      );
+      const lit = seam.slice(seam.indexOf(".seam-line {", 20));
+      expect(lit.slice(0, lit.indexOf("\n  }"))).toMatch(
+        /\n {4}stroke: var\(--foreground\);[\s\S]*filter: drop-shadow\(var\(--seam-glow\)\);/,
+      );
+      const line = hex(declaration(CHROME_SCOPE, "--foreground"));
+      for (const [where, ground] of chromeGrounds(selector, stop)) {
+        expect(contrast(line, ground), where).toBeGreaterThanOrEqual(3);
+      }
+      // The glow is re-derived inside the scope, from the scope's own
+      // foreground: `:root` resolved it on <html>, where it is ink.
+      expect(declaration(CHROME_SCOPE, "--seam-glow")).toBe(
+        declaration(":root", "--seam-glow"),
+      );
+      expect(declaration(":root", "--seam-glow")).toBe(
+        "0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent)",
+      );
     },
   );
 
@@ -1099,6 +1144,33 @@ describe.each(LIGHT_SELECTORS)("bold frame chrome text — %s", (selector) => {
     ).toBeGreaterThanOrEqual(AA);
   });
 
+  it.each(washStops(selector))(
+    "a HOVERED primary button on the frame keeps an AA label on %s",
+    (stop) => {
+      // `hover:bg-brand-gradient-hover` paints --brand-gradient-hover. At the
+      // root that is the brand stops at 80% alpha over nothing; left to
+      // derive from the scope's white brand it was white at 80%, the frame
+      // showed through and the brand label measured about 3.1:1. The scope
+      // re-seeds the image instead. Every stop of it is composited on every
+      // ground the button can sit on, under the label it carries there.
+      const label = hex(declaration(selector, "--brand"));
+      const stops = [
+        ...declaration(CHROME_SCOPE, "--brand-gradient-hover").matchAll(
+          /#ffffff|rgb\(255 255 255 \/ (\d+(?:\.\d+)?)%\)/g,
+        ),
+      ].map((m) => (m[1] === undefined ? 1 : Number(m[1]) / 100));
+      expect(stops.length).toBeGreaterThanOrEqual(2);
+      for (const [where, ground] of chromeGrounds(selector, stop)) {
+        for (const alpha of stops) {
+          expect(
+            contrast(label, over(WHITE, alpha, ground)),
+            `white ${alpha * 100}% ${where}`,
+          ).toBeGreaterThanOrEqual(AA);
+        }
+      }
+    },
+  );
+
   it("every wash stop is darker than the brand, so the frame reads as a frame", () => {
     for (const stop of washStops(selector)) {
       expect(luminance(hex(stop)), stop).toBeLessThanOrEqual(
@@ -1114,13 +1186,18 @@ describe("chrome scope", () => {
     [...blockOf(selector).matchAll(/^\s{2}(--[a-z0-9-]+):/gm)].map((m) => m[1]);
 
   it("is light-only: every rule that names the scope or the reset starts with :root:not(.dark)", () => {
-    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => /\.chrome-(scope|reset)/.test(line));
+    const [screen, print, ...more] = CSS.replace(/\/\*[\s\S]*?\*\//g, "").split(
+      "@media print",
+    );
+    expect(more).toEqual([]);
+    const rulesIn = (css: string) =>
+      css
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /\.chrome-(scope|reset)/.test(line));
     // The two token blocks, and the two selectors of the base-layer `color`
     // rule.
-    expect(rules.sort()).toEqual(
+    expect(rulesIn(screen).sort()).toEqual(
       [
         `${CHROME_SCOPE} {`,
         `${CHROME_RESET} {`,
@@ -1128,6 +1205,10 @@ describe("chrome scope", () => {
         `${CHROME_RESET} {`,
       ].sort(),
     );
+    // …and exactly one more, in print: the scope handing its tokens back so
+    // the chrome prints dark-on-paper (print-styles.test.ts pins its body).
+    // It is light-only like the rest.
+    expect(rulesIn(print)).toEqual([`${CHROME_SCOPE} {`]);
   });
 
   it("the reset restores every token the scope moves, in the same order", () => {
@@ -1205,13 +1286,26 @@ describe.each([...LIGHT_SELECTORS, ...DARK_SELECTORS])(
       expect(
         contrast(
           hex(declaration(selector, "--brand-foreground")),
-          mixSrgb(
-            hex(declaration(selector, "--brand")),
-            hex(declaration(selector, "--brand-2")),
-            50,
-          ),
+          // The block's own --brand-mid where it declares one (Prism bends
+          // the gradient through a third hue); the even mix otherwise.
+          bloomColours(selector)[2],
         ),
       ).toBeGreaterThanOrEqual(AA);
+    });
+
+    it("the middle stop under test is the block's own --brand-mid when it declares one", () => {
+      const mid = bloomColours(selector)[2];
+      const even = mixSrgb(
+        hex(declaration(selector, "--brand")),
+        hex(declaration(selector, "--brand-2")),
+        50,
+      );
+      if (declares(selector, "--brand-mid") && selector !== ":root") {
+        expect(mid).toEqual(hex(declaration(selector, "--brand-mid")));
+        expect(mid).not.toEqual(even);
+      } else {
+        expect(mid).toEqual(even);
+      }
     });
 
     // Progress fills and the sidebar indicator are non-text marks, and their

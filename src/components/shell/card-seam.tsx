@@ -78,8 +78,12 @@ export function CardSeam({
       ref={ref}
       data-seam={side}
       // `rounded-xl` declares the card's radius; nothing here is painted.
+      // `chrome-scope`: the seam lies over the card's outline but lights
+      // against the frame beside it, so in light mode its stroke and bloom
+      // take the frame's white values rather than the root's ink (inert in
+      // dark). The opaque cap hands them back with `chrome-reset`.
       className={cn(
-        "seam pointer-events-none absolute inset-0 z-10 rounded-xl",
+        "seam chrome-scope pointer-events-none absolute inset-0 z-10 rounded-xl",
         className,
       )}
     >
@@ -149,7 +153,9 @@ export function seamHitClasses(side: SeamSide): string {
 export const SEAM_CAP =
   // Opaque, and centred ON the line: the nub breaks the lit seam where the
   // control is, rather than letting the stroke run through the glyph.
-  "seam-cap bg-surface text-muted-foreground absolute top-1/2 left-1/2 flex h-11 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border pointer-coarse:w-7 " +
+  // `chrome-reset`: an opaque pill inside the seam's chrome scope — its glyph,
+  // hairline and focus ring stay the root's dark-on-light values.
+  "seam-cap chrome-reset bg-surface text-muted-foreground absolute top-1/2 left-1/2 flex h-11 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border pointer-coarse:w-7 " +
   // Lit on approach: the hit strip's hover/focus, or the nub's own focus (the
   // dock's nub is the focusable button itself).
   "group-hover/hit:border-border-bright group-hover/hit:text-foreground group-hover/hit:h-13 " +

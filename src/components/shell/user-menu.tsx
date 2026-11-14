@@ -38,8 +38,12 @@ export function UserMenu({ user }: { user: AppShellUser }) {
         <Avatar className="size-8 border-0">
           {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
           {/* `chrome-reset`: an opaque surface inside the header's chrome
-              scope — without it the initial is white on a white disc. */}
-          <AvatarFallback className="chrome-reset hover:bg-state-hover text-sm font-medium">
+              scope — without it the initial is white on a white disc.
+              The translucent hover is `dark:` only: inside the reset a hover
+              fill is the root's black 4%, which would swap the opaque disc
+              for a see-through one and leave a dark initial on the coloured
+              frame. In light the trigger's brightening hairline is the hover. */}
+          <AvatarFallback className="chrome-reset dark:hover:bg-state-hover text-sm font-medium">
             {initialFor(user)}
           </AvatarFallback>
         </Avatar>

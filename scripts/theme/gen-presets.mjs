@@ -67,11 +67,16 @@ const overHex = (fg, alpha, bg) =>
     .join("");
 
 /** Must equal the values in globals.css — `--muted-foreground`,
- *  `--state-selected` and `--destructive` in `:root:not(.dark) .chrome-scope`,
- *  and the light `--app-bloom` in `:root`. scripts/theme/gen-presets.test.mjs
- *  reads the stylesheet and fails when either side moves alone. */
+ *  `--state-selected`, `--chrome-fill` and `--destructive` in
+ *  `:root:not(.dark) .chrome-scope`, and the light `--app-bloom` in `:root`.
+ *  scripts/theme/gen-presets.test.mjs reads the stylesheet and fails when
+ *  either side moves alone. */
 export const CHROME_MUTED_ALPHA = 0.9;
 export const CHROME_SELECTED_ALPHA = 0.16;
+/** The resting fill of chips and the ⌘K kbd, which carry muted text. Kept
+ *  low enough that this case never binds on a shipped wash: a wash must not
+ *  get darker to pay for a fill — lower the fill instead. */
+export const CHROME_FILL_ALPHA = 0.09;
 export const CHROME_DESTRUCTIVE = "#ffd5cf";
 export const LIGHT_BLOOM = {
   /** Share of the accent in each radial's colour; the rest is white. */
@@ -170,18 +175,37 @@ export function groundsOf(stop, accents) {
 }
 
 /**
- * The tightest chrome text contrast on a wash stop, over every ground it can
- * become. Three checks can bind, and each is one the test asserts: white
- * muted text on the ground, the scope's pale error red on the ground, and
- * white body text on a selected row (the strongest fill a row takes).
+ * The chrome text contrasts on ONE ground, by name. Four checks can bind,
+ * and each is one globals.contrast.test.ts asserts: white muted text on the
+ * ground, the scope's pale error red on the ground, white body text on a
+ * selected row (the strongest fill a row takes), and muted text on the
+ * resting chrome fill (the ⌘K kbd, the chip's org kicker).
+ */
+export function chromeContrasts(ground) {
+  const fill = overHex("#ffffff", CHROME_FILL_ALPHA, ground);
+  return {
+    muted: contrastHex(overHex("#ffffff", CHROME_MUTED_ALPHA, ground), ground),
+    destructive: contrastHex(CHROME_DESTRUCTIVE, ground),
+    selected: contrastHex(
+      "#ffffff",
+      overHex("#ffffff", CHROME_SELECTED_ALPHA, ground),
+    ),
+    mutedOnFill: contrastHex(
+      overHex("#ffffff", CHROME_MUTED_ALPHA, fill),
+      fill,
+    ),
+  };
+}
+
+/**
+ * The tightest chrome text contrast on a wash stop: the smallest of
+ * `chromeContrasts` over every ground the stop can become.
  */
 export function worstChromeContrast(stop, accents) {
   return Math.min(
-    ...groundsOf(stop, accents).flatMap((ground) => [
-      contrastHex(overHex("#ffffff", CHROME_MUTED_ALPHA, ground), ground),
-      contrastHex(CHROME_DESTRUCTIVE, ground),
-      contrastHex("#ffffff", overHex("#ffffff", CHROME_SELECTED_ALPHA, ground)),
-    ]),
+    ...groundsOf(stop, accents).flatMap((ground) =>
+      Object.values(chromeContrasts(ground)),
+    ),
   );
 }
 

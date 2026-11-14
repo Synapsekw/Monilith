@@ -10,9 +10,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // The fill is --brand-gradient: flat --brand in a single-accent preset,
-        // brand -> brand-2 in aurora / sunset / nebula. It is a background-IMAGE,
-        // so the hover is its own image (the same stops at 80% alpha) rather
-        // than `hover:bg-primary/80`, which the image would paint over.
+        // brand -> brand-2 in a two-accent one. It is a background-IMAGE,
+        // so the hover is its own image (--brand-gradient-hover: the same stops
+        // at 80% alpha) rather than `hover:bg-primary/80`, which the image
+        // would paint over. On the light frame the chrome scope re-seeds that
+        // token to opaque white — see `.chrome-scope` in globals.css.
         default:
           "bg-brand-gradient text-primary-foreground hover:bg-brand-gradient-hover",
         outline:

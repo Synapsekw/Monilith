@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_THEME_PRESET,
   DEFAULT_THEME_REACH,
-  isThemePresetId,
   THEME_PRESET_ATTR,
   THEME_PRESET_STORAGE_KEY,
   THEME_REACH_ATTR,
@@ -90,13 +89,18 @@ describe("no-flash inline script: preset and reach together", () => {
   });
 
   it("resolves a removed preset id through the alias map before the whitelist", () => {
-    // `ocean` shipped once; its replacement only becomes a real id later, and
-    // until then the stored value must stamp nothing rather than a dead id.
-    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "ocean");
-    run();
-    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe(
-      isThemePresetId("lagoon") ? "lagoon" : null,
-    );
+    // Literal on purpose: the four removed ids and what each one stamps now.
+    for (const [stored, stamped] of [
+      ["ocean", "lagoon"],
+      ["forest", "tropic"],
+      ["ember", "peach"],
+      ["rose", "orchid"],
+    ]) {
+      root.removeAttribute(THEME_PRESET_ATTR);
+      localStorage.setItem(THEME_PRESET_STORAGE_KEY, stored);
+      run();
+      expect(root.getAttribute(THEME_PRESET_ATTR), stored).toBe(stamped);
+    }
   });
 
   it("the alias map applies to the preset only, never to the reach", () => {

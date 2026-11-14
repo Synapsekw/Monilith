@@ -99,7 +99,9 @@ tokens and every preset works for free.
 `scripts/theme/gen-presets.mjs`, run `node scripts/theme/gen-presets.mjs presets`, and paste
 its output into `globals.css` (both blocks) and `presets.ts` (the `THEME_PRESETS` entry). The
 script solves each light wash stop to be as light as it can be while white chrome text still
-clears AA under the preset's own bloom, keeps every bloom radial visible on every stop
+clears AA under the preset's own bloom (including muted text on the resting `bg-chrome-fill`
+of a chip or kbd — never darken a wash to pay for a fill; lower the fill's alpha in the scope
+and `CHROME_FILL_ALPHA` together), keeps every bloom radial visible on every stop
 (≥ 1.12:1), makes the three stops descend in lightness, and pulls dark amber wash hues to burnt
 orange so they do not go brown. `scripts/theme/gen-presets.test.mjs` fails when the shipped CSS
 or registry stops reproducing from the script, `presets.test.ts` enforces the exact token set,
@@ -125,6 +127,13 @@ re-seeds `--brand-gradient` to white there. The components did not change — th
 `bg-brand-gradient`. The wash itself is built from the seeds by the generator, not from the
 utility, so it is not a fifth use.
 
+The primary button's hover image is a token too: `--brand-gradient-hover`, derived once in
+`:root` (the three stops at 80% alpha). The chrome scope re-seeds it to **opaque white**, so a
+primary button on the light frame does **not** change its fill on hover. That is deliberate:
+the label there is the preset's brand, tuned to about 4.5:1 on pure white, so any translucent
+step lets the frame through and fails the label (80% measured 3.1:1; even 99% fails in
+Keystone). Never give a button on the frame a translucent white hover.
+
 ## Chrome scope
 
 The light wash is saturated and mid-tone, so the ordinary dark-on-light tokens are unreadable
@@ -132,7 +141,9 @@ on it. Two classes in `globals.css` (the "Bold frame" section) fix that without 
 reading a chrome value:
 
 - **`chrome-scope`** goes on every element painted **directly on the wash**: today the sidebar
-  rail, the shell header band, the board dock, and the rail and header in `ask/layout.tsx`.
+  rail, the shell header band, the board dock, the rail and header in `ask/layout.tsx`, and
+  the card seam (`CardSeam` — it lies over the card's outline but lights against the frame,
+  so its lit line and haze are white in light mode; its opaque cap carries `chrome-reset`).
   Inside it the generic tokens are re-seeded — text, borders, ring, hover/selected fills and
   "the brand" all become white (muted text is white at 90%, the destructive red becomes a pale
   red). Everything inside keeps using `text-foreground`, `text-muted-foreground`,
@@ -155,9 +166,26 @@ Rules:
 - Anything portalled to `<body>` — menus, popovers, dialogs, tooltips, the mobile drawer — is
   **outside** the scope and keeps the normal tokens, even when its trigger is in the sidebar.
 - The scope's `color` lives in `@layer base`, so a text utility on the same element still wins.
+- **A translucent hover on a `chrome-reset` surface must be `dark:`-prefixed** (or absent).
+  Inside the reset `hover:bg-state-hover` is the root's black 4%, which replaces the opaque
+  fill and leaves dark content on the coloured frame (the avatar fallback did this).
+- **A tint tile on a chrome fill does not work on the frame**: `bg-primary/[0.18] text-primary`
+  on `bg-chrome-fill` is a white glyph on stacked white alphas (3.5–4.2:1). Use a solid
+  `bg-primary text-primary-foreground` in light and keep the tint behind `dark:`.
+- Secondary text may sit on `bg-chrome-fill` (9% white in the scope): muted and kicker text on
+  it are asserted ≥ 4.5 for every preset. Do not stack a second white fill under text.
+- Loading blocks inside a scope use `<Skeleton variant="chrome">`, never the opaque default.
+- **Print:** in `@media print` the scope hands every token back to its `--base-*` value and
+  the light wash is dropped, so the chrome prints dark-on-paper. A token added to the scope
+  goes in **three** lists: the scope, the reset, and the print fallback (plus its `--base-*`
+  alias). `globals.contrast.test.ts` and `print-styles.test.ts` check they agree.
 - Known limitation: secondary (muted) text inside a **selected** sidebar row in light mode is
   about 4.07:1 at worst, under AA, and no test asserts it. Do not add more muted text to
   selected rows on the frame without fixing that first.
+- Known limitation, open: a **Mono's name tint** mixes the Mono's colour towards the scope's
+  white foreground, so on the light frame the seven default palette colours measure about
+  3.3–5.0:1 at worst (four of them under 4.5) and a dark custom colour can be far lower. Not
+  fixed, and no test asserts it.
 
 ## Theme reach
 

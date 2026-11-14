@@ -5,10 +5,13 @@ import {
   BASE_WASHES,
   BLOOM_VISIBLE,
   CHROME_DESTRUCTIVE,
+  CHROME_FILL_ALPHA,
   CHROME_MUTED_ALPHA,
   CHROME_SELECTED_ALPHA,
   LIGHT_BLOOM,
+  chromeContrasts,
   contrastHex,
+  groundsOf,
   oklchToHex,
   MIN_STEPS,
   NEW_PRESETS,
@@ -29,7 +32,7 @@ import { THEME_PRESET_IDS, THEME_PRESETS } from "../../src/lib/theme/presets";
 
 /**
  * The generator restates three things the stylesheet owns — the chrome
- * scope's muted and selected alphas and the light bloom — because it has to
+ * scope's muted, selected and resting-fill alphas and the light bloom — because it has to
  * solve against them. These tests read globals.css and fail when either side
  * moves alone, and pin the five shipped light washes and the twelve generated
  * presets (both blocks and the registry entry of each) to the script's
@@ -63,6 +66,10 @@ describe("gen-presets constants match globals.css", () => {
     expect(whiteAlpha("--muted-foreground")).toBe(CHROME_MUTED_ALPHA);
     expect(whiteAlpha("--kicker")).toBe(CHROME_MUTED_ALPHA);
     expect(whiteAlpha("--state-selected")).toBe(CHROME_SELECTED_ALPHA);
+  });
+
+  it("the chrome scope's resting fill alpha", () => {
+    expect(whiteAlpha("--chrome-fill")).toBe(CHROME_FILL_ALPHA);
   });
 
   it("the chrome scope's error red", () => {
@@ -160,6 +167,38 @@ describe("solveBoldWash", () => {
     expect(washHue(-90)).toBe(270);
   });
 
+  it("counts muted text on the resting chrome fill among the worst cases", () => {
+    // The ⌘K kbd and the chip's org kicker: white at the muted alpha on white
+    // at the fill alpha. globals.contrast.test.ts asserts it for every preset;
+    // the solver must see the same case or it can emit a wash that fails it.
+    const hex = (v) => "#" + v.toString(16).padStart(2, "0").repeat(3);
+    const over = (alpha, bg) => Math.round(alpha * 255 + (1 - alpha) * bg);
+    for (const grey of [40, 70, 100, 130]) {
+      const fill = over(CHROME_FILL_ALPHA, grey);
+      const checks = chromeContrasts(hex(grey));
+      expect(Object.keys(checks).sort()).toEqual([
+        "destructive",
+        "muted",
+        "mutedOnFill",
+        "selected",
+      ]);
+      expect(checks.mutedOnFill).toBeCloseTo(
+        contrastHex(hex(over(CHROME_MUTED_ALPHA, fill)), hex(fill)),
+        10,
+      );
+      // …and it is tighter than muted text on the bare ground.
+      expect(checks.mutedOnFill).toBeLessThan(checks.muted);
+      // The worst case is the minimum of every check on every ground.
+      expect(worstChromeContrast(hex(grey))).toBe(
+        Math.min(
+          ...groundsOf(hex(grey)).flatMap((g) =>
+            Object.values(chromeContrasts(g)),
+          ),
+        ),
+      );
+    }
+  });
+
   it("stacks only the radials whose lit ellipses meet", () => {
     // Today none do, so every ground is one radial at its own peak.
     expect(overlappingRadials(LIGHT_BLOOM.radials)).toEqual([[0], [1], [2]]);
@@ -251,6 +290,17 @@ describe("colour helpers", () => {
     expect(oklchToHex(0, 0, 0)).toBe("#000000");
     // Far outside sRGB at this lightness: still a valid six-digit hex.
     expect(oklchToHex(0.5, 0.4, 272)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("matches published OKLCH reference colours, not just itself", () => {
+    // Independent of this module: CSS Color 4's own conversions of the sRGB
+    // primaries, and a chromatic mid-tone (rebeccapurple).
+    expect(oklchToHex(0.62796, 0.25768, 29.234)).toBe("#ff0000");
+    expect(oklchToHex(0.45201, 0.31321, 264.052)).toBe("#0000ff");
+    expect(oklchToHex(0.86644, 0.29483, 142.495)).toBe("#00ff00");
+    expect(oklchToHex(0.44027, 0.1603, 303.37)).toBe("#663399");
+    // An achromatic mid-tone: 50% grey is L 0.59987.
+    expect(oklchToHex(0.59987, 0, 0)).toBe("#808080");
   });
 
   it("contrastHex is the WCAG ratio", () => {

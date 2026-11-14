@@ -42,7 +42,8 @@ The owner made four decisions on 2026-11-14.
 ## Mechanism
 
 **Chrome scope.** Elements painted directly on the wash carry the class `chrome-scope`: the
-sidebar rail, the shell header band, the board dock, and the rail and header of the Ask layout.
+sidebar rail, the shell header band, the board dock, the rail and header of the Ask layout, and
+the card seam (see "Changes after the whole-branch review").
 The rule is `:root:not(.dark) .chrome-scope`, so it exists in light mode only. Inside it the
 generic tokens are re-seeded: `--foreground` is white, `--muted-foreground` and `--kicker` are
 white at 90%, the borders, ring and scrollbar are white alphas, the hover, active and selected
@@ -54,7 +55,7 @@ reads a chrome value directly. This is why the active sidebar indicator and a pr
 the frame are white in light mode with no component edit.
 
 **Chrome reset.** An opaque surface nested inside the chrome (a dock card, the composer, the
-avatar fallback) carries `chrome-reset`. The rule is
+avatar fallback, the seam's cap) carries `chrome-reset`. The rule is
 `:root:not(.dark) .chrome-scope .chrome-reset`, and it sets every token the scope moved back to
 a `--base-*` alias. The aliases are declared once on `:root`, for example
 `--base-foreground: var(--foreground)`.
@@ -106,6 +107,11 @@ geometry-aware: radials are stacked only where their lit areas overlap.
 - **Light frame, white body text on a selected row under the bloom: 4.60:1** at worst (floor
   4.5). Sunset is the preset that sits on it. This is the check that caps how light a wash may be.
 - **Light frame, muted and kicker text: 5.60:1** at worst.
+- **Light frame, muted and kicker text on the resting chrome fill: 4.67:1** at worst, with the
+  fill at 9% (it was 4.42:1 at the original 12%, under AA in eight presets).
+- **Light frame, the lit seam line against the wash: 6.48:1** at worst (floor 3).
+- **Light frame, the brand label on a hovered primary button: 4.54:1** at worst (Keystone;
+  equal to its resting value, because the hover fill is opaque white there).
 - **Bloom visibility: 1.125:1** at worst (floor 1.12).
 - **Dark mode, muted text on the bloomed wash: 4.56:1** at worst.
 - **Candy ships at reduced chroma (0.75), and Neon's second hue was nudged (to 312).** Both were
@@ -138,17 +144,82 @@ geometry-aware: radials are stacked only where their lit areas overlap.
 - **Any new element painted on the wash needs `chrome-scope`**, and any new opaque surface
   inside the sidebar, header or dock needs `chrome-reset`. Without the scope the element shows
   dark text on a saturated ground; without the reset the surface shows white text on white.
-- **Any token added to the scope must be added to the reset and to the `--base-*` aliases.**
-  The contrast test checks that the scope and reset lists agree.
+- **Any token added to the scope must be added to the reset, to the print fallback and to the
+  `--base-*` aliases.** `globals.contrast.test.ts` checks that the scope and reset lists agree
+  and `print-styles.test.ts` checks the print list against the scope.
 - **Legacy preset ids stay aliased.** The alias map must not be deleted while stored values may
   still hold the old ids.
 - **Light `--muted-foreground` no longer meets the wash.** It only has to clear AA on the
   content card and raised surfaces. Its values did not change.
 - Adding a preset is now a row in the generator plus a regenerate, not a hand-written block.
 
-## Known limitation
+## Changes after the whole-branch review
+
+A review of the finished branch found defects that no per-task review could see. These are the
+ones that changed a stated rule or value. None of them has been checked in a browser either.
+
+- **The primary button's hover is a token, and it is opaque on the frame.** The hover image
+  used to be an inline recipe in `@theme` (the brand stops at 80% alpha). Inside the scope the
+  brand is white, so the hover was white at 80% with the frame showing through, under a label
+  that is the frame's own hue: 3.11:1 in Keystone and under 4.5 in 16 of 17 presets. The recipe
+  is now `--brand-gradient-hover`, derived once in `:root` like `--brand-gradient`; the scope
+  re-seeds it to opaque white and the reset restores it. Outside the scope and in dark mode
+  the resolved colours are the same as before. The cost: **a primary button on the light frame
+  does not change its fill on hover.** No translucent step works, because the label is tuned
+  to about 4.5:1 on pure white (Keystone is 4.54), so even white at 99% fails. A different
+  hover cue for those buttons (a ring, a shadow) would be a component change and is open.
+- **`--chrome-fill` in the scope is 9%, down from 12%.** Muted text on the fill (the ⌘K kbd,
+  the org kicker in the context-switcher chip) was 4.42:1 at worst. 10% clears AA (4.56) but
+  not the solver's 4.6 target, so the generator would have darkened two washes to pay for it;
+  9% clears the target on every shipped wash (4.67 at worst) and no wash moved. The generator
+  solves against the same case (`CHROME_FILL_ALPHA`). The rule: a wash never gets darker to pay
+  for a fill.
+- **The workspace initial tile is solid in light mode.** It was an 18% brand tint with a brand
+  glyph, stacked on the chip's own chrome fill: a white glyph on about 28% white, 3.5–4.2:1 in
+  every preset. It is now `bg-primary text-primary-foreground` in light (a white tile with the
+  brand as its glyph on the frame, the same 4.54:1 floor as the button) and keeps the tint
+  behind `dark:`. In light mode outside the scope (the mobile drawer) it is a solid brand tile
+  with the brand's own label.
+- **The card seam carries the scope.** The seam is drawn in the card's frame, outside the rail
+  and the dock, so it stroked the root's ink: 1.15–2.67:1 against the saturated frame when
+  lit, where the old pale wash gave about 12:1. `CardSeam` now carries `chrome-scope` and its opaque
+  cap `chrome-reset`; `--seam-glow` joined the scope, the reset and the aliases. The lit line
+  is white (6.48:1 against the wash at worst) and its haze is white. **What this does not
+  settle:** the line lies on the card's own border pixel, not on the frame. That hairline is
+  already light (about `#e0e0e0`), so lighting it changes the pixel itself by only about
+  1.3:1; the visible change is the haze spreading onto the frame, the corners, and the cap
+  growing. Whether that reads as "lit" needs eyes. The resting tick is hidden behind the cap
+  (30px tick, 44px cap), so its colour only shows mid-animation.
+- **The frame prints dark on paper.** The scope was not media-qualified and the print rules
+  only hide chrome on a page with a print root, so printing a board in light mode put white
+  sidebar, header and dock text on white paper. In `@media print` the scope now hands every
+  token back to its `--base-*` value, and the light wash is removed so the result holds with
+  "background graphics" on as well. Dark mode prints as it did before.
+- **A translucent hover on a reset surface is dark-only.** The avatar fallback had
+  `hover:bg-state-hover` on top of its opaque fill; inside the reset that is the root's black
+  4%, which replaced the white disc and left a dark initial on the frame. It is now
+  `dark:hover:bg-state-hover`. In light the trigger's brightening hairline is the hover.
+- **The Intelligence tab's loading blocks use the chrome skeleton**, like the rest of the dock.
+  In dark mode that changes those five blocks from the opaque `--muted` fill to white at 6%,
+  which is what the dock's other skeletons already are.
+
+## Known limitations
 
 Secondary (muted) text inside a **selected** sidebar row in light mode is about **4.07:1 at
 worst**. That is under the AA floor of 4.5, and it is deliberately not asserted by any test.
 Body text on the same row passes (4.60:1). This is recorded as an open soft spot, not as
 passing. Raising it would mean either a weaker selected fill or darker washes.
+
+**A Mono's name tint on the light frame is under AA for most colours, and it is not fixed.**
+The name colour is the Mono's own colour mixed 65/35 towards `--foreground`
+(`monoNameColor` in `src/components/mono/MonoChip.tsx`, and the same mix in `MonoTab.tsx`).
+Inside the scope the foreground is white, so the mix lightens the colour instead of darkening
+it. Measured against every wash ground of every preset, the seven default palette colours come
+out at 3.28–4.95:1 at worst; four of them (Periwinkle, Ember, Rose, Violet) are under 4.5. A
+dark custom colour is far lower: near-black mixes to a mid grey at about the frame's own
+lightness. No test asserts any of this. It is open.
+
+The focus halo of a `Button` on the frame (`ring-ring/50`, white at half alpha) measures
+2.83–4.50:1 against the wash grounds, so on some stops the halo alone is under the 3:1 floor
+for a non-text mark. The button's solid `border-ring` (white, at least 6.48:1) is the indicator
+the checks cover. Not changed, and not asserted.

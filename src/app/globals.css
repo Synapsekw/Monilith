@@ -26,15 +26,10 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   /* The two-accent fill (`bg-brand-gradient`) and the primary Button's hover
-     (`bg-brand-gradient-hover`): the same three stops at 80% alpha, which for
-     a single-accent preset is exactly the old `hover:bg-primary/80`. */
+     (`bg-brand-gradient-hover`). Both read a token derived in `:root`, so the
+     light chrome scope can re-seed each (see `.chrome-scope`). */
   --background-image-brand-gradient: var(--brand-gradient);
-  --background-image-brand-gradient-hover: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--brand) 80%, transparent),
-    color-mix(in oklab, var(--brand-mid) 80%, transparent),
-    color-mix(in oklab, var(--brand-2) 80%, transparent)
-  );
+  --background-image-brand-gradient-hover: var(--brand-gradient-hover);
 
   /* Keystone additions */
   --color-kicker: var(--kicker);
@@ -287,7 +282,8 @@
   --brand: #5a6ed5;
   /* The second accent — a SEED token. Single-accent presets (this one
      included) declare it equal to their own --brand, a degenerate gradient;
-     aurora / sunset / nebula give it a second hue. It only ever appears as
+     the fifteen two-accent presets (aurora, sunset, nebula and the twelve
+     generated ones) give it a second hue. It only ever appears as
      the far stop of --brand-gradient and of the chart spectrum, as the header
      glow's second bloom and as the wash's second mesh bloom. --ring, links
      and text stay on --brand. */
@@ -310,6 +306,19 @@
     var(--brand),
     var(--brand-mid),
     var(--brand-2)
+  );
+  /* The primary Button's hover image: the same three stops at 80% alpha over
+     whatever is behind the button, which for a single-accent preset is
+     exactly the old `hover:bg-primary/80`. Derived ONCE, here, like the
+     gradient itself — never in a preset block and not in .dark. A token
+     rather than an inline recipe in `@theme` so the light chrome scope can
+     replace it: there the brand is white and the label is the frame's own
+     hue, and 80% white over the frame fails the label. */
+  --brand-gradient-hover: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--brand) 80%, transparent),
+    color-mix(in oklab, var(--brand-mid) 80%, transparent),
+    color-mix(in oklab, var(--brand-2) 80%, transparent)
   );
 
   --background: #f6f6f8;
@@ -413,8 +422,11 @@
     -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
   /* The bloom on a lit seam (`.seam-line` below). Derived from --foreground, so
      it is declared ONCE and every theme and preset resolves it for free — a
-     white haze on the near-black card, an ink haze on the paper one. Not a
-     seed token: preset blocks must not redeclare it. */
+     white haze on the near-black card, an ink haze at the light root. The
+     light root value is not what the seam paints with, though: the seam
+     carries `.chrome-scope` (it lights against the bold frame), and the scope
+     re-derives this from its own white foreground. Not a seed token: preset
+     blocks must not redeclare it. */
   --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
 
   /* Theme reach — Tinted, the default (no attribute on <html>). How much of
@@ -563,6 +575,7 @@
   --base-brand-mid: var(--brand-mid);
   --base-brand-foreground: var(--brand-foreground);
   --base-brand-gradient: var(--brand-gradient);
+  --base-brand-gradient-hover: var(--brand-gradient-hover);
   --base-primary: var(--primary);
   --base-primary-foreground: var(--primary-foreground);
   --base-state-hover: var(--state-hover);
@@ -572,6 +585,7 @@
   --base-scrollbar-thumb: var(--scrollbar-thumb);
   --base-reach-hover: var(--reach-hover);
   --base-reach-selected: var(--reach-selected);
+  --base-seam-glow: var(--seam-glow);
 }
 
 .dark {
@@ -724,8 +738,9 @@
    the wheel from the brand and from each other whatever the brand is. The
    old palette (a tint of the brand plus four fixed hues) could not promise
    that: cat-2 shared cat-1's hue in every single-accent preset, and a warm or
-   green brand landed on a fixed hue (dark sunset vs #f59e0b measured OKLab
-   dE 0.046, dark forest vs #34d399 0.052).
+   green brand landed on a fixed hue (measured on the presets of the time:
+   dark sunset vs #f59e0b OKLab dE 0.046, and 0.052 for the dark block of
+   Forest, a green preset since removed, vs #34d399).
 
    Lightness and chroma are FIXED per slot and chosen inside the sRGB gamut at
    every hue (the inscribed chroma is 0.119 at L 0.70, 0.111 at 0.78, 0.105 at
@@ -791,32 +806,42 @@
    The numbers are bound by tests, not by taste. globals.contrast.test.ts
    re-runs every check below for every preset x mode x reach.
 
+   The floors quoted in 1-3 are the measurements that SET each value, taken
+   on the presets of the time: nine, of which Ocean, Forest, Ember and Rose
+   have since been removed (stored ids are aliased in
+   src/lib/theme/presets.ts). They are kept as the record of why each number
+   is what it is, not as a description of today's seventeen presets — the
+   values did not move when the list changed, and the test is what holds
+   them for the current list.
+
    1. Light --reach-content is capped at 2.5% (the spec started at 5% / 9%).
       Mixing brand into a white card darkens it towards the chrome, and the
-      bloomed header band must stay >= 1.15:1 against the card. 2.5% is the
-      highest 0.5% step that holds in all six light presets (floor 1.152,
-      forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
-      equals light tinted here and differs by surface and glow only.
+      bloomed header band must stay >= 1.15:1 against the card. 2.5% was the
+      highest 0.5% step that held in all six light presets measured then
+      (floor 1.152, on the since-removed Forest); 3% was 1.142. Vivid cannot
+      go higher either, so light vivid equals light tinted here and differs
+      by surface and glow only.
       (That floor was measured against the old pale light wash. Under the
       bold frame the chrome is far darker than the card and the check has
       a wide margin, so it no longer binds — the value is simply unchanged.)
    2. Light vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8%.
       A hover fill is alpha-on-parent, so muted text on a hovered row inside a
       raised surface sits on two doses of brand. At 7% / 13% that measured
-      4.12-4.40:1 on light --surface-muted in all six presets (and 4.11 on
-      dark rose --secondary). At 5% / 8% the floor is 4.53 (light ocean);
-      tinted's is 4.58. Raising either again needs a darker light
+      4.12-4.40:1 on light --surface-muted in all six presets measured then
+      (and 4.11 on the --secondary of the since-removed Rose, dark). At
+      5% / 8% the floor was 4.53 (light, on the since-removed Ocean);
+      tinted's was 4.58. Raising either again needs a darker light
       --muted-foreground in the preset seeds first.
    3. Dark vivid is content 8% / surface 7% (it shipped as 9% / 5%). The
       seeds put a raised surface about 1.07:1 above the dark content card, and
       a content mix that outruns the surface mix closes that gap: at 9% / 5%
-      cards measured 1.000-1.020 against the page in all nine presets and
-      the red channel inverted in ember and sunset. The two have to climb
-      together. Surface is capped at 7% by the same hovered-row check as (2)
-      with hover at 8% (floor 4.52, dark rose --secondary; 8% is 4.44), and
-      content sits one point above it, exactly as at Tinted (5% / 4%): the
-      card/page separation is then 1.061-1.073, against 1.068-1.073 at
-      Subtle. Dark vivid differs from dark tinted by +3 points of brand on
+      cards measured 1.000-1.020 against the page in all nine presets of the
+      time and the red channel inverted in Sunset and the since-removed
+      Ember. The two have to climb together. Surface is capped at 7% by the
+      same hovered-row check as (2) with hover at 8% (floor then 4.52, on the
+      --secondary of the since-removed Rose, dark; 8% was 4.44), and content
+      sits one point above it, exactly as at Tinted (5% / 4%): the card/page
+      separation measured 1.061-1.073 then, against 1.068-1.073 at Subtle. Dark vivid differs from dark tinted by +3 points of brand on
       the page and on every raised surface, plus the glow.
    4. --reach-selected is 12%. Selected is the brand at 14% alpha; at 8% reach
       the hover fill is itself a brand tint at 12.6% alpha, and an active row
@@ -1813,6 +1838,14 @@
   --brand-mid: #ffffff;
   --brand-foreground: var(--base-brand);
   --brand-gradient: linear-gradient(90deg, #ffffff, #ffffff);
+  /* A primary button on the frame does not change its fill on hover. The
+     root recipe (the brand stops at 80% alpha) would be white at 80% here:
+     the frame shows through, under a label that is the frame's own hue —
+     3.1:1 in Keystone. There is no translucent step that works either: the
+     label is tuned to about 4.5:1 on PURE white, so even 99% fails
+     (globals.contrast.test.ts composites every stop of this image on every
+     ground). Press still moves the button 1px. */
+  --brand-gradient-hover: linear-gradient(90deg, #ffffff, #ffffff);
   --primary: #ffffff;
   --primary-foreground: var(--base-brand);
   /* The fills are kept light on purpose: white body text on a SELECTED row is
@@ -1823,13 +1856,25 @@
   --state-hover: rgb(255 255 255 / 8%);
   --state-active: rgb(255 255 255 / 13%);
   --state-selected: rgb(255 255 255 / 16%);
-  --chrome-fill: rgb(255 255 255 / 12%);
+  /* Secondary text sits ON this fill (the ⌘K kbd, the org kicker in the
+     context-switcher chip), and a white fill under white-90% text spends the
+     text's headroom twice. 9% is the highest whole step at which that text
+     clears the solver's 4.6 target on every shipped wash — so no wash had
+     to darken for it (12% measured 4.42 at worst, 10% 4.56). Must equal
+     CHROME_FILL_ALPHA in scripts/theme/gen-presets.mjs. */
+  --chrome-fill: rgb(255 255 255 / 9%);
   --scrollbar-thumb: rgb(255 255 255 / 28%);
   /* Reach leans the hover and selected fills to the brand; the brand is
      white here and so are the fills, so the lean is switched off rather than
      left to mix white into white. */
   --reach-hover: 0%;
   --reach-selected: 0%;
+  /* The card seam carries the scope (CardSeam): it is drawn over the content
+     card's outline, but what it has to read against is the frame beside it.
+     The root value was resolved on <html> from the ROOT foreground — an ink
+     haze — so the same recipe is restated here to resolve against the
+     scope's white one. The seam's opaque cap carries `.chrome-reset`. */
+  --seam-glow: 0 0 7px color-mix(in oklab, var(--foreground) 45%, transparent);
 }
 
 :root:not(.dark) .chrome-scope .chrome-reset {
@@ -1847,6 +1892,7 @@
   --brand-mid: var(--base-brand-mid);
   --brand-foreground: var(--base-brand-foreground);
   --brand-gradient: var(--base-brand-gradient);
+  --brand-gradient-hover: var(--base-brand-gradient-hover);
   --primary: var(--base-primary);
   --primary-foreground: var(--base-primary-foreground);
   --state-hover: var(--base-state-hover);
@@ -1856,6 +1902,7 @@
   --scrollbar-thumb: var(--base-scrollbar-thumb);
   --reach-hover: var(--base-reach-hover);
   --reach-selected: var(--base-reach-selected);
+  --seam-glow: var(--base-seam-glow);
 }
 
 @layer base {
@@ -2198,6 +2245,47 @@
   /* The reach header glow is screen decoration — never ink. */
   .content-glow::before {
     display: none !important;
+  }
+  /* The bold frame is a SCREEN look. Browsers drop backgrounds on paper, and
+     the hiding rules above only apply to a page with a print root — so
+     Cmd+P anywhere else printed the light chrome's white text on white. In
+     print the scope hands every token it moves back to its root value (the
+     same --base-* aliases `.chrome-reset` uses), and the wash goes with it
+     so the result is dark-on-paper even with "background graphics" on.
+     Deliberately NOT behind `body:has([data-print-root])`, and light-only
+     like every other chrome rule: dark mode prints exactly as it did.
+     Every token of the screen scope must be listed, in the same order
+     (print-styles.test.ts). Same specificity as the screen rule; it wins by
+     coming later. */
+  :root:not(.dark) .chrome-scope {
+    --foreground: var(--base-foreground);
+    --muted-foreground: var(--base-muted-foreground);
+    --kicker: var(--base-kicker);
+    --destructive: var(--base-destructive);
+    --border: var(--base-border);
+    --border-hover: var(--base-border-hover);
+    --border-bright: var(--base-border-bright);
+    --input: var(--base-input);
+    --ring: var(--base-ring);
+    --brand: var(--base-brand);
+    --brand-2: var(--base-brand-2);
+    --brand-mid: var(--base-brand-mid);
+    --brand-foreground: var(--base-brand-foreground);
+    --brand-gradient: var(--base-brand-gradient);
+    --brand-gradient-hover: var(--base-brand-gradient-hover);
+    --primary: var(--base-primary);
+    --primary-foreground: var(--base-primary-foreground);
+    --state-hover: var(--base-state-hover);
+    --state-active: var(--base-state-active);
+    --state-selected: var(--base-state-selected);
+    --chrome-fill: var(--base-chrome-fill);
+    --scrollbar-thumb: var(--base-scrollbar-thumb);
+    --reach-hover: var(--base-reach-hover);
+    --reach-selected: var(--base-reach-selected);
+    --seam-glow: var(--base-seam-glow);
+  }
+  :root:not(.dark) .app-wash {
+    background-image: none;
   }
   [data-print-root],
   [data-print-root] * {

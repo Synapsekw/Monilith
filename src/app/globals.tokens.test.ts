@@ -51,6 +51,9 @@ const THEME_INVARIANT = new Set([
   // Derived from --brand and --brand-2, which every mode and preset block
   // re-seeds on <html> — so one declaration follows them all.
   "--brand-gradient",
+  // The primary Button's hover image: the same three stops at 80% alpha,
+  // derived from the same seeds on the same element.
+  "--brand-gradient-hover",
   // The gradient's middle stop — likewise derived from the two brand seeds on
   // <html>, and `.dark` is the same element.
   "--brand-mid",
@@ -435,8 +438,22 @@ describe("brand gradient tokens", () => {
   });
 
   it("the hover fill is the same three stops at the old bg-primary/80 alpha", () => {
+    // The recipe is a TOKEN (`--brand-gradient-hover`, derived once in :root
+    // like --brand-gradient) and the utility reads it, so the light chrome
+    // scope can re-seed the hover image: derived from the scope's white brand
+    // it was white at 80% and the label failed AA on it.
     expect(FLAT).toContain(
-      "--background-image-brand-gradient-hover: linear-gradient(90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-mid) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent));",
+      "--background-image-brand-gradient-hover: var(--brand-gradient-hover);",
+    );
+    expect(
+      valueIn(":root", "--brand-gradient-hover").replace(/\s+/g, " "),
+    ).toBe(
+      "linear-gradient( 90deg, color-mix(in oklab, var(--brand) 80%, transparent), color-mix(in oklab, var(--brand-mid) 80%, transparent), color-mix(in oklab, var(--brand-2) 80%, transparent) )",
+    );
+    // Derived once: `.dark` and the preset blocks are the same <html>.
+    expect(CSS.match(/^\s*--brand-gradient-hover:/gm)).toHaveLength(4);
+    expect(valueIn(".chrome-scope", "--brand-gradient-hover")).toBe(
+      "linear-gradient(90deg, #ffffff, #ffffff)",
     );
   });
 

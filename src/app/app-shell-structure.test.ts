@@ -178,10 +178,14 @@ describe("bold frame chrome scope", () => {
   ])(
     "%s — an opaque surface inside the scope — carries chrome-reset",
     (_name, file) => {
-      // On the same class string as the opaque fill it resets for.
+      // On the same class string as the opaque fill it resets for. (The
+      // avatar's fill comes from the AvatarFallback primitive; its own string
+      // is the reset plus a DARK-only hover — an unprefixed translucent hover
+      // would replace the opaque disc inside the reset.)
       expect(read(file)).toMatch(
-        /"chrome-reset [^"]*\bbg-surface\b|"chrome-reset hover:bg-state-hover /,
+        /"chrome-reset [^"]*\bbg-surface\b|"chrome-reset dark:hover:bg-state-hover /,
       );
+      expect(read(file)).not.toMatch(/"chrome-reset hover:bg-state-hover /);
     },
   );
 });

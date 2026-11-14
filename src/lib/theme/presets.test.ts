@@ -301,8 +301,9 @@ describe("theme presets", () => {
   it("derives --brand-mid, --brand-gradient and --app-bloom from the seeds, never in a preset block", () => {
     // Derived once (:root) and re-seeded only where a subtree re-seeds the
     // brand itself: the print root, and the light chrome scope with its reset
-    // (white on the bold frame, then back to the root gradient).
-    expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(4);
+    // (white on the bold frame, then back to the root gradient) and its print
+    // fallback (back to the root gradient again, for paper).
+    expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(5);
     for (const sel of [
       ":root:not(.dark) .chrome-scope",
       ":root:not(.dark) .chrome-scope .chrome-reset",
