@@ -14,6 +14,7 @@ import {
   fireEvent,
   waitFor,
   act,
+  within,
 } from "@testing-library/react";
 import { useBoardSelection } from "@/stores/board-selection";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -1440,7 +1441,7 @@ describe("BoardTable frozen Name column", () => {
     expect(headers.length).toBeGreaterThan(0);
   });
 
-  it("gives every frozen Name-column element the permanent right-edge hairline (GroupHeaderRow + item NameCells)", () => {
+  it("gives every frozen Name-column element the permanent right-edge hairline (BoardColumnHeader + item NameCells)", () => {
     renderMany(1);
     const cells = document.querySelectorAll(".name-freeze-edge");
     expect(cells.length).toBeGreaterThan(0);
@@ -1499,10 +1500,11 @@ describe("BoardTable frozen Name column", () => {
   });
 });
 
-// ── Per-group column headers (Monday-style) ──────────────────────────────────
-// Columns are board-scoped + shared, but every group renders its OWN interactive
-// header so empty/new groups still show the columns (the reported bug). Fixture:
-// 3 board columns, two groups, and the SECOND group is EMPTY (no items).
+// ── One board column header ─────────────────────────────────────────────────
+// Columns are board-scoped. The header is rendered ONCE, as the first child of
+// the scroller's content, so it is there for an empty group, a collapsed group
+// and a board with no groups at all. Fixture: 3 board columns, two groups, and
+// the SECOND group is EMPTY (no items).
 function payloadWithColumns() {
   const col = (id: string, name: string, kind = "text", position = 0) => ({
     id,
@@ -1565,62 +1567,220 @@ function renderBoardWithColumns() {
   );
 }
 
-describe("BoardTable per-group column headers", () => {
-  it("renders every column header inside EVERY group, including the empty one", () => {
-    // The core bug: an empty group (g2) used to show no columns. Now each of
-    // the two groups renders all three column names → 2 of each.
+describe("BoardTable single column header", () => {
+  it("renders each column header exactly once for a board with several groups", () => {
     renderBoardWithColumns();
-    expect(screen.getAllByText("Status")).toHaveLength(2);
-    expect(screen.getAllByText("Owner")).toHaveLength(2);
-    expect(screen.getAllByText("Due Date")).toHaveLength(2);
+    expect(screen.getAllByText("Status")).toHaveLength(1);
+    expect(screen.getAllByText("Owner")).toHaveLength(1);
+    expect(screen.getAllByText("Due Date")).toHaveLength(1);
   });
 
-  it("renders an Add-column control in every group header (no single global one)", () => {
+  it("is the first child of the scroller's content and sticks to the top", () => {
+    renderBoardWithColumns();
+    const header = screen.getByTestId("board-column-header");
+    const content = screen.getByTestId("board-scroll").firstElementChild;
+    expect(content?.firstElementChild).toBe(header);
+    const classes = header.className.split(/\s+/);
+    expect(classes).toContain("sticky");
+    expect(classes).toContain("top-0");
+    expect(classes).toContain("z-40");
+  });
+
+  it("still shows the board's columns above an empty group", () => {
+    renderBoardWithColumns();
+    expect(screen.getByTestId("group-header-g2")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("board-column-header")).getByText("Owner"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the columns on a board that has no groups yet", () => {
+    const base = payloadWithColumns() as unknown as Record<string, unknown>;
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable
+          payload={{ ...base, groups: [], items: [] } as never}
+          selectedViewId="v1"
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      within(screen.getByTestId("board-column-header")).getByText("Status"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("This board has no groups yet."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders one Add-column control, one Name resize handle and one resize handle per column", () => {
     renderBoardWithColumns();
     expect(screen.getAllByRole("button", { name: /add column/i })).toHaveLength(
-      2,
+      1,
     );
-  });
-
-  it("renders one Name-column resize handle per group (global header is gone)", () => {
-    // The old single global header had exactly one Name resize handle. Per-group
-    // headers give one each — two groups → two, never one.
-    renderBoardWithColumns();
     expect(
       screen.getAllByRole("separator", { name: /^Resize Name column/i }),
-    ).toHaveLength(2);
-  });
-
-  it("exposes a column resize handle per column per group (resize from any group)", () => {
-    renderBoardWithColumns();
+    ).toHaveLength(1);
     expect(
       screen.getAllByRole("separator", { name: "Resize Status" }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
-  it("keeps the column headers visible when a group is collapsed", () => {
+  it("keeps the column header when a group is collapsed", () => {
     renderBoardWithColumns();
     fireEvent.click(screen.getByRole("button", { name: /Collapse Group 2/i }));
-    expect(screen.getAllByText("Status")).toHaveLength(2);
+    expect(screen.getAllByText("Status")).toHaveLength(1);
+  });
+
+  it("marks the header's Item cell as the freeze edge", () => {
+    renderBoardWithColumns();
+    const itemCell = screen.getByTestId("board-column-header")
+      .firstElementChild as HTMLElement;
+    expect(itemCell.className).toContain("name-freeze-edge");
+    for (const cls of NAME_FREEZE_RULE.split(" ")) {
+      expect(itemCell.className).toContain(cls);
+    }
+    expect(within(itemCell).getByText("Item")).toBeInTheDocument();
+  });
+});
+
+function progressPayload() {
+  const base = payloadWithColumns() as unknown as {
+    columns: { id: string; settings: unknown }[];
+  };
+  const mkItem = (id: string, name: string, position: number) => ({
+    id,
+    board_id: "b1",
+    org_id: "o1",
+    group_id: "g1",
+    name,
+    position,
+    parent_id: null,
+  });
+  return {
+    ...base,
+    columns: base.columns.map((c) =>
+      c.id === "c_status"
+        ? {
+            ...c,
+            settings: {
+              options: [
+                { id: "o_done", label: "Done", color: "#00c875" },
+                { id: "o_wip", label: "Working on it", color: "#fdab3d" },
+              ],
+            },
+          }
+        : c,
+    ),
+    items: [mkItem("i1", "Item 1", 0), mkItem("i2", "Item 2", 1)],
+    cellValues: [
+      { item_id: "i1", column_id: "c_status", value: { optionId: "o_done" } },
+      { item_id: "i2", column_id: "c_status", value: { optionId: "o_wip" } },
+    ],
+  } as never;
+}
+
+describe("BoardTable group row", () => {
+  it("shows the title as the user typed it, with no index number", () => {
+    renderBoardWithColumns();
+    const title = within(screen.getByTestId("group-header-g1")).getByRole(
+      "button",
+      { name: "Group 1" },
+    );
+    expect(title.textContent).toBe("Group 1");
+  });
+
+  it("sticks under the column header", () => {
+    renderBoardWithColumns();
+    const classes = screen
+      .getByTestId("group-header-g1")
+      .className.split(/\s+/);
+    expect(classes).toContain("sticky");
+    expect(classes).toContain("top-[30px]");
+    expect(classes).toContain("z-30");
+  });
+
+  it("holds its content in a block pinned to the visible width of the scroller", () => {
+    renderBoardWithColumns();
+    const inner = screen.getByTestId("group-header-g1")
+      .firstElementChild as HTMLElement;
+    const classes = inner.className.split(/\s+/);
+    expect(classes).toContain("sticky");
+    expect(classes).toContain("left-0");
+    expect(classes).toContain("w-[var(--board-viewport-w,100%)]");
+  });
+
+  it("publishes the scroller's visible width for that block", () => {
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return 900;
+      },
+    });
+    try {
+      renderBoard();
+      expect(
+        screen
+          .getByTestId("board-scroll")
+          .style.getPropertyValue("--board-viewport-w"),
+      ).toBe("900px");
+    } finally {
+      // jsdom defines clientWidth on Element.prototype; drop the override.
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>)
+        .clientWidth;
+    }
+  });
+
+  it("shows the item count", () => {
+    renderBoardWithColumns();
+    expect(
+      within(screen.getByTestId("group-header-g1")).getByText("1"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("group-header-g2")).getByText("0"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a progress meter from the board's done rule", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable payload={progressPayload()} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    const g1 = within(screen.getByTestId("group-header-g1"));
+    expect(g1.getByText("50% done")).toBeInTheDocument();
+    expect(g1.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+    // An empty group has nothing to measure.
+    expect(
+      within(screen.getByTestId("group-header-g2")).queryByRole("progressbar"),
+    ).toBeNull();
+  });
+
+  it("shows no progress meter on a board without a status column", () => {
+    renderTwoItems();
+    expect(
+      within(screen.getByTestId("group-header-g1")).queryByRole("progressbar"),
+    ).toBeNull();
   });
 });
 
 describe("BoardTable column reorder", () => {
-  it("renders a reorder grip per data column in every group header", () => {
+  it("renders one reorder grip per data column, in the single header", () => {
     renderBoardWithColumns();
-    // 2 groups × 3 columns; Name/Created cells get no grip.
+    // Name/Created cells get no grip.
     expect(
       screen.getAllByRole("button", { name: "Reorder Status column" }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(
       screen.getAllByRole("button", { name: "Reorder Owner column" }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /Reorder Name/ })).toBeNull();
   });
 
   it("disables Move left on the first data column and Move right on the last", () => {
     renderBoardWithColumns();
-    fireEvent.click(screen.getAllByLabelText("Status column menu")[0]);
+    fireEvent.click(screen.getByLabelText("Status column menu"));
     expect(
       screen.getByText("Move left").closest("[role=menuitem]"),
     ).toHaveAttribute("aria-disabled", "true");
@@ -1651,9 +1811,12 @@ describe("BoardTable column reorder (pure position math)", () => {
 
 describe("BoardTable touch reorder sensors", () => {
   it("consumes the shared touch-aware sensors for each DndContext (group + item + subitem)", () => {
-    // nestedPayload has a group, a top-level item, and two subitems → all three
-    // DndContexts mount, so the hook is called at least three times.
+    // nestedPayload has a group, a top-level item, and two subitems. The group
+    // reorder (BoardTableInner), the board's column reorder (BoardColumnHeader)
+    // and — once the parent is expanded — the subitem reorder (SubitemBlock)
+    // each call the hook, so at least three calls.
     renderNested();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
     expect(touchSensorsSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 });
@@ -1668,7 +1831,7 @@ describe("BoardTable touch reorder sensors", () => {
 // without one.
 
 describe("BoardTable deterministic dnd ids", () => {
-  it("derives the column reorder handle's aria-describedby from the group id, not the global counter", () => {
+  it("gives the column reorder handle a fixed aria-describedby, not one from the global counter", () => {
     const qc = new QueryClient();
     const payload = {
       board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
@@ -1705,7 +1868,7 @@ describe("BoardTable deterministic dnd ids", () => {
       </QueryClientProvider>,
     );
     const handle = screen.getByRole("button", { name: "Reorder Est column" });
-    expect(handle.getAttribute("aria-describedby")).toBe("group-columns-g1");
+    expect(handle.getAttribute("aria-describedby")).toBe("board-columns");
   });
 });
 

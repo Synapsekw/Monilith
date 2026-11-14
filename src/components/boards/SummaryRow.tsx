@@ -227,7 +227,8 @@ export function SummaryRow({
         ROW_HAIRLINE,
         "grid",
         variant === "board" && [
-          "sticky bottom-0 z-[15] min-h-[38px]",
+          // z-[45]: above the sticky group rows (z-30) and the column header (z-40), below portalled menus (z-50).
+          "sticky bottom-0 z-[45] min-h-[38px]",
           BOARD_TOTAL_SURFACE,
           "before:bg-brand before:left-0 before:opacity-100",
         ],

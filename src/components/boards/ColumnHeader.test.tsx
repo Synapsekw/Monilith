@@ -273,7 +273,7 @@ describe("ColumnHeader reorder affordances", () => {
 });
 
 describe("ColumnHeader — Quiet Grid", () => {
-  it("paints no vertical rule and pads to 16px", () => {
+  it("paints no vertical rule, pads to 8px and fills the header row's height", () => {
     const { container } = render(
       <ColumnHeader
         column={col()}
@@ -286,7 +286,10 @@ describe("ColumnHeader — Quiet Grid", () => {
     );
     const header = container.firstElementChild as HTMLElement;
     expect(header.className).not.toMatch(/\bborder-l\b/);
-    expect(header.className).toContain("px-4");
+    const classes = header.className.split(/\s+/);
+    expect(classes).toContain("px-2");
+    expect(classes).toContain("h-full");
+    expect(classes).not.toContain("pt-3.5");
   });
 
   it("dims the column kicker", () => {

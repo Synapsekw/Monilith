@@ -124,6 +124,8 @@ describe("SummaryRow", () => {
     );
     const row = screen.getByTestId("board-summary-footer");
     expect(row.className).toContain("sticky");
+    // Above the sticky group row (z-30) and column header (z-40).
+    expect(row.className.split(/\s+/)).toContain("z-[45]");
     const nameTrack = row.firstElementChild as HTMLElement;
     expect(nameTrack.style.boxShadow).toBe("");
     expect(nameTrack.querySelector("[aria-hidden]")).not.toBeInTheDocument();

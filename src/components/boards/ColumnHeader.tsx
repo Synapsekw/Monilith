@@ -115,7 +115,7 @@ export function ColumnHeader({
       ref={reorder?.setNodeRef}
       style={reorder?.style}
       className={cn(
-        "group/col relative flex items-center gap-1 px-4 pt-3.5 pb-2.5",
+        "group/col relative flex h-full min-w-0 items-center gap-1 px-2",
         reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >

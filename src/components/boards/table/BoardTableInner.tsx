@@ -79,6 +79,7 @@ import { fitNameColumnWidth } from "@/lib/boards/name-column-width";
 import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 import { AddGroupRow } from "./AddGroupRow";
+import { BoardColumnHeader } from "./BoardColumnHeader";
 import { GroupSection } from "./GroupSection";
 import { useEditingCell } from "./editing-store";
 import {
@@ -161,6 +162,24 @@ export function BoardTableInner({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scrolledX, setScrolledX] = useState(false);
+
+  // The slim group rows pin their content to the VISIBLE width of the scroller
+  // (not the full table width), so a group's title stays in view during
+  // horizontal scroll. Published as a CSS variable with a direct style write —
+  // no React state, so resizing the window re-renders nothing.
+  useEffect(() => {
+    const scroller = scrollContainerRef.current;
+    if (!scroller) return;
+    const publish = () =>
+      scroller.style.setProperty(
+        "--board-viewport-w",
+        `${scroller.clientWidth}px`,
+      );
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, []);
 
   // Edit mode lives in its own store, subscribed to per cell — NOT in this
   // component's state and NOT in the `controls` bundle. Holding it here handed
@@ -431,7 +450,7 @@ export function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (500 13.5px Inter /
+  // Offscreen canvas measurer at the Name cell font (500 13px Inter /
   // text-item), used to auto-fit the Name column to the longest item name
   // across ALL items (not just the virtualized rows). Pure measurement — no
   // server round-trip. Reads the LIVE `--font-inter` variable next/font sets
@@ -465,8 +484,8 @@ export function BoardTableInner({
   // same list by `parent_id`) — so a long subitem name is measured too, with
   // its indented row's own (larger) chrome reserve via `indented`.
   // Measure only after hydration. The server has no canvas (every name
-  // measures 0), and React keeps the server's grid template on the group
-  // headers if the client's first render disagrees — so a board with no saved
+  // measures 0), and React keeps the server's grid template on the column
+  // header if the client's first render disagrees — so a board with no saved
   // name width rendered its headers at the minimum while rows (rendered
   // client-side) auto-fit wider, shifting every header off its column.
   const hydrated = useHydrated();
@@ -538,8 +557,8 @@ export function BoardTableInner({
     [canEdit, footerNowMs, setColumnSummary],
   );
 
-  // Board-level column-management surface shared by every group's header row
-  // (columns are board-scoped). Width state stays here so a resize/add/rename
+  // Board-level column-management surface used by the board's single column
+  // header (columns are board-scoped). Width state stays here so a resize/add/rename
   // from any group reflows all groups + the footer. Memoized on the width state
   // alone — every callback below is stable (the `m` proxy / setState setters) —
   // so a dialog, a scroll or a cell edit no longer re-creates it.
@@ -820,6 +839,11 @@ export function BoardTableInner({
         className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 overflow-auto rounded-lg border transition-colors"
       >
         <div ref={contentRef} className="min-w-fit">
+          <BoardColumnHeader
+            columns={columns}
+            template={template}
+            col={columnControls}
+          />
           {groups.length === 0 ? (
             <p className="text-muted-foreground px-4 py-6 text-sm">
               This board has no groups yet.
@@ -857,7 +881,6 @@ export function BoardTableInner({
                     itemIds={itemIdsByGroup.get(group.id) ?? NO_IDS}
                     columns={columns}
                     selectable={canEdit}
-                    col={columnControls}
                     cellMap={cellMap}
                     template={template}
                     controls={controls}

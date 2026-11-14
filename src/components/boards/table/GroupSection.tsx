@@ -25,13 +25,13 @@ import { cn } from "@/lib/utils";
 import { useStableIds } from "@/lib/boards/stable-ids";
 import { AddItemRow } from "./AddItemRow";
 import { GroupHeaderRow } from "./GroupHeaderRow";
+import { groupProgress } from "@/lib/boards/group-progress";
 import { GroupRollupRow } from "./GroupRollupRow";
 import { GroupSelectAllCheckbox } from "./GroupSelectAllCheckbox";
 import { ItemRow } from "./ItemRow";
 import { SubitemBlock } from "./SubitemBlock";
 import {
   type CellControls,
-  type ColumnHeaderControls,
   type GroupControls,
   type GroupSummaryControls,
 } from "./shared";
@@ -62,7 +62,6 @@ export const GroupSection = memo(function GroupSection({
   itemIds: rawItemIds,
   columns,
   selectable,
-  col,
   cellMap,
   template,
   controls,
@@ -81,7 +80,7 @@ export const GroupSection = memo(function GroupSection({
   contentRef,
 }: {
   group: Group;
-  /** Zero-based position among visible groups — powers the Keystone head kicker. */
+  /** Zero-based position among visible groups — a group reorder re-measures the row area. */
   groupIndex: number;
   items: Item[];
   /** `items.map(i => i.id)`. Held to a stable identity in the body (see
@@ -92,7 +91,6 @@ export const GroupSection = memo(function GroupSection({
   columns: Column[];
   /** Whether bulk row-selection checkboxes are shown (editors only, not viewers). */
   selectable: boolean;
-  col: ColumnHeaderControls;
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
@@ -227,6 +225,15 @@ export const GroupSection = memo(function GroupSection({
     [itemIds, childrenByParent],
   );
 
+  // Done-rule progress over this group's visible top-level rows, for the group
+  // row's meter. `controls.statusColumn` is the board's first status column,
+  // resolved once in BoardTableInner. This component already re-renders on
+  // every `cellMap` change (it is a prop), so the memo adds no renders.
+  const progress = useMemo(
+    () => groupProgress(itemIds, controls.statusColumn, cellMap),
+    [itemIds, controls.statusColumn, cellMap],
+  );
+
   function openRename() {
     setName(group.name);
     setRenaming(true);
@@ -251,9 +258,6 @@ export const GroupSection = memo(function GroupSection({
     >
       <GroupHeaderRow
         group={group}
-        groupIndex={groupIndex}
-        columns={columns}
-        template={template}
         selectAll={
           selectable && selectableIds.length > 0 ? (
             <GroupSelectAllCheckbox visibleIds={selectableIds} />
@@ -271,11 +275,11 @@ export const GroupSection = memo(function GroupSection({
         }}
         onOpenRename={openRename}
         itemCount={items.length}
+        progress={progress}
         dragAttributes={attributes}
         dragListeners={listeners}
         onSetColor={(color) => groupControls.setColor(group.id, color)}
         onDelete={() => groupControls.remove(group.id)}
-        col={col}
       />
 
       {/* Group body wrapper — the `group-container` droppable. Rendered for
