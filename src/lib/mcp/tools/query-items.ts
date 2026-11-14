@@ -74,6 +74,7 @@ export async function queryItemsHandler(
     if ("error" in scope) return err(scope.error);
 
     let dueTo = args.dueTo ?? null;
+    let timezoneAssumed = false;
     if (args.overdue) {
       const { data: profile, error: profileErr } = await supabase
         .from("profiles")
@@ -81,7 +82,9 @@ export async function queryItemsHandler(
         .eq("id", actorId)
         .maybeSingle();
       if (profileErr) return err(profileErr.message);
-      const { today } = todayInTimeZone(profile?.timezone ?? null, now);
+      const day = todayInTimeZone(profile?.timezone ?? null, now);
+      const today = day.today;
+      timezoneAssumed = day.timezoneAssumed;
       dueTo = new Date(Date.parse(`${today}T00:00:00Z`) - DAY_MS)
         .toISOString()
         .slice(0, 10);
@@ -105,7 +108,12 @@ export async function queryItemsHandler(
       p_updated_since: args.updatedSince ?? null,
     };
 
-    const names = nameMap(await listOrgMemberProfiles(supabase, scope.org.id));
+    // Names are only needed to label people: item listings and assignee counts.
+    const needsNames = !args.countBy || args.countBy === "assignee";
+    const names = needsNames
+      ? nameMap(await listOrgMemberProfiles(supabase, scope.org.id))
+      : new Map<string, string>();
+    const assumed = timezoneAssumed ? { timezoneAssumed: true } : {};
 
     if (args.countBy) {
       const { data, error } = await typedRpc(supabase, "count_items", {
@@ -126,7 +134,7 @@ export async function queryItemsHandler(
         content: [
           {
             type: "text",
-            text: JSON.stringify({ countBy: args.countBy, counts }),
+            text: JSON.stringify({ countBy: args.countBy, counts, ...assumed }),
           },
         ],
       };
@@ -158,6 +166,17 @@ export async function queryItemsHandler(
       ),
     }));
     const shown = offset + items.length;
+    // `offset` is capped at QUERY_MAX_OFFSET, so a longer list cannot be paged
+    // to the end: say so rather than stopping silently.
+    const more =
+      shown < total
+        ? shown <= QUERY_MAX_OFFSET
+          ? { nextOffset: shown }
+          : {
+              truncated: true,
+              note: `Only the first ${shown} of ${total} matching items can be paged. Narrow the filter (a board, a date window, an assignee) to see the rest.`,
+            }
+        : {};
     return {
       content: [
         {
@@ -165,9 +184,8 @@ export async function queryItemsHandler(
           text: JSON.stringify({
             total,
             items,
-            ...(shown < total && shown < QUERY_MAX_OFFSET
-              ? { nextOffset: shown }
-              : {}),
+            ...more,
+            ...assumed,
           }),
         },
       ],
@@ -180,7 +198,7 @@ export async function queryItemsHandler(
 export const queryItemsDescriptor: ToolDescriptor = {
   name: "query_items",
   title: "Query items",
-  description: `Filtered read of items across one board (boardId), one project folder (folderId) or the whole organization. Filters: assignee ("me", "unassigned" or a user id), state (open by default, done, any), overdue, dueFrom/dueTo, updatedSince, groupId. Sort by due date (default) or last change. Returns at most ${QUERY_LIMIT} items plus \`total\`, the number of items matching the filter; pass \`nextOffset\` back as \`offset\` for more. Set countBy (board, assignee or status) to get counts instead of items, which is the right call for "how many" and "how is it spread" questions. Prefer this over paging list_items.`,
+  description: `Filtered read of items across one board (boardId), one project folder (folderId) or the whole organization. Filters: assignee ("me", "unassigned" or a user id), state (open by default, done, any), overdue, dueFrom/dueTo, updatedSince, groupId. Sort by due date (default) or last change. Returns at most ${QUERY_LIMIT} items plus \`total\`, the number of items matching the filter; pass \`nextOffset\` back as \`offset\` for more (paging stops at offset ${QUERY_MAX_OFFSET}; then \`truncated\` is set, so narrow the filter). Set countBy (board, assignee or status) to get counts instead of items, which is the right call for "how many" and "how is it spread" questions. Assignee counts count an item once per assignee, so they can add up to more than \`total\`; unassigned items are counted under "Unassigned". Status counts merge statuses with the same name across boards. Counts list at most 100 groups. Prefer this over paging list_items.`,
   inputSchema: input,
   capability: null,
   scope: "none",

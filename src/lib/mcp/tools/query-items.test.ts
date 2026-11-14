@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { queryItemsHandler, QUERY_LIMIT } from "./query-items";
+import {
+  queryItemsDescriptor,
+  queryItemsHandler,
+  QUERY_LIMIT,
+} from "./query-items";
 
 type Row = Record<string, unknown>;
 
@@ -396,6 +400,147 @@ describe("queryItemsHandler", () => {
     expect(p2.nextOffset).toBeUndefined();
   });
 
+  describe("paging past the offset cap", () => {
+    const many = Array.from({ length: 1100 }, (_, i) => ({
+      ...ITEMS[0],
+      item_id: `x${i}`,
+    }));
+
+    it("lets nextOffset reach the cap exactly", async () => {
+      const { getClient } = fixture({ items: many });
+      const parsed = JSON.parse(
+        text(
+          await queryItemsHandler(
+            getClient,
+            "u1",
+            { orgId: "o1", offset: 950 },
+            NOW,
+          ),
+        ),
+      );
+      expect(parsed.items).toHaveLength(QUERY_LIMIT);
+      expect(parsed.nextOffset).toBe(1000);
+      expect(parsed.truncated).toBeUndefined();
+    });
+
+    it("says the list is truncated, instead of silently stopping, past the cap", async () => {
+      const { getClient } = fixture({ items: many });
+      const parsed = JSON.parse(
+        text(
+          await queryItemsHandler(
+            getClient,
+            "u1",
+            { orgId: "o1", offset: 1000 },
+            NOW,
+          ),
+        ),
+      );
+      expect(parsed.total).toBe(1100);
+      expect(parsed.nextOffset).toBeUndefined();
+      expect(parsed.truncated).toBe(true);
+      expect(parsed.note).toMatch(/narrow|filter/i);
+    });
+
+    it("does not flag a complete list as truncated", async () => {
+      const { getClient } = fixture();
+      const parsed = JSON.parse(
+        text(await queryItemsHandler(getClient, "u1", { orgId: "o1" }, NOW)),
+      );
+      expect(parsed.truncated).toBeUndefined();
+      expect(parsed.nextOffset).toBeUndefined();
+    });
+  });
+
+  describe("timezoneAssumed", () => {
+    it("is reported when `overdue` falls back to the UTC day", async () => {
+      const { getClient } = fixture();
+      const parsed = JSON.parse(
+        text(
+          await queryItemsHandler(
+            getClient,
+            "u2",
+            { orgId: "o1", overdue: true },
+            NOW,
+          ),
+        ),
+      );
+      expect(parsed.timezoneAssumed).toBe(true);
+    });
+
+    it("is absent when the member has a zone, and when `overdue` is not used", async () => {
+      const a = fixture();
+      const withZone = JSON.parse(
+        text(
+          await queryItemsHandler(
+            a.getClient,
+            "u1",
+            { orgId: "o1", overdue: true },
+            NOW,
+          ),
+        ),
+      );
+      expect(withZone.timezoneAssumed).toBeUndefined();
+      const b = fixture();
+      const noOverdue = JSON.parse(
+        text(await queryItemsHandler(b.getClient, "u2", { orgId: "o1" }, NOW)),
+      );
+      expect(noOverdue.timezoneAssumed).toBeUndefined();
+    });
+
+    it("is reported on counts too", async () => {
+      const { getClient } = fixture({ countRows: [] });
+      const parsed = JSON.parse(
+        text(
+          await queryItemsHandler(
+            getClient,
+            "u2",
+            { orgId: "o1", overdue: true, countBy: "board" },
+            NOW,
+          ),
+        ),
+      );
+      expect(parsed.timezoneAssumed).toBe(true);
+    });
+  });
+
+  describe("member names are loaded only when they are needed", () => {
+    it("not for board counts", async () => {
+      const { getClient, reads } = fixture({ countRows: [] });
+      await queryItemsHandler(
+        getClient,
+        "u1",
+        { orgId: "o1", countBy: "board" },
+        NOW,
+      );
+      expect(reads).not.toContain("org_members");
+    });
+    it("not for status counts", async () => {
+      const { getClient, reads } = fixture({ countRows: [] });
+      await queryItemsHandler(
+        getClient,
+        "u1",
+        { orgId: "o1", countBy: "status" },
+        NOW,
+      );
+      expect(reads).not.toContain("org_members");
+    });
+    it("for assignee counts", async () => {
+      const { getClient, reads } = fixture({ countRows: [] });
+      await queryItemsHandler(
+        getClient,
+        "u1",
+        { orgId: "o1", countBy: "assignee" },
+        NOW,
+      );
+      expect(reads).toContain("org_members");
+    });
+    it("for item listings", async () => {
+      const { getClient, reads } = fixture();
+      await queryItemsHandler(getClient, "u1", { orgId: "o1" }, NOW);
+      expect(reads).toContain("org_members");
+    });
+  });
+
   it("reports total 0 and no items when nothing matches", async () => {
     const { getClient } = fixture({ items: [] });
     const parsed = JSON.parse(
@@ -499,5 +644,16 @@ describe("queryItemsHandler", () => {
     );
     expect(result.isError).toBe(true);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("queryItemsDescriptor", () => {
+  it("tells the agent how counts and paging behave", () => {
+    const d = queryItemsDescriptor.description;
+    expect(d).toMatch(/once per assignee/);
+    expect(d).toMatch(/more than `total`/);
+    expect(d).toMatch(/same name across boards/);
+    expect(d).toMatch(/at most 100 groups/);
+    expect(d).toMatch(/truncated/);
   });
 });
