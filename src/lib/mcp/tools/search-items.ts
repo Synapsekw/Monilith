@@ -1,4 +1,6 @@
 import * as z from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
@@ -30,6 +32,39 @@ type Hit = {
 
 function err(text: string): ToolResult {
   return { content: [{ type: "text", text }], isError: true };
+}
+
+/** Escape LIKE wildcards so the user's text is matched literally. */
+function escapeLike(q: string): string {
+  return q.replace(/[\\%_]/g, "\\$&");
+}
+
+type SemanticResult = Awaited<
+  ReturnType<
+    typeof import("@/lib/ai/embeddings/semantic-core").semanticSearchCore
+  >
+>;
+
+/**
+ * Semantic search never fails the tool: an import or runtime failure reports
+ * `ok: false`, and the caller says it searched names only.
+ *
+ * Dynamic import: the semantic path pulls in server-only modules, and this
+ * descriptor is reachable from catalog.ts, which client components import.
+ */
+async function runSemantic(
+  supabase: SupabaseClient<Database>,
+  args: Parameters<
+    typeof import("@/lib/ai/embeddings/semantic-core").semanticSearchCore
+  >[1],
+): Promise<SemanticResult> {
+  try {
+    const { semanticSearchCore } =
+      await import("@/lib/ai/embeddings/semantic-core");
+    return await semanticSearchCore(supabase, args);
+  } catch {
+    return { ok: false };
+  }
 }
 
 function ok(body: Record<string, unknown>): ToolResult {
@@ -73,23 +108,24 @@ export async function searchItemsHandler(
       return ok({ items: [], semantic: true, truncated: false });
   }
 
+  // Archived boards are excluded IN the query (inner join + filter), so the
+  // limit applies to rows that can actually be returned. Filtering after the
+  // limit would let archived rows crowd out real matches and make `truncated`
+  // lie. `%`, `_` and `\` are escaped so the user's text is a literal.
   let nameQ = supabase
     .from("items")
-    .select("id, name, board_id")
+    .select("id, name, board_id, boards!inner(name)")
     .eq("org_id", orgId)
     .is("archived_at", null)
-    .ilike("name", `%${input.query}%`)
+    .is("boards.archived_at", null)
+    .ilike("name", `%${escapeLike(input.query)}%`)
     .order("updated_at", { ascending: false })
     .limit(SEARCH_LIMIT + 1);
   if (boardIds) nameQ = nameQ.in("board_id", boardIds);
 
-  // Dynamic import: the semantic path pulls in server-only modules, and this
-  // descriptor is reachable from catalog.ts, which client components import.
-  const { semanticSearchCore } =
-    await import("@/lib/ai/embeddings/semantic-core");
   const [names, semantic] = await Promise.all([
     nameQ,
-    semanticSearchCore(supabase, {
+    runSemantic(supabase, {
       orgId,
       userId: actorId,
       query: input.query,
@@ -100,28 +136,17 @@ export async function searchItemsHandler(
   if (names.error) return err(names.error.message);
 
   const nameRows = names.data ?? [];
-  const truncated = nameRows.length > SEARCH_LIMIT;
-  const nameBoardIds = [...new Set(nameRows.map((r) => r.board_id))];
-  const { data: boards } = nameBoardIds.length
-    ? await supabase
-        .from("boards")
-        .select("id, name")
-        .in("id", nameBoardIds)
-        .is("archived_at", null)
-    : { data: [] as { id: string; name: string }[] };
-  const boardName = new Map((boards ?? []).map((b) => [b.id, b.name]));
+  const nameTruncated = nameRows.length > SEARCH_LIMIT;
 
   const hits: Hit[] = [];
   const seen = new Set<string>();
   for (const r of nameRows.slice(0, SEARCH_LIMIT)) {
-    const board = boardName.get(r.board_id);
-    if (!board) continue; // archived or unreadable board
     seen.add(r.id);
     hits.push({
       id: r.id,
       name: r.name,
       boardId: r.board_id,
-      board,
+      board: r.boards.name,
       matchedOn: "name",
     });
   }
@@ -137,6 +162,10 @@ export async function searchItemsHandler(
         matchedOn: "content",
       });
     }
+
+  // Truncated when EITHER the name query had a further match OR the merged
+  // list was cut by the final cap.
+  const truncated = nameTruncated || hits.length > SEARCH_LIMIT;
 
   return ok({
     items: hits.slice(0, SEARCH_LIMIT),
