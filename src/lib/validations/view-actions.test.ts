@@ -53,4 +53,17 @@ describe("timelineConfigSchema", () => {
       timelineConfigSchema.safeParse({ date_column_id: "nope" }).success,
     ).toBe(false);
   });
+
+  it.each([160, 300, 520])("accepts label_width %i", (label_width) => {
+    expect(timelineConfigSchema.safeParse({ label_width }).success).toBe(true);
+  });
+
+  it.each([159, 521, 300.5, "300", null])(
+    "rejects label_width %s",
+    (label_width) => {
+      expect(timelineConfigSchema.safeParse({ label_width }).success).toBe(
+        false,
+      );
+    },
+  );
 });

@@ -120,8 +120,8 @@ export const VIEW_TYPE_SCHEMA: Record<string, SchemaEntry> = {
   },
   timeline: {
     settings:
-      '{ date_column_id?: string | null, end_column_id?: string | null, color_column_id?: string | null, zoom?: "week" | "month" | "quarter" | "year" }',
-    note: 'date_column_id/end_column_id accept a date column id, or the sentinel "__created_at__" / "__updated_at__" to plot the item timestamp instead of a column; color_column_id should be a status or dropdown column.',
+      '{ date_column_id?: string | null, end_column_id?: string | null, color_column_id?: string | null, zoom?: "week" | "month" | "quarter" | "year", label_width?: number }',
+    note: 'date_column_id/end_column_id accept a date column id, or the sentinel "__created_at__" / "__updated_at__" to plot the item timestamp instead of a column; color_column_id should be a status or dropdown column; label_width is the name rail width in px, an integer from 160 to 520. An update replaces the whole config, so send every key you want to keep.',
   },
 };
 

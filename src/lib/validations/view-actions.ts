@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { CREATED_AT_SOURCE, UPDATED_AT_SOURCE } from "@/lib/boards/dates";
+import { LABEL_W_MAX, LABEL_W_MIN } from "@/components/boards/gantt/utils";
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(100);
@@ -36,14 +37,16 @@ export const calendarConfigSchema = z
   .strict();
 
 // Timeline config: start date column id, optional end date column id,
-// optional color-by column id (status/dropdown), and optional zoom level.
-// `.strict()` for the same reason as kanbanConfigSchema above.
+// optional color-by column id (status/dropdown), optional zoom level, and the
+// optional width of the name rail in px (an integer inside the rail's drag
+// bounds). `.strict()` for the same reason as kanbanConfigSchema above.
 export const timelineConfigSchema = z
   .object({
     date_column_id: dateSourceId.nullable().optional(),
     end_column_id: dateSourceId.nullable().optional(),
     color_column_id: z.string().uuid().nullable().optional(),
     zoom: z.enum(["week", "month", "quarter", "year"]).optional(),
+    label_width: z.number().int().min(LABEL_W_MIN).max(LABEL_W_MAX).optional(),
   })
   .strict();
 
