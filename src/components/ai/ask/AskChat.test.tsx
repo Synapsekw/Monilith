@@ -84,6 +84,7 @@ vi.mock("@/lib/boards/use-resync-boards", () => ({
   useResyncBoards: () => resync,
 }));
 import { AskChat } from "./AskChat";
+import { armAskStart } from "@/lib/ai/ask/start-prompts";
 import {
   appendUserMessage,
   createConversation,
@@ -100,6 +101,7 @@ const ACTION = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
   send.mockImplementation(
     async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
       onEvent({ type: "token", text: "Answer" });
@@ -149,7 +151,9 @@ function ask(question = "what's overdue?") {
 }
 
 describe("AskChat", () => {
-  it("sends the autoSend message once on a new chat, without any typing", async () => {
+  it("sends the autoSend message once when the link armed it, and clears the URL key", async () => {
+    armAskStart("What should I focus on today?");
+    const replaceState = vi.spyOn(window.history, "replaceState");
     render(
       <AskChat
         conversationId={null}
@@ -164,6 +168,36 @@ describe("AskChat", () => {
     );
     await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
     expect(createConversation).toHaveBeenCalledTimes(1);
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/ask");
+  });
+
+  it("does not send a second time when the page is remounted with the same props (browser Back)", async () => {
+    armAskStart("What should I focus on today?");
+    const props = {
+      conversationId: null,
+      initialMessages: [],
+      autoSend: "What should I focus on today?",
+    };
+    const first = render(<AskChat {...props} />);
+    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+    first.unmount();
+    render(<AskChat {...props} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send when ?start is present but no link armed it (shared or foreign link)", async () => {
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("never auto-sends into an existing conversation", async () => {

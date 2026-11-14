@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TodayFocus } from "./TodayFocus";
+import { consumeAskStart } from "@/lib/ai/ask/start-prompts";
 import type { FocusItem, FocusResult } from "@/lib/focus/queries";
 import type { FocusTier } from "@/lib/focus/reason";
 
@@ -49,7 +50,10 @@ function focusOf(count: number, over: Partial<FocusResult> = {}): FocusResult {
   };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  window.sessionStorage.clear();
+});
 
 describe("TodayFocus", () => {
   it("renders the first 7 of 12 items as deep links with name, place, reason and due date", () => {
@@ -148,6 +152,20 @@ describe("TodayFocus", () => {
     expect(
       screen.getByRole("link", { name: "Ask about my day" }),
     ).toHaveAttribute("href", "/ask?start=today");
+  });
+
+  it("arms the one-shot ask token when the Ask link is clicked, and not before", async () => {
+    const user = userEvent.setup();
+    render(<TodayFocus focus={focusOf(2)} canAsk nextDue={null} />);
+    expect(consumeAskStart("What should I focus on today?")).toBe(false);
+    await user.click(screen.getByRole("link", { name: "Ask about my day" }));
+    expect(consumeAskStart("What should I focus on today?")).toBe(true);
+  });
+
+  it("shows a row arrow that is hidden from assistive tech", () => {
+    render(<TodayFocus focus={focusOf(2)} canAsk={false} nextDue={null} />);
+    const link = screen.getAllByRole("link")[0];
+    expect(link.querySelector("svg[aria-hidden='true']")).not.toBeNull();
   });
 
   it("tells the member when dates fell back to UTC", () => {

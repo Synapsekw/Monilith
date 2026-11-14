@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, Globe } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Globe } from "lucide-react";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
+import { STATUS_SOFT_TEXT } from "@/components/ui/status-pill";
 import { Kicker } from "@/components/ui/kicker";
 import { cn } from "@/lib/utils";
 import type { FocusItem, FocusResult } from "@/lib/focus/queries";
 import type { FocusTier } from "@/lib/focus/reason";
 import { formatDue } from "@/lib/my-work/format";
+import { armAskStart, startPromptFor } from "@/lib/ai/ask/start-prompts";
 
 /** Rows shown before "Show all". The database already limited the list. */
 const COLLAPSED_ROWS = 7;
@@ -28,33 +30,39 @@ const TIERS: Record<
     label: "Overdue",
     plural: "overdue",
     bar: "bg-status-red",
-    text: "text-[color:color-mix(in_oklab,var(--status-red)_65%,black)] dark:text-status-red",
+    text: STATUS_SOFT_TEXT.red,
   },
   2: {
     label: "Blocking",
     plural: "blocking",
     bar: "bg-status-orange",
-    text: "text-[color:color-mix(in_oklab,var(--status-orange)_65%,black)] dark:text-status-orange",
+    text: STATUS_SOFT_TEXT.orange,
   },
   3: {
     label: "Due soon",
     plural: "due soon",
     bar: "bg-status-yellow",
-    text: "text-[color:color-mix(in_oklab,var(--status-yellow)_65%,black)] dark:text-status-yellow",
+    text: STATUS_SOFT_TEXT.yellow,
   },
   4: {
     label: "Waiting on reply",
     plural: "awaiting reply",
     bar: "bg-status-blue",
-    text: "text-[color:color-mix(in_oklab,var(--status-blue)_65%,black)] dark:text-status-blue",
+    text: STATUS_SOFT_TEXT.blue,
   },
   5: {
     label: "Stalled",
     plural: "stalled",
     bar: "bg-status-gray",
-    text: "text-[color:color-mix(in_oklab,var(--status-gray)_65%,black)] dark:text-status-gray",
+    text: STATUS_SOFT_TEXT.gray,
   },
 };
+
+/** The link's one-shot proof of intent; see `armAskStart`. */
+function armAsk() {
+  const text = startPromptFor("today");
+  if (text) armAskStart(text);
+}
 
 const TIER_ORDER: readonly FocusTier[] = [1, 2, 3, 4, 5];
 
@@ -131,6 +139,10 @@ function Row({
               {formatDue(item.dueDate)}
             </span>
           ) : null}
+          <ArrowRight
+            aria-hidden="true"
+            className="text-muted-foreground ease-keystone hidden size-3.5 shrink-0 -translate-x-1 opacity-0 transition-[opacity,transform] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 sm:block"
+          />
         </div>
       </Link>
     </li>
@@ -218,6 +230,7 @@ export function TodayFocus({
           {canAsk ? (
             <Link
               href="/ask?start=today"
+              onClick={armAsk}
               className="bg-surface hover:border-border-hover hover:bg-state-hover focus-visible:ring-ring ease-keystone group inline-flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[0.8125rem] font-medium whitespace-nowrap transition-[border-color,background-color,transform] outline-none focus-visible:ring-2 active:scale-[0.97]"
             >
               <AskAiMark className="text-primary ease-keystone size-4 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[18deg]" />

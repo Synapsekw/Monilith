@@ -1,5 +1,6 @@
 "use client";
 
+import { consumeAskStart } from "@/lib/ai/ask/start-prompts";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -128,7 +129,8 @@ export function AskChat({
   /** Who is answering, when not the org assistant (the My Mono tab). */
   speaker?: ChatSpeaker;
   /** A message to send once, on mount, as the first turn of a NEW chat (e.g.
-   *  the My Work "Ask about my day" link). Ignored for an existing thread. */
+   *  the My Work "Ask about my day" link). Ignored for an existing thread, and
+   *  inert unless the link armed the one-shot token (`armAskStart`). */
   autoSend?: string;
 }) {
   const router = useRouter();
@@ -321,12 +323,16 @@ export function AskChat({
     }
   }
 
-  // One-shot first turn for a link-started chat. The ref (not state) is what
-  // keeps a StrictMode double-mount from sending it twice.
+  // One-shot first turn for a link-started chat. It sends only when the link
+  // armed a sessionStorage token (consumed here, so Back/remount cannot send
+  // again and a bare `?start=` URL never does). The ref keeps a StrictMode
+  // double-mount from consuming twice.
   const autoSent = useRef(false);
   useEffect(() => {
     if (!autoSend || conversationId || autoSent.current) return;
     autoSent.current = true;
+    if (!consumeAskStart(autoSend)) return;
+    window.history.replaceState(null, "", "/ask");
     void onSubmit(autoSend);
     // Mount-only by design: `onSubmit` closes over fresh state every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
