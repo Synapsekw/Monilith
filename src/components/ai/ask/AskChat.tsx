@@ -394,7 +394,7 @@ export function AskChat({
           reliable guard: the dock always sets it and the two /ask surfaces
           never do. The header appears once a real thread exists to name. */}
       {!boardId && activeId !== null ? (
-        <ThreadHeader title={title ?? "Conversation"} />
+        <ThreadHeader title={title ?? "Conversation"} speaker={speaker} />
       ) : null}
       <MessageList
         messages={messages}

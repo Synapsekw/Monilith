@@ -9,4 +9,15 @@ describe("ThreadHeader", () => {
     expect(screen.getByText("Monolith assistant")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("names the speaker instead when a Mono answers", () => {
+    render(
+      <ThreadHeader
+        title="Q3 slippage"
+        speaker={{ name: "Aria", tint: "#ff6fa8" }}
+      />,
+    );
+    expect(screen.getByText("Aria")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith assistant")).toBeNull();
+  });
 });
