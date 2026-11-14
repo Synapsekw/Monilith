@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import * as z from "zod";
 import { simulateReadableStream, tool } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import {
   ASSISTANT_MAX_OUTPUT_TOKENS,
   ASSISTANT_MAX_STEPS,
@@ -49,6 +50,24 @@ function scripted(steps: unknown[][]) {
 }
 
 const messages = [{ role: "user" as const, content: "hi" }];
+
+describe("ASSISTANT_PREAMBLE tool references", () => {
+  it("names only tools that exist in the catalog", () => {
+    const names = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.name));
+    const mentioned =
+      ASSISTANT_PREAMBLE.match(
+        /\b(?:get|list|query|search|manage|create|update)_[a-z_]+\b/g,
+      ) ?? [];
+    expect(mentioned.length).toBeGreaterThan(0);
+    for (const m of mentioned) expect(names.has(m), m).toBe(true);
+  });
+
+  it("routes focus, filtered and why questions to their tools", () => {
+    expect(ASSISTANT_PREAMBLE).toContain("get_focus_today");
+    expect(ASSISTANT_PREAMBLE).toContain("query_items");
+    expect(ASSISTANT_PREAMBLE).toContain("get_item_thread");
+  });
+});
 
 describe("runAssistantLoop", () => {
   it("streams text as token events and returns it", async () => {
