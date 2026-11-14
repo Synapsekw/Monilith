@@ -1,7 +1,7 @@
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { resolveOrgForTool } from "@/lib/mcp/org-scope";
+import { resolveOrgForScope } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
@@ -90,7 +90,16 @@ export async function searchItemsHandler(
     return err("Pass boardId or folderId, not both.");
 
   const supabase = await getClient();
-  const scope = await resolveOrgForTool(supabase, input.orgId);
+  let scope: Awaited<ReturnType<typeof resolveOrgForScope>>;
+  try {
+    scope = await resolveOrgForScope(supabase, {
+      orgId: input.orgId,
+      boardId: input.boardId,
+      folderId: input.folderId,
+    });
+  } catch (e) {
+    return err((e as Error).message);
+  }
   if ("error" in scope) return err(scope.error);
   const orgId = scope.org.id;
 

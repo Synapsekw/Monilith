@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { FOCUS_LIMIT, getFocusTodayCore } from "@/lib/focus/queries";
 import type { FocusTier } from "@/lib/focus/reason";
-import { resolveOrgForTool } from "@/lib/mcp/org-scope";
+import { resolveOrgForScope } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
@@ -19,7 +19,15 @@ export async function getFocusTodayHandler(
   args: { orgId?: string; folderId?: string },
 ): Promise<ToolResult> {
   const supabase = await getClient();
-  const scope = await resolveOrgForTool(supabase, args.orgId);
+  let scope: Awaited<ReturnType<typeof resolveOrgForScope>>;
+  try {
+    scope = await resolveOrgForScope(supabase, {
+      ...(args.orgId ? { orgId: args.orgId } : {}),
+      ...(args.folderId ? { folderId: args.folderId } : {}),
+    });
+  } catch (e) {
+    scope = { error: (e as Error).message };
+  }
   if ("error" in scope)
     return { content: [{ type: "text", text: scope.error }], isError: true };
 

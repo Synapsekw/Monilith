@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
-import { listOrgMemberProfiles, resolveOrgForTool } from "@/lib/mcp/org-scope";
+import { listOrgMemberProfiles, resolveOrgForScope } from "@/lib/mcp/org-scope";
 import { todayInTimeZone } from "@/lib/focus/today";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
@@ -70,7 +70,11 @@ export async function queryItemsHandler(
 
   const supabase = await getClient();
   try {
-    const scope = await resolveOrgForTool(supabase, args.orgId);
+    const scope = await resolveOrgForScope(supabase, {
+      orgId: args.orgId,
+      boardId: args.boardId,
+      folderId: args.folderId,
+    });
     if ("error" in scope) return err(scope.error);
 
     let dueTo = args.dueTo ?? null;

@@ -86,6 +86,12 @@ function fakeClient(
       chain("limit", (n) => {
         max = n as number;
       });
+      b.maybeSingle = async () => {
+        rec.calls.push(["maybeSingle"]);
+        return errors[table]
+          ? { data: null, error: { message: errors[table] } }
+          : { data: rows[0] ?? null, error: null };
+      };
       b.then = (resolve: (v: unknown) => unknown) =>
         resolve(
           errors[table]
@@ -193,6 +199,7 @@ describe("searchItemsHandler", () => {
   it("board scope: name rows from other boards are excluded and semantic gets the board", async () => {
     const fake = fakeClient({
       organizations: [ORG],
+      boards: [{ id: "b1", org_id: "o1" }],
       items: [
         item("i1", "Fix login", "b1", LIVE),
         item("i2", "Fix login too", "b2", WEB),
@@ -214,6 +221,7 @@ describe("searchItemsHandler", () => {
   it("folder scope: only the folder's boards are searched, by name and by meaning", async () => {
     const fake = fakeClient({
       organizations: [ORG],
+      folders: [{ id: "f1", org_id: "o1" }],
       folder_boards: [
         { folder_id: "f1", board_id: "b1" },
         { folder_id: "f1", board_id: "b2" },
@@ -241,6 +249,7 @@ describe("searchItemsHandler", () => {
   it("empty folder: answers empty without searching", async () => {
     const fake = fakeClient({
       organizations: [ORG],
+      folders: [{ id: "f1", org_id: "o1" }],
       folder_boards: [{ folder_id: "other", board_id: "b1" }],
       items: [item("i1", "Fix login", "b1", LIVE)],
     });
@@ -422,6 +431,82 @@ describe("searchItemsHandler", () => {
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toMatch(/not a member/);
     expect(semanticSearchCore).not.toHaveBeenCalled();
+  });
+});
+
+describe("searchItemsHandler org from scope (review I2)", () => {
+  // Alphabetical: Acme (o1) is the default org; the board lives in Globex (o2).
+  const ORGS = [ORG, { id: "o2", name: "Globex", timezone: "UTC" }];
+  const O2 = { name: "Contracts", archived_at: null };
+
+  it("searches a board in a second org when only boardId is given", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      boards: [{ id: "b2", org_id: "o2" }],
+      items: [item("i9", "Vendor contract", "b2", O2, { org_id: "o2" })],
+    });
+
+    const res = await searchItemsHandler(fake.getClient, "u1", {
+      query: "contract",
+      boardId: "b2",
+    });
+
+    expect(ids(res)).toEqual(["i9"]);
+    expect(semanticSearchCore).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: "o2", boardIds: ["b2"] }),
+    );
+  });
+
+  it("searches a folder in a second org when only folderId is given", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      folders: [{ id: "f2", org_id: "o2" }],
+      folder_boards: [{ folder_id: "f2", board_id: "b2" }],
+      items: [item("i9", "Vendor contract", "b2", O2, { org_id: "o2" })],
+    });
+
+    const res = await searchItemsHandler(fake.getClient, "u1", {
+      query: "contract",
+      folderId: "f2",
+    });
+
+    expect(ids(res)).toEqual(["i9"]);
+  });
+
+  it("says the board is not found when the caller cannot read it", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      boards: [],
+      items: [item("i9", "Vendor contract", "b2", O2, { org_id: "o2" })],
+    });
+
+    const res = await searchItemsHandler(fake.getClient, "u1", {
+      query: "contract",
+      boardId: "b2",
+    });
+
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe("Board not found.");
+    expect(fake.reads("items")).toHaveLength(0);
+    expect(semanticSearchCore).not.toHaveBeenCalled();
+  });
+
+  it("an explicit orgId still wins over the board's org", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      boards: [{ id: "b2", org_id: "o2" }],
+      items: [item("i9", "Vendor contract", "b2", O2, { org_id: "o2" })],
+    });
+
+    const res = await searchItemsHandler(fake.getClient, "u1", {
+      query: "contract",
+      orgId: "o1",
+      boardId: "b2",
+    });
+
+    expect(ids(res)).toEqual([]);
+    expect(fake.reads("boards")).toHaveLength(0);
   });
 });
 

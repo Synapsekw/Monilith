@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { resolveToolOrg } from "./org-scope";
+import { describe, expect, it, vi } from "vitest";
+import { resolveOrgForScope, resolveToolOrg } from "./org-scope";
 import type { UserOrg } from "@/lib/auth/session";
 
 const ORGS: UserOrg[] = [
@@ -22,5 +22,82 @@ describe("resolveToolOrg", () => {
 
   it("returns null when the user has no orgs", () => {
     expect(resolveToolOrg([], undefined)).toBeNull();
+  });
+});
+
+/** A tiny client double: `eq` filters, `order` keeps order, rows per table. */
+function scopeClient(tables: Record<string, Record<string, unknown>[]>) {
+  const reads: string[] = [];
+  const from = (table: string) => {
+    reads.push(table);
+    let rows = [...(tables[table] ?? [])];
+    const q: Record<string, unknown> = {
+      select: () => q,
+      order: () => q,
+      eq: (k: string, v: unknown) => {
+        rows = rows.filter((r) => r[k] === v);
+        return q;
+      },
+      maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+      then: (r: (v: unknown) => unknown) => r({ data: rows, error: null }),
+    };
+    return q;
+  };
+  return { client: { from } as never, reads };
+}
+
+describe("resolveOrgForScope", () => {
+  const tables = {
+    organizations: ORGS,
+    boards: [{ id: "b2", org_id: "o2" }],
+    folders: [{ id: "f2", org_id: "o2" }],
+  };
+
+  it("uses the board's org when only boardId is given", async () => {
+    const { client } = scopeClient(tables);
+    const r = await resolveOrgForScope(client, { boardId: "b2" });
+    expect(r).toEqual({ org: ORGS[1] });
+  });
+
+  it("uses the folder's org when only folderId is given", async () => {
+    const { client } = scopeClient(tables);
+    const r = await resolveOrgForScope(client, { folderId: "f2" });
+    expect(r).toEqual({ org: ORGS[1] });
+  });
+
+  it("an explicit orgId wins and the board is not read", async () => {
+    const { client, reads } = scopeClient(tables);
+    const r = await resolveOrgForScope(client, { orgId: "o1", boardId: "b2" });
+    expect(r).toEqual({ org: ORGS[0] });
+    expect(reads).not.toContain("boards");
+  });
+
+  it("falls back to the first org when nothing scopes it", async () => {
+    const { client } = scopeClient(tables);
+    expect(await resolveOrgForScope(client, {})).toEqual({ org: ORGS[0] });
+  });
+
+  it("an unreadable board or folder is not found, never another org", async () => {
+    const { client } = scopeClient({ organizations: ORGS });
+    expect(await resolveOrgForScope(client, { boardId: "b2" })).toEqual({
+      error: "Board not found.",
+    });
+    expect(await resolveOrgForScope(client, { folderId: "f2" })).toEqual({
+      error: "Folder not found.",
+    });
+  });
+
+  it("a read failure throws rather than reading as not found", async () => {
+    const from = vi.fn(() => {
+      const q: Record<string, unknown> = {
+        select: () => q,
+        eq: () => q,
+        maybeSingle: async () => ({ data: null, error: { message: "down" } }),
+      };
+      return q;
+    });
+    await expect(
+      resolveOrgForScope({ from } as never, { boardId: "b2" }),
+    ).rejects.toThrow(/down/);
   });
 });

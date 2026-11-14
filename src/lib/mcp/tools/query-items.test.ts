@@ -73,6 +73,7 @@ function fixture(
     orgsError?: string;
     countRows?: unknown[];
     items?: TestItem[];
+    tables?: Record<string, Row[]>;
   } = {},
 ) {
   const items = opts.items ?? ITEMS;
@@ -123,6 +124,7 @@ function fixture(
       { id: "u2", timezone: null, full_name: "Ana Kovac", avatar_url: null },
       { id: "u1", timezone: "Asia/Tokyo", full_name: "Me", avatar_url: null },
     ],
+    ...opts.tables,
   };
   const reads: string[] = [];
   const from = (table: string) => {
@@ -643,6 +645,71 @@ describe("queryItemsHandler", () => {
       NOW,
     );
     expect(result.isError).toBe(true);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("queryItemsHandler org from scope (review I2)", () => {
+  // Alphabetical: Acme (o1) is the default org; the board lives in Globex (o2).
+  const ORGS = [
+    { id: "o1", name: "Acme", timezone: "UTC" },
+    { id: "o2", name: "Globex", timezone: "UTC" },
+  ];
+
+  it("queries a board in a second org when only boardId is given", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, boards: [{ id: "b2", org_id: "o2" }] },
+    });
+    await queryItemsHandler(getClient, "u1", { boardId: "b2" }, NOW);
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_org_id: "o2", p_board_id: "b2" }),
+    );
+  });
+
+  it("queries a folder in a second org when only folderId is given", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, folders: [{ id: "f2", org_id: "o2" }] },
+    });
+    await queryItemsHandler(
+      getClient,
+      "u1",
+      { folderId: "f2", countBy: "board" },
+      NOW,
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "count_items",
+      expect.objectContaining({ p_org_id: "o2", p_folder_id: "f2" }),
+    );
+  });
+
+  it("says the board is not found when the caller cannot read it", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, boards: [] },
+    });
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { boardId: "b2" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe("Board not found.");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("says the folder is not found when the caller cannot read it", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, folders: [] },
+    });
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { folderId: "f2" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe("Folder not found.");
     expect(rpc).not.toHaveBeenCalled();
   });
 });

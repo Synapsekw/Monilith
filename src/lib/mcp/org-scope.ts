@@ -102,3 +102,45 @@ export async function resolveOrgForTool(
     };
   return { org };
 }
+
+/**
+ * The org for a tool call scoped to a board or a project folder (review I2).
+ *
+ * Without an `orgId`, `resolveOrgForTool` picks the caller's alphabetically
+ * first org, so a board or folder in any other org would be filtered to an
+ * empty result that reads exactly like "no match". When the call names a board
+ * or folder and no org, the org is read from that row through the caller's own
+ * RLS-scoped client: a row the caller cannot read comes back as "not found",
+ * never as another org's answer. An explicit `orgId` still wins (and is still
+ * checked for membership). A read failure throws, so the handler's catch
+ * surfaces it instead of turning an outage into "not found".
+ */
+export async function resolveOrgForScope(
+  supabase: SupabaseClient<Database>,
+  scope: { orgId?: string; boardId?: string; folderId?: string },
+): Promise<{ org: UserOrg } | { error: string }> {
+  if (scope.orgId || (!scope.boardId && !scope.folderId))
+    return resolveOrgForTool(supabase, scope.orgId);
+
+  let orgId: string | undefined;
+  if (scope.boardId) {
+    const { data, error } = await supabase
+      .from("boards")
+      .select("org_id")
+      .eq("id", scope.boardId)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to load board: ${error.message}`);
+    if (!data) return { error: "Board not found." };
+    orgId = data.org_id;
+  } else if (scope.folderId) {
+    const { data, error } = await supabase
+      .from("folders")
+      .select("org_id")
+      .eq("id", scope.folderId)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to load folder: ${error.message}`);
+    if (!data) return { error: "Folder not found." };
+    orgId = data.org_id;
+  }
+  return resolveOrgForTool(supabase, orgId);
+}

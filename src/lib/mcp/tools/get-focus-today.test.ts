@@ -5,9 +5,9 @@ vi.mock("@/lib/focus/queries", () => ({
   FOCUS_LIMIT: 20,
   getFocusTodayCore: (...a: unknown[]) => getFocusTodayCore(...a),
 }));
-const resolveOrgForTool = vi.fn();
+const resolveOrgForScope = vi.fn();
 vi.mock("@/lib/mcp/org-scope", () => ({
-  resolveOrgForTool: (...a: unknown[]) => resolveOrgForTool(...a),
+  resolveOrgForScope: (...a: unknown[]) => resolveOrgForScope(...a),
 }));
 
 import { getFocusTodayHandler } from "./get-focus-today";
@@ -17,9 +17,9 @@ const getClient = vi.fn(async () => supabase);
 
 beforeEach(() => {
   getFocusTodayCore.mockReset();
-  resolveOrgForTool.mockReset();
+  resolveOrgForScope.mockReset();
   getClient.mockClear();
-  resolveOrgForTool.mockResolvedValue({ org: { id: "o1", name: "Acme" } });
+  resolveOrgForScope.mockResolvedValue({ org: { id: "o1", name: "Acme" } });
 });
 
 describe("getFocusTodayHandler", () => {
@@ -38,12 +38,48 @@ describe("getFocusTodayHandler", () => {
       folderId: "f1",
     });
     expect(getClient).toHaveBeenCalledTimes(1);
-    expect(resolveOrgForTool).toHaveBeenCalledWith(supabase, "o1");
+    expect(resolveOrgForScope).toHaveBeenCalledWith(supabase, {
+      orgId: "o1",
+      folderId: "f1",
+    });
     expect(getFocusTodayCore).toHaveBeenCalledWith(supabase, {
       orgId: "o1",
       userId: "u1",
       folderId: "f1",
     });
+  });
+
+  it("takes the org from the folder when only folderId is given (review I2)", async () => {
+    resolveOrgForScope.mockResolvedValue({
+      org: { id: "o2", name: "Globex", timezone: "UTC" },
+    });
+    getFocusTodayCore.mockResolvedValue({
+      ok: true,
+      data: {
+        today: "2026-11-14",
+        timezoneAssumed: false,
+        items: [],
+        totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      },
+    });
+    await getFocusTodayHandler(getClient, "u1", { folderId: "f2" });
+    expect(resolveOrgForScope).toHaveBeenCalledWith(supabase, {
+      folderId: "f2",
+    });
+    expect(getFocusTodayCore).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ orgId: "o2", folderId: "f2" }),
+    );
+  });
+
+  it("reports an unreadable folder instead of an empty day", async () => {
+    resolveOrgForScope.mockResolvedValue({ error: "Folder not found." });
+    const result = await getFocusTodayHandler(getClient, "u1", {
+      folderId: "f9",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe("Folder not found.");
+    expect(getFocusTodayCore).not.toHaveBeenCalled();
   });
 
   it("returns tier names, reasons and totals, and no internal fields", async () => {
