@@ -35,6 +35,7 @@ describe("presets", () => {
     expect(PRESETS.project.tabs.map((t) => t.id)).toEqual([
       "overview",
       "stages",
+      "timeline",
       "boards",
       "people",
     ]);

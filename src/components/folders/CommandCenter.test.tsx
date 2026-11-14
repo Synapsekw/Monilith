@@ -24,10 +24,27 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/folders/actions", () => ({
   getFolderWorkload: vi.fn(async () => ({ ok: true, data: [] })),
+  getFolderTimeline: vi.fn(async () => ({
+    ok: true,
+    data: {
+      board_order: [],
+      boards: [],
+      items: [],
+      external_item_ids: [],
+      dependencies: [],
+      total_items: 0,
+      truncated: false,
+    },
+  })),
 }));
 // The lazy burn chart never resolves in jsdom; the shell must not depend on it.
 vi.mock("@/components/folders/charts/BurnChart", () => ({
   BurnChart: () => <div data-testid="burn-chart" />,
+}));
+// next/dynamic never resolves in jsdom either: stand the real tab body in for
+// the lazy wrapper so the test still proves the fetch waits for the tab.
+vi.mock("@/components/folders/tabs/Timeline", async () => ({
+  TimelineTab: (await import("./tabs/TimelineInner")).TimelineInner,
 }));
 vi.mock("@/lib/folders/layout-actions", () => ({
   saveFolderLayout: vi.fn(),
@@ -39,7 +56,7 @@ vi.mock("sonner", () => ({
   }),
 }));
 
-import { getFolderWorkload } from "@/lib/folders/actions";
+import { getFolderTimeline, getFolderWorkload } from "@/lib/folders/actions";
 import { saveFolderLayout } from "@/lib/folders/layout-actions";
 import { CommandCenter, type CommandCenterProps } from "./CommandCenter";
 
@@ -59,6 +76,7 @@ describe("CommandCenter", () => {
     params.current = new URLSearchParams("");
     window.history.replaceState({}, "", "/folders/f1");
     vi.mocked(getFolderWorkload).mockClear();
+    vi.mocked(getFolderTimeline).mockClear();
     vi.mocked(saveFolderLayout).mockReset();
     routerPush.mockClear();
     routerRefresh.mockClear();
@@ -99,6 +117,42 @@ describe("CommandCenter", () => {
     expect(replace).toHaveBeenCalledTimes(3);
     expect(getFolderWorkload).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("loads the timeline only when its tab opens, and only once", async () => {
+    // Tab state lives in the (mocked) search params, so "opening" a tab is a
+    // re-render with ?tab= — the same thing history.replaceState drives live.
+    const qc = new QueryClient();
+    const ui = () => (
+      <QueryClientProvider client={qc}>
+        <TooltipProvider>
+          <CommandCenter payload={folderFixture()} />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui());
+    expect(screen.getByRole("tab", { name: /Timeline/ })).toBeInTheDocument();
+    // Overview first paint: no timeline fetch.
+    expect(getFolderTimeline).not.toHaveBeenCalled();
+    params.current = new URLSearchParams("tab=timeline");
+    rerender(ui());
+    expect(
+      await screen.findByText("No boards match these filters."),
+    ).toBeInTheDocument();
+    expect(getFolderTimeline).toHaveBeenCalledTimes(1);
+    expect(getFolderTimeline).toHaveBeenCalledWith({
+      folderId: folderFixture().folder.id,
+    });
+    // Away and back re-reads the query cache instead of refetching.
+    params.current = new URLSearchParams("tab=boards");
+    rerender(ui());
+    params.current = new URLSearchParams("tab=timeline");
+    rerender(ui());
+    expect(
+      await screen.findByText("No boards match these filters."),
+    ).toBeInTheDocument();
+    expect(getFolderTimeline).toHaveBeenCalledTimes(1);
     expect(routerRefresh).not.toHaveBeenCalled();
   });
 

@@ -1,10 +1,13 @@
 import "server-only";
 import { cache } from "react";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
+
+const UUID = z.string().uuid();
 
 export type Board = Tables<"boards">;
 export type Group = Tables<"groups">;
@@ -255,14 +258,19 @@ export const getBoardPayload = cache(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
-      // Bounded over the board_id index — the only board-payload read that was
-      // previously uncapped. Dependencies scale with items, so cap at the same
-      // 5000 as the items read; a server-side follow-up applies if a board ever
-      // exceeds this (matches items/cell_values/relation_links).
-      supabase
-        .from("item_dependencies")
-        .select("*")
-        .eq("board_id", boardId)
+      // Bounded over the board_id + predecessor_board_id indexes. A link belongs
+      // to this board when it is either end (cross-board links included).
+      // Dependencies scale with items, so cap at the same 5000 as the items
+      // read; a server-side follow-up applies if a board ever exceeds this
+      // (matches items/cell_values/relation_links). The `.or()` filter string is
+      // only built from a validated uuid — boardId is a raw route param here.
+      (UUID.safeParse(boardId).success
+        ? supabase
+            .from("item_dependencies")
+            .select("*")
+            .or(`board_id.eq.${boardId},predecessor_board_id.eq.${boardId}`)
+        : supabase.from("item_dependencies").select("*").eq("board_id", boardId)
+      )
         .order("created_at", { ascending: true })
         .limit(5000),
       supabase

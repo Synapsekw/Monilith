@@ -43,6 +43,39 @@ describe("folderLayoutConfigSchema", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("accepts a single timeline tab and rejects a duplicate", () => {
+    const base = {
+      v: 1 as const,
+      tabs: [
+        {
+          id: "overview",
+          label: "Overview",
+          kind: "canvas" as const,
+          sections: [],
+        },
+      ],
+    };
+    expect(
+      folderLayoutConfigSchema.safeParse({
+        ...base,
+        tabs: [
+          ...base.tabs,
+          { id: "timeline", label: "Timeline", kind: "timeline" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      folderLayoutConfigSchema.safeParse({
+        ...base,
+        tabs: [
+          ...base.tabs,
+          { id: "timeline", label: "Timeline", kind: "timeline" },
+          { id: "t2", label: "T2", kind: "timeline" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects duplicate section ids inside one tab", () => {
     const parsed = folderLayoutConfigSchema.safeParse({
       v: 1,

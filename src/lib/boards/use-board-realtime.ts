@@ -66,6 +66,9 @@ export function useBoardRealtime(
       if (frame == null) frame = requestAnimationFrame(flush);
     }
 
+    const onDependency = (payload: unknown) =>
+      enqueue({ table: "item_dependencies", payload } as BoardRealtimeEvent);
+
     const channel = supabase
       .channel(`board:${boardId}`)
       .on(
@@ -82,11 +85,20 @@ export function useBoardRealtime(
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "item_dependencies", filter },
-        (payload) =>
-          enqueue({
-            table: "item_dependencies",
-            payload,
-          } as BoardRealtimeEvent),
+        onDependency,
+      )
+      // A cross-board link lives on its successor's board (board_id) — listen
+      // on the predecessor end too so this board sees links it feeds. A
+      // same-board link arrives on both; applyDependency is idempotent on id.
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "item_dependencies",
+          filter: `predecessor_board_id=eq.${boardId}`,
+        },
+        onDependency,
       )
       .on(
         "postgres_changes",

@@ -78,6 +78,15 @@ vi.mock("@/lib/boards/use-board-realtime", () => ({
   useBoardRealtime: vi.fn(),
 }));
 
+const { depContext } = vi.hoisted(() => ({
+  depContext: {
+    value: { data: { boards: [], items: [] }, isPending: false } as unknown,
+  },
+}));
+vi.mock("@/lib/boards/use-dependency-context", () => ({
+  useDependencyContext: () => depContext.value,
+}));
+
 const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -173,6 +182,7 @@ beforeEach(() => {
   removeDependency.mockReset();
   push.mockReset();
   refresh.mockReset();
+  depContext.value = { data: { boards: [], items: [] }, isPending: false };
 });
 
 describe("GanttBoard", () => {
@@ -962,5 +972,61 @@ describe("GanttBoard — timeline row virtualization", () => {
     // Windowed: a viewport's worth (+overscan), never all 200.
     expect(rows.length).toBeLessThan(60);
     expect(rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe("GanttBoard — cross-board links", () => {
+  const OTHER = "99999999-9999-4999-8999-999999999999";
+
+  it("draws a cross-board link as a stub, not an arrow, and navigates on tap", () => {
+    depContext.value = {
+      isPending: false,
+      data: {
+        boards: [
+          {
+            id: OTHER,
+            name: "Regulatory",
+            can_edit: false,
+            date_columns: [],
+            timeline_config: null,
+            groups: [],
+          },
+        ],
+        items: [
+          {
+            id: "ext-1",
+            board_id: OTHER,
+            group_id: "g1",
+            parent_id: null,
+            name: "Permit",
+            position: 0,
+            created_at: "",
+            updated_at: "",
+            dates: {},
+          },
+        ],
+      },
+    };
+    const payload = payloadFixture() as unknown as {
+      dependencies: Array<Record<string, unknown>>;
+    };
+    payload.dependencies.push({
+      id: "x-dep",
+      org_id: "o1",
+      board_id: "b1",
+      predecessor_board_id: OTHER,
+      predecessor_id: "ext-1",
+      successor_id: "i1",
+      type: "FS",
+      created_at: "2026-06-01T00:00:00Z",
+    });
+    const { container } = renderGantt(payload as never);
+    // Only the same-board i1 -> i2 link is an arrow.
+    expect(container.querySelectorAll("path[marker-end]")).toHaveLength(1);
+    const chip = screen.getByRole("button", {
+      name: /Waiting on Permit · Regulatory/,
+    });
+    fireEvent.click(chip);
+    expect(push).toHaveBeenCalledWith(`/boards/${OTHER}?item=ext-1`);
   });
 });

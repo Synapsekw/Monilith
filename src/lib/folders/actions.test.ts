@@ -12,8 +12,10 @@ vi.mock("@/lib/org/active", () => ({
     timezone: "UTC",
   })),
 }));
+const resolveFolderTimeline = vi.fn();
 vi.mock("./resolve", () => ({
   resolveFolderWorkload: vi.fn(async () => ({ ok: true, rows: [] })),
+  resolveFolderTimeline: (...a: unknown[]) => resolveFolderTimeline(...a),
 }));
 
 type EqCall = [string, unknown];
@@ -146,6 +148,7 @@ import {
   attachDashboardToFolder,
   createFolder,
   deleteFolder,
+  getFolderTimeline,
   getFolderWorkload,
   moveBoardToFolder,
   renameFolder,
@@ -293,6 +296,35 @@ describe("folder actions", () => {
     expect(await getFolderWorkload({ folderId: FOLDER })).toEqual({
       ok: true,
       data: [],
+    });
+  });
+
+  it("getFolderTimeline rejects a bad id and returns parsed data", async () => {
+    expect((await getFolderTimeline({ folderId: "x" })).ok).toBe(false);
+    expect(resolveFolderTimeline).not.toHaveBeenCalled();
+    const data = {
+      board_order: [],
+      boards: [],
+      items: [],
+      external_item_ids: [],
+      dependencies: [],
+      total_items: 0,
+      truncated: false,
+    };
+    resolveFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    const res = await getFolderTimeline({ folderId: FOLDER });
+    expect(resolveFolderTimeline).toHaveBeenCalledWith(
+      expect.anything(),
+      FOLDER,
+    );
+    expect(res).toEqual({ ok: true, data });
+    resolveFolderTimeline.mockResolvedValueOnce({
+      ok: false,
+      error: "Folder not found.",
+    });
+    expect(await getFolderTimeline({ folderId: FOLDER })).toMatchObject({
+      ok: false,
+      error: "Folder not found.",
     });
   });
 });

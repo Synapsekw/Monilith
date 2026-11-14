@@ -2674,3 +2674,5 @@ Critical path: Task 1 → Task 4 → Task 6/7 → Task 8 (Task 3 → Task 5 runs
 1. **Folder Timeline filters** use the existing folder filter bar (stage + board). The spec named person/status, which the bar does not have; adding them is out of scope.
 2. **Opening an item from the folder Timeline** navigates to `/boards/{id}?item={id}` instead of an in-place panel — the folder page has no item panel and the panel's props are board-bound.
 3. **Existing folders with a saved layout** get the tab via a new "Add Timeline tab" button in the layout editor (there was no add-tab path; only preset reset).
+4. **Board bands show no done/total.** The `folder_timeline` payload carries no per-item status, so a band cannot count done items without an RPC change. Deferred to the next migration that touches `folder_timeline`.
+5. **Board Gantt cannot remove a cross-board link.** Cross-board links render as stubs with no remove entry. They are removed from the item panel ("Waiting on / Blocking") or the folder Timeline instead.

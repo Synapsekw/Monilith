@@ -2227,6 +2227,7 @@ export type Database = {
           created_at: string;
           id: string;
           org_id: string;
+          predecessor_board_id: string;
           predecessor_id: string;
           successor_id: string;
           type: string;
@@ -2236,6 +2237,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           org_id: string;
+          predecessor_board_id: string;
           predecessor_id: string;
           successor_id: string;
           type?: string;
@@ -2245,6 +2247,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           org_id?: string;
+          predecessor_board_id?: string;
           predecessor_id?: string;
           successor_id?: string;
           type?: string;
@@ -2262,6 +2265,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_predecessor_board_id_fkey";
+            columns: ["predecessor_board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
             referencedColumns: ["id"];
           },
           {
@@ -4186,6 +4196,8 @@ export type Database = {
         Args: { p_leaving: string; p_org_id: string };
         Returns: string;
       };
+      _timeline_boards_json: { Args: { p_board_ids: string[] }; Returns: Json };
+      _timeline_items_json: { Args: { p_item_ids: string[] }; Returns: Json };
       _webhook_outcome: {
         Args: { p_error_msg: string; p_status_code: number };
         Returns: string;
@@ -4318,6 +4330,7 @@ export type Database = {
         Args: { p_action: Json; p_agent: string; p_item: string };
         Returns: string;
       };
+      board_dependency_context: { Args: { p_board_id: string }; Returns: Json };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
@@ -4539,6 +4552,7 @@ export type Database = {
           created_at: string;
           id: string;
           org_id: string;
+          predecessor_board_id: string;
           predecessor_id: string;
           successor_id: string;
           type: string;
@@ -4772,6 +4786,10 @@ export type Database = {
           total: number;
           unassigned: number;
         }[];
+      };
+      folder_timeline: {
+        Args: { p_folder_id: string; p_limit?: number };
+        Returns: Json;
       };
       folder_workload: {
         Args: { p_folder_id: string };

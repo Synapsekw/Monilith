@@ -144,12 +144,27 @@ describe("useLayoutDraft", () => {
     expect(result.current.config.tabs.map((t) => t.id)).toEqual([
       "overview",
       "stages",
+      "timeline",
       "boards",
     ]);
     act(() => result.current.hideTab("stages"));
+    act(() => result.current.hideTab("timeline"));
     act(() => result.current.hideTab("boards"));
     act(() => result.current.hideTab("overview"));
     expect(result.current.config.tabs).toHaveLength(1);
+  });
+
+  it("addTab adds a missing timeline tab once, respecting the 6-tab cap", () => {
+    const { result } = renderHook(() => useLayoutDraft(PRESETS.support));
+    act(() => result.current.addTab("timeline"));
+    expect(result.current.config.tabs.map((t) => t.kind)).toContain("timeline");
+    act(() => result.current.addTab("timeline"));
+    expect(
+      result.current.config.tabs.filter((t) => t.kind === "timeline"),
+    ).toHaveLength(1);
+    expect(
+      folderLayoutConfigSchema.safeParse(result.current.config).success,
+    ).toBe(true);
   });
 
   it("reset(preset) replaces the whole config and stays dirty", () => {

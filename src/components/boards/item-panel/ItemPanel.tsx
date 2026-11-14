@@ -32,6 +32,7 @@ import { MetaChip } from "@/components/ui/meta-chip";
 import type { MonoMemberMeta } from "@/lib/monos/types";
 import { AgentChip } from "@/components/mono/MonoChip";
 import { ownerPossessive } from "@/lib/monos/labels";
+import type { TimelineViewConfig } from "@/lib/boards/schedule";
 
 // Lazy-load the AI assist panel (and its action/SDK imports) only when the
 // fields tab is first opened — keeps opening the item panel / switching to
@@ -55,6 +56,18 @@ const FindSimilar = dynamic(
   { ssr: false },
 );
 
+// Lazy like FindSimilar — the dependencies section (and its search/action
+// imports) loads only when the fields tab is first opened (gotcha-09). It reads
+// the already-hydrated board cache, so opening it adds no round-trip unless
+// the board has cross-board links.
+const DependenciesSection = dynamic(
+  () =>
+    import("@/components/boards/item-panel/DependenciesSection").then(
+      (m) => m.DependenciesSection,
+    ),
+  { ssr: false },
+);
+
 type Tab = "fields" | "updates" | "activity" | "files";
 
 // Memoized: BoardViews re-renders on every presence sync, and every prop it
@@ -67,6 +80,9 @@ function ItemPanelInner({
   itemName,
   orgId,
   boardId,
+  boardName,
+  timelineConfig,
+  canEdit,
   currentUserId,
   columns,
   members,
@@ -78,6 +94,11 @@ function ItemPanelInner({
   itemName: string;
   orgId: string;
   boardId: string;
+  boardName: string;
+  /** The board's first timeline view config — decides which dates mark "Late". */
+  timelineConfig: TimelineViewConfig;
+  /** False for read-only viewers: hides adding/removing dependencies. */
+  canEdit: boolean;
   currentUserId: string;
   columns: readonly Column[];
   // Superset of activity's Member: the created-by row also renders the avatar
@@ -207,6 +228,15 @@ function ItemPanelInner({
                   />
                 )}
                 {itemId && <FindSimilar itemId={itemId} />}
+                {itemId && (
+                  <DependenciesSection
+                    itemId={itemId}
+                    boardId={boardId}
+                    boardName={boardName}
+                    schedule={timelineConfig}
+                    canEdit={canEdit}
+                  />
+                )}
                 <dl className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground text-sm">
