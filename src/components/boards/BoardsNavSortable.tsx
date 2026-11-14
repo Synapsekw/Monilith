@@ -27,8 +27,7 @@ import type { NavBoard } from "@/lib/folders/group";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { navSyncKey } from "@/lib/boards/nav-sync-key";
 import { reorderBoard } from "@/lib/boards/actions";
-import { moveBoardToFolder } from "@/lib/folders/actions";
-import { showMutationError } from "@/lib/ui/mutation-toast";
+import { useMoveBoardToFolder } from "@/components/boards/move-to-folder";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { useUIStore } from "@/stores/ui";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
@@ -430,6 +429,8 @@ export function BoardsNavSortable({
     keyboardCoordinateGetter: sortableKeyboardCoordinates,
   });
 
+  const moveBoard = useMoveBoardToFolder();
+
   /**
    * Filing a board by dropping it on a folder header. Unlike reorder this
    * genuinely changes what the server renders (the placement decides which
@@ -437,18 +438,20 @@ export function BoardsNavSortable({
    * where the optimistic order is already authoritative.
    */
   function fileIntoFolder(boardId: string, folderId: string) {
-    void moveBoardToFolder({ boardId, folderId }).then((res) => {
-      if (!res.ok) {
-        showMutationError("Couldn't move the board.", new Error(res.error));
-        return;
-      }
-      // The folder may have been collapsed — and hover-expansion is purely
-      // visual now, so it will snap shut the instant the pointer leaves, hiding
-      // the board the user just filed. `setSection`, never `toggleSection`: an
-      // already-open folder must stay open. Client state only, 0 round-trips.
-      setSection(`${FOLDER_DROP_PREFIX}${folderId}`, false);
-      // No router.refresh(): moveBoardToFolder's updateTag(foldersTag) put the
-      // re-rendered sidebar in the action's own response.
+    moveBoard({
+      boardId,
+      folderId,
+      folderName: folders.find((f) => f.id === folderId)?.name,
+      onMoved: () => {
+        // The folder may have been collapsed — and hover-expansion is purely
+        // visual now, so it will snap shut the instant the pointer leaves,
+        // hiding the board the user just filed. `setSection`, never
+        // `toggleSection`: an already-open folder must stay open. Client state
+        // only, 0 round-trips.
+        setSection(`${FOLDER_DROP_PREFIX}${folderId}`, false);
+        // No router.refresh(): moveBoardToFolder's updateTag(foldersTag) put
+        // the re-rendered sidebar in the action's own response.
+      },
     });
   }
 
