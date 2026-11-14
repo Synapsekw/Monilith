@@ -328,13 +328,15 @@
   --secondary: #f1f1f4;
   --secondary-foreground: #1a1a1f;
   --muted: #f1f1f4;
-  /* Tuned against the WASH, not against --background: the sidebar's muted nav
-     labels sit on the gradient's dark end (light) and under the brand bloom
-     (dark). Worst case, computed with globals.contrast.test.ts's own over()
-     helper (per-channel Math.round of the alpha blend): 4.56:1 light
-     (darkest wash stop, #cfd4e6) / 4.70:1 dark (lightest wash stop #212540,
-     fully bloomed at 22% brand → composited rgb(57 65 102)) — both clear AA
-     4.5 with a thin margin. See globals.contrast.test.ts. */
+  /* Dark is tuned against the WASH, not against --background: the sidebar's
+     muted nav labels sit under the brand bloom — 4.70:1 on the lightest wash
+     stop #212540 fully bloomed at 22% brand (composited rgb(57 65 102)),
+     computed with globals.contrast.test.ts's own over() helper.
+     The LIGHT value no longer meets the wash at all: the light chrome is the
+     bold frame, whose muted text is white (see `.chrome-scope` below). This
+     grey only has to clear AA on the content card and the raised surfaces,
+     which it does with room — it was tuned against the old pale wash
+     (#cfd4e6, 4.56:1) and is deliberately unchanged. */
   --muted-foreground: #5b5b62;
   /* Kicker shares --muted-foreground's exact lightness in both themes: AA 4.5
      on the wash leaves no dimmer gray to spend, so the old "kicker is dimmer
@@ -352,23 +354,34 @@
   --ring: var(--brand);
   --glow-primary: 0 0 30px -8px rgba(90, 110, 213, 0.35);
 
-  /* Periwinkle Dusk — light. Chrome only; content stays neutral. The first stop
-     sits slightly below the bloom so the bloom has visible range (the Aug 27
-     tint had collapsed the two onto the same value — a no-op bloom). */
-  --app-wash: linear-gradient(168deg, #dde2f2 0%, #d6dbee 46%, #cfd4e6 100%);
+  /* Periwinkle Dusk — light: the BOLD FRAME. In light mode the chrome is a
+     saturated gradient of the preset's own hues (periwinkle into deep indigo
+     here) and everything painted on it is white — see `.chrome-scope` after
+     the preset blocks. The content card stays white. The stops are not taste:
+     scripts/theme/gen-presets.mjs starts from a mid-tone ramp (OKLCH L
+     0.52 / 0.44 / 0.33) and lowers each stop only until white chrome text
+     clears AA on it under this preset's own bloom, keeping the three in
+     descending lightness; globals.contrast.test.ts re-checks every stop of
+     every preset. What binds the first stop is white body text on a
+     SELECTED row under the first bloom radial. */
+  --app-wash: linear-gradient(168deg, #3643a7 0%, #2c3699 46%, #222c72 100%);
   /* Mesh bloom — three radials, one per accent stop, derived ONCE per mode.
      Not a seed: preset blocks must not redeclare it. Mixed `in srgb` so
      globals.contrast.test.ts can reproduce the painted colour. The light
-     blooms are a pale tint of each accent, lighter than every wash stop, so
-     they raise contrast against dark text. The first radial is the original
-     single bloom; the other two sit in the lower corners and do not overlap
-     it. */
+     blooms are a GLOW of each accent, not a white haze: 70% accent, 30%
+     white. They still lighten the ground and so lower contrast against the
+     white chrome text, which caps the alphas from above; from below, every
+     radial at its peak must sit >= 1.12:1 off every bare wash stop or the
+     mesh is not there (it is the grey Graphite accent that sets the lower
+     two at 16%). Tint, peaks and geometry must equal LIGHT_BLOOM in
+     scripts/theme/gen-presets.mjs. The radials keep the dark bloom's
+     geometry; the lower two do not overlap the first. */
   --app-bloom:
     radial-gradient(
       110% 85% at 8% -6%,
       color-mix(
           in srgb,
-          color-mix(in srgb, var(--brand) 12%, white) 70%,
+          color-mix(in srgb, var(--brand) 70%, white) 18%,
           transparent
         )
         0%,
@@ -378,7 +391,7 @@
       90% 60% at 100% 100%,
       color-mix(
           in srgb,
-          color-mix(in srgb, var(--brand-2) 12%, white) 60%,
+          color-mix(in srgb, var(--brand-2) 70%, white) 16%,
           transparent
         )
         0%,
@@ -388,7 +401,7 @@
       70% 40% at 0% 80%,
       color-mix(
           in srgb,
-          color-mix(in srgb, var(--brand-mid) 12%, white) 45%,
+          color-mix(in srgb, var(--brand-mid) 70%, white) 16%,
           transparent
         )
         0%,
@@ -528,6 +541,37 @@
   --sidebar-accent-foreground: #1a1a1f;
   --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
+
+  /* Root values of every token `.chrome-scope` moves, captured so
+     `.chrome-reset` can hand them back to an opaque surface nested inside
+     the chrome (both rules live after the preset blocks). Declared ONCE,
+     here, and not in `.dark`: `:root`, `.dark` and every preset and reach
+     selector match the same <html> element, so each alias computes from the
+     value that won the cascade there and descendants inherit the resolved
+     colour. Not seed tokens: a preset block must never redeclare them. */
+  --base-foreground: var(--foreground);
+  --base-muted-foreground: var(--muted-foreground);
+  --base-kicker: var(--kicker);
+  --base-destructive: var(--destructive);
+  --base-border: var(--border);
+  --base-border-hover: var(--border-hover);
+  --base-border-bright: var(--border-bright);
+  --base-input: var(--input);
+  --base-ring: var(--ring);
+  --base-brand: var(--brand);
+  --base-brand-2: var(--brand-2);
+  --base-brand-mid: var(--brand-mid);
+  --base-brand-foreground: var(--brand-foreground);
+  --base-brand-gradient: var(--brand-gradient);
+  --base-primary: var(--primary);
+  --base-primary-foreground: var(--primary-foreground);
+  --base-state-hover: var(--state-hover);
+  --base-state-active: var(--state-active);
+  --base-state-selected: var(--state-selected);
+  --base-chrome-fill: var(--chrome-fill);
+  --base-scrollbar-thumb: var(--scrollbar-thumb);
+  --base-reach-hover: var(--reach-hover);
+  --base-reach-selected: var(--reach-selected);
 }
 
 .dark {
@@ -753,6 +797,9 @@
       highest 0.5% step that holds in all six light presets (floor 1.152,
       forest); 3% is 1.142. Vivid cannot go higher either, so light vivid
       equals light tinted here and differs by surface and glow only.
+      (That floor was measured against the old pale light wash. Under the
+      bold frame the chrome is far darker than the card and the check has
+      a wide margin, so it no longer binds — the value is simply unchanged.)
    2. Light vivid --reach-surface 7% -> 5% and --reach-hover 13% -> 8%.
       A hover fill is alpha-on-parent, so muted text on a hovered row inside a
       raised surface sits on two doses of brand. At 7% / 13% that measured
@@ -843,7 +890,8 @@
    globals.contrast.test.ts re-runs every AA check against each block.
    --------------------------------------------------------------------------- */
 
-/* Graphite — the accent stands down to a neutral steel; the wash is pure grey.
+/* Graphite — the accent stands down to a neutral steel; the wash is pure grey
+   (a charcoal frame in light, where every wash is the bold frame).
    For people who want the chrome to disappear entirely.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
@@ -868,7 +916,7 @@
   --accent: #eeeef0;
   --accent-foreground: #1a1a1e;
   --glow-primary: 0 0 30px -8px rgba(75, 75, 85, 0.35);
-  --app-wash: linear-gradient(168deg, #e2e2e6 0%, #dadade 46%, #d1d1d6 100%);
+  --app-wash: linear-gradient(168deg, #515259 0%, #46464d 46%, #34353a 100%);
   --content-surface: #ffffff;
 }
 
@@ -901,11 +949,14 @@
    the only difference is that --brand-2 is a second hue instead of a copy of
    --brand, so --brand-gradient and the chart spectrum actually travel. The
    wash leans from the first accent (top-left, under the bloom) towards the
-   second. Light brands are the dark hues deepened until the white label
+   second — a near-black lean in dark, the saturated bold frame in light
+   (generated by scripts/theme/gen-presets.mjs: `base` prints all five).
+   Light brands are the dark hues deepened until the white label
    clears AA on BOTH stops (globals.contrast.test.ts enforces it).
    --------------------------------------------------------------------------- */
 
-/* Aurora — teal into violet over a sea-glass wash that cools to lavender.
+/* Aurora — teal into violet. Dark: a sea-glass wash that cools to night.
+   Light: a deep teal frame that runs to violet.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="aurora"] {
@@ -929,7 +980,7 @@
   --accent: #e9f0ef;
   --accent-foreground: #141a19;
   --glow-primary: 0 0 30px -8px rgba(15, 125, 113, 0.35);
-  --app-wash: linear-gradient(168deg, #d9ebe7 0%, #d5dfe9 46%, #d0d3e8 100%);
+  --app-wash: linear-gradient(168deg, #015a4f 0%, #004572 46%, #36236c 100%);
   --content-surface: #ffffff;
 }
 
@@ -957,7 +1008,9 @@
   --content-surface: #0e1111;
 }
 
-/* Sunset — amber into pink over a sand wash that warms to rose.
+/* Sunset — amber into pink. Dark: an ember wash that cools to night.
+   Light: a burnt-orange frame that runs through crimson to plum (a dark
+   amber is brown, so the generator pulls a wash stop's hue from 50-95 to 45).
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="sunset"] {
@@ -981,7 +1034,7 @@
   --accent: #f1ebe8;
   --accent-foreground: #1e1613;
   --glow-primary: 0 0 30px -8px rgba(182, 83, 24, 0.35);
-  --app-wash: linear-gradient(168deg, #f0e3d9 0%, #ead8d6 46%, #e1cad2 100%);
+  --app-wash: linear-gradient(168deg, #8e3800 0%, #8e0a20 46%, #600e38 100%);
   --content-surface: #ffffff;
 }
 
@@ -1009,7 +1062,8 @@
   --content-surface: #12100f;
 }
 
-/* Nebula — violet into blue over a lilac wash that cools to slate blue.
+/* Nebula — violet into blue. Dark: a violet wash that cools to night.
+   Light: a violet frame that runs to deep blue.
    Seeded from the :root / .dark recipe — only the tokens a preset can move are
    redeclared; everything alpha-based or brand-derived follows. */
 :root[data-theme-preset="nebula"] {
@@ -1033,7 +1087,7 @@
   --accent: #f0eef5;
   --accent-foreground: #19171f;
   --glow-primary: 0 0 30px -8px rgba(116, 80, 214, 0.35);
-  --app-wash: linear-gradient(168deg, #e2dcf2 0%, #d9dcef 46%, #cdd6e8 100%);
+  --app-wash: linear-gradient(168deg, #6639a0 0%, #323ca0 46%, #00346c 100%);
   --content-surface: #ffffff;
 }
 
@@ -1061,6 +1115,101 @@
   --content-surface: #0f0e12;
 }
 
+/* ---------------------------------------------------------------------------
+   Bold frame — light mode only. The light wash is a saturated gradient, so
+   everything painted directly on it (sidebar rail, shell header, board dock,
+   the /ask rail and header) needs light-on-dark values. Inside
+   `.chrome-scope` the generic tokens are re-seeded and "the brand" is white:
+   an active row, a focus ring and a primary button all read as white on the
+   frame. The `@theme inline` aliases at the top of this file resolve on the
+   element, so every ordinary utility (text-muted-foreground, border-border,
+   bg-state-hover, bg-brand-gradient…) follows with no component change;
+   components never read these values directly.
+
+   `.chrome-reset` hands the root values back (the --base-* aliases captured
+   in `:root`) to an OPAQUE surface nested in the chrome — a dock card, the
+   composer, an avatar — so its contents are dark-on-light again. Every token
+   the scope moves must be restored there, in the same order:
+   globals.contrast.test.ts checks the two lists agree.
+
+   Dark mode is untouched by construction: every selector here starts with
+   `:root:not(.dark)`, so under .dark neither class declares anything. The
+   reset is also inert outside a scope (on the content card, in a portalled
+   menu, in the print root), where the shared components that carry it are
+   rendered too. Unlayered, like every palette block, so nothing in a cascade
+   layer can out-rank it; the one `color` declaration that goes with these
+   lives in `@layer base` below so a text utility still wins.
+
+   Things portalled to <body> (menus, popovers, dialogs, tooltips, the mobile
+   drawer) are outside the scope and keep the normal tokens.
+   --------------------------------------------------------------------------- */
+:root:not(.dark) .chrome-scope {
+  --foreground: #ffffff;
+  /* 90% is the ceiling: any higher and muted stops reading as muted beside
+     white body text. It must clear AA on every wash stop under the bloom
+     (globals.contrast.test.ts) and equal CHROME_MUTED_ALPHA in
+     scripts/theme/gen-presets.mjs. */
+  --muted-foreground: rgb(255 255 255 / 90%);
+  --kicker: rgb(255 255 255 / 90%);
+  /* The root red is a mid-tone tuned for white paper; on the frame it is the
+     same lightness as the wash. A pale red keeps error text legible (AA on
+     every stop, same test). Must equal CHROME_DESTRUCTIVE in the script. */
+  --destructive: #ffd5cf;
+  --border: rgb(255 255 255 / 16%);
+  --border-hover: rgb(255 255 255 / 26%);
+  --border-bright: rgb(255 255 255 / 40%);
+  --input: rgb(255 255 255 / 22%);
+  --ring: #ffffff;
+  --brand: #ffffff;
+  --brand-2: #ffffff;
+  --brand-mid: #ffffff;
+  --brand-foreground: var(--base-brand);
+  --brand-gradient: linear-gradient(90deg, #ffffff, #ffffff);
+  --primary: #ffffff;
+  --primary-foreground: var(--base-brand);
+  /* The fills are kept light on purpose: white body text on a SELECTED row is
+     the check that caps how light the wash itself may be, so every point of
+     alpha here is paid for in a darker frame. Selected still out-lifts hover
+     2:1. --state-selected must equal CHROME_SELECTED_ALPHA in
+     scripts/theme/gen-presets.mjs. */
+  --state-hover: rgb(255 255 255 / 8%);
+  --state-active: rgb(255 255 255 / 13%);
+  --state-selected: rgb(255 255 255 / 16%);
+  --chrome-fill: rgb(255 255 255 / 12%);
+  --scrollbar-thumb: rgb(255 255 255 / 28%);
+  /* Reach leans the hover and selected fills to the brand; the brand is
+     white here and so are the fills, so the lean is switched off rather than
+     left to mix white into white. */
+  --reach-hover: 0%;
+  --reach-selected: 0%;
+}
+
+:root:not(.dark) .chrome-scope .chrome-reset {
+  --foreground: var(--base-foreground);
+  --muted-foreground: var(--base-muted-foreground);
+  --kicker: var(--base-kicker);
+  --destructive: var(--base-destructive);
+  --border: var(--base-border);
+  --border-hover: var(--base-border-hover);
+  --border-bright: var(--base-border-bright);
+  --input: var(--base-input);
+  --ring: var(--base-ring);
+  --brand: var(--base-brand);
+  --brand-2: var(--base-brand-2);
+  --brand-mid: var(--base-brand-mid);
+  --brand-foreground: var(--base-brand-foreground);
+  --brand-gradient: var(--base-brand-gradient);
+  --primary: var(--base-primary);
+  --primary-foreground: var(--base-primary-foreground);
+  --state-hover: var(--base-state-hover);
+  --state-active: var(--base-state-active);
+  --state-selected: var(--base-state-selected);
+  --chrome-fill: var(--base-chrome-fill);
+  --scrollbar-thumb: var(--base-scrollbar-thumb);
+  --reach-hover: var(--base-reach-hover);
+  --reach-selected: var(--base-reach-selected);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -1068,6 +1217,15 @@
   body {
     @apply bg-background text-foreground;
     font-optical-sizing: auto;
+  }
+  /* The bold frame's inherited text colour. `body` sets `color` once, from
+     the ROOT --foreground, and inheritance would carry that dark value into
+     the chrome; re-reading the token on the scope (and again on a reset)
+     flips it. In this layer on purpose: a text utility on the same element
+     (text-muted-foreground, text-brand…) must still win. */
+  :root:not(.dark) .chrome-scope,
+  :root:not(.dark) .chrome-scope .chrome-reset {
+    color: var(--foreground);
   }
   /* Inter runs wider than the Nunito Sans it replaced. Display sizes need
      negative tracking to hold the same optical rhythm; UI-sized text is tuned

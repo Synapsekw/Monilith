@@ -17,19 +17,21 @@ const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
  * rather than as body text. That is an eye judgement and belongs to the
  * visual pass, not here.
  *
- * Direction of the bloom matters and is why the two themes have different
- * worst cases:
- *   - light bloom is near-WHITE, so it lightens the surface and RAISES
- *     contrast against dark text → worst case is the darkest stop, bloom
- *     ignored.
- *   - dark bloom is the accent itself, so it lightens the surface and LOWERS
- *     contrast against light text → worst case is the lightest stop at full
- *     bloom.
+ * Both modes now put LIGHT text on a DARK chrome, so the bloom works against
+ * the text in both — it lightens the ground and LOWERS contrast, and the worst
+ * case is a stop at full bloom:
+ *   - dark bloom is the accent itself at low alpha, under the mode's own
+ *     light-grey --muted-foreground;
+ *   - light is the BOLD FRAME: a saturated wash under a bright tint of each
+ *     accent (a glow, mostly accent), and the text on it is white — the generic tokens are re-seeded
+ *     inside `.chrome-scope` (see "bold frame chrome text" below). The light
+ *     palette's own dark greys never meet the wash any more; they are checked
+ *     on the content card and the raised surfaces only.
  *
  * The bloom is a MESH of three radials, one per accent stop (--brand,
  * --brand-2, --brand-mid), declared once per mode in `:root` / `.dark` and
- * never in a preset block — so the alphas are read from the mode block and the
- * colours from the palette block under test. See `darkBloomed`.
+ * never in a preset block — so the geometry and alphas are read from the mode
+ * block and the colours from the palette block under test. See `bloomed`.
  *
  * Every describe below is parameterized over the theme-preset override blocks
  * as well as the base palette: a preset re-seeds exactly the tokens these
@@ -121,13 +123,16 @@ function declares(selector: string, token: string): boolean {
 function bloomColours(selector: string): RGB[] {
   const a = hex(declaration(selector, "--brand"));
   const b = hex(declaration(selector, "--brand-2"));
-  const mid = declares(selector, "--brand-mid")
-    ? hex(declaration(selector, "--brand-mid"))
-    : mixSrgb(a, b, 50);
+  // `:root` declares the recipe itself; a preset block either inherits it or
+  // seeds a literal.
+  const own = declares(selector, "--brand-mid")
+    ? declaration(selector, "--brand-mid")
+    : BRAND_MID_RECIPE;
+  const mid = own === BRAND_MID_RECIPE ? mixSrgb(a, b, 50) : hex(own);
   return [a, b, mid];
 }
 
-/** One dark bloom radial: an ellipse in fractions of the `.app-wash` box. */
+/** One bloom radial: an ellipse in fractions of the `.app-wash` box. */
 type BloomRadial = {
   /** Horizontal and vertical radius of the ending shape. */
   rx: number;
@@ -141,42 +146,69 @@ type BloomRadial = {
   reach: number;
 };
 
+/** A light radial also tints its accent towards white: `tint`% accent. */
+type LightBloomRadial = BloomRadial & { tint: number };
+
+const PCT = "(-?\\d+(?:\\.\\d+)?)%";
+/** The colour stop of one radial, per mode. Dark is the accent itself at an
+ *  alpha; light is a tint of the accent towards white, at an alpha. Both
+ *  capture the accent suffix first and the alpha last; light captures the
+ *  tint in between. */
+const BLOOM_COLOUR: Record<Mode, string> = {
+  dark: `color-mix\\(in srgb, var\\(--brand(-2|-mid)?\\) ${PCT}, transparent\\)`,
+  light:
+    `color-mix\\(\\s*in srgb,\\s*color-mix\\(in srgb, var\\(--brand(-2|-mid)?\\) ${PCT}, white\\) ${PCT},` +
+    `\\s*transparent\\s*\\)`,
+};
+
 /**
- * The dark bloom radials, in declaration order — each is
- * `radial-gradient(RX% RY% at CX% CY%, color-mix(in srgb, var(--brand|--brand-2|--brand-mid) N%, transparent) 0%, transparent T%)`.
- * Declared per MODE (`.dark`), not per preset.
+ * The bloom radials of a mode, in declaration order — each is
+ * `radial-gradient(RX% RY% at CX% CY%, <colour> 0%, transparent T%)`, where
+ * `<colour>` is `BLOOM_COLOUR[mode]`. Declared per MODE (`:root` / `.dark`),
+ * not per preset. The regex is strict on purpose: a radial written any other
+ * way is not silently skipped, it fails the three-radial check below.
  */
-function darkBloomRadials(): BloomRadial[] {
-  const pct = "(-?\\d+(?:\\.\\d+)?)%";
+function bloomRadials(mode: "dark"): BloomRadial[];
+function bloomRadials(mode: "light"): LightBloomRadial[];
+function bloomRadials(mode: Mode): BloomRadial[] {
   const radials = [
-    ...declaration(".dark", "--app-bloom").matchAll(
+    ...declaration(mode === "dark" ? ".dark" : ":root", "--app-bloom").matchAll(
       new RegExp(
-        `radial-gradient\\(\\s*${pct} ${pct} at ${pct} ${pct},\\s*` +
-          `color-mix\\(in srgb, var\\(--brand(-2|-mid)?\\) ${pct}, transparent\\) 0%,\\s*` +
-          `transparent ${pct}\\s*\\)`,
+        `radial-gradient\\(\\s*${PCT} ${PCT} at ${PCT} ${PCT},\\s*` +
+          `${BLOOM_COLOUR[mode]}\\s*0%,\\s*` +
+          `transparent ${PCT}\\s*\\)`,
         "g",
       ),
     ),
   ];
   if (radials.map((m) => m[5] ?? "").join() !== ",-2,-mid") {
     throw new Error(
-      "the dark bloom must be three radials: --brand, --brand-2, --brand-mid",
+      `the ${mode} bloom must be three radials: --brand, --brand-2, --brand-mid`,
     );
   }
-  return radials.map((m) => ({
-    rx: Number(m[1]) / 100,
-    ry: Number(m[2]) / 100,
-    cx: Number(m[3]) / 100,
-    cy: Number(m[4]) / 100,
-    peak: Number(m[6]) / 100,
-    reach: Number(m[7]) / 100,
-  }));
+  return radials.map((m) => {
+    // Groups after the accent suffix: dark = alpha, reach; light = tint,
+    // alpha, reach.
+    const rest = m.slice(6).map(Number);
+    const geometry = {
+      rx: Number(m[1]) / 100,
+      ry: Number(m[2]) / 100,
+      cx: Number(m[3]) / 100,
+      cy: Number(m[4]) / 100,
+    };
+    return mode === "dark"
+      ? { ...geometry, peak: rest[0] / 100, reach: rest[1] / 100 }
+      : {
+          ...geometry,
+          tint: rest[0],
+          peak: rest[1] / 100,
+          reach: rest[2] / 100,
+        };
+  });
 }
 
-/** Peak alpha of each dark bloom radial, in declaration order. */
-function darkBloomPeaks(): number[] {
-  return darkBloomRadials().map((r) => r.peak);
-}
+const darkBloomRadials = () => bloomRadials("dark");
+const lightBloomRadials = () => bloomRadials("light");
 
 /**
  * Which radials can light the SAME pixel: every maximal set of radial indices
@@ -209,47 +241,48 @@ function overlappingBloomRadials(radials: BloomRadial[]): number[][] {
     .map((m) => radials.map((_, n) => n).filter((n) => m & (1 << n)));
 }
 
-let darkBloomGroups: number[][] | undefined;
+const WHITE: RGB = [255, 255, 255];
+
+const bloomGroups: Partial<Record<Mode, number[][]>> = {};
 
 /**
- * Every worst-case dark chrome ground a wash stop can become under the bloom:
- * one per set of radials that can light the same pixel, with every radial of
- * the set STACKED at its full declared peak — conservative twice over, since
- * the peaks sit at the centres (the first one is outside the box) and the
+ * Every worst-case chrome ground a wash stop can become under the bloom: one
+ * per set of radials that can light the same pixel, with every radial of the
+ * set STACKED at its full declared peak — conservative twice over, since the
+ * peaks sit at the centres (the first one is outside the box) and the
  * lightest wash stop is not under every radial.
  *
- * Today the three lit ellipses are disjoint (top-left, bottom-right,
- * lower-left: the first ends at 43% of the height on the left edge, the third
- * starts at 56%), so this is three grounds — the sidebar under radial 1, the
- * sidebar under radial 3, the dock side under radial 2.
+ * The painted colour of a radial is the accent itself in dark, and in light
+ * the accent tinted towards white by the radial's declared `tint`
+ * (`color-mix(in srgb, accent T%, white)`).
+ *
+ * Today the three lit ellipses are disjoint in both modes (top-left,
+ * bottom-right, lower-left: the first ends at 43% of the height on the left
+ * edge, the third starts at 56%), so this is three grounds — the sidebar under
+ * radial 1, the sidebar under radial 3, the dock side under radial 2.
  */
-function darkBloomed(selector: string, stop: string): Array<[string, RGB]> {
-  const peaks = darkBloomPeaks();
-  const colours = bloomColours(selector);
-  darkBloomGroups ??= overlappingBloomRadials(darkBloomRadials());
-  return darkBloomGroups.map((group) => [
+function bloomed(selector: string, stop: string): Array<[string, RGB]> {
+  const mode = modeOf(selector);
+  const accents = bloomColours(selector);
+  const light = mode === "light" ? lightBloomRadials() : null;
+  const radials: BloomRadial[] = light ?? darkBloomRadials();
+  const colours = light
+    ? accents.map((c, n) => mixSrgb(c, WHITE, light[n].tint))
+    : accents;
+  const groups = (bloomGroups[mode] ??= overlappingBloomRadials(radials));
+  return groups.map((group) => [
     `bloom radial ${group.map((n) => n + 1).join("+")}`,
-    group.reduce<RGB>((bg, n) => over(colours[n], peaks[n], bg), hex(stop)),
+    group.reduce<RGB>(
+      (bg, n) => over(colours[n], radials[n].peak, bg),
+      hex(stop),
+    ),
   ]);
 }
 
-/**
- * The light bloom radials, in declaration order — each is
- * `color-mix(in srgb, color-mix(in srgb, var(--brand…) P%, white) A%, transparent)`:
- * a pale tint of the accent (`tint`) at an alpha (`alpha`). Declared per MODE.
- */
-function lightBloom(): Array<{ tint: number; alpha: number }> {
-  const stops = [
-    ...declaration(":root", "--app-bloom").matchAll(
-      /var\(--brand(-2|-mid)?\)\s+(\d+)%,\s*white\)\s+(\d+)%,\s*transparent\s*\)/g,
-    ),
-  ];
-  if (stops.map((m) => m[1] ?? "").join() !== ",-2,-mid") {
-    throw new Error(
-      "the light bloom must be three radials of color-mix(in srgb, var(--brand…) P%, white) at A%",
-    );
-  }
-  return stops.map((m) => ({ tint: Number(m[2]), alpha: Number(m[3]) / 100 }));
+/** `bloomed` for a `.dark` palette block. */
+function darkBloomed(selector: string, stop: string): Array<[string, RGB]> {
+  if (modeOf(selector) !== "dark") throw new Error(`${selector} is not dark`);
+  return bloomed(selector, stop);
 }
 
 /**
@@ -603,15 +636,14 @@ function rowGrounds(
     ...RAISED_SURFACE_SEEDS.map(
       (seed) => [seed, raised(selector, seed, level)] as [string, RGB],
     ),
-    // The sidebar: rows sit straight on the wash.
-    ...washStops(selector).map(
-      (stop) => [`wash ${stop}`, hex(stop)] as [string, RGB],
-    ),
   ];
   if (mode === "dark") {
-    // …and under the mesh bloom at its declared peaks (dark only; the light
-    // bloom is near-white and is the easier case for both checks).
+    // The sidebar: rows sit straight on the wash, and under the mesh bloom at
+    // its declared peaks. Dark only — a row on the LIGHT wash is inside
+    // `.chrome-scope`, where the hover and selected fills and the text are
+    // different tokens altogether; "bold frame chrome text" below covers it.
     for (const stop of washStops(selector)) {
+      grounds.push([`wash ${stop}`, hex(stop)]);
       for (const [where, ground] of darkBloomed(selector, stop)) {
         grounds.push([`bloomed wash ${stop} (${where})`, ground]);
       }
@@ -666,14 +698,13 @@ describe.each([
   });
 });
 
+// The light palette's --muted-foreground is no longer painted on the wash (the
+// bold frame's muted text is white — "bold frame chrome text" below), so what
+// is left of this light check is the card and the raised surface.
 describe.each(LIGHT_SELECTORS)(
-  "muted text clears WCAG AA on the wash — light %s",
+  "muted text clears WCAG AA off the wash — light %s",
   (selector) => {
     const fg = hex(declaration(selector, "--muted-foreground"));
-
-    it.each(washStops(selector))("clears AA on the %s stop", (stop) => {
-      expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
-    });
 
     it.each(REACH_LEVELS)(
       "clears AA on the content card and on --surface-muted at reach %s",
@@ -789,16 +820,6 @@ describe.each(DARK_SELECTORS)(
   },
 );
 
-describe.each(LIGHT_SELECTORS)(
-  "kicker text clears WCAG AA on the wash — light %s",
-  (selector) => {
-    const fg = hex(declaration(selector, "--kicker"));
-    it.each(washStops(selector))("clears AA on the %s stop", (stop) => {
-      expect(contrast(fg, hex(stop))).toBeGreaterThanOrEqual(AA);
-    });
-  },
-);
-
 describe.each(DARK_SELECTORS)(
   "kicker text clears WCAG AA on the wash — dark %s",
   (selector) => {
@@ -855,8 +876,21 @@ describe("the mesh bloom is derived per mode, never per preset", () => {
     ]);
   });
 
-  it("light reads as three pale accent tints", () => {
-    expect(lightBloom()).toHaveLength(3);
+  it("light is three bright accent tints on the dark bloom's geometry", () => {
+    const light = lightBloomRadials();
+    const dark = darkBloomRadials();
+    expect(light).toHaveLength(3);
+    light.forEach((radial, n) => {
+      const { rx, ry, cx, cy, reach } = dark[n];
+      expect(radial).toMatchObject({ rx, ry, cx, cy, reach });
+      // A tint, not the accent and not white; and a bloom, not a fill.
+      expect(radial.tint).toBeGreaterThan(0);
+      expect(radial.tint).toBeLessThan(100);
+      expect(radial.peak).toBeGreaterThan(0);
+      expect(radial.peak).toBeLessThan(0.5);
+    });
+    // One tint for the whole mesh.
+    expect(new Set(light.map((r) => r.tint)).size).toBe(1);
   });
 });
 
@@ -882,28 +916,257 @@ describe("--brand-gradient middle stop", () => {
 describe.each(LIGHT_SELECTORS)(
   "light chrome separates from the content card — %s",
   (selector) => {
-    // The header band lives top-left, under the FIRST bloom radial only (the
-    // other two sit in the lower corners and never reach it). Its source is
-    // `color-mix(in srgb, var(--brand) P%, white)` at alpha A over the FIRST
-    // wash stop. The recipe is declared once, in `:root`; the brand and the
-    // wash come from the palette block under test.
+    // The frame and the card must read as two things. With the bold frame the
+    // wash is far darker than the white card, so the binding case is the
+    // LIGHTEST the chrome gets: a wash stop under the bloom at its declared
+    // peak (the bloom is a bright tint, so it lifts the frame towards the
+    // card). Every stop is checked on every bloomed ground and bare, although
+    // only the header band — top-left, the first stop under the first radial
+    // — actually runs along the card's edge.
     // Reach tints the card with the brand, which in light mode DARKENS it
-    // towards the chrome. This floor is what caps light --reach-content (see
-    // the "Theme reach" comment in globals.css) — far below the dark values.
+    // towards the chrome, so each level is checked.
     it.each(REACH_LEVELS)(
-      "bloomed header band vs the content card ≥ 1.15:1 at reach %s",
+      "every wash ground, bloomed or bare, vs the content card ≥ 1.15:1 at reach %s",
       (level) => {
-        const [{ tint, alpha }] = lightBloom();
-        const brand = hex(declaration(selector, "--brand"));
-        const src = mixSrgb(brand, [255, 255, 255], tint);
-        const band = over(src, alpha, hex(washStops(selector)[0]));
-        expect(
-          contrast(band, contentCard(selector, level)),
-        ).toBeGreaterThanOrEqual(1.15);
+        const card = contentCard(selector, level);
+        for (const stop of washStops(selector)) {
+          for (const [where, ground] of chromeGrounds(selector, stop)) {
+            expect(
+              contrast(ground, card),
+              `${stop} ${where}`,
+            ).toBeGreaterThanOrEqual(1.15);
+            // …and it is the FRAME that is the dark one.
+            expect(luminance(ground), `${stop} ${where}`).toBeLessThan(
+              luminance(card),
+            );
+          }
+        }
       },
     );
   },
 );
+
+/**
+ * The bold frame (light mode). The light wash is a saturated gradient and the
+ * chrome painted on it — sidebar, shell header, board dock, the /ask rail — is
+ * white-on-colour: `:root:not(.dark) .chrome-scope` re-seeds the generic
+ * tokens for that subtree, and `.chrome-reset` hands the root values back to
+ * an opaque surface nested in it.
+ *
+ * So the text on a light wash stop is not the palette block's own grey: it is
+ * the scope's white, and these are the checks that replace "muted / kicker
+ * text clears AA on the wash — light". They run on every ground a stop can
+ * become (`chromeGrounds`): bare, and once per set of bloom radials that can
+ * light the same pixel, each at its declared peak. The bloom is a bright tint
+ * here, so it works AGAINST white text.
+ *
+ * The scope's values are declared once, for every preset; only the wash, the
+ * accents (bloom colours) and --brand (the primary label) come from the block
+ * under test.
+ */
+const CHROME_SCOPE = ":root:not(.dark) .chrome-scope";
+const CHROME_RESET = `${CHROME_SCOPE} .chrome-reset`;
+
+/** A scope token that is `rgb(255 255 255 / N%)` → N/100. */
+function chromeWhiteAlpha(token: string): number {
+  const raw = declaration(CHROME_SCOPE, token);
+  const m = raw.match(/^rgb\(255 255 255 \/ (\d+(?:\.\d+)?)%\)$/);
+  if (!m)
+    throw new Error(`${token} in the chrome scope is not white N%: ${raw}`);
+  return Number(m[1]) / 100;
+}
+
+/** Every ground a light wash stop can become: bare, then under the bloom. */
+function chromeGrounds(selector: string, stop: string): Array<[string, RGB]> {
+  if (modeOf(selector) !== "light") throw new Error(`${selector} is not light`);
+  return [["bare", hex(stop)], ...bloomed(selector, stop)];
+}
+
+describe.each(LIGHT_SELECTORS)("bold frame chrome text — %s", (selector) => {
+  /** White at a scope token's alpha, composited on a ground. */
+  const white = (token: string, ground: RGB) =>
+    over(WHITE, chromeWhiteAlpha(token), ground);
+
+  it("the scope's text, ring and brand are white", () => {
+    for (const token of [
+      "--foreground",
+      "--ring",
+      "--brand",
+      "--brand-2",
+      "--brand-mid",
+      "--primary",
+    ]) {
+      expect(declaration(CHROME_SCOPE, token), token).toBe("#ffffff");
+    }
+  });
+
+  it.each(washStops(selector))(
+    "body, muted, kicker and error text clear AA on %s, bare and under the bloom",
+    (stop) => {
+      const destructive = hex(declaration(CHROME_SCOPE, "--destructive"));
+      for (const [where, ground] of chromeGrounds(selector, stop)) {
+        expect(contrast(WHITE, ground), where).toBeGreaterThanOrEqual(AA);
+        for (const token of ["--muted-foreground", "--kicker"]) {
+          expect(
+            contrast(white(token, ground), ground),
+            `${token} ${where}`,
+          ).toBeGreaterThanOrEqual(AA);
+        }
+        expect(
+          contrast(destructive, ground),
+          `--destructive ${where}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    },
+  );
+
+  it.each(washStops(selector))(
+    "selected out-lifts hover ≥ 1.5× on %s, and body text clears AA on both fills",
+    (stop) => {
+      // The same metric as "selected is visibly stronger than hover": the
+      // lift of the composited fill over its own ground. Reach is switched
+      // off inside the scope, so the fills are exactly the declared alphas.
+      expect(declaration(CHROME_SCOPE, "--reach-hover")).toBe("0%");
+      expect(declaration(CHROME_SCOPE, "--reach-selected")).toBe("0%");
+      const lift = (fill: RGB, bg: RGB) => contrast(fill, bg) - 1;
+      for (const [where, ground] of chromeGrounds(selector, stop)) {
+        const hover = white("--state-hover", ground);
+        const selected = white("--state-selected", ground);
+        expect(
+          lift(selected, ground) / lift(hover, ground),
+          where,
+        ).toBeGreaterThanOrEqual(1.5);
+        // Active rows and hovered rows both set `text-foreground`.
+        expect(
+          contrast(WHITE, selected),
+          `selected ${where}`,
+        ).toBeGreaterThanOrEqual(AA);
+        expect(contrast(WHITE, hover), `hover ${where}`).toBeGreaterThanOrEqual(
+          AA,
+        );
+        // The chips and kbd: body text on the resting chrome fill.
+        expect(
+          contrast(WHITE, white("--chrome-fill", ground)),
+          `chrome fill ${where}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    },
+  );
+
+  it.each(washStops(selector))(
+    "the white focus ring and active indicator are ≥ 3:1 marks on %s",
+    (stop) => {
+      for (const [where, ground] of chromeGrounds(selector, stop)) {
+        expect(contrast(WHITE, ground), where).toBeGreaterThanOrEqual(3);
+      }
+    },
+  );
+
+  it.each(washStops(selector))(
+    "every bloom radial at its peak is visible on %s (≥ 1.12:1 off the bare stop)",
+    (stop) => {
+      // The other side of the AA cap above: a bloom too faint to see is not a
+      // mesh. Checked for every radial on every stop, like the text checks.
+      for (const [where, ground] of bloomed(selector, stop)) {
+        expect(contrast(ground, hex(stop)), where).toBeGreaterThanOrEqual(1.12);
+        // A glow: it lightens the frame, never darkens it.
+        expect(luminance(ground), where).toBeGreaterThan(luminance(hex(stop)));
+      }
+    },
+  );
+
+  it("the wash descends in lightness with visible range — no flat half", () => {
+    // OKLCH lightness of the three stops: first ≥ 0.04 above the middle, the
+    // middle ≥ 0.05 above the last.
+    const stops = washStops(selector);
+    expect(stops).toHaveLength(3);
+    const [first, middle, last] = stops.map((stop) => oklch(hex(stop))[0]);
+    expect(first - middle, "first → middle").toBeGreaterThanOrEqual(0.04);
+    expect(middle - last, "middle → last").toBeGreaterThanOrEqual(0.05);
+  });
+
+  it("a primary button on the frame is white with the preset's brand as its label", () => {
+    // Inside the scope the fill (--primary, --brand-gradient) is white and
+    // the label reads the ROOT brand back through --base-brand.
+    expect(declaration(CHROME_SCOPE, "--brand-gradient")).toBe(
+      "linear-gradient(90deg, #ffffff, #ffffff)",
+    );
+    for (const token of ["--primary-foreground", "--brand-foreground"]) {
+      expect(declaration(CHROME_SCOPE, token), token).toBe("var(--base-brand)");
+    }
+    expect(
+      contrast(hex(declaration(selector, "--brand")), WHITE),
+    ).toBeGreaterThanOrEqual(AA);
+  });
+
+  it("every wash stop is darker than the brand, so the frame reads as a frame", () => {
+    for (const stop of washStops(selector)) {
+      expect(luminance(hex(stop)), stop).toBeLessThanOrEqual(
+        luminance(hex(declaration(selector, "--brand"))) + 0.02,
+      );
+    }
+  });
+});
+
+describe("chrome scope", () => {
+  /** The custom properties a top-level block declares, in order. */
+  const tokensOf = (selector: string) =>
+    [...blockOf(selector).matchAll(/^\s{2}(--[a-z0-9-]+):/gm)].map((m) => m[1]);
+
+  it("is light-only: every rule that names the scope or the reset starts with :root:not(.dark)", () => {
+    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /\.chrome-(scope|reset)/.test(line));
+    // The two token blocks, and the two selectors of the base-layer `color`
+    // rule.
+    expect(rules.sort()).toEqual(
+      [
+        `${CHROME_SCOPE} {`,
+        `${CHROME_RESET} {`,
+        `${CHROME_SCOPE},`,
+        `${CHROME_RESET} {`,
+      ].sort(),
+    );
+  });
+
+  it("the reset restores every token the scope moves, in the same order", () => {
+    const moved = tokensOf(CHROME_SCOPE);
+    expect(moved.length).toBeGreaterThan(0);
+    expect(tokensOf(CHROME_RESET)).toEqual(moved);
+    for (const token of moved) {
+      const base = `--base-${token.slice(2)}`;
+      expect(declaration(CHROME_RESET, token), token).toBe(`var(${base})`);
+      // …and the alias it reads is captured on <html>, from the same token.
+      expect(declaration(":root", base), base).toBe(`var(${token})`);
+    }
+  });
+
+  it("captures the base aliases once, in :root — never in .dark or a preset block", () => {
+    const aliases = tokensOf(":root").filter((t) => t.startsWith("--base-"));
+    expect(aliases.sort()).toEqual(
+      tokensOf(CHROME_SCOPE)
+        .map((t) => `--base-${t.slice(2)}`)
+        .sort(),
+    );
+    for (const selector of [".dark", ...LIGHT_SELECTORS, ...DARK_SELECTORS]) {
+      if (selector === ":root") continue;
+      expect(blockOf(selector), selector).not.toMatch(/--base-/);
+    }
+  });
+
+  it("flips the inherited text colour from the base layer, so a text utility still wins", () => {
+    const base = CSS.slice(CSS.indexOf("\n@layer base {"));
+    expect(base.slice(0, base.indexOf("\n}"))).toMatch(
+      /\n {2}:root:not\(\.dark\) \.chrome-scope,\n {2}:root:not\(\.dark\) \.chrome-scope \.chrome-reset \{\n {4}color: var\(--foreground\);\n {2}\}/,
+    );
+    // Neither token block may set `color` itself: unlayered, it would beat
+    // every text utility on the same element.
+    for (const selector of [CHROME_SCOPE, CHROME_RESET]) {
+      expect(blockOf(selector), selector).not.toMatch(/^\s*color:/m);
+    }
+  });
+});
 
 /**
  * Palette-wide floors that must hold in EVERY block, base or preset. These are

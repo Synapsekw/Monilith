@@ -37,7 +37,9 @@ export function UserMenu({ user }: { user: AppShellUser }) {
             fallback. First paint comes from the session (no client fetch). */}
         <Avatar className="size-8 border-0">
           {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-          <AvatarFallback className="hover:bg-state-hover text-sm font-medium">
+          {/* `chrome-reset`: an opaque surface inside the header's chrome
+              scope — without it the initial is white on a white disc. */}
+          <AvatarFallback className="chrome-reset hover:bg-state-hover text-sm font-medium">
             {initialFor(user)}
           </AvatarFallback>
         </Avatar>

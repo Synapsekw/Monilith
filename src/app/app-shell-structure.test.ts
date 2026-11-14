@@ -111,3 +111,77 @@ describe("route skeletons", () => {
     });
   }
 });
+
+/**
+ * The bold light frame. In light mode the wash is a saturated gradient and
+ * `.chrome-scope` (globals.css) re-seeds the generic tokens to white-on-colour
+ * for whatever is painted on it; `.chrome-reset` hands the root values back to
+ * an opaque surface nested inside. Both are plain class names on elements, so
+ * nothing but this test notices when one is dropped in a refactor — and a
+ * missing scope is dark text on a dark frame, a missing reset white text on a
+ * white card.
+ */
+describe("bold frame chrome scope", () => {
+  const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+  it("every element painted on the wash carries chrome-scope", () => {
+    expect(read("src/components/sidebar.tsx")).toMatch(/"chrome-scope /);
+    expect(read("src/components/app-shell.tsx")).toMatch(
+      /<header className="chrome-scope /,
+    );
+    const ask = read("src/app/ask/layout.tsx");
+    expect(ask).toMatch(/<aside className="chrome-scope /);
+    expect(ask).toMatch(/<header className="chrome-scope /);
+    expect(read("src/components/boards/dock/BoardDock.tsx")).toMatch(
+      /"chrome-scope /,
+    );
+  });
+
+  it("the wash root and the content card stay outside the scope", () => {
+    for (const file of [
+      "src/components/app-shell.tsx",
+      "src/app/ask/layout.tsx",
+    ]) {
+      const src = read(file);
+      expect(src, file).not.toMatch(
+        /className="[^"]*app-wash[^"]*chrome-scope/,
+      );
+      expect(src, file).not.toMatch(
+        /className="[^"]*chrome-scope[^"]*app-wash/,
+      );
+      expect(src, file).not.toMatch(/<main className="[^"]*chrome-/);
+    }
+  });
+
+  it.each([
+    ["the account avatar fallback", "src/components/shell/user-menu.tsx"],
+    ["the dock composer", "src/components/ai/ask/Composer.tsx"],
+    ["the thinking tile", "src/components/ai/ask/ThinkingIndicator.tsx"],
+    ["the stream-drop card", "src/components/ai/ask/StreamDropNotice.tsx"],
+    [
+      "the proposed-action card",
+      "src/components/ai/actions/ActionConfirmCard.tsx",
+    ],
+    [
+      "the batch-confirm card",
+      "src/components/ai/assistant/BatchConfirmCard.tsx",
+    ],
+    [
+      "the intelligence Q&A card",
+      "src/components/boards/dock/intelligence/AskComposer.tsx",
+    ],
+    [
+      "the suggestion card",
+      "src/components/boards/dock/intelligence/SuggestionCard.tsx",
+    ],
+    ["the sleeping-Mono card", "src/components/mono/rail/MonoTab.tsx"],
+  ])(
+    "%s — an opaque surface inside the scope — carries chrome-reset",
+    (_name, file) => {
+      // On the same class string as the opaque fill it resets for.
+      expect(read(file)).toMatch(
+        /"chrome-reset [^"]*\bbg-surface\b|"chrome-reset hover:bg-state-hover /,
+      );
+    },
+  );
+});

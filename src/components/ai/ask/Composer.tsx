@@ -72,7 +72,9 @@ export function Composer({
           className={
             card
               ? "bg-surface focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
-              : "bg-surface border-border shadow-content-lift hover:border-border-hover focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
+              : // `chrome-reset`: the one opaque surface of the dock's chat,
+                // sitting inside its chrome scope.
+                "chrome-reset bg-surface border-border shadow-content-lift hover:border-border-hover focus-within:border-border-bright flex items-end gap-2 rounded-lg border p-2 transition-colors"
           }
           onSubmit={(e) => {
             e.preventDefault();

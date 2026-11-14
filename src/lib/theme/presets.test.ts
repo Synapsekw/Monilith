@@ -164,7 +164,15 @@ describe("theme presets", () => {
   });
 
   it("derives --brand-mid, --brand-gradient and --app-bloom from the seeds, never in a preset block", () => {
-    expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(2); // :root + print root
+    // Derived once (:root) and re-seeded only where a subtree re-seeds the
+    // brand itself: the print root, and the light chrome scope with its reset
+    // (white on the bold frame, then back to the root gradient).
+    expect(CSS.match(/^\s*--brand-gradient:/gm)).toHaveLength(4);
+    for (const sel of [
+      ":root:not(.dark) .chrome-scope",
+      ":root:not(.dark) .chrome-scope .chrome-reset",
+    ])
+      expect(block(sel), sel).toMatch(/^\s{2}--brand-gradient:/m);
     expect(block(":root")).toContain(
       "--brand-mid: color-mix(in srgb, var(--brand), var(--brand-2));",
     );

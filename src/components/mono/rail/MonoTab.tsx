@@ -222,7 +222,8 @@ export function MonoTab({
       ) : null}
 
       {!awake ? (
-        <div className="bg-surface mx-3.5 my-3 flex flex-col gap-2 rounded-lg border p-3">
+        // `chrome-reset`: an opaque card inside the dock's chrome scope.
+        <div className="chrome-reset bg-surface mx-3.5 my-3 flex flex-col gap-2 rounded-lg border p-3">
           <p className="text-sm font-semibold">{mono.name} is asleep</p>
           <p className="text-muted-foreground text-xs">
             Give it a brain to wake it up: add an Anthropic or OpenAI API key.

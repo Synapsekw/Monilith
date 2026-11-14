@@ -63,7 +63,9 @@ export function StreamDropNotice({
         role="group"
         aria-live="polite"
         aria-label="Connection lost"
-        className="bg-surface hover:border-border-hover rounded-lg border p-3 text-sm transition-colors"
+        // `chrome-reset`: an opaque card that also renders in the board dock,
+        // inside its chrome scope (inert on the content card).
+        className="chrome-reset bg-surface hover:border-border-hover rounded-lg border p-3 text-sm transition-colors"
       >
         <Kicker>Connection lost</Kicker>
         <p className="text-foreground mt-1.5 font-medium">

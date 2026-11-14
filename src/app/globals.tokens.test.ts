@@ -69,8 +69,17 @@ describe("Keystone token contract", () => {
   it("keeps light and dark palettes at parity", () => {
     const root = tokensIn(":root");
     const dark = tokensIn(".dark");
+    // The `--base-*` aliases are `.chrome-reset`'s copy of every token
+    // `.chrome-scope` moves (`--base-foreground: var(--foreground)`, …). They
+    // are captured ONCE, in `:root`, because `:root` and `.dark` are the same
+    // <html> element: each alias computes from whichever value won the
+    // cascade there, so a second copy in `.dark` would be the same string
+    // twice. Exempt by prefix rather than listed, so the scope can move one
+    // more token without touching this file — globals.contrast.test.ts pins
+    // the set to the scope's own token list.
     const onlyLight = [...root].filter(
-      (t) => !dark.has(t) && !THEME_INVARIANT.has(t),
+      (t) =>
+        !dark.has(t) && !THEME_INVARIANT.has(t) && !t.startsWith("--base-"),
     );
     const onlyDark = [...dark].filter(
       (t) => !root.has(t) && !THEME_INVARIANT.has(t),
