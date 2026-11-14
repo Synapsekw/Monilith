@@ -370,6 +370,7 @@ export async function POST(req: Request) {
           client: actingClient,
           // Every org-scoped call is pinned to the org this turn runs in.
           orgId: org.id,
+          actingAsMono: monoTurn !== null,
           stage: (call) => {
             if (staged.length >= MAX_STAGED_CALLS) return false;
             staged.push(call);

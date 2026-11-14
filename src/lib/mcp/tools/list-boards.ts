@@ -5,7 +5,7 @@ export async function listBoardsHandler(getClient: GetClient) {
   const supabase = await getClient();
   const { data, error } = await supabase
     .from("boards")
-    .select("id, name, org_id, organizations(name)")
+    .select("id, name, org_id, workspace_id, organizations(name)")
     .is("archived_at", null)
     .order("name", { ascending: true });
   if (error) {
@@ -19,6 +19,7 @@ export async function listBoardsHandler(getClient: GetClient) {
     name: b.name,
     orgId: b.org_id,
     orgName: (b.organizations as { name: string } | null)?.name ?? null,
+    workspaceId: b.workspace_id,
   }));
   return { content: [{ type: "text" as const, text: JSON.stringify(boards) }] };
 }

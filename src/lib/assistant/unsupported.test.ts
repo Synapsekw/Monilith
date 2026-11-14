@@ -2,6 +2,21 @@ import { describe, it, expect } from "vitest";
 import { unsupportedReason } from "./unsupported";
 
 describe("unsupportedReason", () => {
+  it("refuses a board create without a workspace", () => {
+    expect(
+      unsupportedReason("manage_board", { action: "create", name: "X" }),
+    ).toBe(
+      "Pass workspaceId: list_boards and get_board return each board's workspaceId. Use the workspace of the board the user is on unless they name another.",
+    );
+    expect(
+      unsupportedReason("manage_board", {
+        action: "create",
+        name: "X",
+        workspaceId: "w-1",
+      }),
+    ).toBe(null);
+  });
+
   it("refuses creating a goal", () => {
     expect(unsupportedReason("manage_goal", { action: "create" })).toBe(
       "Creating goals from the assistant isn't available yet. Create it from the Goals page.",
