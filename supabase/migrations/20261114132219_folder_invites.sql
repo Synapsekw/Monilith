@@ -32,6 +32,9 @@ create table public.folder_invitations (
   email        text not null,
   access_level public.board_access not null,
   invited_by   uuid references auth.users (id) on delete set null,
+  -- Set only when the invite created the guest org invitation itself, so a
+  -- revoke never touches an org invitation somebody else made.
+  org_invitation_id uuid references public.org_invitations (id) on delete set null,
   status       text not null default 'pending'
                constraint folder_invitations_status_check
                check (status in ('pending', 'accepted', 'revoked')),
@@ -43,6 +46,7 @@ create unique index folder_invitations_pending_uq
 create index folder_invitations_email_idx on public.folder_invitations (lower(email));
 create index folder_invitations_org_id_idx on public.folder_invitations (org_id);
 create index folder_invitations_invited_by_idx on public.folder_invitations (invited_by);
+create index folder_invitations_org_invitation_idx on public.folder_invitations (org_invitation_id);
 
 alter table public.folder_members enable row level security;
 alter table public.folder_invitations enable row level security;
@@ -67,7 +71,12 @@ $$;
 
 create function public.folder_has_members(p_folder_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
-  select exists (select 1 from public.folder_members fm where fm.folder_id = p_folder_id);
+  -- Only answers for callers who belong to the folder's org; used by the
+  -- folders delete policy, so the grant to authenticated stays.
+  select exists (
+    select 1 from public.folders f
+    where f.id = p_folder_id and public.is_org_member(f.org_id)
+  ) and exists (select 1 from public.folder_members fm where fm.folder_id = p_folder_id);
 $$;
 
 -- A guest sees a folder only as a member of it; everyone else in the org sees it.
@@ -218,7 +227,8 @@ language sql stable security definer set search_path = '' as $$
   join public.folders f on f.id = fb.folder_id
   join public.folder_members fm on fm.folder_id = fb.folder_id
   where fb.board_id = p_board_id
-    and public.can_read_board(p_board_id);
+    and public.can_read_board(p_board_id)
+    and public.can_see_folder(fb.folder_id);
 $$;
 revoke execute on function public.board_folder_grants(uuid) from public, anon;
 grant execute on function public.board_folder_grants(uuid) to authenticated;
@@ -289,12 +299,15 @@ begin
     )
   loop
     perform public._sync_mono_board_row(v_board, r.user_id);
+    if tg_op = 'UPDATE' and old.board_id <> new.board_id then
+      perform public._sync_mono_board_row(old.board_id, r.user_id);
+    end if;
   end loop;
   return null;
 end $$;
 revoke execute on function public.tg_folder_boards_sync_monos() from public, anon, authenticated;
 create trigger folder_boards_sync_monos
-  after insert or update of folder_id or delete on public.folder_boards
+  after insert or update of folder_id, board_id or delete on public.folder_boards
   for each row execute function public.tg_folder_boards_sync_monos();
 
 -- ───────────────────────── 5. moving a board into or out of a shared folder
@@ -312,7 +325,13 @@ begin
   if v_uid is null or pg_trigger_depth() > 1 then
     return case when tg_op = 'DELETE' then old else new end;
   end if;
-  if tg_op = 'UPDATE' and new.folder_id = old.folder_id then
+  -- Swapping which board a placement points at would slip an unrelated board
+  -- into (or out of) a shared folder without passing the checks below.
+  if tg_op = 'UPDATE' and new.board_id <> old.board_id then
+    raise exception 'a folder placement cannot be re-pointed at another board'
+      using errcode = '42501';
+  end if;
+  if tg_op = 'UPDATE' and new.folder_id = old.folder_id and new.board_id = old.board_id then
     return new;
   end if;
   select exists (
@@ -351,6 +370,29 @@ returns boolean language sql stable security definer set search_path = '' as $$
       and public.can_read_board(b.id)
   );
 $$;
+
+-- can_manage_folder keys on folders.created_by, so a client must not be able to
+-- rewrite it. The FK's on delete set null runs at trigger depth > 1 (and the
+-- creator is gone from auth.users); server-side writes without a caller pass.
+create function public.tg_folders_guard_created_by()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if new.created_by is distinct from old.created_by
+     and (select auth.uid()) is not null
+     and pg_trigger_depth() = 1
+     and not (
+       new.created_by is null
+       and not exists (select 1 from auth.users u where u.id = old.created_by)
+     ) then
+    raise exception 'the creator of a folder cannot be changed'
+      using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.tg_folders_guard_created_by() from public, anon, authenticated;
+create trigger folders_guard_created_by
+  before update on public.folders
+  for each row execute function public.tg_folders_guard_created_by();
 
 -- ───────────────────────────────────────── 6. folder visibility and writes
 alter policy "folders: read if member" on public.folders
@@ -414,6 +456,17 @@ alter policy "folder_layouts: update if member" on public.folder_layouts
 
 alter policy "folder_layouts: delete if member" on public.folder_layouts
   using (public.is_org_member(org_id) and not public.is_org_guest(org_id));
+
+alter policy "folder_boards: read if member" on public.folder_boards
+  using (
+    exists (
+      select 1 from public.folders f
+      where f.id = folder_boards.folder_id
+        and f.org_id in (select public.auth_user_orgs())
+    )
+    and public.can_read_board(folder_boards.board_id)
+    and public.can_see_folder(folder_boards.folder_id)
+  );
 
 alter policy "folder_boards: update if member" on public.folder_boards
   using (
@@ -537,6 +590,7 @@ declare
   v_org uuid;
   v_email text := lower(trim(p_email));
   v_user uuid;
+  v_org_inv uuid;
 begin
   if not public.can_manage_folder(p_folder_id) then
     raise exception 'not allowed to manage this folder' using errcode = '42501';
@@ -557,23 +611,26 @@ begin
     return v_user;
   end if;
 
-  insert into public.folder_invitations (folder_id, org_id, email, access_level, invited_by)
-  values (p_folder_id, v_org, v_email, p_level, v_uid)
-  on conflict (folder_id, lower(email)) where status = 'pending'
-  do update set access_level = excluded.access_level, invited_by = excluded.invited_by;
-
+  -- Remember the org invitation only when this call created it.
   insert into public.org_invitations (org_id, email, role, invited_by)
   values (v_org, v_email, 'guest'::public.org_role, v_uid)
-  on conflict (org_id, lower(email)) where status = 'pending' do nothing;
+  on conflict (org_id, lower(email)) where status = 'pending' do nothing
+  returning id into v_org_inv;
+
+  insert into public.folder_invitations (folder_id, org_id, email, access_level, invited_by, org_invitation_id)
+  values (p_folder_id, v_org, v_email, p_level, v_uid, v_org_inv)
+  on conflict (folder_id, lower(email)) where status = 'pending'
+  do update set access_level = excluded.access_level, invited_by = excluded.invited_by,
+                org_invitation_id = coalesce(excluded.org_invitation_id, public.folder_invitations.org_invitation_id);
 
   return null;
 end $$;
 
 create function public.revoke_folder_invitation(p_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare v_folder uuid; v_org uuid; v_email text;
+declare v_folder uuid; v_org_inv uuid;
 begin
-  select folder_id, org_id, lower(email) into v_folder, v_org, v_email
+  select folder_id, org_invitation_id into v_folder, v_org_inv
     from public.folder_invitations where id = p_id and status = 'pending';
   if v_folder is null then
     raise exception 'invitation not found' using errcode = 'P0002';
@@ -582,15 +639,18 @@ begin
     raise exception 'not allowed to manage this folder' using errcode = '42501';
   end if;
   update public.folder_invitations set status = 'revoked' where id = p_id;
-  -- A guest org invitation that existed only to carry folder invites goes too.
-  update public.org_invitations oi
-     set status = 'revoked'
-   where oi.org_id = v_org and lower(oi.email) = v_email
-     and oi.status = 'pending' and oi.role = 'guest'
-     and not exists (
-       select 1 from public.folder_invitations fi
-       where fi.org_id = v_org and lower(fi.email) = v_email and fi.status = 'pending'
-     );
+  -- Only an org invitation this feature created, and only once no other
+  -- pending folder invitation still rides on it.
+  if v_org_inv is not null then
+    update public.org_invitations oi
+       set status = 'revoked'
+     where oi.id = v_org_inv
+       and oi.status = 'pending' and oi.role = 'guest'
+       and not exists (
+         select 1 from public.folder_invitations fi
+         where fi.org_invitation_id = v_org_inv and fi.status = 'pending'
+       );
+  end if;
 end $$;
 
 create function public.folder_invitation_states(p_folder_id uuid)

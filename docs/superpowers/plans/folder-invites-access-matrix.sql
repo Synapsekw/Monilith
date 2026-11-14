@@ -1,12 +1,22 @@
--- Folder invites access matrix. Run AFTER the migration SQL in the same
--- execute_sql call. Ends with RAISE EXCEPTION on purpose: the whole call,
--- migration included, rolls back. Output: 'ACCESS_MATRIX {json}'.
+-- Folder invites access matrix. Run AFTER the migration SQL, in the same
+-- execute_sql call. The script opens its own transaction and ends with
+-- ROLLBACK, so nothing it (or the migration before it) does is kept.
+-- Output: one row per check, (name, value). A check passes when value = true.
+-- Names starting with t_ are timings in ms; 'fixture' = NO_FIXTURE means no
+-- usable data. It prints only check names and booleans/numbers, never ids,
+-- names or emails.
+begin;
+
+create temp table matrix_results (name text primary key, value jsonb);
+
 do $matrix$
 declare
   v_org uuid; v_owner uuid; v_other uuid; v_board uuid; v_ws uuid;
-  v_folder uuid; v_tmp_folder uuid; v_tmp_board uuid;
+  v_board2 uuid; v_third uuid;
+  v_folder uuid; v_tmp_folder uuid;
+  v_email text; v_org_inv uuid;
   r jsonb := '{}'::jsonb;
-  v_bool boolean; v_raised boolean; v_n int; v_m int;
+  v_raised boolean; v_n int; v_m int;
   v_plan json; v_ms numeric; v_best numeric; i int;
 begin
   -- A board B created by U, and another active plain member V of the same org.
@@ -22,8 +32,16 @@ begin
   order by (select count(*) from public.items it where it.board_id = b.id) desc
   limit 1;
   if v_board is null then
-    raise exception 'ACCESS_MATRIX {"fixture":"NO_FIXTURE"}';
+    insert into matrix_results values ('fixture', '"NO_FIXTURE"');
+    return;
   end if;
+
+  select b2.id into v_board2 from public.boards b2
+   where b2.org_id = v_org and b2.id <> v_board limit 1;
+  select om.user_id into v_third from public.org_members om
+   where om.org_id = v_org and om.role = 'member' and om.deactivated_at is null
+     and om.user_id <> v_other
+   order by (om.user_id = v_owner) limit 1;
 
   -- V starts with no access: drop any direct grant, take the board out of any
   -- folder, then file it in a fresh folder created by U. (All rolled back.)
@@ -46,20 +64,32 @@ begin
     '03_viewer_cannot_edit', not public.can_edit_board(v_board),
     '04_in_readable_ids', exists (select 1 from public.readable_board_ids() x where x = v_board),
     '05_is_board_member', public.is_board_member(v_board),
-    '06_level_rpc_viewer', (select access_level = 'viewer'
-                              from public.my_folder_board_levels(array[v_board]))
+    '06_level_rpc_viewer', coalesce((select access_level = 'viewer'
+                              from public.my_folder_board_levels(array[v_board])), false)
   );
 
-  -- RLS path, as the authenticated role: V reads the board's items.
+  -- RLS path, as the authenticated role: V reads the board's items. The
+  -- fixture board must actually have items or the check proves nothing.
   select count(*) into v_m from public.items where board_id = v_board;
   perform set_config('role', 'authenticated', true);
   select count(*) into v_n from public.items where board_id = v_board;
   perform set_config('role', 'none', true);
-  r := r || jsonb_build_object('07_rls_items_visible', v_n = v_m);
+  r := r || jsonb_build_object('07_rls_items_visible', v_m > 0 and v_n = v_m);
 
   update public.folder_members set access_level = 'editor'
    where folder_id = v_folder and user_id = v_other;
   r := r || jsonb_build_object('08_editor_can_edit', public.can_edit_board(v_board));
+
+  -- Higher-of rule: a direct viewer grant on top of the folder editor grant.
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.board_members (org_id, board_id, user_id, access_level, granted_by)
+  values (v_org, v_board, v_other, 'viewer', v_owner);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
+  r := r || jsonb_build_object('26_direct_viewer_plus_folder_editor_can_edit',
+                               public.can_edit_board(v_board));
+  perform set_config('request.jwt.claims', '', true);
+  delete from public.board_members where board_id = v_board and user_id = v_other;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
 
   -- V is not the folder's creator and not an admin: cannot manage.
   v_raised := false;
@@ -70,6 +100,19 @@ begin
   r := r || jsonb_build_object(
     '09_non_manager_cannot_share', v_raised,
     '10_non_manager_flag', not public.can_manage_folder(v_folder)
+  );
+
+  -- created_by is what can_manage_folder keys on: a member must not be able
+  -- to rewrite it and then share the folder with themselves.
+  v_raised := false;
+  begin
+    update public.folders set created_by = v_other where id = v_folder;
+  exception when insufficient_privilege then v_raised := true;
+  end;
+  r := r || jsonb_build_object(
+    '27_created_by_takeover_refused', v_raised,
+    '27b_created_by_unchanged', exists (
+      select 1 from public.folders where id = v_folder and created_by = v_owner)
   );
 
   -- V is not the board's creator: cannot take it out of a shared folder.
@@ -87,6 +130,22 @@ begin
   exception when insufficient_privilege then v_raised := true;
   end;
   r := r || jsonb_build_object('12_reorder_allowed', not v_raised);
+
+  -- Re-pointing a placement at another board must be refused.
+  if v_board2 is not null then
+    v_raised := false;
+    begin
+      update public.folder_boards set board_id = v_board2 where board_id = v_board;
+    exception when insufficient_privilege then v_raised := true;
+    end;
+    r := r || jsonb_build_object(
+      '28_board_id_swap_refused', v_raised,
+      '28b_placement_unchanged', exists (
+        select 1 from public.folder_boards where folder_id = v_folder and board_id = v_board)
+    );
+  else
+    r := r || jsonb_build_object('28_board_id_swap_refused', null);
+  end if;
 
   -- Deactivated org member with the folder row still present: no access.
   perform set_config('request.jwt.claims', '', true);
@@ -133,7 +192,20 @@ begin
     '18_guest_non_member_cannot_see', not public.can_see_folder(v_folder),
     '19_guest_non_member_rollup_refused', v_raised
   );
+
+  -- A guest who reaches the board through a direct grant, but is not in the
+  -- folder, must learn nothing about the folder from board_folder_grants.
   perform set_config('request.jwt.claims', '', true);
+  insert into public.board_members (org_id, board_id, user_id, access_level, granted_by)
+  values (v_org, v_board, v_other, 'viewer', v_owner);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
+  select count(*) into v_n from public.board_folder_grants(v_board);
+  r := r || jsonb_build_object(
+    '29_guest_board_read_ok', public.can_read_board(v_board),
+    '29b_guest_non_member_gets_no_grants', v_n = 0
+  );
+  perform set_config('request.jwt.claims', '', true);
+  delete from public.board_members where board_id = v_board and user_id = v_other;
   update public.org_members set role = 'member' where org_id = v_org and user_id = v_other;
 
   -- Pending invitation grants nothing; the creator can invite; revoke clears both rows.
@@ -152,9 +224,43 @@ begin
    where oi.org_id = v_org and oi.status = 'pending' and oi.email like 'matrix-%@example.com';
   r := r || jsonb_build_object('23_revoke_clears_guest_org_invite', v_n = 0);
 
-  -- Cascade: the creator deletes a shared folder holding a board that is not
-  -- theirs. The move guard must not fire on the cascade (pg_trigger_depth > 1).
+  -- Revoking a folder invitation must leave an org invitation it did not
+  -- create (here: a pre-existing member invitation) pending.
+  v_email := 'matrix-' || gen_random_uuid()::text || '@example.com';
   perform set_config('request.jwt.claims', '', true);
+  insert into public.org_invitations (org_id, email, role, invited_by)
+  values (v_org, v_email, 'member', v_owner)
+  returning id into v_org_inv;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+  perform public.invite_to_folder(v_folder, v_email, 'viewer');
+  perform public.revoke_folder_invitation(
+    (select id from public.folder_invitations
+      where folder_id = v_folder and lower(email) = v_email and status = 'pending'));
+  r := r || jsonb_build_object('30_revoke_keeps_foreign_org_invite',
+    exists (select 1 from public.org_invitations where id = v_org_inv and status = 'pending'));
+
+  -- Redemption: accepting the org invitation turns the pending folder
+  -- invitation into a folder_members row.
+  perform set_config('request.jwt.claims', '', true);
+  select lower(u.email::text) into v_email from auth.users u where u.id = v_other;
+  delete from public.org_invitations
+   where org_id = v_org and lower(email) = v_email and status = 'pending';
+  insert into public.org_invitations (org_id, email, role, invited_by)
+  values (v_org, v_email, 'member', v_owner)
+  returning id into v_org_inv;
+  insert into public.folder_invitations (folder_id, org_id, email, access_level, invited_by)
+  values (v_folder, v_org, v_email, 'viewer', v_owner);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
+  perform public.accept_invitation(v_org_inv);
+  r := r || jsonb_build_object('31_accept_invitation_redeems_folder_invite', exists (
+    select 1 from public.folder_members
+     where folder_id = v_folder and user_id = v_other and access_level = 'viewer'));
+  perform set_config('request.jwt.claims', '', true);
+  delete from public.folder_members where folder_id = v_folder and user_id = v_other;
+
+  -- Cascade and delete rights. A shared folder created by V holds a board V
+  -- did not create. A non-manager member cannot delete it (RLS); its manager
+  -- can, and the move guard must not fire on the cascade (trigger depth > 1).
   insert into public.folders (org_id, workspace_id, name, created_by)
   values (v_org, v_ws, 'matrix-' || gen_random_uuid()::text, v_other)
   returning id into v_tmp_folder;
@@ -162,13 +268,40 @@ begin
   insert into public.folder_boards (folder_id, board_id, position) values (v_tmp_folder, v_board, 0);
   insert into public.folder_members (folder_id, org_id, user_id, access_level, granted_by)
   values (v_tmp_folder, v_org, v_owner, 'viewer', v_other);
+
+  if v_third is not null then
+    perform set_config('request.jwt.claims', json_build_object('sub', v_third)::text, true);
+    perform set_config('role', 'authenticated', true);
+    v_raised := false; v_n := -1;
+    begin
+      delete from public.folders where id = v_tmp_folder;
+      get diagnostics v_n = row_count;
+    exception when others then v_raised := true;
+    end;
+    perform set_config('role', 'none', true);
+    r := r || jsonb_build_object(
+      '24a_non_manager_delete_refused',
+        (v_raised or v_n = 0)
+        and exists (select 1 from public.folders where id = v_tmp_folder)
+    );
+  else
+    r := r || jsonb_build_object('24a_non_manager_delete_refused', null);
+  end if;
+
   perform set_config('request.jwt.claims', json_build_object('sub', v_other)::text, true);
-  v_raised := false;
+  perform set_config('role', 'authenticated', true);
+  v_raised := false; v_n := -1;
   begin
     delete from public.folders where id = v_tmp_folder;
+    get diagnostics v_n = row_count;
   exception when others then v_raised := true;
   end;
-  r := r || jsonb_build_object('24_shared_folder_delete_cascades', not v_raised);
+  perform set_config('role', 'none', true);
+  r := r || jsonb_build_object(
+    '24_manager_delete_cascades',
+      not v_raised and v_n = 1
+      and not exists (select 1 from public.folders where id = v_tmp_folder)
+  );
 
   -- Timings for the stop condition (best of 3, milliseconds).
   perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
@@ -182,20 +315,26 @@ begin
   r := r || jsonb_build_object('t_items_ms', v_best);
   perform set_config('role', 'none', true);
 
+  v_tmp_folder := null; v_best := null;
   select fb.folder_id into v_tmp_folder
     from public.folder_boards fb group by fb.folder_id order by count(*) desc limit 1;
-  select b.created_by into v_owner
-    from public.folder_boards fb join public.boards b on b.id = fb.board_id
-   where fb.folder_id = v_tmp_folder limit 1;
-  perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
-  v_best := null;
-  for i in 1..3 loop
-    execute format('explain (analyze, format json) select count(*) from public.folder_rollup(%L)', v_tmp_folder) into v_plan;
-    v_ms := (v_plan -> 0 ->> 'Execution Time')::numeric;
-    if v_best is null or v_ms < v_best then v_best := v_ms; end if;
-  end loop;
+  if v_tmp_folder is not null then
+    select b.created_by into v_owner
+      from public.folder_boards fb join public.boards b on b.id = fb.board_id
+     where fb.folder_id = v_tmp_folder limit 1;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_owner)::text, true);
+    for i in 1..3 loop
+      execute format('explain (analyze, format json) select count(*) from public.folder_rollup(%L)', v_tmp_folder) into v_plan;
+      v_ms := (v_plan -> 0 ->> 'Execution Time')::numeric;
+      if v_best is null or v_ms < v_best then v_best := v_ms; end if;
+    end loop;
+  end if;
   r := r || jsonb_build_object('t_folder_rollup_ms', v_best);
 
-  raise exception 'ACCESS_MATRIX %', r::text;
+  insert into matrix_results select key, value from jsonb_each(r);
 end
 $matrix$;
+
+select name, value from matrix_results order by name;
+
+rollback;
