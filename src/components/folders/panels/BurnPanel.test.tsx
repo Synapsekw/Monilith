@@ -54,6 +54,7 @@ describe("BurnPanel", () => {
         anyDue
         onRetry={vi.fn()}
         forecast={forecast}
+        gap={-7}
       />,
     );
     expect(screen.getByTestId("burn-reading").textContent).toBe(
@@ -65,6 +66,37 @@ describe("BurnPanel", () => {
     );
   });
 
+  it("takes the gap from the Gap card, never from the burn series", () => {
+    // DAAS: the truncated series said 54 behind while the card said −341.
+    const { rerender } = render(
+      <BurnPanel
+        kicker="02"
+        board={null}
+        burn={points}
+        anyDue
+        onRetry={vi.fn()}
+        forecast={{ ...forecast, gapNow: -54 }}
+        gap={-341}
+      />,
+    );
+    expect(screen.getByTestId("burn-reading").textContent).toMatch(
+      /^341 behind plan today\. /,
+    );
+    rerender(
+      <BurnPanel
+        kicker="02"
+        board={null}
+        burn={points}
+        anyDue
+        onRetry={vi.fn()}
+        forecast={{ ...forecast, gapNow: -54 }}
+      />,
+    );
+    expect(screen.getByTestId("burn-reading").textContent).toBe(
+      "At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
+    );
+  });
+
   it("says ahead when the gap is positive and nothing when it is zero", () => {
     const { rerender } = render(
       <BurnPanel
@@ -73,7 +105,8 @@ describe("BurnPanel", () => {
         burn={points}
         anyDue
         onRetry={vi.fn()}
-        forecast={{ ...forecast, gapNow: 4 }}
+        forecast={forecast}
+        gap={4}
       />,
     );
     expect(screen.getByTestId("burn-reading").textContent).toBe(
@@ -86,7 +119,8 @@ describe("BurnPanel", () => {
         burn={points}
         anyDue
         onRetry={vi.fn()}
-        forecast={{ ...forecast, gapNow: 0 }}
+        forecast={forecast}
+        gap={0}
       />,
     );
     expect(screen.getByTestId("burn-reading").textContent).toBe(

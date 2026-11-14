@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildStages } from "./stages";
-import type { BurnPoint } from "./rollup";
+import { burnSeries, type BurnPoint } from "./rollup";
 import { FIXTURE_TODAY, folderFixture } from "./fixture";
 import {
   addDays,
@@ -249,7 +249,14 @@ describe("burnForecast", () => {
     const f = burnForecast(flat, 24)!;
     expect(f.pace).toBe(0);
     expect(f.finishWeek).toBeNull();
+    // The one completion is in the current week, outside the pace window.
     expect(forecastReading(f)).toBe(
+      "No items were completed in the four weeks before this one, so there is no pace yet; 1 was completed this week.",
+    );
+    const none = flat.map((p) =>
+      p.weekStart === "2026-09-14" ? { ...p, completed: 0 } : p,
+    );
+    expect(forecastReading(burnForecast(none, 24)!)).toBe(
       "No items completed in the last four weeks.",
     );
   });
@@ -267,6 +274,113 @@ describe("burnForecast", () => {
         24,
       ),
     ).toBeNull();
+  });
+});
+
+describe("kpiTrends agreement with the cards", () => {
+  const rows = [
+    wk("2026-08-24", 2, 1, 0),
+    wk("2026-08-31", 3, 1, 1),
+    wk("2026-09-07", 2, 1, 2),
+    wk("2026-09-14", 3, 1, 4),
+    wk("2026-09-21", 5, 0, 0),
+    wk("2026-09-28", 1, 0, 0),
+  ];
+  const now = { complete: 30, gap: -9, overdue: 7, dueThisWeek: 2 };
+
+  it("ends every past series on the card's value and starts due on it", () => {
+    const t = kpiTrends(rows, null, "2026-09-15", 20, now);
+    expect(t.complete?.points).toEqual([5, 10, 15, 30]);
+    expect(t.complete?.delta).toBe(15);
+    expect(t.gap?.points).toEqual([-1, -3, -4, -9]);
+    expect(t.overdue?.points).toEqual([0, 1, 2, 7]);
+    expect(t.dueThisWeek?.points).toEqual([2, 5, 1]);
+    expect(t.dueThisWeek?.delta).toBe(3);
+  });
+
+  it("appends the card value when the burn rows stop before this week", () => {
+    const t = kpiTrends(rows.slice(0, 3), null, "2026-09-15", 20, now);
+    expect(t.gap?.points).toEqual([-1, -3, -4, -9]);
+    expect(t.dueThisWeek).toBeUndefined();
+  });
+
+  it("drops a card's trend when the card has no value", () => {
+    const t = kpiTrends(rows, null, "2026-09-15", 20, { ...now, gap: null });
+    expect(t.gap).toBeUndefined();
+    expect(t.complete).toBeDefined();
+  });
+
+  it("hides the overdue trend while folder_burn has no overdue_open column", () => {
+    const old = rows.map(({ overdueOpen: _o, importedDone: _i, ...r }) => r);
+    expect(kpiTrends(old, null, "2026-09-15", 20, now).overdue).toBeUndefined();
+    expect(kpiTrends(old, null, "2026-09-15", 20, now).gap).toBeDefined();
+  });
+});
+
+/**
+ * Shaped like the live DAAS folder on 2026-11-14: 56 stages x 73 weekly
+ * buckets (4,088 folder_burn rows), 1,953 items all dated, 663 done, every one
+ * of them completed (and created) in the current week, i.e. imported.
+ */
+function daasRows(imported: boolean): BurnRow[] {
+  const out: BurnRow[] = [];
+  let planned = 0;
+  for (let s = 0; s < 56; s++)
+    for (let w = 0; w < 73; w++) {
+      const weekStart = addDays("2026-01-26", w * 7);
+      const p = planned < 1953 && (s * 73 + w) % 2 === 0 ? 1 : 0;
+      planned += p;
+      const c = weekStart === "2026-11-09" ? (s < 47 ? 12 : 11) : 0;
+      out.push({
+        stageKey: `stage-${String(s).padStart(2, "0")}`,
+        weekStart,
+        planned: p,
+        completed: c,
+        ...(imported ? { importedDone: c, overdueOpen: 0 } : {}),
+      });
+    }
+  return out;
+}
+
+describe("a DAAS-shaped folder", () => {
+  const today = "2026-11-14";
+  const card = { complete: 34, gap: -341, overdue: 601, dueThisWeek: 91 };
+
+  it("is 4,088 rows whose sums match the rollup, unlike a 1,000-row cut", () => {
+    const rows = daasRows(false);
+    expect(rows).toHaveLength(4088);
+    const sum = (rs: BurnRow[], k: "planned" | "completed") =>
+      rs.reduce((a, r) => a + r[k], 0);
+    expect(sum(rows, "planned")).toBe(1953);
+    expect(sum(rows, "completed")).toBe(663);
+    // What PostgREST's max_rows used to hand the page:
+    expect(sum(rows.slice(0, 1000), "completed")).toBeLessThan(663);
+  });
+
+  it("puts the card's numbers at the end of the complete and gap trends", () => {
+    const t = kpiTrends(daasRows(false), null, today, 1953, card);
+    expect(t.complete?.points.at(-1)).toBe(34);
+    expect(t.gap?.points.at(-1)).toBe(-341);
+    expect(t.dueThisWeek?.points[0]).toBe(91);
+    // Old RPC: no overdue_open, so no overdue line of zeros.
+    expect(t.overdue).toBeUndefined();
+  });
+
+  it("does not claim nothing was completed when the week's work is new", () => {
+    const pts = burnSeries(daasRows(false), null, today);
+    const f = burnForecast(pts, 1953, { importedKnown: false })!;
+    expect(f.pace).toBe(0);
+    expect(forecastReading(f)).toBe(
+      "No items were completed in the four weeks before this one, so there is no pace yet; 663 were completed this week.",
+    );
+  });
+
+  it("says everything arrived done once imported_done is known", () => {
+    const pts = burnSeries(daasRows(true), null, today);
+    const f = burnForecast(pts, 1953, { importedKnown: true })!;
+    expect(forecastReading(f)).toBe(
+      "Everything completed so far arrived already done, so there is no pace to forecast from.",
+    );
   });
 });
 

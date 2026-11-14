@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
+import { computeKpis } from "@/lib/folders/rollup";
 import { canvasSections } from "@/lib/folders/layout";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
 
@@ -224,5 +225,19 @@ describe("OverviewTab", () => {
   it("shows the reading line above the burn chart", () => {
     renderOverview();
     expect(screen.getByTestId("burn-reading")).toBeInTheDocument();
+  });
+
+  it("states the same gap in the reading as on the Gap card", () => {
+    renderOverview();
+    const k = computeKpis(folderFixture().rollup!, FIXTURE_TODAY);
+    const reading = screen.getByTestId("burn-reading").textContent!;
+    if (k.gap === null || k.gap === 0)
+      expect(reading).not.toMatch(/plan today/);
+    else
+      expect(reading).toMatch(
+        new RegExp(
+          `^${Math.abs(k.gap)} ${k.gap < 0 ? "behind" : "ahead of"} plan today\\. `,
+        ),
+      );
   });
 });

@@ -70,16 +70,39 @@ function weekly(rows: BurnRow[], stage: string | null): Wk[] {
     });
 }
 
+/** The value each KPI card shows right now (from the rollup); `null` means
+ *  the card has no value, so it gets no trend either. */
+export type KpiNow = Partial<Record<KpiKey, number | null>>;
+
 /**
  * Weekly series behind each KPI card. Complete, gap and overdue look BACK over
  * up to eight weeks ending in the current one; due looks FORWARD from it. A
  * card with no entry draws no sparkline. `total` is the item count in scope.
+ *
+ * AGREEMENT RULE (2026-11-14 browser fix): a trend never contradicts the card
+ * it sits on. When `now` is passed (KpisPanel always passes it), the series'
+ * LATEST point is the card's own value from the rollup:
+ *   - complete / gap / overdue: the current week's point is replaced by the
+ *     card value ("as of today"); earlier points stay folder_burn's
+ *     end-of-week values, which count on the same basis as the rollup (done =
+ *     every done item with a done date; planned = items whose latest date is
+ *     in or before that week). When the burn rows stop before the current
+ *     week, the card value is appended as the newest point instead.
+ *   - dueThisWeek: the first bar (this week) is the card value; later bars are
+ *     folder_burn's planned counts for those weeks.
+ *   - a card whose `now` value is null gets no trend.
+ *   - overdue: folder_burn carries `overdue_open` only once the folder_tower
+ *     migration is applied. Rows without it (`overdueOpen` undefined) would
+ *     draw zeros ending in the card's value, so with `now` the overdue trend
+ *     is omitted until the column exists.
+ * Without `now` the raw folder_burn series is returned.
  */
 export function kpiTrends(
   rows: BurnRow[],
   stage: string | null,
   todayISO: string,
   total: number,
+  now?: KpiNow,
 ): Partial<Record<KpiKey, Trend>> {
   const ws = weekly(rows, stage);
   let cur = -1;
@@ -95,20 +118,51 @@ export function kpiTrends(
     points,
     delta: points[points.length - 1]! - points[points.length - 2]!,
   });
-  const out: Partial<Record<KpiKey, Trend>> = {
-    gap: line(past.map((w) => w.completedCum - w.plannedCum)),
-    overdue: line(past.map((w) => w.overdueOpen)),
+  // Anchor a past series on the card's value (see the rule above).
+  const anchored = (key: KpiKey, points: number[]): Trend | undefined => {
+    if (now === undefined || !(key in now)) return line(points);
+    const v = now[key];
+    if (v === null || v === undefined) return undefined;
+    const pts = inWeek
+      ? [...points.slice(0, -1), v]
+      : [...points, v].slice(-TREND_WEEKS);
+    return pts.length < 2 ? undefined : line(pts);
   };
-  if (total > 0)
-    out.complete = line(
+  const out: Partial<Record<KpiKey, Trend>> = {};
+  const gap = anchored(
+    "gap",
+    past.map((w) => w.completedCum - w.plannedCum),
+  );
+  if (gap) out.gap = gap;
+  const hasOverdue = rows.some((r) => r.overdueOpen !== undefined);
+  if (now === undefined || hasOverdue) {
+    const overdue = anchored(
+      "overdue",
+      past.map((w) => w.overdueOpen),
+    );
+    if (overdue) out.overdue = overdue;
+  }
+  if (total > 0) {
+    const complete = anchored(
+      "complete",
       past.map((w) => Math.round((w.completedCum / total) * 100)),
     );
-  if (ahead.length >= 2)
-    out.dueThisWeek = {
-      kind: "bars",
-      points: ahead.map((w) => w.planned),
-      delta: ahead[1]!.planned - ahead[0]!.planned,
-    };
+    if (complete) out.complete = complete;
+  }
+  if (ahead.length >= 2) {
+    const first =
+      now !== undefined && "dueThisWeek" in now
+        ? now.dueThisWeek
+        : ahead[0]!.planned;
+    if (first !== null && first !== undefined) {
+      const points = [first, ...ahead.slice(1).map((w) => w.planned)];
+      out.dueThisWeek = {
+        kind: "bars",
+        points,
+        delta: points[1]! - points[0]!,
+      };
+    }
+  }
   return out;
 }
 
@@ -153,11 +207,20 @@ export type Forecast = {
   /** True when fewer than two full weeks precede the current one; no pace,
    *  date or line is produced then. */
   insufficientHistory: boolean;
+  /** Completions in the current week (not part of the pace window). */
+  completedThisWeek?: number;
+  /** Cumulative completions up to and including the current week. */
+  completedCum?: number;
+  /** False when the rows came from a folder_burn without `imported_done`
+   *  (before the folder_tower migration): `importedDone` is then 0 because
+   *  it is unknown, not because nothing was imported. */
+  importedKnown?: boolean;
 };
 
 export function burnForecast(
   points: BurnPoint[],
   total: number,
+  opts: { importedKnown?: boolean } = {},
 ): Forecast | null {
   let cur = -1;
   for (let i = 0; i < points.length; i++) if (points[i]!.isPast) cur = i;
@@ -199,6 +262,9 @@ export function burnForecast(
           value: Math.min(total, Math.round(here.completedCum + pace * i)),
         })),
     insufficientHistory,
+    completedThisWeek: here.completed,
+    completedCum: here.completedCum,
+    importedKnown: opts.importedKnown ?? true,
   };
 }
 
@@ -219,8 +285,23 @@ export function forecastReading(f: Forecast): string {
         ? " 1 item arrived already done and is left out of the pace."
         : ` ${f.importedDone} items arrived already done and are left out of the pace.`
       : "";
-  if (f.pace === 0 || f.finishWeek === null)
+  if (f.pace === 0 || f.finishWeek === null) {
+    // No pace. Say WHY, truthfully for what this data can know:
+    //  - imported_done known and every completion so far arrived done: there
+    //    never was any organic completion to pace on;
+    //  - completions this week (the pace window is the four FULL weeks before
+    //    it): "none in the last four weeks" would read as false, so name the
+    //    window and this week's count. With the pre-migration folder_burn we
+    //    cannot tell whether those were imported, so we do not claim either;
+    //  - otherwise the plain sentence is true.
+    const cum = f.completedCum ?? 0;
+    const thisWeek = f.completedThisWeek ?? 0;
+    if (f.importedKnown !== false && cum > 0 && f.importedDone >= cum)
+      return "Everything completed so far arrived already done, so there is no pace to forecast from.";
+    if (thisWeek > 0)
+      return `No items were completed in the four weeks before this one, so there is no pace yet; ${thisWeek} ${thisWeek === 1 ? "was" : "were"} completed this week.${imported}`;
     return `No items completed in the last four weeks.${imported}`;
+  }
   const pace =
     f.pace >= 10
       ? String(Math.round(f.pace))

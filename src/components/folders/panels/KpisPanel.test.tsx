@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { statusToneClasses } from "@/components/ui/status-pill";
 import type { BurnRow } from "@/lib/folders/types";
+import { computeKpis } from "@/lib/folders/rollup";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
 import { KpisPanel } from "./KpisPanel";
 
@@ -52,6 +53,7 @@ function expectTone(el: HTMLElement, color: "green" | "red" | "blue" | "gray") {
 }
 
 const fx = folderFixture();
+const k = computeKpis(fx.rollup!, FIXTURE_TODAY);
 const all = [
   "complete",
   "gap",
@@ -80,22 +82,52 @@ describe("KpisPanel", () => {
     expect(screen.getAllByRole("img")).toHaveLength(4);
   });
 
-  it("states more overdue as a red pill and more complete as a green one", () => {
+  it("ends every sparkline on the number its card shows", () => {
     renderPanel({ burn: COVERS_TODAY, stage: null, board: null });
+    const series = (name: RegExp) =>
+      screen
+        .getByRole("img", { name })
+        .getAttribute("aria-label")!
+        .split(": ")[1]!
+        .split(", ")
+        .map(Number);
+    expect(series(/^Complete/).at(-1)).toBe(k.donePct);
+    expect(series(/^Gap to plan/).at(-1)).toBe(k.gap);
+    expect(series(/^Overdue/).at(-1)).toBe(k.overdue);
+    expect(series(/^Due this week/)[0]).toBe(k.dueThisWeek);
+  });
+
+  it("states more overdue as a red pill and more complete as a green one", () => {
+    // Last week: one fewer overdue than the card, and 0% complete.
+    const burn = burnRows([
+      ["2026-08-31", 3, 0, 0],
+      ["2026-09-07", 3, 0, k.overdue - 1],
+      ["2026-09-14", 4, 4, 0],
+      ["2026-09-21", 5, 0, 0],
+    ]);
+    renderPanel({ burn });
     expectTone(pill("+1 this week"), "red");
-    expectTone(pill("+15 pts this week"), "green");
-    expectTone(pill("flat"), "gray");
+    expectTone(pill(`+${k.donePct} pts this week`), "green");
     expectTone(pill("5 next week"), "blue");
   });
 
-  it("states fewer overdue as a green pill", () => {
+  it("states fewer overdue as a green pill and an unchanged gap as flat", () => {
+    // Gap last week equal to the card's gap: completed − planned = k.gap.
     const burn = burnRows([
-      ["2026-08-31", 3, 2, 1],
-      ["2026-09-07", 3, 3, 3],
-      ["2026-09-14", 4, 4, 2],
+      ["2026-08-31", 0, 0, 0],
+      ["2026-09-07", -k.gap!, 0, k.overdue + 1],
+      ["2026-09-14", 4, 4, 0],
     ]);
     renderPanel({ burn });
     expectTone(pill("−1 this week"), "green");
+    expectTone(pill("flat"), "gray");
+  });
+
+  it("hides the overdue trend while folder_burn has no overdue_open", () => {
+    const burn = COVERS_TODAY.map(({ overdueOpen: _o, ...r }) => r);
+    renderPanel({ burn });
+    expect(screen.queryByRole("img", { name: /^Overdue/ })).toBeNull();
+    expect(screen.getByRole("img", { name: /^Complete/ })).toBeInTheDocument();
   });
 
   it("draws no sparklines and no pills when burn is null", () => {

@@ -171,10 +171,17 @@ export function KpisPanel({
 }) {
   const k = computeKpis(rows, todayISO);
   if (failed) return <Failed onRetry={onRetry} />;
+  // Each trend ENDS on the value its card shows (kpiTrends' agreement rule),
+  // so a pill can never contradict the number above it.
   const trends =
     burn === null || board !== null
       ? {}
-      : kpiTrends(burn, stage, todayISO, k.total);
+      : kpiTrends(burn, stage, todayISO, k.total, {
+          complete: k.donePct,
+          gap: k.gap,
+          overdue: k.overdue,
+          dueThisWeek: k.dueThisWeek,
+        });
   const live = cards.filter((key) => !IS_ZERO[key](k));
   const quiet = cards.filter((key) => IS_ZERO[key](k));
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);

@@ -37,6 +37,7 @@ export function BurnPanel({
   anyDue,
   onRetry,
   forecast = null,
+  gap = null,
   stageBars,
 }: {
   kicker: string;
@@ -48,6 +49,14 @@ export function BurnPanel({
   anyDue: boolean;
   onRetry: () => void;
   forecast?: Forecast | null;
+  /**
+   * The gap the reading states: the rollup's done − planned-by-today for the
+   * chart's own scope (folder-wide, current stage), which with no board
+   * filter IS the Gap card's value. Never `forecast.gapNow`: that is the
+   * series' end-of-week figure and once disagreed with the card (DAAS: "54
+   * behind" beside −341). Null (or omitted) drops the gap sentence.
+   */
+  gap?: number | null;
   /** Supplied by Overview; when the folder has no dates these replace the chart. */
   stageBars?: StageBar[];
 }) {
@@ -92,7 +101,7 @@ export function BurnPanel({
         <p data-testid="burn-reading" className="text-muted-foreground text-xs">
           {forecast.insufficientHistory
             ? NOT_ENOUGH_HISTORY
-            : `${gapSentence(forecast.gapNow)}${forecastReading(forecast)}`}
+            : `${gap === null ? "" : gapSentence(gap)}${forecastReading(forecast)}`}
         </p>
       ) : null}
       {burn === null ? (

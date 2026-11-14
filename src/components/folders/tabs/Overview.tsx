@@ -13,6 +13,8 @@ import { MilestonesPanel } from "@/components/folders/panels/MilestonesPanel";
 import {
   boardSummaries,
   burnSeries,
+  computeKpis,
+  filterRows,
   nextMilestones,
 } from "@/lib/folders/rollup";
 import {
@@ -112,8 +114,23 @@ export function OverviewTab({
     groups === null || groups.length === 0
       ? null
       : "By board. Counts are totals; a board expands to its most urgent items.";
-  const total = rows.reduce((s, r) => s + r.total, 0);
-  const forecast = burn === null ? null : burnForecast(burn, total);
+  // The burn series has no board dimension, so its reading is computed on the
+  // chart's own scope: folder-wide, current stage. With no board filter this
+  // is exactly `rows`, so the reading's gap equals the Gap card; with one, the
+  // panel's "Scope: All boards" note labels the difference.
+  const burnScope = computeKpis(
+    payload.rollup === null
+      ? rows
+      : filterRows(payload.rollup, { stageKey: stage, boardId: null }),
+    payload.todayISO,
+  );
+  // Pre-migration folder_burn has no imported_done column: unknown, not 0.
+  const importedKnown =
+    payload.burn?.some((r) => r.importedDone !== undefined) ?? false;
+  const forecast =
+    burn === null
+      ? null
+      : burnForecast(burn, burnScope.total, { importedKnown });
   const milestones = nextMilestones(
     stages.filter((s) => stage === null || s.key === stage),
     payload.todayISO,
@@ -152,6 +169,7 @@ export function OverviewTab({
                     anyDue={anyDue}
                     onRetry={onRetry}
                     forecast={forecast}
+                    gap={burnScope.gap}
                     stageBars={stageBars(stages)}
                   />
                 );
