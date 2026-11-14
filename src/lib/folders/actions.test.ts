@@ -33,12 +33,15 @@ const state: {
   affectedRows: number;
   currentFolderId: string | null;
   folderMemberRows: { folder_id: string; user_id: string }[];
+  /** Whether a plain `folders` read on the RLS client still sees the folder. */
+  folderVisible: boolean;
 } = {
   insertError: null,
   maxPosition: null,
   affectedRows: 1,
   currentFolderId: null,
   folderMemberRows: [],
+  folderVisible: false,
 };
 
 // Every write the mocked client actually received, keyed by operation — this is
@@ -85,6 +88,7 @@ vi.mock("@/lib/supabase/server", () => ({
       let mode: "update" | "delete" | null = null;
       let updatePayload: unknown = null;
       let logged = false;
+      let selected: string | null = null;
 
       // Exactly one of `.then` / `.maybeSingle` terminates a given chain, but
       // guard anyway: a double-log would silently break the `toHaveLength(1)`
@@ -100,7 +104,10 @@ vi.mock("@/lib/supabase/server", () => ({
       };
 
       const qb: Record<string, unknown> = {};
-      qb.select = () => qb;
+      qb.select = (cols?: string) => {
+        selected = cols ?? null;
+        return qb;
+      };
       qb.eq = (col: string, val: unknown) => {
         eqLog.push([col, val]);
         return qb;
@@ -127,6 +134,13 @@ vi.mock("@/lib/supabase/server", () => ({
         logOperation();
         // `folder_boards.select("folder_id").eq("board_id", …)`: where the
         // board is filed today. `mode` is null because it is a plain read.
+        // `folders.select("id").eq("id", …)`: can the caller still see it?
+        if (table === "folders" && mode === null && selected === "id") {
+          return Promise.resolve({
+            data: state.folderVisible ? { id: "visible" } : null,
+            error: null,
+          });
+        }
         if (table === "folder_boards" && mode === null) {
           return Promise.resolve({
             data: state.currentFolderId
@@ -163,9 +177,20 @@ vi.mock("@/lib/supabase/server", () => ({
       // Makes `qb` itself awaitable when `.eq()` is the last call in the
       // chain — `moveBoardToFolder`'s unfile delete has no RETURNING, so it
       // never reaches a distinct terminal method.
-      qb.then = (resolve: (value: { error: unknown }) => void) => {
+      qb.then = (
+        resolve: (value: { data: unknown; error: unknown }) => void,
+      ) => {
         logOperation();
-        resolve({ error: state.insertError });
+        // A delete's RETURNING rows: as many as `affectedRows` says matched.
+        resolve({
+          data:
+            mode === "delete"
+              ? Array.from({ length: state.affectedRows }, () => ({
+                  board_id: "matched-row",
+                }))
+              : null,
+          error: state.insertError,
+        });
       };
       return qb;
     },
@@ -193,6 +218,7 @@ describe("folder actions", () => {
     state.affectedRows = 1;
     state.currentFolderId = null;
     state.folderMemberRows = [];
+    state.folderVisible = false;
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];
@@ -376,6 +402,7 @@ describe("folder actions — a 0-row match", () => {
     state.affectedRows = 1;
     state.currentFolderId = null;
     state.folderMemberRows = [];
+    state.folderVisible = false;
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];
@@ -411,9 +438,45 @@ describe("folder actions — a 0-row match", () => {
   it("unfiles a board with a legitimate no-op when there is no placement", async () => {
     // Deleting a placement that doesn't exist matches zero rows but is not an
     // error — a double-click or a stale menu, not a "folder is gone" case.
+    state.affectedRows = 0;
     const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
     expect(res.ok).toBe(true);
     expect(updateTag).toHaveBeenCalledWith("folders:org:org-1");
+  });
+
+  it("does not report success when RLS refused to unfile a visible placement", async () => {
+    // A guest sees the placement but cannot delete it: 0 rows removed.
+    state.currentFolderId = FOLDER;
+    state.affectedRows = 0;
+    const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "Only the board's owner or an admin can move a board into or out of a shared folder.",
+    });
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("deleteFolder says who may delete when the folder is still visible", async () => {
+    state.affectedRows = 0;
+    state.folderVisible = true;
+    const res = await deleteFolder({ folderId: FOLDER });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only the folder's creator or an admin can delete a shared folder",
+    });
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("renameFolder reports a permission problem when the folder is still visible", async () => {
+    state.affectedRows = 0;
+    state.folderVisible = true;
+    const res = await renameFolder({ folderId: FOLDER, name: "New Name" });
+    expect(res).toEqual({
+      ok: false,
+      error: "You don't have permission to change this folder",
+    });
+    expect(updateTag).not.toHaveBeenCalled();
   });
 });
 
@@ -428,6 +491,7 @@ describe("moveBoardToFolder into a shared folder", () => {
     state.affectedRows = 1;
     state.currentFolderId = null;
     state.folderMemberRows = [];
+    state.folderVisible = false;
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];

@@ -60,9 +60,18 @@ function updateChain(error: unknown = null, ownerId: string | null = "u1") {
   return { chain: { update, select }, update, eq };
 }
 
-/** `.from("x").select("y").eq("z", …)` resolving to `{ data }`. */
+/**
+ * `.from("x").select("y").eq("z", …)` resolving to `{ data }` — awaited
+ * directly or capped with `.limit()`. `.maybeSingle()` (the board's folder
+ * placement) answers "not filed", so no folder members are read.
+ */
 function selectChain(data: unknown[] = []) {
-  const eq = vi.fn().mockResolvedValue({ data });
+  const eq = vi.fn(() =>
+    Object.assign(Promise.resolve({ data }), {
+      limit: async () => ({ data }),
+      maybeSingle: async () => ({ data: null, error: null }),
+    }),
+  );
   return { select: vi.fn(() => ({ eq })) };
 }
 
@@ -245,7 +254,9 @@ describe("archiveBoard", () => {
 
   it("stamps archived_at/archived_by and invalidates the board list", async () => {
     const { chain, update, eq } = updateChain(null);
-    from.mockReturnValue(chain);
+    from.mockImplementation((table: string) =>
+      table === "boards" ? chain : selectChain([]),
+    );
     const res = await archiveBoard({ boardId: BOARD_ID });
     expect(res).toEqual({ ok: true, data: undefined });
     expect(update).toHaveBeenCalledWith({
@@ -285,7 +296,9 @@ describe("restoreBoard", () => {
 
   it("clears both archive columns", async () => {
     const { chain, update } = updateChain(null);
-    from.mockReturnValue(chain);
+    from.mockImplementation((table: string) =>
+      table === "boards" ? chain : selectChain([]),
+    );
     const res = await restoreBoard({ boardId: BOARD_ID });
     expect(res).toEqual({ ok: true, data: undefined });
     expect(update).toHaveBeenCalledWith({

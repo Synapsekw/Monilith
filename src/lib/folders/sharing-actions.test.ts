@@ -9,6 +9,7 @@ const fromResult: { data: unknown; error: unknown } = {
   error: null,
 };
 const deleteEq = vi.fn();
+const deleted: { rows: unknown[] } = { rows: [{ user_id: "me" }] };
 const membersResult: { data: unknown; error: unknown } = {
   data: [],
   error: null,
@@ -34,9 +35,12 @@ vi.mock("@/lib/supabase/server", () => ({
       }),
       delete: () => ({
         eq: (c1: string, v1: unknown) => ({
-          eq: async (c2: string, v2: unknown) => {
+          eq: (c2: string, v2: unknown) => {
             deleteEq(c1, v1, c2, v2);
-            return { error: null };
+            // RETURNING: how many rows the delete actually removed.
+            return {
+              select: async () => ({ data: deleted.rows, error: null }),
+            };
           },
         }),
       }),
@@ -72,6 +76,7 @@ beforeEach(() => {
   inviteUserByEmail.mockReset();
   auditInsert.mockClear();
   deleteEq.mockReset();
+  deleted.rows = [{ user_id: "me" }];
   membersResult.data = [];
 });
 
@@ -288,6 +293,15 @@ describe("leaveFolder", () => {
     await leaveFolder({ folderId: F });
     for (const [tag] of updateTag.mock.calls)
       expect(String(tag)).not.toMatch(/^folders:/);
+  });
+  it("does not report success when the caller was not on the folder", async () => {
+    deleted.rows = [];
+    const r = await leaveFolder({ folderId: F });
+    expect(r).toEqual({
+      ok: false,
+      error: "You are not a member of this folder",
+    });
+    expect(updateTag).not.toHaveBeenCalled();
   });
 });
 

@@ -253,12 +253,16 @@ export async function leaveFolder(input: unknown): Promise<ActionResult> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return fail("You must be signed in.");
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("folder_members")
     .delete()
     .eq("folder_id", parsed.data.folderId)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("user_id");
   if (error) return fail(GENERIC_ERROR);
+  // Nothing removed: not on this folder (any more), so nothing was left.
+  if ((removed ?? []).length === 0)
+    return fail("You are not a member of this folder");
   invalidateFor(user.id);
   return { ok: true, data: undefined };
 }

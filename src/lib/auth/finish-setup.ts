@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidateTag } from "next/cache";
 import { invitationRedeemedTags } from "@/lib/cache/invitation-tags";
+import { orgMembersTag } from "@/lib/cache/tags";
 import { createClient } from "@/lib/supabase/server";
 import { provisionAccountForUser } from "@/lib/auth/provision";
 import { redeemInvitationsForUser } from "@/lib/auth/redeem";
@@ -28,6 +29,43 @@ function expireRedeemedAccess(userId: string): void {
   }
 }
 
+/** Cap on the orgs read back after a redemption (a person joins a handful). */
+const JOINED_ORGS_LIMIT = 50;
+
+/**
+ * A redemption that created org memberships changed those orgs' member lists:
+ * expire them, so the person who just joined does not show as "Unknown
+ * member" to everyone else until the cache window passes. The joined orgs are
+ * not returned by `redeem_invitations`, so read the user's active memberships
+ * (bounded, the user's own rows on their own session) and expire each. Same
+ * context rules and render-phase no-op as `expireRedeemedAccess`. Best
+ * effort: a failed read must never fail the sign-in it rides on.
+ */
+async function expireJoinedOrgMembers(
+  client: SupabaseClient<Database>,
+  userId: string,
+): Promise<void> {
+  let orgs: { org_id: string }[] = [];
+  try {
+    const { data } = await client
+      .from("org_members")
+      .select("org_id")
+      .eq("user_id", userId)
+      .is("deactivated_at", null)
+      .limit(JOINED_ORGS_LIMIT);
+    orgs = data ?? [];
+  } catch {
+    return;
+  }
+  for (const { org_id } of orgs) {
+    try {
+      revalidateTag(orgMembersTag(org_id), { expire: 0 });
+    } catch {
+      // Render phase: nothing to expire safely here.
+    }
+  }
+}
+
 /**
  * First-sign-in setup for an approved account: redeem pending invitations
  * FIRST, and only self-provision a new org when none were redeemed. Moved
@@ -48,6 +86,7 @@ export async function finishAccountSetup(
   // someone already in the org is redeemed too but not counted, so expire this
   // user's cached access entries unconditionally (cheap, and only their own).
   expireRedeemedAccess(user.id);
+  if (redeemed > 0) await expireJoinedOrgMembers(client, user.id);
   if (redeemed === 0) {
     const { error: provisionError } = await provisionAccountForUser(
       client,

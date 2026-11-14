@@ -36,6 +36,9 @@ function fakeClient(opts: {
   updateError?: { message: string } | null;
   rpc?: { data: unknown; error: { message: string } | null };
   memberIds?: string[];
+  /** The folder the board is filed in, and that folder's members. */
+  folderId?: string | null;
+  folderMemberIds?: string[];
   leaveRows?: { board_id: string }[];
   leaveError?: { message: string } | null;
 }) {
@@ -109,14 +112,45 @@ function fakeClient(opts: {
             }
             if (cols === "user_id") {
               return {
-                eq: async () => ({
-                  data: (opts.memberIds ?? []).map((id) => ({ user_id: id })),
+                eq: () => ({
+                  limit: async () => ({
+                    data: (opts.memberIds ?? []).map((id) => ({ user_id: id })),
+                  }),
                 }),
               };
             }
             throw new Error(`unexpected board_members.select(${cols})`);
           },
           delete: del,
+        };
+      }
+      if (table === "folder_boards") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: opts.folderId ? { folder_id: opts.folderId } : null,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "folder_members") {
+        return {
+          select: () => ({
+            in: (_c: string, ids: string[]) => ({
+              limit: async () => ({
+                data: ids.includes(opts.folderId ?? "")
+                  ? (opts.folderMemberIds ?? []).map((id) => ({
+                      folder_id: opts.folderId,
+                      user_id: id,
+                    }))
+                  : [],
+                error: null,
+              }),
+            }),
+          }),
         };
       }
       throw new Error(`unexpected table ${table}`);
@@ -148,6 +182,23 @@ describe("archiveBoardCore", () => {
     });
   });
 
+  it("expires the shared lists of grantees and folder members", async () => {
+    const { client } = fakeClient({
+      createdBy: OWNER,
+      memberIds: ["u2"],
+      folderId: "f1",
+      folderMemberIds: ["fm1", "u2"],
+    });
+    const r = await archiveBoardCore(client, OWNER, { boardId: BOARD_ID });
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("u2"));
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("fm1"));
+    // Once per person, even when reached both ways.
+    expect(
+      updateTag.mock.calls.filter(([t]) => t === sharedBoardsTag("u2")),
+    ).toHaveLength(1);
+  });
+
   it("stamps archived_at/archived_by for the owner", async () => {
     const { client, update } = fakeClient({ createdBy: OWNER });
     const r = await archiveBoardCore(client, OWNER, { boardId: BOARD_ID });
@@ -167,6 +218,16 @@ describe("restoreBoardCore", () => {
       ok: false,
       error: "Only the board owner can restore this board.",
     });
+  });
+
+  it("expires the folder members' shared lists on restore", async () => {
+    const { client } = fakeClient({
+      createdBy: OWNER,
+      folderId: "f1",
+      folderMemberIds: ["fm1"],
+    });
+    await restoreBoardCore(client, OWNER, { boardId: BOARD_ID });
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("fm1"));
   });
 
   it("clears both archive columns for the owner", async () => {
@@ -242,6 +303,19 @@ describe("renameBoardCore", () => {
     expect(update).toHaveBeenCalledWith({ name: "New" });
     expect(updateTag).toHaveBeenCalledWith("shared-boards:user:u2");
     expect(updateTag).toHaveBeenCalledWith("shared-boards:user:u3");
+  });
+
+  it("also expires the members of the board's folder", async () => {
+    const { client } = fakeClient({
+      createdBy: OWNER,
+      memberIds: ["u2"],
+      folderId: "f1",
+      folderMemberIds: ["fm1", "fm2"],
+    });
+    await renameBoardCore(client, { boardId: BOARD_ID, name: "New" });
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("u2"));
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("fm1"));
+    expect(updateTag).toHaveBeenCalledWith(sharedBoardsTag("fm2"));
   });
 
   it("propagates an update error before any tag work", async () => {

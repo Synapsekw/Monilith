@@ -4,7 +4,12 @@ import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
-import { dashboardsTag, foldersTag, sharedBoardsTag } from "@/lib/cache/tags";
+import { dashboardsTag, foldersTag } from "@/lib/cache/tags";
+import {
+  MEMBER_ROWS_LIMIT,
+  folderMemberRows,
+  invalidateSharedLists,
+} from "./shared-lists";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import {
   attachDashboardSchema,
@@ -30,8 +35,10 @@ const SHARED_FOLDER_MOVE =
   "Only the board's owner or an admin can move a board into or out of a shared folder.";
 
 const GENERIC_FOLDER_ERROR = "Something went wrong. Please try again.";
-/** Read cap on the members of the folders a placement change touches. */
-const MEMBER_ROWS_LIMIT = 500;
+
+const DELETE_DENIED =
+  "Only the folder's creator or an admin can delete a shared folder";
+const RENAME_DENIED = "You don't have permission to change this folder";
 
 /** Logs the raw database error server-side; the client only sees generic copy. */
 function genericFolderError(action: string, error: { message: string }) {
@@ -48,24 +55,23 @@ function moveError(error: { message: string }) {
 
 type Db = Awaited<ReturnType<typeof createClient>>;
 
-/** Members of these folders. RLS client: only folders the caller can see answer. */
-async function folderMemberRows(
+/**
+ * A write that matched 0 rows means either the folder is gone or RLS refused
+ * the write. A read on the same RLS client tells the two apart, so the caller
+ * hears "not allowed" rather than "no longer exists" for a folder still on
+ * their screen.
+ */
+async function deniedOrGone(
   supabase: Db,
-  folderIds: string[],
-): Promise<{ folder_id: string; user_id: string }[]> {
-  if (folderIds.length === 0) return [];
+  folderId: string,
+  denied: string,
+): Promise<string> {
   const { data } = await supabase
-    .from("folder_members")
-    .select("folder_id, user_id")
-    .in("folder_id", folderIds)
-    .limit(MEMBER_ROWS_LIMIT);
-  return data ?? [];
-}
-
-/** A placement change alters which boards these people can read. */
-function invalidateSharedLists(rows: { user_id: string }[]): void {
-  for (const id of new Set(rows.map((r) => r.user_id)))
-    updateTag(sharedBoardsTag(id));
+    .from("folders")
+    .select("id")
+    .eq("id", folderId)
+    .maybeSingle();
+  return data ? denied : FOLDER_GONE_ERROR;
 }
 
 /**
@@ -145,7 +151,10 @@ export async function renameFolder(input: {
     .maybeSingle();
   if (error?.code === "23505") return fail(DUPLICATE_NAME);
   if (error) return fail(error.message);
-  if (!data) return fail(FOLDER_GONE_ERROR);
+  if (!data)
+    return fail(
+      await deniedOrGone(supabase, parsed.data.folderId, RENAME_DENIED),
+    );
   updateTag(foldersTag(org.id));
   return { ok: true, data: undefined };
 }
@@ -170,7 +179,10 @@ export async function deleteFolder(input: {
     .select("id")
     .maybeSingle();
   if (error) return fail(genericFolderError("deleteFolder", error));
-  if (!data) return fail(FOLDER_GONE_ERROR);
+  if (!data)
+    return fail(
+      await deniedOrGone(supabase, parsed.data.folderId, DELETE_DENIED),
+    );
   updateTag(foldersTag(org.id));
   updateTag(dashboardsTag(org.id));
   invalidateSharedLists(memberRows);
@@ -227,12 +239,18 @@ export async function moveBoardToFolder(input: {
   }
 
   if (folderId === null) {
-    // Unfiling a board with no placement is a legitimate no-op (double click, stale menu).
-    const { error } = await supabase
+    // Unfiling a board with no placement is a legitimate no-op (double click,
+    // stale menu). But a placement the caller can see that the delete did not
+    // remove was refused by RLS (a guest, or not the owner or an admin): that
+    // is not a success.
+    const { data: removed, error } = await supabase
       .from("folder_boards")
       .delete()
-      .eq("board_id", boardId);
+      .eq("board_id", boardId)
+      .select("board_id");
     if (error) return fail(moveError(error));
+    if (currentFolderId !== null && (removed ?? []).length === 0)
+      return fail(SHARED_FOLDER_MOVE);
   } else {
     const { data: last } = await supabase
       .from("folder_boards")
