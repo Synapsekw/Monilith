@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
@@ -35,6 +36,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Loaded on first open, like the folder header's copy of it.
+const ShareFolderDialog = dynamic(
+  () =>
+    import("@/components/folders/ShareFolderDialog").then(
+      (m) => m.ShareFolderDialog,
+    ),
+  { ssr: false },
+);
+
 export function BoardFolderMenu({
   folder,
 }: {
@@ -44,6 +54,9 @@ export function BoardFolderMenu({
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  // Mounted on first open and kept, so the close animation and focus return run.
+  const [shareMounted, setShareMounted] = useState(false);
   const [name, setName] = useState(folder.name);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,7 +115,15 @@ export function BoardFolderMenu({
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            onSelect={() => {
+              setShareMounted(true);
+              setShareOpen(true);
+            }}
+          >
+            Share folder…
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               setName(folder.name);
@@ -194,6 +215,15 @@ export function BoardFolderMenu({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {shareMounted && (
+        <ShareFolderDialog
+          folderId={folder.id}
+          folderName={folder.name}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      )}
     </>
   );
 }

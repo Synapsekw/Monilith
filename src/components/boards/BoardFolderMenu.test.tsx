@@ -14,6 +14,11 @@ vi.mock("@/lib/folders/actions", () => ({
   deleteFolder: (...args: unknown[]) => deleteFolder(...args),
 }));
 
+vi.mock("@/components/folders/ShareFolderDialog", () => ({
+  ShareFolderDialog: ({ open }: { open: boolean }) =>
+    open ? <div>share-dialog</div> : null,
+}));
+
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
 import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
 
@@ -28,7 +33,7 @@ beforeEach(() => {
 });
 
 /** Open the folder's ⋯ menu and pick one of its entries. */
-function openMenuAndSelect(entry: "Rename" | "Delete") {
+function openMenuAndSelect(entry: "Rename" | "Delete" | "Share folder…") {
   render(<BoardFolderMenu folder={folder} />);
   fireEvent.click(
     screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
@@ -37,6 +42,11 @@ function openMenuAndSelect(entry: "Rename" | "Delete") {
 }
 
 describe("BoardFolderMenu", () => {
+  it("opens the share dialog from the folder menu", async () => {
+    openMenuAndSelect("Share folder…");
+    expect(await screen.findByText("share-dialog")).toBeInTheDocument();
+  });
+
   it("renames the folder with the trimmed new name — and leaves the re-render to the action", async () => {
     openMenuAndSelect("Rename");
 
