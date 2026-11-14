@@ -6,11 +6,16 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc, from }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const searchItems = vi.fn();
+vi.mock("@/lib/search/item-search", () => ({
+  searchItems: (q: string) => searchItems(q),
+}));
 
 import {
   createDependency,
   deleteDependency,
   getBoardDependencyContext,
+  searchDependencyTargets,
 } from "@/lib/boards/dependency-actions";
 
 const PRED_ID = "11111111-1111-4111-8111-111111111111";
@@ -19,6 +24,7 @@ const DEP_ID = "33333333-3333-4333-8333-333333333333";
 const BOARD_ID = "44444444-4444-4444-8444-444444444444";
 
 beforeEach(() => {
+  searchItems.mockReset();
   rpc.mockReset();
   from.mockReset();
 });
@@ -49,10 +55,10 @@ describe("createDependency", () => {
     expect(res).toEqual({ ok: true, data: { dependencyId: DEP_ID } });
   });
 
-  it("returns ok:false on rpc error, passing the message through", async () => {
+  it("returns ok:false on rpc error, mapped to user copy", async () => {
     rpc.mockResolvedValue({
       data: null,
-      error: { message: "this would create a dependency cycle" },
+      error: { code: "P0001", message: "this would create a dependency cycle" },
     });
     const res = await createDependency({
       predecessorId: PRED_ID,
@@ -60,7 +66,22 @@ describe("createDependency", () => {
     });
     expect(res).toEqual({
       ok: false,
-      error: "this would create a dependency cycle",
+      error: "That would create a dependency loop.",
+    });
+  });
+
+  it("names the other board, not 'this board', when edit access is missing", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "42501", message: "no edit access to this board" },
+    });
+    const res = await createDependency({
+      predecessorId: PRED_ID,
+      successorId: SUCC_ID,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "You can't edit the board that item is on.",
     });
   });
 });
@@ -123,7 +144,10 @@ describe("deleteDependency", () => {
       }),
     }));
     const res = await deleteDependency({ dependencyId: DEP_ID });
-    expect(res).toEqual({ ok: false, error: "delete failed" });
+    expect(res).toEqual({
+      ok: false,
+      error: "Couldn't remove the dependency.",
+    });
   });
 });
 
@@ -159,5 +183,44 @@ describe("getBoardDependencyContext", () => {
       boardId: "11111111-1111-4111-8111-111111111111",
     });
     expect(res).toEqual({ ok: false, error: "Couldn't load linked items." });
+  });
+});
+
+describe("searchDependencyTargets", () => {
+  const OTHER = "55555555-5555-4555-8555-555555555555";
+
+  it("flags each hit with editability, one check per distinct board", async () => {
+    searchItems.mockResolvedValue([
+      { id: "a", name: "A", boardId: BOARD_ID, boardName: "Mine" },
+      { id: "b", name: "B", boardId: BOARD_ID, boardName: "Mine" },
+      { id: "c", name: "C", boardId: OTHER, boardName: "Theirs" },
+    ]);
+    rpc.mockImplementation(async (_fn: string, args: { p_board_id: string }) =>
+      args.p_board_id === BOARD_ID
+        ? { data: true, error: null }
+        : { data: false, error: null },
+    );
+    const res = await searchDependencyTargets("ab");
+    expect(searchItems).toHaveBeenCalledWith("ab");
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledWith("can_edit_board", { p_board_id: OTHER });
+    expect(res.map((r) => [r.id, r.canEdit])).toEqual([
+      ["a", true],
+      ["b", true],
+      ["c", false],
+    ]);
+  });
+
+  it("treats a failed check as not editable and skips checks with no hits", async () => {
+    searchItems.mockResolvedValueOnce([]);
+    expect(await searchDependencyTargets("zz")).toEqual([]);
+    expect(rpc).not.toHaveBeenCalled();
+
+    searchItems.mockResolvedValueOnce([
+      { id: "c", name: "C", boardId: OTHER, boardName: "Theirs" },
+    ]);
+    rpc.mockResolvedValue({ data: null, error: { message: "x" } });
+    const res = await searchDependencyTargets("cc");
+    expect(res[0]?.canEdit).toBe(false);
   });
 });

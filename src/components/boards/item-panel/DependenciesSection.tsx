@@ -20,15 +20,13 @@ import {
   type BoardCache,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
-import {
-  dependencyContextKey,
-  useDependencyContext,
-} from "@/lib/boards/use-dependency-context";
+import { useDependencyContext } from "@/lib/boards/use-dependency-context";
 import {
   createDependency,
   deleteDependency,
+  searchDependencyTargets,
+  type DependencyTarget,
 } from "@/lib/boards/dependency-actions";
-import { searchItems, type ItemSearchResult } from "@/lib/search/item-search";
 import {
   isSyntheticDateSource,
   resolveTimelineSpan,
@@ -56,8 +54,9 @@ const MIN_QUERY = 2;
  * fetch of its own — the board already hydrated it) plus the foreign ends of
  * cross-board links via `useDependencyContext`, which only round-trips when
  * such a link exists. Adding searches the whole org (RLS-scoped); the realtime
- * echo puts the new row into the board cache. Removing is optimistic with a
- * rollback on error.
+ * echo puts the new row into the board cache, and a new cross-board row bumps
+ * `useDependencyContext`'s key so the foreign end loads once — no manual
+ * invalidate. Removing is optimistic with a rollback on error.
  */
 export function DependenciesSection({
   itemId,
@@ -128,11 +127,20 @@ export function DependenciesSection({
 
   if (!cache || !lists) return null;
 
-  const linkedIds = new Set<string>([
-    itemId,
-    ...lists.waitingOn.map((e) => e.itemId),
-    ...lists.blocking.map((e) => e.itemId),
-  ]);
+  // From the raw rows, not the lists: a foreign end whose context hasn't
+  // loaded yet is missing from the lists but is still linked.
+  const linkedIds = new Set<string>([itemId]);
+  for (const d of cache.dependencies) {
+    if (d.successor_id === itemId) linkedIds.add(d.predecessor_id);
+    if (d.predecessor_id === itemId) linkedIds.add(d.successor_id);
+  }
+  // The DB lets a link be deleted with edit on EITHER board, so a foreign
+  // link is removable when the viewer can edit the other board.
+  const foreignEditable = new Set(
+    (ctx.data?.boards ?? []).filter((b) => b.can_edit).map((b) => b.id),
+  );
+  const canRemove = (e: DependencyEntry) =>
+    canEdit || (!e.local && foreignEditable.has(e.boardId));
 
   async function remove(entry: DependencyEntry) {
     const key = boardKey(boardId);
@@ -142,13 +150,23 @@ export function DependenciesSection({
     qc.setQueryData<BoardCache>(key, (prev) =>
       prev ? removeDependency(prev, entry.dependencyId) : prev,
     );
-    const res = await deleteDependency({ dependencyId: entry.dependencyId });
-    if (!res.ok) {
+    const restore = () => {
       if (prior)
         qc.setQueryData<BoardCache>(key, (prev) =>
           prev ? addDependency(prev, prior) : prev,
         );
-      toast.error(res.error);
+    };
+    try {
+      const res = await deleteDependency({
+        dependencyId: entry.dependencyId,
+      });
+      if (!res.ok) {
+        restore();
+        toast.error(res.error);
+      }
+    } catch {
+      restore();
+      toast.error("Couldn't remove the dependency. Check your connection.");
     }
   }
 
@@ -161,24 +179,14 @@ export function DependenciesSection({
             Work that has to finish first, and work that waits on this.
           </p>
         </div>
-        {canEdit && (
-          <AddDependency
-            itemId={itemId}
-            excludeIds={linkedIds}
-            onAdded={() =>
-              void qc.invalidateQueries({
-                queryKey: dependencyContextKey(boardId),
-              })
-            }
-          />
-        )}
+        {canEdit && <AddDependency itemId={itemId} excludeIds={linkedIds} />}
       </div>
       <DependencyList
         title="Waiting on"
         empty="Not waiting on anything."
         entries={lists.waitingOn}
         boardId={boardId}
-        canEdit={canEdit}
+        canRemove={canRemove}
         onRemove={remove}
       />
       <DependencyList
@@ -186,7 +194,7 @@ export function DependenciesSection({
         empty="Nothing waits on this item."
         entries={lists.blocking}
         boardId={boardId}
-        canEdit={canEdit}
+        canRemove={canRemove}
         onRemove={remove}
       />
     </section>
@@ -198,14 +206,14 @@ function DependencyList({
   empty,
   entries,
   boardId,
-  canEdit,
+  canRemove,
   onRemove,
 }: {
   title: string;
   empty: string;
   entries: DependencyEntry[];
   boardId: string;
-  canEdit: boolean;
+  canRemove: (entry: DependencyEntry) => boolean;
   onRemove: (entry: DependencyEntry) => void;
 }) {
   const headingId = `deps-${title.replace(/\s+/g, "-").toLowerCase()}`;
@@ -234,7 +242,7 @@ function DependencyList({
               <DependencyRow
                 entry={e}
                 foreign={e.boardId !== boardId}
-                canEdit={canEdit}
+                canRemove={canRemove(e)}
                 onRemove={() => onRemove(e)}
               />
             </li>
@@ -264,12 +272,12 @@ function openLocal(e: MouseEvent<HTMLAnchorElement>, itemId: string) {
 function DependencyRow({
   entry,
   foreign,
-  canEdit,
+  canRemove,
   onRemove,
 }: {
   entry: DependencyEntry;
   foreign: boolean;
-  canEdit: boolean;
+  canRemove: boolean;
   onRemove: () => void;
 }) {
   const body = (
@@ -329,7 +337,7 @@ function DependencyRow({
           {body}
         </a>
       )}
-      {canEdit && (
+      {canRemove && (
         <Button
           variant="ghost"
           size="icon"
@@ -347,16 +355,14 @@ function DependencyRow({
 function AddDependency({
   itemId,
   excludeIds,
-  onAdded,
 }: {
   itemId: string;
   excludeIds: ReadonlySet<string>;
-  onAdded: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<Direction>("waitingOn");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ItemSearchResult[]>([]);
+  const [results, setResults] = useState<DependencyTarget[]>([]);
   // The term `results` belong to — "No items found." only once it matches.
   const [resolvedTerm, setResolvedTerm] = useState("");
   const [pending, setPending] = useState(false);
@@ -365,7 +371,12 @@ function AddDependency({
 
   const runSearch = useDebouncedCallback(async (term: string) => {
     const id = ++requestId.current;
-    const hits = await searchItems(term);
+    let hits: DependencyTarget[];
+    try {
+      hits = await searchDependencyTargets(term);
+    } catch {
+      hits = [];
+    }
     if (requestId.current !== id) return;
     setResults(hits);
     setResolvedTerm(term);
@@ -394,20 +405,24 @@ function AddDependency({
     }
   }
 
-  async function pick(hit: ItemSearchResult) {
+  async function pick(hit: DependencyTarget) {
     setPending(true);
-    const res = await createDependency(
-      direction === "waitingOn"
-        ? { predecessorId: hit.id, successorId: itemId }
-        : { predecessorId: itemId, successorId: hit.id },
-    );
-    setPending(false);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
+    try {
+      const res = await createDependency(
+        direction === "waitingOn"
+          ? { predecessorId: hit.id, successorId: itemId }
+          : { predecessorId: itemId, successorId: hit.id },
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onOpenChange(false);
+    } catch {
+      toast.error("Couldn't add the dependency. Check your connection.");
+    } finally {
+      setPending(false);
     }
-    onOpenChange(false);
-    onAdded();
   }
 
   const visible = results.filter((r) => !excludeIds.has(r.id));
@@ -474,25 +489,44 @@ function AddDependency({
           </div>
         </div>
         <ul className="max-h-64 overflow-y-auto py-1" aria-busy={pending}>
-          {visible.map((hit) => (
-            <li key={hit.id}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void pick(hit)}
-                aria-label={`${hit.name} · ${hit.boardName}`}
-                className="hover:bg-state-hover focus-visible:bg-state-hover flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm focus-visible:outline-none disabled:opacity-50 pointer-coarse:min-h-11"
-              >
-                <span className="truncate">
-                  {hit.name}
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {hit.boardName}
+          {visible.map((hit) => {
+            // Blocking makes the picked item the successor, and the server
+            // requires edit access on the successor's board.
+            const readOnly = direction === "blocking" && !hit.canEdit;
+            return (
+              <li key={hit.id}>
+                <button
+                  type="button"
+                  disabled={pending || readOnly}
+                  onClick={() => void pick(hit)}
+                  aria-label={
+                    readOnly
+                      ? `${hit.name} · ${hit.boardName} (view only)`
+                      : `${hit.name} · ${hit.boardName}`
+                  }
+                  className="hover:bg-state-hover focus-visible:bg-state-hover flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent pointer-coarse:min-h-11"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {hit.name}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {hit.boardName}
+                    </span>
                   </span>
-                </span>
-              </button>
+                  {readOnly && (
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      View only
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          {direction === "blocking" && visible.some((h) => !h.canEdit) && (
+            <li className="text-muted-foreground border-t px-3 py-2 text-xs">
+              Only items on boards you can edit can wait on this one.
             </li>
-          ))}
+          )}
           {visible.length === 0 && (
             <li className="text-muted-foreground px-3 py-3 text-xs">
               {emptyText}

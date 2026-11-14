@@ -4,13 +4,43 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BoardCache } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
-import {
-  createDependency,
-  deleteDependency,
-} from "@/lib/boards/dependency-actions";
-import { searchItems } from "@/lib/search/item-search";
 import { toast } from "sonner";
 import { DependenciesSection } from "./DependenciesSection";
+
+// The real server actions run (validation, error mapping, editability check);
+// only the Supabase client and the search RPC wrapper underneath are faked.
+const db = vi.hoisted(() => ({
+  createResult: {
+    data: { id: "new" } as unknown,
+    error: null as null | { code: string; message: string },
+  },
+  deleteResult: { error: null as null | { message: string } },
+  editableBoards: new Set<string>(),
+  rpc: vi.fn(),
+  deleteEq: vi.fn(),
+  searchItems: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    rpc: db.rpc,
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: { board_id: BOARD },
+            error: null,
+          }),
+        }),
+      }),
+      delete: () => ({ eq: db.deleteEq }),
+    }),
+  }),
+}));
+
+vi.mock("@/lib/search/item-search", () => ({
+  searchItems: (q: string) => db.searchItems(q),
+}));
 
 vi.mock("@/lib/boards/use-dependency-context", () => ({
   dependencyContextKey: (boardId: string) => ["board-dep-context", boardId],
@@ -20,42 +50,41 @@ vi.mock("@/lib/boards/use-dependency-context", () => ({
   }),
 }));
 
-vi.mock("@/lib/boards/dependency-actions", () => ({
-  createDependency: vi.fn(async () => ({
-    ok: true,
-    data: { dependencyId: "new" },
-  })),
-  deleteDependency: vi.fn(async () => ({ ok: true, data: undefined })),
-}));
-
-vi.mock("@/lib/search/item-search", () => ({
-  searchItems: vi.fn(async () => [
-    { id: "x9", name: "Permit", boardId: "b9", boardName: "Regulatory" },
-  ]),
-}));
-
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
+const BOARD = "b0b0b0b0-0000-4000-8000-000000000000";
+const OTHER_BOARD = "b9b9b9b9-0000-4000-8000-000000000000";
+const ME = "11111111-1111-4111-8111-111111111111";
+const DESIGN = "22222222-2222-4222-8222-222222222222";
+const PERMIT = "99999999-9999-4999-8999-999999999999";
+const DEP = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const COL = "c-when";
+
+const permit = {
+  id: PERMIT,
+  name: "Permit",
+  boardId: OTHER_BOARD,
+  boardName: "Regulatory",
+};
 
 function makeCache(): BoardCache {
   return {
-    board: { id: "b0", name: "Platform" },
+    board: { id: BOARD, name: "Platform" },
     groups: [],
     columns: [{ id: COL, name: "When", kind: "date" }],
     items: [
-      { id: "me", name: "Me" },
-      { id: "design", name: "Design" },
+      { id: ME, name: "Me" },
+      { id: DESIGN, name: "Design" },
     ],
     cellValues: [
       {
-        item_id: "me",
+        item_id: ME,
         column_id: COL,
         value: { date: "2026-11-03", end: "2026-11-12" },
         updated_at: "",
       },
       {
-        item_id: "design",
+        item_id: DESIGN,
         column_id: COL,
         value: { date: "2026-11-01", end: "2026-11-05" },
         updated_at: "",
@@ -63,11 +92,11 @@ function makeCache(): BoardCache {
     ],
     dependencies: [
       {
-        id: "dep-1",
-        predecessor_id: "design",
-        successor_id: "me",
-        board_id: "b0",
-        predecessor_board_id: "b0",
+        id: DEP,
+        predecessor_id: DESIGN,
+        successor_id: ME,
+        board_id: BOARD,
+        predecessor_board_id: BOARD,
       },
     ],
     attachments: [],
@@ -82,12 +111,12 @@ function renderSection(canEdit = true) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  qc.setQueryData(boardKey("b0"), makeCache());
+  qc.setQueryData(boardKey(BOARD), makeCache());
   const utils = render(
     <QueryClientProvider client={qc}>
       <DependenciesSection
-        itemId="me"
-        boardId="b0"
+        itemId={ME}
+        boardId={BOARD}
         boardName="Platform"
         schedule={null}
         canEdit={canEdit}
@@ -97,7 +126,36 @@ function renderSection(canEdit = true) {
   return { qc, ...utils };
 }
 
-beforeEach(() => vi.clearAllMocks());
+async function openSearch(direction: "Waiting on" | "Blocking") {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Add dependency" }));
+  await user.click(screen.getByRole("radio", { name: direction }));
+  await user.type(screen.getByRole("searchbox"), "per");
+  return user;
+}
+
+const createCalls = () =>
+  db.rpc.mock.calls.filter(([fn]) => fn === "create_item_dependency");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  db.createResult = { data: { id: "new" }, error: null };
+  db.deleteResult = { error: null };
+  db.editableBoards = new Set([BOARD, OTHER_BOARD]);
+  db.searchItems.mockResolvedValue([permit]);
+  db.deleteEq.mockImplementation(async () => db.deleteResult);
+  db.rpc.mockImplementation(
+    async (fn: string, args: { p_board_id?: string }) => {
+      if (fn === "can_edit_board")
+        return {
+          data: db.editableBoards.has(args.p_board_id ?? ""),
+          error: null,
+        };
+      if (fn === "create_item_dependency") return db.createResult;
+      throw new Error(`unexpected rpc ${fn}`);
+    },
+  );
+});
 
 describe("DependenciesSection", () => {
   it("lists what the item waits on, with board and a late marker", () => {
@@ -114,66 +172,97 @@ describe("DependenciesSection", () => {
   });
 
   it("adds a waiting-on link from org-wide search", async () => {
-    const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByRole("button", { name: "Add dependency" }));
-    await user.click(screen.getByRole("radio", { name: "Waiting on" }));
-    await user.type(screen.getByRole("searchbox"), "per");
+    const user = await openSearch("Waiting on");
     const hit = await screen.findByRole("button", {
       name: "Permit · Regulatory",
     });
-    expect(searchItems).toHaveBeenCalledWith("per");
+    expect(db.searchItems).toHaveBeenCalledWith("per");
     await user.click(hit);
-    expect(createDependency).toHaveBeenCalledWith({
-      predecessorId: "x9",
-      successorId: "me",
-    });
+    await waitFor(() =>
+      expect(createCalls()).toEqual([
+        ["create_item_dependency", { p_predecessor: PERMIT, p_successor: ME }],
+      ]),
+    );
   });
 
   it("adds a blocking link with this item as the predecessor", async () => {
-    const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByRole("button", { name: "Add dependency" }));
-    await user.click(screen.getByRole("radio", { name: "Blocking" }));
-    await user.type(screen.getByRole("searchbox"), "per");
+    const user = await openSearch("Blocking");
     await user.click(
       await screen.findByRole("button", { name: "Permit · Regulatory" }),
     );
-    expect(createDependency).toHaveBeenCalledWith({
-      predecessorId: "me",
-      successorId: "x9",
-    });
+    await waitFor(() =>
+      expect(createCalls()).toEqual([
+        ["create_item_dependency", { p_predecessor: ME, p_successor: PERMIT }],
+      ]),
+    );
   });
 
-  it("toasts the server message when adding fails", async () => {
-    vi.mocked(createDependency).mockResolvedValueOnce({
-      ok: false,
-      error: "This link would create a cycle.",
-    });
-    const user = userEvent.setup();
+  it("disables blocking targets on boards the viewer can't edit", async () => {
+    db.editableBoards = new Set([BOARD]);
     renderSection();
-    await user.click(screen.getByRole("button", { name: "Add dependency" }));
-    await user.type(screen.getByRole("searchbox"), "per");
+    await openSearch("Blocking");
+    const hit = await screen.findByRole("button", {
+      name: "Permit · Regulatory (view only)",
+    });
+    expect(hit).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Only items on boards you can edit can wait on this one.",
+      ),
+    ).toBeInTheDocument();
+    // Waiting on only needs read access on the other board.
+    await userEvent
+      .setup()
+      .click(screen.getByRole("radio", { name: "Waiting on" }));
+    expect(
+      screen.getByRole("button", { name: "Permit · Regulatory" }),
+    ).toBeEnabled();
+  });
+
+  it("toasts mapped copy for the real cycle error", async () => {
+    db.createResult = {
+      data: null,
+      error: { code: "P0001", message: "this would create a dependency cycle" },
+    };
+    renderSection();
+    const user = await openSearch("Waiting on");
     await user.click(
       await screen.findByRole("button", { name: "Permit · Regulatory" }),
     );
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        "This link would create a cycle.",
+        "That would create a dependency loop.",
+      ),
+    );
+  });
+
+  it("toasts mapped copy for the real edit-access error", async () => {
+    db.createResult = {
+      data: null,
+      error: { code: "42501", message: "no edit access to this board" },
+    };
+    renderSection();
+    const user = await openSearch("Blocking");
+    await user.click(
+      await screen.findByRole("button", { name: "Permit · Regulatory" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You can't edit the board that item is on.",
       ),
     );
   });
 
   it("does not offer the item itself or already-linked items", async () => {
-    vi.mocked(searchItems).mockResolvedValueOnce([
-      { id: "me", name: "Me", boardId: "b0", boardName: "Platform" },
-      { id: "design", name: "Design", boardId: "b0", boardName: "Platform" },
-      { id: "x9", name: "Permit", boardId: "b9", boardName: "Regulatory" },
+    db.searchItems.mockResolvedValue([
+      { id: ME, name: "Me", boardId: BOARD, boardName: "Platform" },
+      { id: DESIGN, name: "Design", boardId: BOARD, boardName: "Platform" },
+      permit,
     ]);
-    const user = userEvent.setup();
     renderSection();
-    await user.click(screen.getByRole("button", { name: "Add dependency" }));
-    await user.type(screen.getByRole("searchbox"), "per");
+    await openSearch("Waiting on");
     await screen.findByRole("button", { name: "Permit · Regulatory" });
     expect(
       screen.queryByRole("button", { name: "Me · Platform" }),
@@ -189,33 +278,51 @@ describe("DependenciesSection", () => {
     await user.click(
       screen.getByRole("button", { name: "Remove link to Design" }),
     );
-    expect(deleteDependency).toHaveBeenCalledWith({ dependencyId: "dep-1" });
-    expect(qc.getQueryData<BoardCache>(boardKey("b0"))?.dependencies).toEqual(
+    expect(qc.getQueryData<BoardCache>(boardKey(BOARD))?.dependencies).toEqual(
       [],
     );
     expect(
       await screen.findByText("Not waiting on anything."),
     ).toBeInTheDocument();
+    await waitFor(() => expect(db.deleteEq).toHaveBeenCalledWith("id", DEP));
   });
 
   it("restores the link and toasts when removing fails", async () => {
-    vi.mocked(deleteDependency).mockResolvedValueOnce({
-      ok: false,
-      error: "You can't edit this board.",
-    });
+    db.deleteResult = { error: { message: "permission denied" } };
     const user = userEvent.setup();
     const { qc } = renderSection();
     await user.click(
       screen.getByRole("button", { name: "Remove link to Design" }),
     );
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("You can't edit this board."),
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't remove the dependency.",
+      ),
     );
     expect(
       qc
-        .getQueryData<BoardCache>(boardKey("b0"))
+        .getQueryData<BoardCache>(boardKey(BOARD))
         ?.dependencies.map((d) => d.id),
-    ).toEqual(["dep-1"]);
+    ).toEqual([DEP]);
+  });
+
+  it("restores the link when the remove request itself throws", async () => {
+    db.deleteEq.mockRejectedValueOnce(new Error("network"));
+    const user = userEvent.setup();
+    const { qc } = renderSection();
+    await user.click(
+      screen.getByRole("button", { name: "Remove link to Design" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't remove the dependency. Check your connection.",
+      ),
+    );
+    expect(
+      qc
+        .getQueryData<BoardCache>(boardKey(BOARD))
+        ?.dependencies.map((d) => d.id),
+    ).toEqual([DEP]);
   });
 
   it("hides editing controls for read-only viewers", () => {
