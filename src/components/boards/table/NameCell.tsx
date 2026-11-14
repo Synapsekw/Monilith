@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef, useState, useTransition } from "react";
+import { memo, useEffect, useRef, useState, useTransition } from "react";
 import type { CSSProperties } from "react";
 import { Maximize2 } from "lucide-react";
 import type { Item } from "@/lib/boards/queries";
@@ -111,12 +111,20 @@ export const NameCell = memo(function NameCell({
   // null = closed. Open = capped to the scroller's visible width, read once
   // when it opens (the cell is `sticky left-0`, so its left edge is the
   // scroller's left edge).
-  const [peek, setPeek] = useState<{ cap: number | undefined } | null>(null);
+  const [peek, setPeek] = useState<{
+    cap: number | undefined;
+    by: "hover" | "focus";
+  } | null>(null);
   const peeking = peek !== null && !coarse && !peekDisabled;
 
-  // No unmount cleanup for the timer on purpose: if a virtualized row unmounts
-  // inside the 200ms, the callback finds no text node and sets state on an
-  // unmounted component, which React ignores.
+  // Virtualised rows unmount constantly: never leave a pending timer behind.
+  useEffect(
+    () => () => {
+      if (peekTimer.current) clearTimeout(peekTimer.current);
+    },
+    [],
+  );
+
   function cancelPeek() {
     if (peekTimer.current) {
       clearTimeout(peekTimer.current);
@@ -130,11 +138,11 @@ export const NameCell = memo(function NameCell({
     return el !== null && el.scrollWidth > el.clientWidth;
   }
 
-  function openPeek() {
+  function openPeek(by: "hover" | "focus") {
     const scroller = textRef.current?.closest<HTMLElement>(
       "[data-scroll-container]",
     );
-    setPeek({ cap: scroller ? scroller.clientWidth : undefined });
+    setPeek({ cap: scroller ? scroller.clientWidth : undefined, by });
   }
 
   function armPeek() {
@@ -142,7 +150,7 @@ export const NameCell = memo(function NameCell({
     if (peekTimer.current) clearTimeout(peekTimer.current);
     peekTimer.current = setTimeout(() => {
       peekTimer.current = null;
-      openPeek();
+      openPeek("hover");
     }, NAME_PEEK_DELAY_MS);
   }
 
@@ -204,7 +212,22 @@ export const NameCell = memo(function NameCell({
     <div
       data-peek={peeking ? "true" : undefined}
       onMouseEnter={armPeek}
-      onMouseLeave={cancelPeek}
+      onMouseLeave={() => {
+        // A keyboard-opened peek outlives the pointer; only a hover peek
+        // (or a pending one) closes here.
+        if (peekTimer.current) {
+          clearTimeout(peekTimer.current);
+          peekTimer.current = null;
+        }
+        setPeek((cur) => (cur?.by === "focus" ? cur : null));
+      }}
+      onBlur={(e) => {
+        // A focus peek closes when focus leaves the whole cell, not when it
+        // moves to a button inside it.
+        const next = e.relatedTarget as Node | null;
+        if (next && e.currentTarget.contains(next)) return;
+        setPeek((cur) => (cur?.by === "focus" ? null : cur));
+      }}
       // The frozen Name column is `sticky left-0`, so the other columns scroll
       // UNDERNEATH it — its background MUST be opaque. The background is one
       // custom property, `--name-bg`, so the buttons overlay can fade to
@@ -267,10 +290,18 @@ export const NameCell = memo(function NameCell({
         aria-label={`${item.name} name`}
         title={item.name}
         onClick={open}
-        onFocus={() => {
-          if (!coarse && !peekDisabled && isTruncated()) openPeek();
+        onFocus={(e) => {
+          if (coarse || peekDisabled || !isTruncated()) return;
+          // Keyboard focus only: a mouse click also focuses this div and
+          // must still wait for the 200ms rest.
+          let visible = false;
+          try {
+            visible = e.currentTarget.matches(":focus-visible");
+          } catch {
+            visible = false;
+          }
+          if (visible) openPeek("focus");
         }}
-        onBlur={cancelPeek}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -298,10 +329,10 @@ export const NameCell = memo(function NameCell({
       <div
         data-testid="name-actions"
         className={cn(
-          "flex shrink-0 items-center pr-1 pointer-coarse:static pointer-coarse:bg-none pointer-coarse:pr-0 pointer-coarse:pl-0 pointer-coarse:opacity-100",
+          "flex shrink-0 items-center pr-1 pointer-coarse:pointer-events-auto pointer-coarse:static pointer-coarse:bg-none pointer-coarse:pr-0 pointer-coarse:pl-0 pointer-coarse:opacity-100",
           peeking
             ? "static opacity-100"
-            : "absolute inset-y-0 right-0 bg-[linear-gradient(to_right,transparent,var(--name-bg)_1.25rem)] pl-6 opacity-0 transition-opacity group-hover/name:opacity-100 focus-within:opacity-100",
+            : "pointer-events-none absolute inset-y-0 right-0 bg-[linear-gradient(to_right,transparent,var(--name-bg)_1.25rem)] pl-6 opacity-0 transition-opacity group-hover/name:opacity-100 focus-within:opacity-100 [&>*]:pointer-events-auto",
         )}
       >
         {!pending && (

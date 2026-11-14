@@ -139,6 +139,14 @@ describe("NameCell — hover buttons overlay", () => {
     expect(classes).toContain("focus-within:opacity-100");
   });
 
+  it("lets clicks pass through the overlay container to the name on fine pointers", () => {
+    render(<NameCell item={item} controls={controls} />);
+    const classes = screen.getByTestId("name-actions").className.split(/\s+/);
+    expect(classes).toContain("pointer-events-none");
+    expect(classes).toContain("[&>*]:pointer-events-auto");
+    expect(classes).toContain("pointer-coarse:pointer-events-auto");
+  });
+
   it("carries the full name as the name button's title", () => {
     render(<NameCell item={item} controls={controls} />);
     expect(screen.getByLabelText(`${item.name} name`)).toHaveAttribute(
@@ -241,27 +249,98 @@ describe("NameCell — hover peek", () => {
     expect(cell).not.toHaveAttribute("data-peek");
   });
 
-  it("peeks at once on keyboard focus of a truncated name, and closes on blur", () => {
+  function stubFocusVisible(el: HTMLElement, value: boolean) {
+    el.matches = ((sel: string) =>
+      sel === ":focus-visible" ? value : false) as typeof el.matches;
+  }
+
+  it("peeks at once on keyboard focus of a truncated name, and closes when focus leaves the cell", () => {
     const { container } = render(<NameCell item={item} controls={controls} />);
     const cell = container.firstElementChild as HTMLElement;
     setTruncated(screen.getByText(item.name), true);
     const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
     fireEvent.focus(nameButton);
     expect(cell).toHaveAttribute("data-peek", "true");
     fireEvent.blur(nameButton);
     expect(cell).not.toHaveAttribute("data-peek");
   });
 
-  it("is not there while the name is being edited", () => {
+  it("does not peek on a mouse-click focus (not focus-visible)", () => {
     const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
     setTruncated(screen.getByText(item.name), true);
-    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, false);
+    fireEvent.focus(nameButton);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("keeps a keyboard peek open when the pointer leaves", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
+    fireEvent.focus(nameButton);
+    fireEvent.mouseLeave(cell);
+    expect(cell).toHaveAttribute("data-peek", "true");
+  });
+
+  it("keeps a keyboard peek open when focus moves to a button inside the cell", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    const nameButton = screen.getByLabelText(`${item.name} name`);
+    stubFocusVisible(nameButton, true);
+    fireEvent.focus(nameButton);
+    const openBtn = screen.getByRole("button", { name: `Open ${item.name}` });
+    fireEvent.blur(nameButton, { relatedTarget: openBtn });
+    expect(cell).toHaveAttribute("data-peek", "true");
+    fireEvent.blur(openBtn, { relatedTarget: document.body });
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("closes a hover peek on mouse leave", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    const cell = container.firstElementChild as HTMLElement;
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(cell);
     act(() => {
       vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
     });
+    expect(cell).toHaveAttribute("data-peek", "true");
+    // moving focus within the cell must not close a hover peek either way
+    fireEvent.mouseLeave(cell);
+    expect(cell).not.toHaveAttribute("data-peek");
+  });
+
+  it("clears a pending peek timer when the row unmounts mid-delay", () => {
+    const { container, unmount } = render(
+      <NameCell item={item} controls={controls} />,
+    );
+    setTruncated(screen.getByText(item.name), true);
+    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
+    expect(vi.getTimerCount()).toBe(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not show the peek again after editing is started and cancelled", () => {
+    const { container } = render(<NameCell item={item} controls={controls} />);
+    setTruncated(screen.getByText(item.name), true);
+    const cell = container.firstElementChild as HTMLElement;
+    fireEvent.mouseEnter(cell);
+    act(() => {
+      vi.advanceTimersByTime(NAME_PEEK_DELAY_MS);
+    });
+    expect(cell).toHaveAttribute("data-peek", "true");
     fireEvent.click(screen.getByLabelText(`${item.name} name`));
-    const editing = container.firstElementChild as HTMLElement;
-    expect(editing.querySelector("input")).toBeInTheDocument();
-    expect(editing).not.toHaveAttribute("data-peek");
+    const input = container.querySelector("input") as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
+    const back = container.firstElementChild as HTMLElement;
+    expect(container.querySelector("input")).toBeNull();
+    expect(back).not.toHaveAttribute("data-peek");
   });
 });
