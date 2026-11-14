@@ -3,11 +3,16 @@
 import { memo, useState, useTransition, useMemo } from "react";
 import { CalendarDays, GanttChartSquare } from "lucide-react";
 
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { BoardPayload } from "@/lib/boards/queries";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
+import { useDependencyContext } from "@/lib/boards/use-dependency-context";
+import { crossBoardStubs } from "@/lib/boards/cross-board";
+import { contextSpans } from "@/lib/boards/timeline-context";
+import { scheduleFromPicks } from "@/lib/boards/schedule";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardViewPrefs } from "@/lib/boards/view-prefs-context";
@@ -76,6 +81,7 @@ function GanttBoardInner({
   const { data: cache } = useBoardCache(payload.board.id, payload);
   const mutations = useBoardMutations(payload.board.id, currentUserId);
 
+  const router = useRouter();
   const [, startTransition] = useTransition();
 
   // Resolve the selected view and its config
@@ -126,15 +132,13 @@ function GanttBoardInner({
     [dateColumns],
   );
 
-  // The ids actually used to resolve dates. A synthetic pick keeps its sentinel;
-  // a real/absent start falls back to the resolved date column.
-  const startSourceId = isSyntheticDateSource(startColId)
-    ? startColId
-    : (dateColumn?.id ?? null);
-  const endSourceId = endColId;
-  // A timestamp-sourced bar can't be dragged/resized — there's no cell to write.
-  const readOnly =
-    isSyntheticDateSource(startSourceId) || isSyntheticDateSource(endSourceId);
+  // The ids actually used to resolve dates. A timestamp-sourced bar can't be
+  // dragged/resized — there's no cell to write.
+  const { startSourceId, endSourceId, readOnly } = scheduleFromPicks(
+    dateColumns,
+    startColId,
+    endColId,
+  );
 
   // Cell values augmented with synthetic created/updated-at cells when a
   // timestamp source is selected, so date resolution reads them like any cell.
@@ -220,10 +224,50 @@ function GanttBoardInner({
   const rows = useMemo(() => ganttResult?.rows ?? [], [ganttResult]);
 
   // Detect dependency violations (finish-to-start constraint check).
-  const violations = useMemo(
-    () => detectViolations(rows, cache.dependencies),
-    [rows, cache.dependencies],
+  // Only same-board links are arrows; cross-board links become stubs below.
+  const localIds = useMemo(
+    () => new Set(cache.items.map((i) => i.id)),
+    [cache.items],
   );
+  const intraDeps = useMemo(
+    () =>
+      cache.dependencies.filter(
+        (d) => localIds.has(d.predecessor_id) && localIds.has(d.successor_id),
+      ),
+    [cache.dependencies, localIds],
+  );
+  const violations = useMemo(
+    () => detectViolations(rows, intraDeps),
+    [rows, intraDeps],
+  );
+
+  const ctx = useDependencyContext(payload.board.id, cache.dependencies);
+  const localSpans = useMemo(
+    () =>
+      new Map(
+        rows.map((r) => [
+          r.itemId,
+          r.startISO && r.endISO
+            ? {
+                start: r.startISO,
+                end: r.endISO,
+                isMilestone: !!r.isMilestone,
+              }
+            : null,
+        ]),
+      ),
+    [rows],
+  );
+  const externalLinks = useMemo(() => {
+    const context = ctx.data ?? { boards: [], items: [] };
+    return crossBoardStubs({
+      dependencies: cache.dependencies,
+      localItemIds: localIds,
+      localSpans,
+      context,
+      contextSpans: contextSpans(context),
+    });
+  }, [ctx.data, cache.dependencies, localIds, localSpans]);
 
   // Rows with an actual bar (a valid date range) — the dependency picker offers
   // these as endpoints.
@@ -536,8 +580,9 @@ function GanttBoardInner({
       {/* Gantt grid (+ Unscheduled section underneath) */}
       <GanttCanvas
         rows={visibleTimelineRows}
-        dependencies={cache.dependencies}
+        dependencies={intraDeps}
         violations={violations}
+        externalLinks={externalLinks}
         rangeStartISO={rangeStartISO}
         dayCount={dayCount}
         zoom={zoom}
@@ -567,7 +612,7 @@ function GanttBoardInner({
             .map((o) => ({ itemId: o.itemId, name: o.name }))
         }
         onItemTap={handleItemTap}
-        onStubTap={() => {}}
+        onStubTap={(s) => router.push(`/boards/${s.boardId}?item=${s.itemId}`)}
         footer={
           <UnscheduledSection
             rows={unscheduledRows}

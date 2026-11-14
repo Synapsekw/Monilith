@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { ExternalLinkStub } from "@/lib/boards/cross-board";
 import { Kicker } from "@/components/ui/kicker";
 import {
   Popover,
@@ -11,20 +12,8 @@ import {
 /**
  * A dependency whose other end is not on this canvas (another board, or out of
  * view), drawn as a stub on the local bar instead of an arrow.
- *
- * Mirrors `ExternalLinkStub` in `src/lib/boards/cross-board.ts` (Task 2). Kept
- * local until that module lands on this branch; switch to a type import then.
  */
-export type ExternalLinkStub = {
-  dependencyId: string;
-  direction: "waiting_on" | "blocking";
-  itemId: string;
-  itemName: string;
-  boardId: string;
-  boardName: string;
-  endISO: string | null;
-  late: boolean;
-};
+export type { ExternalLinkStub };
 
 /** Stubs shown inline before the rest collapse into "+N". */
 const MAX_INLINE = 2;
