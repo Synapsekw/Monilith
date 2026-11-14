@@ -101,6 +101,9 @@ export const BoardColumnHeader = memo(function BoardColumnHeader({
             col.setLiveNameWidth(null);
             col.resizeNameColumn(w);
           }}
+          // A gesture the browser takes over (touch scroll) never reaches
+          // pointerup; drop the live width so the column snaps back.
+          onResizeCancel={() => col.setLiveNameWidth(null)}
           onAutoFit={() => {
             col.setLiveNameWidth(null);
             col.resizeNameColumn(null);
