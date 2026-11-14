@@ -83,6 +83,8 @@ begin
     from win w
     where w.lo is not null
   ),
+  -- imported_done is a HEURISTIC: a completion counts as imported when the
+  -- status cell's last update (done_on) falls on the item's creation day.
   agg as (
     select c.sk, c.wk,
            sum(c.planned)::int as planned,
@@ -91,6 +93,10 @@ begin
     from clamped c
     group by c.sk, c.wk
   ),
+  -- KNOWN LIMIT: overdue_open is computed only for weeks inside the burn
+  -- window (this week and up to 12 back), so a folder whose events are all in
+  -- the future reports 0. The Overdue KPI value itself comes from folder_rollup;
+  -- only the trend line uses this column.
   ovd as (
     select lower(trim(f.group_name)) as sk, wks.wk, count(*)::int as n
     from flags f
@@ -117,7 +123,7 @@ begin
 end; $$;
 
 revoke execute on function public.folder_burn(uuid) from public, anon;
-grant execute on function public.folder_burn(uuid) to authenticated;
+grant execute on function public.folder_burn(uuid) to authenticated, service_role;
 
 -- ── folder_load: open items by board, stage and the week they are planned ────
 -- Rows older than the window fold into its first week, so nothing late is
@@ -143,18 +149,22 @@ declare
 begin
   perform public._assert_folder_member(p_folder_id);
   return query
-  select f.board_id,
-         lower(trim(f.group_name)),
-         greatest(date_trunc('week', f.planned_on)::date, v_lo),
-         count(*)::int
-  from public._folder_item_flags(p_folder_id) f
-  where not f.is_done
-    and f.planned_on is not null
-    and date_trunc('week', f.planned_on)::date <= v_hi
-  group by 1, 2, 3
-  order by 1, 2, 3
+  select x.board_id, x.sk, x.wk, x.n
+  from (
+    select f.board_id,
+           f.board_position as bp,
+           lower(trim(f.group_name)) as sk,
+           greatest(date_trunc('week', f.planned_on)::date, v_lo) as wk,
+           count(*)::int as n
+    from public._folder_item_flags(p_folder_id) f
+    where not f.is_done
+      and f.planned_on is not null
+      and date_trunc('week', f.planned_on)::date <= v_hi
+    group by f.board_id, f.board_position, 3, 4
+  ) x
+  order by x.bp, x.board_id, x.sk, x.wk
   limit 5000;
 end; $$;
 
 revoke execute on function public.folder_load(uuid, integer, integer) from public, anon;
-grant execute on function public.folder_load(uuid, integer, integer) to authenticated;
+grant execute on function public.folder_load(uuid, integer, integer) to authenticated, service_role;
