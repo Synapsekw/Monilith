@@ -1435,6 +1435,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         Insert: {
@@ -1449,6 +1452,9 @@ export type Database = {
           org_id: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id: string;
         };
         Update: {
@@ -1463,6 +1469,9 @@ export type Database = {
           org_id?: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [
@@ -1471,6 +1480,20 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
             referencedColumns: ["id"];
           },
           {
@@ -4372,6 +4395,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4395,6 +4421,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4691,6 +4720,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
