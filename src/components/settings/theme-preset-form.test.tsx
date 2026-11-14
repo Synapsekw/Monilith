@@ -22,10 +22,6 @@ describe("ThemePresetForm", () => {
     for (const label of [
       "Keystone",
       "Graphite",
-      "Ocean",
-      "Forest",
-      "Ember",
-      "Rose",
       "Aurora",
       "Sunset",
       "Nebula",
@@ -70,14 +66,7 @@ describe("ThemePresetForm", () => {
 
   it("keeps a flat round dot for a single-accent preset", () => {
     render(<ThemePresetForm currentPreset="keystone" />);
-    for (const label of [
-      "Keystone",
-      "Graphite",
-      "Ocean",
-      "Forest",
-      "Ember",
-      "Rose",
-    ]) {
+    for (const label of ["Keystone", "Graphite"]) {
       const tile = screen.getByRole("radio", { name: label }).closest("label")!;
       const dots = tile.querySelectorAll<HTMLElement>("[data-swatch-accent]");
       expect(dots).toHaveLength(2);
@@ -87,11 +76,11 @@ describe("ThemePresetForm", () => {
         expect(dot).not.toHaveClass("w-5");
       }
     }
-    const ocean = screen
-      .getByRole("radio", { name: "Ocean" })
+    const graphite = screen
+      .getByRole("radio", { name: "Graphite" })
       .closest("label")!
       .querySelector<HTMLElement>('[data-swatch-accent="light"]')!;
-    expect(ocean.style.background).toBe("rgb(31, 122, 140)");
+    expect(graphite.style.background).toBe("rgb(75, 75, 85)");
   });
 
   it("marks the selected tile with a bright border, a brand ring and a check — and only that tile", async () => {
@@ -143,20 +132,20 @@ describe("ThemePresetForm", () => {
     const user = userEvent.setup();
     render(<ThemePresetForm currentPreset="keystone" />);
 
-    await user.click(screen.getByRole("radio", { name: "Ocean" }));
+    await user.click(screen.getByRole("radio", { name: "Graphite" }));
 
     expect(document.documentElement.getAttribute(THEME_PRESET_ATTR)).toBe(
-      "ocean",
+      "graphite",
     );
     expect(updateProfileThemePreset).toHaveBeenCalledWith({
-      themePreset: "ocean",
+      themePreset: "graphite",
     });
-    expect(screen.getByRole("radio", { name: "Ocean" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Graphite" })).toBeChecked();
   });
 
   it("removes the attribute when the default preset is chosen", async () => {
     const user = userEvent.setup();
-    render(<ThemePresetForm currentPreset="ocean" />);
+    render(<ThemePresetForm currentPreset="graphite" />);
 
     await user.click(screen.getByRole("radio", { name: "Keystone" }));
 
@@ -176,7 +165,7 @@ describe("ThemePresetForm", () => {
     const user = userEvent.setup();
     render(<ThemePresetForm currentPreset="keystone" />);
 
-    await user.click(screen.getByRole("radio", { name: "Rose" }));
+    await user.click(screen.getByRole("radio", { name: "Graphite" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -193,11 +182,11 @@ describe("ThemePresetForm", () => {
     render(<ThemePresetForm currentPreset="keystone" />);
 
     act(() => {
-      document.documentElement.setAttribute(THEME_PRESET_ATTR, "ocean");
+      document.documentElement.setAttribute(THEME_PRESET_ATTR, "graphite");
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("radio", { name: "Ocean" })).toBeChecked();
+      expect(screen.getByRole("radio", { name: "Graphite" })).toBeChecked();
     });
   });
 });

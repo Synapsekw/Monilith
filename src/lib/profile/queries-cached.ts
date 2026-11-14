@@ -3,10 +3,9 @@ import { cacheLife, cacheTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { profileTag } from "@/lib/cache/tags";
 import {
-  DEFAULT_THEME_PRESET,
   DEFAULT_THEME_REACH,
-  isThemePresetId,
   isThemeReachId,
+  resolveThemePresetId,
   type ThemePresetId,
   type ThemeReachId,
 } from "@/lib/theme/presets";
@@ -70,15 +69,16 @@ export async function getUserTimeZoneCached(
  * A user's theme preset. A selector over the shared cached read above.
  *
  * The column is free text (the id list lives in app code), so the value is
- * NARROWED here: anything the running build does not know — a preset removed in
- * a later release, a row written by an older one — falls back to the default
- * rather than stamping an attribute with no CSS block behind it.
+ * NARROWED here: a preset removed in a later release resolves to its
+ * replacement (`LEGACY_THEME_PRESET_ALIASES`), and anything else the running
+ * build does not know falls back to the default rather than stamping an
+ * attribute with no CSS block behind it.
  */
 export async function getUserThemePresetCached(
   userId: string,
 ): Promise<ThemePresetId> {
   const value = (await getProfilePreferencesCached(userId))?.theme_preset;
-  return isThemePresetId(value) ? value : DEFAULT_THEME_PRESET;
+  return resolveThemePresetId(value);
 }
 
 /**

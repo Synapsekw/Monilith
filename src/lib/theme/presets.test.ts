@@ -8,6 +8,8 @@ import {
   THEME_PRESET_ATTR,
   applyThemePreset,
   isThemePresetId,
+  LEGACY_THEME_PRESET_ALIASES,
+  resolveThemePresetId,
   swatchAccentFill,
   THEME_REACH_IDS,
   DEFAULT_THEME_REACH,
@@ -165,21 +167,49 @@ describe("theme presets", () => {
   });
 
   it("narrows unknown stored values", () => {
-    expect(isThemePresetId("ocean")).toBe(true);
+    expect(isThemePresetId("graphite")).toBe(true);
     expect(isThemePresetId("aurora")).toBe(true);
     expect(isThemePresetId("teal")).toBe(false);
     expect(isThemePresetId(null)).toBe(false);
   });
 
   it("applyThemePreset stamps the attribute and removes it for the default", () => {
-    applyThemePreset("ocean");
+    applyThemePreset("graphite");
     expect(document.documentElement.getAttribute(THEME_PRESET_ATTR)).toBe(
-      "ocean",
+      "graphite",
     );
     applyThemePreset(DEFAULT_THEME_PRESET);
     expect(document.documentElement.hasAttribute(THEME_PRESET_ATTR)).toBe(
       false,
     );
+  });
+});
+
+describe("legacy preset aliases", () => {
+  it("maps each removed id to a replacement", () => {
+    expect(LEGACY_THEME_PRESET_ALIASES).toEqual({
+      ocean: "lagoon",
+      forest: "tropic",
+      ember: "peach",
+      rose: "orchid",
+    });
+  });
+
+  it("the removed ids are no longer presets and have no CSS block", () => {
+    for (const id of ["ocean", "forest", "ember", "rose"]) {
+      expect(isThemePresetId(id), id).toBe(false);
+      expect(CSS).not.toContain(`data-theme-preset="${id}"`);
+    }
+  });
+
+  it("resolveThemePresetId returns current ids, follows aliases that exist, and defaults otherwise", () => {
+    expect(resolveThemePresetId("aurora")).toBe("aurora");
+    expect(resolveThemePresetId("teal")).toBe(DEFAULT_THEME_PRESET);
+    expect(resolveThemePresetId(null)).toBe(DEFAULT_THEME_PRESET);
+    for (const [legacy, target] of Object.entries(LEGACY_THEME_PRESET_ALIASES))
+      expect(resolveThemePresetId(legacy)).toBe(
+        isThemePresetId(target) ? target : DEFAULT_THEME_PRESET,
+      );
   });
 });
 

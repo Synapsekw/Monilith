@@ -11,8 +11,8 @@
  * `--state-*`) or brand-derived (`--primary`, `--ring`, `--app-bloom`) follows
  * on its own.
  *
- * `--brand-2` is one of those seeds. Six presets are single-accent and declare
- * it equal to `--brand`; `aurora`, `sunset` and `nebula` give it a second hue,
+ * `--brand-2` is one of those seeds. Keystone and Graphite are single-accent and
+ * declare it equal to `--brand`; `aurora`, `sunset` and `nebula` give it a second hue,
  * which is all that makes them "gradient" presets — `--brand-gradient` is
  * derived once in `:root` from the two.
  *
@@ -24,10 +24,6 @@
 export const THEME_PRESET_IDS = [
   "keystone",
   "graphite",
-  "ocean",
-  "forest",
-  "ember",
-  "rose",
   "aurora",
   "sunset",
   "nebula",
@@ -99,38 +95,6 @@ export const THEME_PRESETS: ReadonlyArray<ThemePreset> = [
     },
   },
   {
-    id: "ocean",
-    label: "Ocean",
-    swatch: {
-      light: { chrome: "#d2e2e8", accent: "#1f7a8c" },
-      dark: { chrome: "#1b3037", accent: "#6fc6d6" },
-    },
-  },
-  {
-    id: "forest",
-    label: "Forest",
-    swatch: {
-      light: { chrome: "#d6e3da", accent: "#2f7a4f" },
-      dark: { chrome: "#1d3126", accent: "#7fcf9c" },
-    },
-  },
-  {
-    id: "ember",
-    label: "Ember",
-    swatch: {
-      light: { chrome: "#e8dbcf", accent: "#b4581a" },
-      dark: { chrome: "#332419", accent: "#f0a868" },
-    },
-  },
-  {
-    id: "rose",
-    label: "Rose",
-    swatch: {
-      light: { chrome: "#e8d5dc", accent: "#b8375f" },
-      dark: { chrome: "#33202a", accent: "#f08fb0" },
-    },
-  },
-  {
     id: "aurora",
     label: "Aurora",
     swatch: {
@@ -161,6 +125,26 @@ export function isThemePresetId(v: unknown): v is ThemePresetId {
   return (
     typeof v === "string" && (THEME_PRESET_IDS as readonly string[]).includes(v)
   );
+}
+
+/** Ids that shipped once and were removed. A stored value keeps resolving to
+ *  the closest current preset; the write boundary accepts current ids only, so
+ *  the stored value is replaced the next time the user saves. */
+export const LEGACY_THEME_PRESET_ALIASES: Readonly<Record<string, string>> = {
+  ocean: "lagoon",
+  forest: "tropic",
+  ember: "peach",
+  rose: "orchid",
+};
+
+/** Read boundary for a stored preset: current id, else its alias, else default. */
+export function resolveThemePresetId(v: unknown): ThemePresetId {
+  if (isThemePresetId(v)) return v;
+  if (typeof v === "string") {
+    const alias = LEGACY_THEME_PRESET_ALIASES[v];
+    if (isThemePresetId(alias)) return alias;
+  }
+  return DEFAULT_THEME_PRESET;
 }
 
 /**

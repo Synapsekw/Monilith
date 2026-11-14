@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_THEME_PRESET,
   DEFAULT_THEME_REACH,
+  isThemePresetId,
   THEME_PRESET_ATTR,
   THEME_PRESET_STORAGE_KEY,
   THEME_REACH_ATTR,
@@ -53,7 +54,7 @@ describe("no-flash inline script: reach", () => {
     expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
 
     // A valid PRESET id is still not a reach id.
-    localStorage.setItem(THEME_REACH_STORAGE_KEY, "ocean");
+    localStorage.setItem(THEME_REACH_STORAGE_KEY, "graphite");
     run();
     expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
   });
@@ -70,10 +71,10 @@ describe("no-flash inline script: reach", () => {
 
 describe("no-flash inline script: preset and reach together", () => {
   it("stamps both attributes from the one script", () => {
-    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "ocean");
+    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "graphite");
     localStorage.setItem(THEME_REACH_STORAGE_KEY, "vivid");
     run();
-    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("ocean");
+    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe("graphite");
     expect(root.getAttribute(THEME_REACH_ATTR)).toBe("vivid");
   });
 
@@ -86,6 +87,22 @@ describe("no-flash inline script: preset and reach together", () => {
     localStorage.setItem(THEME_PRESET_STORAGE_KEY, "vivid");
     run();
     expect(root.hasAttribute(THEME_PRESET_ATTR)).toBe(false);
+  });
+
+  it("resolves a removed preset id through the alias map before the whitelist", () => {
+    // `ocean` shipped once; its replacement only becomes a real id later, and
+    // until then the stored value must stamp nothing rather than a dead id.
+    localStorage.setItem(THEME_PRESET_STORAGE_KEY, "ocean");
+    run();
+    expect(root.getAttribute(THEME_PRESET_ATTR)).toBe(
+      isThemePresetId("lagoon") ? "lagoon" : null,
+    );
+  });
+
+  it("the alias map applies to the preset only, never to the reach", () => {
+    localStorage.setItem(THEME_REACH_STORAGE_KEY, "ocean");
+    run();
+    expect(root.hasAttribute(THEME_REACH_ATTR)).toBe(false);
   });
 
   it("an invalid preset does not stop a valid reach from being stamped", () => {

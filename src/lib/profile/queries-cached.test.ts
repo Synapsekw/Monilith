@@ -23,6 +23,11 @@ import {
   getUserThemeReachCached,
   getUserTimeZoneCached,
 } from "./queries-cached";
+import {
+  DEFAULT_THEME_PRESET,
+  isThemePresetId,
+  LEGACY_THEME_PRESET_ALIASES,
+} from "@/lib/theme/presets";
 
 /** The ONE read every getter is a selector over. */
 const PROFILE_COLUMNS = "timezone, theme_preset, theme_reach, celebrate_done";
@@ -30,7 +35,7 @@ const PROFILE_COLUMNS = "timezone, theme_preset, theme_reach, celebrate_done";
 const row = (over: Record<string, unknown> = {}) => ({
   data: {
     timezone: "Europe/Vienna",
-    theme_preset: "ocean",
+    theme_preset: "graphite",
     theme_reach: "vivid",
     celebrate_done: false,
     ...over,
@@ -59,7 +64,7 @@ describe("the shared cached profile read", () => {
     maybeSingle.mockResolvedValue(row());
 
     expect(await getUserTimeZoneCached("user-1")).toBe("Europe/Vienna");
-    expect(await getUserThemePresetCached("user-1")).toBe("ocean");
+    expect(await getUserThemePresetCached("user-1")).toBe("graphite");
     expect(await getUserThemeReachCached("user-1")).toBe("vivid");
     expect(await getUserCelebrateDoneCached("user-1")).toBe(false);
 
@@ -126,6 +131,17 @@ describe("getUserThemePresetCached", () => {
   it("narrows an unknown stored value to keystone", async () => {
     maybeSingle.mockResolvedValue(row({ theme_preset: "retired-preset" }));
     expect(await getUserThemePresetCached("user-1")).toBe("keystone");
+  });
+
+  it("resolves a removed preset id to its replacement, or the default until that ships", async () => {
+    for (const [legacy, target] of Object.entries(
+      LEGACY_THEME_PRESET_ALIASES,
+    )) {
+      maybeSingle.mockResolvedValue(row({ theme_preset: legacy }));
+      expect(await getUserThemePresetCached("user-1"), legacy).toBe(
+        isThemePresetId(target) ? target : DEFAULT_THEME_PRESET,
+      );
+    }
   });
 
   it("falls back to keystone on a missing row", async () => {
