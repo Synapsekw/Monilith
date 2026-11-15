@@ -71,10 +71,30 @@ export async function POST(req: Request) {
   }
 
   // refresh_token grant
-  const tokens = await rotateTokenPair(
-    parsed.data.refresh_token,
-    parsed.data.client_id,
-  );
+  // rotateTokenPair returns null for a token that is unknown, revoked, expired
+  // or another client's, and THROWS when the database call itself failed. Only
+  // the first is invalid_grant: a client that is told invalid_grant discards
+  // the connection and asks the user to sign in again, which a database blip
+  // must never cause. 503 tells it to keep its refresh token and retry.
+  let tokens: Awaited<ReturnType<typeof rotateTokenPair>>;
+  try {
+    tokens = await rotateTokenPair(
+      parsed.data.refresh_token,
+      parsed.data.client_id,
+    );
+  } catch (e) {
+    console.error("[oauth/token] refresh rotation failed:", {
+      clientId: parsed.data.client_id,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return NextResponse.json(
+      {
+        error: "temporarily_unavailable",
+        error_description: "Could not refresh the token. Please retry.",
+      },
+      { status: 503 },
+    );
+  }
   if (!tokens) {
     return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
   }

@@ -145,6 +145,20 @@ describe("POST /api/oauth/token — refresh_token grant", () => {
     await expect(res.json()).resolves.toMatchObject({ access_token: "at2" });
   });
 
+  // A database error while rotating is not a verdict on the token. Answering
+  // invalid_grant (or a bare empty 500) makes the client drop a healthy
+  // connection and send the user back through sign-in.
+  it("answers temporarily_unavailable, not invalid_grant, when the rotation itself fails", async () => {
+    rotateTokenPair.mockRejectedValue(new Error("connection reset"));
+    const res = await POST(
+      tokenRequest({ grant_type: "refresh_token", refresh_token: "rt" }),
+    );
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("temporarily_unavailable");
+    expect(JSON.stringify(body)).not.toContain("connection reset");
+  });
+
   it("rejects an unknown or revoked refresh token", async () => {
     rotateTokenPair.mockResolvedValue(null);
     const res = await POST(

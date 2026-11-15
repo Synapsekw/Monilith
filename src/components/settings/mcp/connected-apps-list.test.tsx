@@ -21,6 +21,8 @@ const CONNECTIONS = [
     id: "tok-1",
     clientName: "Claude Desktop",
     createdAt: "2026-07-01T10:00:00.000Z",
+    lastUsedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    expiresAt: "2027-02-12T12:00:00.000Z",
   },
 ];
 
@@ -36,6 +38,24 @@ describe("ConnectedAppsList", () => {
     render(<ConnectedAppsList connections={CONNECTIONS} />);
     expect(screen.getByText("Claude Desktop")).toBeInTheDocument();
     expect(screen.getByText(/connected/i)).toBeInTheDocument();
+  });
+
+  it("shows when the app was last used", () => {
+    render(<ConnectedAppsList connections={CONNECTIONS} />);
+    expect(screen.getByText(/last used/i)).toHaveTextContent(
+      /last used 3 hours ago/i,
+    );
+  });
+
+  it("shows the date the connection expires if it is left unused", () => {
+    render(<ConnectedAppsList connections={CONNECTIONS} />);
+    const line = screen.getByText(/expires if unused by/i);
+    expect(line).toHaveTextContent(/2027/);
+    // Machine-readable too, and not the connected date.
+    expect(line.querySelector("time")).toHaveAttribute(
+      "datetime",
+      "2027-02-12T12:00:00.000Z",
+    );
   });
 
   it("confirms before revoking", async () => {

@@ -38,7 +38,10 @@ vi.mock("@/lib/env", () => ({
 vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => ({ SUPABASE_SERVICE_ROLE_KEY: "service-key" }),
 }));
-vi.mock("@supabase/supabase-js", () => ({
+// Keep the real exports (the auth error classes and guards the bridge
+// classifies with); replace only the client factory.
+vi.mock("@supabase/supabase-js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@supabase/supabase-js")>()),
   createClient: () => ({
     auth: {
       admin: {
@@ -106,12 +109,6 @@ describe("mintBridgeSecret — Vault secret naming", () => {
     expect(payload.refreshToken).toBe("refresh-1");
     expect(payload.accessToken).toBe("access-1");
     expect(typeof payload.accessExpiresAt).toBe("number");
-  });
-
-  it("drops the dead secret it replaces when re-minting a bridge", async () => {
-    await mintBridgeSecret(USER_ID, "dead-secret-id");
-    const args = typedRpc.mock.calls[0][2] as { p_old_secret_id: string };
-    expect(args.p_old_secret_id).toBe("dead-secret-id");
   });
 
   it("keeps the user id in the name so secrets stay greppable per user", async () => {

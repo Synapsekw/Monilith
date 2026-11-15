@@ -103,6 +103,7 @@ beforeEach(() => {
   checkRateLimit.mockReset().mockResolvedValue({ allowed: true });
   redirect.mockClear();
   authSignOut.mockReset().mockResolvedValue({ error: null });
+  oauthTokensDeleteEq.mockReset().mockResolvedValue({ error: null });
   cookieDelete.mockReset();
   readAccountApproval.mockReset().mockResolvedValue("approved");
   serverEnv.value = {};
@@ -157,6 +158,50 @@ describe("changeOwnPassword", () => {
     await expect(changeOwnPassword({}, fd("longenough1"))).rejects.toThrow(
       "REDIRECT:/",
     );
+  });
+});
+
+// A connected MCP app holds its own long-lived credential and can re-mint its
+// Supabase session, so a new password alone would not lock it out.
+describe("changeOwnPassword — connected apps", () => {
+  it("disconnects the user's connected apps once the password is changed", async () => {
+    await expect(changeOwnPassword({}, fd("longenough1"))).rejects.toThrow(
+      "REDIRECT:/",
+    );
+    expect(oauthTokensDeleteEq).toHaveBeenCalledWith(
+      "oauth_tokens",
+      "user_id",
+      "u1",
+    );
+    expect(updateUser.mock.invocationCallOrder[0]).toBeLessThan(
+      oauthTokensDeleteEq.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("leaves connected apps alone when the password was not changed", async () => {
+    updateUser.mockResolvedValue({ error: { message: "same password" } });
+    const r = await changeOwnPassword({}, fd("longenough1"));
+    expect(r.error).toBe("same password");
+    expect(oauthTokensDeleteEq).not.toHaveBeenCalled();
+
+    await changeOwnPassword({}, fd("short"));
+    expect(oauthTokensDeleteEq).not.toHaveBeenCalled();
+  });
+
+  it("says so, instead of reporting success, when the apps could not be disconnected", async () => {
+    oauthTokensDeleteEq.mockResolvedValue({ error: { message: "timeout" } });
+
+    const r = await changeOwnPassword({}, fd("longenough1"));
+
+    expect(r.error).toMatch(/password was changed/i);
+    expect(r.error).toMatch(/connected apps/i);
+    expect(r.error).not.toContain("timeout");
+    expect(redirect).not.toHaveBeenCalled();
+    // The forced-change flag is still cleared: the password IS changed, and the
+    // user must be able to reach Settings to finish the job.
+    expect(updateUserById).toHaveBeenCalledWith("u1", {
+      app_metadata: { y: 2, must_change_password: false },
+    });
   });
 });
 
@@ -551,5 +596,49 @@ describe("sign out — forgets the last-visited board", () => {
     await expect(signOutEverywhere()).rejects.toThrow("REDIRECT:/login");
     expect(authSignOut).toHaveBeenCalledWith({ scope: "global" });
     expect(cookieDelete).toHaveBeenCalledWith("pulse_last_board");
+  });
+});
+
+describe("signOutEverywhere — fails closed", () => {
+  // THE DEFECT: a failed connector delete was only logged, the action carried
+  // on to the redirect, and the connectors then re-minted their own sessions —
+  // the user believed everything was signed out when their apps were not.
+  it("reports failure and signs nothing out when the apps could not be disconnected", async () => {
+    oauthTokensDeleteEq.mockResolvedValue({ error: { message: "timeout" } });
+
+    const res = await signOutEverywhere();
+
+    expect(res).toEqual({ ok: false, error: expect.any(String) });
+    if (res.ok) throw new Error("unreachable");
+    expect(res.error).toMatch(/connected apps/i);
+    expect(res.error).toMatch(/try again/i);
+    expect(res.error).not.toContain("timeout");
+    expect(authSignOut).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(cookieDelete).not.toHaveBeenCalled();
+  });
+
+  it("disconnects the apps before it revokes the sessions", async () => {
+    await expect(signOutEverywhere()).rejects.toThrow("REDIRECT:/login");
+    expect(oauthTokensDeleteEq.mock.invocationCallOrder[0]).toBeLessThan(
+      authSignOut.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("reports failure when revoking the sessions fails", async () => {
+    authSignOut.mockResolvedValue({ error: { message: "upstream 503" } });
+
+    const res = await signOutEverywhere();
+
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.error).toMatch(/other devices/i);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("just goes to sign-in when there is no session to end", async () => {
+    getUser.mockResolvedValueOnce({ data: { user: null } });
+    await expect(signOutEverywhere()).rejects.toThrow("REDIRECT:/login");
+    expect(oauthTokensDeleteEq).not.toHaveBeenCalled();
   });
 });
