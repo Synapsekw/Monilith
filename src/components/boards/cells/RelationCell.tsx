@@ -219,12 +219,22 @@ export function RelationCell({
     </Popover>
   );
 
-  if (isEmpty) return popover;
-
+  // One stable tree for both states, so the picker stays mounted (and keeps
+  // its place) when the first link is added or the last one removed. Only the
+  // reveal differs: an empty cell's add target is always visible.
   return (
-    <div className="group flex h-full w-full min-w-0 items-center gap-1 px-1">
-      {chipRow}
-      <RevealOnHover className="shrink-0">{popover}</RevealOnHover>
+    <div
+      className={cn(
+        "group flex h-full w-full min-w-0 items-center gap-1",
+        !isEmpty && "px-1",
+      )}
+    >
+      {!isEmpty && chipRow}
+      <RevealOnHover
+        className={isEmpty ? "h-full flex-1 opacity-100" : "shrink-0"}
+      >
+        {popover}
+      </RevealOnHover>
     </div>
   );
 }
