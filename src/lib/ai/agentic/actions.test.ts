@@ -60,6 +60,12 @@ vi.mock("./context", () => ({
   buildJobContext: (...args: unknown[]) => buildJobContext(...args),
 }));
 
+// The caller's own access to the board (the service client bypasses RLS).
+const getBoardAccess = vi.fn();
+vi.mock("@/lib/boards/queries", () => ({
+  getBoardAccess: (...args: unknown[]) => getBoardAccess(...args),
+}));
+
 // Minimal chainable fake for the two reads the action issues:
 //   .from("boards").select().eq().maybeSingle()
 //   .from("items").select().eq().is().order().limit().maybeSingle()
@@ -83,8 +89,12 @@ let ITEM_RESULT: { data: unknown; error: unknown } = {
   error: null,
 };
 
+// Every table the service client was asked for, to prove a refused caller
+// never reaches a service-client read.
+const serviceFromCalls: string[] = [];
 const createServiceClient = vi.fn(() => ({
   from: (table: string) => {
+    serviceFromCalls.push(table);
     if (table === "boards") return { select: () => chain(BOARD_RESULT) };
     if (table === "items") return { select: () => chain(ITEM_RESULT) };
     throw new Error(`unexpected table: ${table}`);
@@ -116,7 +126,10 @@ beforeEach(() => {
   requireUser.mockReset();
   decideAction.mockReset();
   buildJobContext.mockReset();
+  getBoardAccess.mockReset();
+  getBoardAccess.mockResolvedValue("owner");
   createServiceClient.mockClear();
+  serviceFromCalls.length = 0;
 
   resolveActiveOrg.mockResolvedValue({ id: ORG_ID, name: "Org" });
   requireUser.mockResolvedValue({ id: "user-1" });
@@ -129,6 +142,37 @@ beforeEach(() => {
 
   BOARD_RESULT = { data: { id: BOARD_ID, org_id: ORG_ID }, error: null };
   ITEM_RESULT = { data: { id: ITEM_ID, name: "Widget A" }, error: null };
+});
+
+describe("previewAiStep — the caller must be able to edit the board", () => {
+  it("refuses someone with no access to the board, before any item or model work", async () => {
+    getBoardAccess.mockResolvedValue(null);
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(buildJobContext).not.toHaveBeenCalled();
+    expect(decideAction).not.toHaveBeenCalled();
+    // No service-client read of any table ran for a caller without access.
+    expect(serviceFromCalls).toEqual([]);
+    expect(serviceFromCalls).not.toContain("items");
+  });
+
+  it("refuses a viewer", async () => {
+    getBoardAccess.mockResolvedValue("viewer");
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r).toEqual({ ok: false, error: "Board not found." });
+    expect(serviceFromCalls).not.toContain("items");
+    expect(decideAction).not.toHaveBeenCalled();
+  });
+
+  it("lets an editor through", async () => {
+    getBoardAccess.mockResolvedValue("editor");
+    const { previewAiStep } = await import("./actions");
+    const r = await previewAiStep(validInput());
+    expect(r.ok).toBe(true);
+    expect(getBoardAccess).toHaveBeenCalledWith(BOARD_ID);
+  });
 });
 
 describe("previewAiStep — input validation", () => {

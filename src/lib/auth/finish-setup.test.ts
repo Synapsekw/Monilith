@@ -2,13 +2,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
-const { redeemInvitationsForUser, provisionAccountForUser, requestClient } =
-  vi.hoisted(() => ({
-    redeemInvitationsForUser: vi.fn(),
-    provisionAccountForUser: vi.fn(),
-    requestClient: { tag: "request-client" },
-  }));
+const {
+  redeemInvitationsForUser,
+  provisionAccountForUser,
+  requestClient,
+  revalidateTag,
+} = vi.hoisted(() => ({
+  redeemInvitationsForUser: vi.fn(),
+  provisionAccountForUser: vi.fn(),
+  // Answers the joined-orgs read: `from().select().eq().is().limit()`.
+  requestClient: {
+    tag: "request-client",
+    from: () => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        is: () => chain,
+        limit: async () => ({
+          data: [{ org_id: "o1" }, { org_id: "o2" }],
+          error: null,
+        }),
+      };
+      return chain;
+    },
+  },
+  revalidateTag: vi.fn(),
+}));
 
+vi.mock("next/cache", () => ({ revalidateTag }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => requestClient,
 }));
@@ -29,6 +50,7 @@ const user = {
 };
 
 beforeEach(() => {
+  revalidateTag.mockReset();
   redeemInvitationsForUser.mockReset().mockResolvedValue(0);
   provisionAccountForUser.mockReset().mockResolvedValue({ error: null });
 });
@@ -60,6 +82,48 @@ describe("finishAccountSetup", () => {
 
     await finishAccountSetup(user);
     expect(order).toEqual(["redeem", "provision"]);
+  });
+
+  it("expires the user's access caches whether or not an org membership was counted", async () => {
+    for (const count of [0, 1]) {
+      revalidateTag.mockClear();
+      redeemInvitationsForUser.mockResolvedValue(count);
+      await finishAccountSetup(user);
+      const tags = revalidateTag.mock.calls.map((c) => c[0]);
+      expect(tags).toContain("folder-members:user:u1");
+      expect(tags).toContain("shared-boards:user:u1");
+      expect(revalidateTag).toHaveBeenCalledWith(expect.any(String), {
+        expire: 0,
+      });
+    }
+  });
+
+  it("expires the member lists of the orgs joined, only when one was joined", async () => {
+    redeemInvitationsForUser.mockResolvedValue(1);
+    await finishAccountSetup(user);
+    expect(revalidateTag).toHaveBeenCalledWith("org-members:org:o1", {
+      expire: 0,
+    });
+    expect(revalidateTag).toHaveBeenCalledWith("org-members:org:o2", {
+      expire: 0,
+    });
+
+    revalidateTag.mockClear();
+    redeemInvitationsForUser.mockResolvedValue(0);
+    await finishAccountSetup(user);
+    expect(
+      revalidateTag.mock.calls.filter(([t]) =>
+        String(t).startsWith("org-members:"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("still finishes setup when revalidation is not allowed (render phase)", async () => {
+    revalidateTag.mockImplementation(() => {
+      throw new Error("revalidateTag during render");
+    });
+    redeemInvitationsForUser.mockResolvedValue(1);
+    expect(await finishAccountSetup(user)).toEqual({ ok: true });
   });
 
   it("reports a provisioning failure", async () => {

@@ -101,7 +101,7 @@ export function SharedBoardRow({
             </Tooltip>
           ) : null}
           <SharedBoardMenu
-            board={{ id: board.id, name: board.name }}
+            board={{ id: board.id, name: board.name, via: board.via }}
             folders={folders}
             currentFolderId={currentFolderId}
             isActive={isActive}

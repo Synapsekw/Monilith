@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { dashboardsTag, foldersTag } from "@/lib/cache/tags";
+import {
+  MEMBER_ROWS_LIMIT,
+  folderMemberRows,
+  invalidateSharedLists,
+} from "./shared-lists";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import {
   attachDashboardSchema,
@@ -14,6 +19,7 @@ import {
   moveBoardToFolderSchema,
   renameFolderSchema,
 } from "@/lib/validations/folders";
+import type { MoveConfirm } from "./sharing-types";
 import { resolveFolderTimeline, resolveFolderWorkload } from "./resolve";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
 import {
@@ -24,6 +30,49 @@ import {
 
 const DUPLICATE_NAME =
   "A folder with that name already exists in this workspace.";
+
+const SHARED_FOLDER_MOVE =
+  "Only the board's owner or an admin can move a board into or out of a shared folder.";
+
+const GENERIC_FOLDER_ERROR = "Something went wrong. Please try again.";
+
+const DELETE_DENIED =
+  "Only the folder's creator or an admin can delete a shared folder";
+const RENAME_DENIED = "You don't have permission to change this folder";
+
+/** Logs the raw database error server-side; the client only sees generic copy. */
+function genericFolderError(action: string, error: { message: string }) {
+  console.error(`[${action}] folder write failed`, { error: error.message });
+  return GENERIC_FOLDER_ERROR;
+}
+
+/** The shared-folder trigger gets its own copy; anything else stays generic. */
+function moveError(error: { message: string }) {
+  return error.message.includes("shared folder")
+    ? SHARED_FOLDER_MOVE
+    : genericFolderError("moveBoardToFolder", error);
+}
+
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * A write that matched 0 rows means either the folder is gone or RLS refused
+ * the write. A read on the same RLS client tells the two apart, so the caller
+ * hears "not allowed" rather than "no longer exists" for a folder still on
+ * their screen.
+ */
+async function deniedOrGone(
+  supabase: Db,
+  folderId: string,
+  denied: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from("folders")
+    .select("id")
+    .eq("id", folderId)
+    .maybeSingle();
+  return data ? denied : FOLDER_GONE_ERROR;
+}
 
 /**
  * Shared folders are org-visible and workspace-scoped, so every action runs on
@@ -102,7 +151,10 @@ export async function renameFolder(input: {
     .maybeSingle();
   if (error?.code === "23505") return fail(DUPLICATE_NAME);
   if (error) return fail(error.message);
-  if (!data) return fail(FOLDER_GONE_ERROR);
+  if (!data)
+    return fail(
+      await deniedOrGone(supabase, parsed.data.folderId, RENAME_DENIED),
+    );
   updateTag(foldersTag(org.id));
   return { ok: true, data: undefined };
 }
@@ -117,57 +169,109 @@ export async function deleteFolder(input: {
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
   const supabase = await createClient();
+  // Read before the delete: the cascade removes the rows that say whose
+  // "Shared with me" list just changed.
+  const memberRows = await folderMemberRows(supabase, [parsed.data.folderId]);
   const { data, error } = await supabase
     .from("folders")
     .delete()
     .eq("id", parsed.data.folderId)
     .select("id")
     .maybeSingle();
-  if (error) return fail(error.message);
-  if (!data) return fail(FOLDER_GONE_ERROR);
+  if (error) return fail(genericFolderError("deleteFolder", error));
+  if (!data)
+    return fail(
+      await deniedOrGone(supabase, parsed.data.folderId, DELETE_DENIED),
+    );
   updateTag(foldersTag(org.id));
   updateTag(dashboardsTag(org.id));
+  invalidateSharedLists(memberRows);
   return { ok: true, data: undefined };
 }
 
-/** File a board (upsert on the board_id PK — "one folder per board" is the key) or unfile with null. */
+/**
+ * File a board (upsert on the board_id PK — "one folder per board" is the key)
+ * or unfile with null.
+ *
+ * Filing a board into a folder that has members gives those people access to
+ * it, so the first call returns `needsConfirm` and changes nothing; the caller
+ * confirms and calls again with `confirmShared: true`.
+ *
+ * `needsConfirm` is the TOTAL number of members of the target folder, including
+ * the mover and people who can already read the board. Word it as "N people in
+ * this folder will have access", not "N new people". `truncated` is true when
+ * the member read hit its cap, so the real count may be higher.
+ */
 export async function moveBoardToFolder(input: {
   boardId: string;
   folderId: string | null;
-}): Promise<ActionResult> {
+  confirmShared?: boolean;
+}): Promise<ActionResult<MoveConfirm | undefined>> {
   const parsed = moveBoardToFolderSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
   const supabase = await createClient();
-  if (parsed.data.folderId === null) {
-    // Unfiling a board with no placement is a legitimate no-op (double click, stale menu).
-    const { error } = await supabase
+  const { boardId, folderId, confirmShared } = parsed.data;
+
+  const { data: current } = await supabase
+    .from("folder_boards")
+    .select("folder_id")
+    .eq("board_id", boardId)
+    .maybeSingle();
+  const currentFolderId = current?.folder_id ?? null;
+  const affected = [currentFolderId, folderId].filter(
+    (v): v is string => typeof v === "string",
+  );
+  const memberRows = await folderMemberRows(supabase, [...new Set(affected)]);
+
+  if (folderId !== null && folderId !== currentFolderId && !confirmShared) {
+    const incoming = memberRows.filter((r) => r.folder_id === folderId).length;
+    if (incoming > 0)
+      return {
+        ok: true,
+        data: {
+          needsConfirm: incoming,
+          truncated: memberRows.length >= MEMBER_ROWS_LIMIT,
+        },
+      };
+  }
+
+  if (folderId === null) {
+    // Unfiling a board with no placement is a legitimate no-op (double click,
+    // stale menu). But a placement the caller can see that the delete did not
+    // remove was refused by RLS (a guest, or not the owner or an admin): that
+    // is not a success.
+    const { data: removed, error } = await supabase
       .from("folder_boards")
       .delete()
-      .eq("board_id", parsed.data.boardId);
-    if (error) return fail(error.message);
+      .eq("board_id", boardId)
+      .select("board_id");
+    if (error) return fail(moveError(error));
+    if (currentFolderId !== null && (removed ?? []).length === 0)
+      return fail(SHARED_FOLDER_MOVE);
   } else {
     const { data: last } = await supabase
       .from("folder_boards")
       .select("position")
-      .eq("folder_id", parsed.data.folderId)
+      .eq("folder_id", folderId)
       .order("position", { ascending: false })
       .limit(1);
     const position = (last?.[0]?.position ?? -1) + 1;
-    const { error } = await supabase.from("folder_boards").upsert(
-      {
-        board_id: parsed.data.boardId,
-        folder_id: parsed.data.folderId,
-        position,
-      },
-      { onConflict: "board_id" },
-    );
-    // A board outside the folder's workspace, or one you cannot read, is refused by RLS (folder_accepts_board).
-    if (error) return fail(error.message);
+    const { error } = await supabase
+      .from("folder_boards")
+      .upsert(
+        { board_id: boardId, folder_id: folderId, position },
+        { onConflict: "board_id" },
+      );
+    // A board outside the folder's workspace, or one you cannot read, is refused
+    // by RLS (folder_accepts_board); moving into or out of a shared folder is
+    // guarded by a trigger (owner or admin only).
+    if (error) return fail(moveError(error));
   }
   updateTag(foldersTag(org.id));
+  invalidateSharedLists(memberRows);
   return { ok: true, data: undefined };
 }
 

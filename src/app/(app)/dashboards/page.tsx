@@ -9,11 +9,13 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveFolderGallery } from "@/lib/folders/resolve";
 import { listUnfiledDashboards } from "@/lib/folders/queries";
 import { listFoldersCached } from "@/lib/folders/queries-cached";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
+import { visibleFolders } from "@/lib/folders/nav-filter";
 import { EmptyState } from "@/components/ui/empty-state";
 
 /** The folder gallery (spec §4): one folder_gallery RPC + one bounded unfiled read + the warm cached folder list. */
 export default async function DashboardsIndex() {
-  await requireUser();
+  const user = await requireUser();
   const orgId = await getActiveOrgId();
   const workspaceId = await getActiveWorkspaceId(
     await listWorkspacesCached(orgId),
@@ -25,10 +27,11 @@ export default async function DashboardsIndex() {
       </EmptyState>
     );
   const supabase = await createClient();
-  const [gallery, unfiled, nav] = await Promise.all([
+  const [gallery, unfiled, nav, folderAccess] = await Promise.all([
     resolveFolderGallery(supabase, workspaceId),
     listUnfiledDashboards(supabase, workspaceId),
     listFoldersCached(orgId, workspaceId),
+    getFolderAccessForUserCached(user.id, orgId),
   ]);
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
@@ -45,7 +48,10 @@ export default async function DashboardsIndex() {
       <UnfiledDashboards
         workspaceId={workspaceId}
         dashboards={unfiled}
-        folders={(nav?.folders ?? []).map((f) => ({ id: f.id, name: f.name }))}
+        folders={visibleFolders(nav?.folders ?? [], {
+          isGuest: folderAccess.isGuest,
+          memberFolderIds: new Set(folderAccess.folderIds),
+        }).map((f) => ({ id: f.id, name: f.name }))}
       />
     </div>
   );

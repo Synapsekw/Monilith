@@ -24,6 +24,10 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 import { invalidateMyBoards } from "@/lib/boards/actions/internal";
 import { boardsTag } from "@/lib/cache/tags";
 import {
+  boardAudienceRows,
+  invalidateSharedLists,
+} from "@/lib/folders/shared-lists";
+import {
   archiveBoardCore,
   leaveBoardCore,
   createBoardCore,
@@ -172,10 +176,15 @@ export async function deleteBoard(input: {
 
   // Attachment rows cascade with the board; their Storage objects do not. Every
   // attachment carries a denormalized board_id, so one query covers all items.
-  const { data: attachments } = await supabase
-    .from("attachments")
-    .select("storage_path")
-    .eq("board_id", parsed.data.boardId);
+  // Read with the attachments, before the delete: the cascade removes the
+  // grants and the placement that say whose "Shared with me" list shows it.
+  const [{ data: attachments }, audience] = await Promise.all([
+    supabase
+      .from("attachments")
+      .select("storage_path")
+      .eq("board_id", parsed.data.boardId),
+    boardAudienceRows(supabase, parsed.data.boardId),
+  ]);
 
   const { error } = await supabase
     .from("boards")
@@ -186,6 +195,7 @@ export async function deleteBoard(input: {
   await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
 
   await invalidateMyBoards();
+  invalidateSharedLists(audience);
   return { ok: true, data: undefined };
 }
 

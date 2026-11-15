@@ -26,6 +26,30 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: vi.fn(),
 }));
+// Who a board is shared with: the real read (grants + folder members) is
+// covered in core/board.test.ts. These per-table fakes model only the direct
+// grants, so the double reads `board_members` and treats any table a test did
+// not set up as "nobody". The tag expiry itself stays real.
+vi.mock("@/lib/folders/shared-lists", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/folders/shared-lists")>();
+  return {
+    ...actual,
+    boardAudienceRows: async (
+      supabase: { from: (t: string) => unknown },
+      boardId: string,
+    ) => {
+      const t = supabase.from("board_members") as {
+        select?: (c: string) => {
+          eq: (c: string, v: string) => Promise<{ data: unknown }>;
+        };
+      };
+      if (!t?.select) return [];
+      const { data } = await t.select("user_id").eq("board_id", boardId);
+      return (data as { user_id: string }[] | null) ?? [];
+    },
+  };
+});
 
 import { revalidatePath } from "next/cache";
 import { clearCell, upsertCell } from "@/lib/boards/actions";

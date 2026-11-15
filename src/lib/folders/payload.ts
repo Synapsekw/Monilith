@@ -10,6 +10,7 @@ import {
   resolveFolderBurn,
   resolveFolderRollup,
 } from "./resolve";
+import { getFolderAccessHead } from "./sharing-queries";
 import type { FolderPayload } from "./types";
 
 /**
@@ -36,11 +37,12 @@ export async function buildFolderPayload(
   folderId: string,
   userId: string,
 ): Promise<FolderPayload | null> {
-  const [head, layoutRow, rollup, attention] = await Promise.all([
+  const [head, layoutRow, rollup, attention, access] = await Promise.all([
     getFolderHead(supabase, folderId),
     getFolderLayoutRow(supabase, folderId),
     resolveFolderRollup(supabase, folderId),
     resolveFolderAttention(supabase, folderId, ATTENTION_LIMIT),
+    getFolderAccessHead(supabase, folderId),
   ]);
   if (!head) return null;
   const layout = resolveLayout(layoutRow);
@@ -67,6 +69,7 @@ export async function buildFolderPayload(
       fullName: m.fullName,
       avatarUrl: m.avatarUrl,
     })),
+    access,
     layout,
     generatedAt: new Date().toISOString(),
     todayISO: localTodayISO(),

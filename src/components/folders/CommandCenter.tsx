@@ -153,7 +153,10 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
         actions={
           <HeaderActions
             folderId={payload.folder.id}
+            folderName={payload.folder.name}
             canExport={canExport}
+            access={payload.access}
+            members={payload.members}
             editing={edit}
             onCustomize={() => setEdit(true)}
           />

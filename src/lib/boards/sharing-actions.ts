@@ -6,9 +6,12 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 import { sharedBoardsTag } from "@/lib/cache/tags";
 import { invalidateMyBoards } from "@/lib/boards/actions/internal";
 import {
+  boardFolderGrantsSchema,
   shareBoardSchema,
   unshareBoardSchema,
 } from "@/lib/validations/board-sharing";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
+import type { FolderGrant } from "@/lib/boards/folder-levels";
 
 /**
  * What a grant change makes stale, as tags — deliberately NOT
@@ -64,4 +67,29 @@ export async function unshareBoard(input: unknown): Promise<ActionResult> {
   if (error) return fail(friendly(error.message));
   await invalidateGrantLists(parsed.data.userId);
   return { ok: true, data: undefined };
+}
+
+/**
+ * Everyone who reaches this board through its folder. Loaded by the share
+ * dialog when it opens, so the board page's first paint pays nothing for it.
+ * The RPC returns rows only to a caller who can read the board.
+ */
+export async function loadBoardFolderGrants(
+  input: unknown,
+): Promise<ActionResult<FolderGrant[]>> {
+  const parsed = boardFolderGrantsSchema.safeParse(input);
+  if (!parsed.success) return fail("Invalid input");
+  const supabase = await createClient();
+  const { data, error } = await typedRpc(supabase, "board_folder_grants", {
+    p_board_id: parsed.data.boardId,
+  });
+  if (error) return fail("Something went wrong. Please try again.");
+  return {
+    ok: true,
+    data: (data ?? []).map((r) => ({
+      userId: r.user_id,
+      access: r.access_level,
+      folderName: r.folder_name,
+    })),
+  };
 }

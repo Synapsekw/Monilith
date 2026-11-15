@@ -6,6 +6,7 @@
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
+import { memberInitials } from "@/lib/ui/initials";
 import { MonoAvatar } from "@/components/mono/MonoAvatar";
 import {
   DEFAULT_MONO_COLOR,
@@ -25,15 +26,7 @@ const AVATAR_PX = 24;
 /** The pebble is drawn this much larger than the disc and cropped by it. */
 const MONO_FACE_SCALE = 1.4;
 
-export function memberInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+export { memberInitials };
 
 /**
  * A member's identity colour: one of the eight status tokens, picked by a

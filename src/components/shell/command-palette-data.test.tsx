@@ -37,6 +37,12 @@ vi.mock("@/lib/folders/queries-cached", () => ({
     placements: [],
   })),
 }));
+vi.mock("@/lib/folders/access-cached", () => ({
+  getFolderAccessForUserCached: vi.fn(async () => ({
+    isGuest: false,
+    folderIds: [],
+  })),
+}));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
 }));

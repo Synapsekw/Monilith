@@ -76,6 +76,15 @@ vi.mock("@/lib/org/queries-cached", () => ({
   }),
 }));
 
+vi.mock("./sharing-queries", () => ({
+  getFolderAccessHead: vi.fn(async () => {
+    order.push("start:access");
+    await tick();
+    order.push("end:access");
+    return { count: 2, memberIds: ["m1", "m2"], canManage: true };
+  }),
+}));
+
 import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
 import { resolveFolderAttention, resolveFolderBurn } from "./resolve";
 import { ATTENTION_LIMIT, buildFolderPayload } from "./payload";
@@ -126,7 +135,13 @@ describe("buildFolderPayload", () => {
     // complete start/end pair before the next read even starts.
     // `burn` moved into wave B behind the layout gate (Task 3); `layout`
     // takes its place as the fourth wave-A read alongside head/rollup/attention.
-    const firstPaintReads = ["head", "rollup", "layout", "attention"] as const;
+    const firstPaintReads = [
+      "head",
+      "rollup",
+      "layout",
+      "attention",
+      "access",
+    ] as const;
     const startIdx = Object.fromEntries(
       firstPaintReads.map((name) => [name, order.indexOf(`start:${name}`)]),
     );
@@ -142,6 +157,15 @@ describe("buildFolderPayload", () => {
     // it must only start once wave A's head read has ended.
     expect(order.indexOf("start:briefs")).toBeGreaterThan(endIdx.head);
     expect(order.indexOf("start:members")).toBeGreaterThan(endIdx.head);
+  });
+
+  it("carries the folder's access head from wave A", async () => {
+    const p = await buildFolderPayload(supabase, "f1", "u1");
+    expect(p!.access).toEqual({
+      count: 2,
+      memberIds: ["m1", "m2"],
+      canManage: true,
+    });
   });
 
   it("returns null when the folder is hidden or absent", async () => {

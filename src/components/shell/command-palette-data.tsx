@@ -2,6 +2,8 @@ import { getUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
 import { listMyBoardsCached } from "@/lib/boards/queries-cached";
 import { listFoldersCached } from "@/lib/folders/queries-cached";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
+import { visibleFolders } from "@/lib/folders/nav-filter";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { CommandPalette } from "@/components/command-palette";
@@ -17,15 +19,19 @@ export async function CommandPaletteData() {
   const userId = user?.id ?? "";
   const workspaces = await listWorkspacesCached(orgId);
   const workspaceId = await getActiveWorkspaceId(workspaces);
-  const [boards, nav] = await Promise.all([
+  const [boards, nav, folderAccess] = await Promise.all([
     listMyBoardsCached(userId),
     listFoldersCached(orgId, workspaceId),
+    getFolderAccessForUserCached(userId, orgId),
   ]);
 
   return (
     <CommandPalette
       boards={boards}
-      folders={(nav?.folders ?? []).map((f) => ({ id: f.id, name: f.name }))}
+      folders={visibleFolders(nav?.folders ?? [], {
+        isGuest: folderAccess.isGuest,
+        memberFolderIds: new Set(folderAccess.folderIds),
+      }).map((f) => ({ id: f.id, name: f.name }))}
       workspaces={workspaces}
     />
   );

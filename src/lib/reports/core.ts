@@ -4,6 +4,7 @@ import { type ActionResult, fail } from "@/lib/actions/result";
 import { defaultReportConfig, type ReportConfig } from "@/lib/reports/config";
 import { canEditReports, type ReportAccess } from "@/lib/reports/access";
 import { deriveBoardAccess } from "@/lib/boards/queries";
+import { listMyFolderBoardLevels } from "@/lib/boards/folder-levels";
 import type { ReportRow, ReportScope } from "@/lib/reports/queries";
 import {
   bindingBoardIds,
@@ -80,13 +81,14 @@ async function canEditAllBoards(
   if (boardIds.length === 0) return true;
   const ids = [...new Set(boardIds)];
 
-  const [boardsRes, grantsRes] = await Promise.all([
+  const [boardsRes, grantsRes, folderLevels] = await Promise.all([
     supabase.from("boards").select("id, created_by, org_id").in("id", ids),
     supabase
       .from("board_members")
       .select("board_id, user_id, access_level")
       .in("board_id", ids)
       .eq("user_id", userId),
+    listMyFolderBoardLevels(supabase, ids),
   ]);
 
   const boardsById = new Map(
@@ -106,7 +108,12 @@ async function canEditAllBoards(
     const board = boardsById.get(id);
     if (!board || board.org_id !== orgId) return false;
     return canEditReports(
-      deriveBoardAccess(board, grantsByBoard.get(id) ?? [], userId),
+      deriveBoardAccess(
+        board,
+        grantsByBoard.get(id) ?? [],
+        userId,
+        folderLevels.get(id) ?? null,
+      ),
     );
   });
 }

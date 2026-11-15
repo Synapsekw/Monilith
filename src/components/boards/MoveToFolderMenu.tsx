@@ -1,10 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
 import { FolderInput } from "lucide-react";
 
-import { moveBoardToFolder } from "@/lib/folders/actions";
-import { showMutationError } from "@/lib/ui/mutation-toast";
+import { useMoveBoardToFolder } from "@/components/boards/move-to-folder";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 import type { FolderSummary } from "@/lib/folders/types";
 import {
   DropdownMenuItem,
@@ -18,6 +17,12 @@ import {
  * The "Move to folder ▸" submenu, shared by the owned-board and shared-board
  * row menus. This is the keyboard path for filing a board — drag is an
  * enhancement on top, never the only way in.
+ *
+ * The move itself, its error toast and the "this folder is shared" question
+ * belong to `MoveBoardToFolderHost` in `BoardsNav`: this submenu lives inside
+ * another menu's content and is gone the moment an item is picked.
+ *
+ * A guest cannot file boards, so for them the submenu is not rendered.
  */
 export function MoveToFolderMenu({
   boardId,
@@ -28,21 +33,9 @@ export function MoveToFolderMenu({
   folders: FolderSummary[];
   currentFolderId: string | null;
 }) {
-  const [, startTransition] = useTransition();
-
-  function move(folderId: string | null) {
-    startTransition(async () => {
-      const res = await moveBoardToFolder({ boardId, folderId });
-      if (!res.ok) {
-        // The dropdown has already closed, so there is no inline surface left.
-        showMutationError("Couldn't move the board.", new Error(res.error));
-        return;
-      }
-      // This one DOES change server data (unlike a folder collapse) — and
-      // moveBoardToFolder's updateTag(foldersTag) re-renders the route inside
-      // the action response, so no client router.refresh() follows it.
-    });
-  }
+  const move = useMoveBoardToFolder();
+  const isGuest = useNavIsGuest();
+  if (isGuest) return null;
 
   return (
     <DropdownMenuSub>
@@ -58,7 +51,9 @@ export function MoveToFolderMenu({
             <DropdownMenuItem
               key={f.id}
               disabled={f.id === currentFolderId}
-              onSelect={() => move(f.id)}
+              onSelect={() =>
+                move({ boardId, folderId: f.id, folderName: f.name })
+              }
             >
               <span className="truncate">{f.name}</span>
             </DropdownMenuItem>
@@ -67,7 +62,9 @@ export function MoveToFolderMenu({
         {currentFolderId ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => move(null)}>
+            <DropdownMenuItem
+              onSelect={() => move({ boardId, folderId: null })}
+            >
               Remove from folder
             </DropdownMenuItem>
           </>

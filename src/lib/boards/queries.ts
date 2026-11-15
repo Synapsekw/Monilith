@@ -7,6 +7,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 import { fetchAllRows } from "@/lib/supabase/paginate";
+import { mergeSharedBoards } from "@/lib/boards/shared-merge";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
+import {
+  higherAccess,
+  listMyFolderBoardLevels,
+  type FolderLevel,
+} from "@/lib/boards/folder-levels";
 
 const UUID = z.string().uuid();
 
@@ -73,6 +80,10 @@ export type SharedBoardEntry = {
   position: number;
   owner_name: string | null;
   access_level: "viewer" | "editor";
+  /** How the board reached the user: a direct board grant (which "Leave
+   *  board" can remove) or only through a folder they are on. A board granted
+   *  both ways is "direct". */
+  via: "direct" | "folder";
 };
 
 // Defensive cap on the sidebar board lists (hot path — runs on ~every nav via
@@ -105,38 +116,105 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
   }));
 }
 
-/** Boards shared WITH the current user by someone else. */
+/**
+ * Boards shared WITH the current user by someone else: granted directly, or
+ * reached through a folder they are a member of. Runs on the caller's RLS
+ * client, so the boards policy already enforces active org membership.
+ */
 export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
   const user = await getUser();
   if (!user) return [];
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("board_members")
-    .select("access_level, boards!inner(id, name, position, created_by)")
-    .eq("user_id", user.id)
-    .is("boards.archived_at", null)
-    .limit(MY_BOARDS_LIMIT)
-    .order("created_at", { ascending: true });
+  // The two grant reads are independent: one round trip, not two.
+  const [{ data, error }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level, boards!inner(id, name, position, created_by)")
+      .eq("user_id", user.id)
+      .is("boards.archived_at", null)
+      .order("created_at", { ascending: true })
+      .order("board_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+    // Folder path. A failed read here degrades to "direct grants only" rather
+    // than failing a list that is otherwise correct.
+    supabase
+      .from("folder_members")
+      .select("folder_id, access_level")
+      .eq("user_id", user.id)
+      .order("folder_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+  ]);
   // Same fail-loud policy as listMyBoards: an error is not an empty list.
   if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
+  warnIfAtCap("listSharedBoards", "board_members", data, MY_BOARDS_LIMIT);
+  warnIfAtCap(
+    "listSharedBoards",
+    "folder_members",
+    memberships,
+    MY_BOARDS_LIMIT,
+  );
   const rows = (data ?? []).filter(
     (r) => r.boards && r.boards.created_by !== user.id,
   );
 
-  const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
+  const levelByFolder = new Map(
+    (memberships ?? []).map((r) => [r.folder_id, r.access_level] as const),
+  );
+  let folderRows: {
+    folder_id: string;
+    boards: { id: string; name: string; position: number; created_by: string };
+  }[] = [];
+  if (levelByFolder.size > 0) {
+    const { data: placed } = await supabase
+      .from("folder_boards")
+      .select("folder_id, boards!inner(id, name, position, created_by)")
+      .in("folder_id", [...levelByFolder.keys()])
+      .is("boards.archived_at", null)
+      .order("folder_id", { ascending: true })
+      .order("position", { ascending: true })
+      .order("board_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT);
+    warnIfAtCap("listSharedBoards", "folder_boards", placed, MY_BOARDS_LIMIT);
+    // Keep only rows whose folder the user holds a grant on (belt and braces:
+    // the `in` filter already says so, and a row without a level has none).
+    folderRows = (placed ?? []).filter(
+      (r) =>
+        r.boards &&
+        r.boards.created_by !== user.id &&
+        levelByFolder.has(r.folder_id),
+    );
+  }
+
+  const ownerIds = [
+    ...new Set([
+      ...rows.map((r) => r.boards.created_by),
+      ...folderRows.map((r) => r.boards.created_by),
+    ]),
+  ];
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, full_name")
     .in("id", ownerIds);
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
 
-  return rows.map((r) => ({
-    id: r.boards.id,
-    name: r.boards.name,
-    position: r.boards.position,
-    owner_name: nameById.get(r.boards.created_by) ?? null,
-    access_level: r.access_level,
-  }));
+  return mergeSharedBoards(
+    rows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: r.access_level,
+      via: "direct" as const,
+    })),
+    folderRows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: levelByFolder.get(r.folder_id)!,
+      via: "folder" as const,
+    })),
+  );
 }
 
 /**
@@ -149,6 +227,11 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
  * so a non-owner's archive would report success while changing nothing. That is
  * the "lying success" the explicit check exists to prevent (spec F4 / decision
  * D5).
+ *
+ * `userId` MUST be the same user as the client's session (`auth.uid()`): the
+ * direct-grant half is read by `userId`, but the folder half
+ * (`my_folder_board_levels`) is resolved by the database from the session, not
+ * from this parameter. Passing a different user's id would mix two identities.
  */
 export async function getBoardAccessCore(
   supabase: SupabaseClient<Database>,
@@ -162,13 +245,21 @@ export async function getBoardAccessCore(
     .maybeSingle();
   if (!board) return null;
   if (board.created_by === userId) return "owner";
-  const { data: grant } = await supabase
-    .from("board_members")
-    .select("access_level")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return grant?.access_level ?? null;
+  const [{ data: grant }, folderLevels] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level")
+      .eq("board_id", boardId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // Resolved from auth.uid() by the RPC: `supabase` is the caller's own
+    // client on both the cookie path and the bridged MCP path.
+    listMyFolderBoardLevels(supabase, [boardId]),
+  ]);
+  return higherAccess(
+    grant?.access_level ?? null,
+    folderLevels.get(boardId) ?? null,
+  );
 }
 
 /** The current user's effective access to a board (or null if none). */
@@ -185,14 +276,20 @@ export async function getBoardAccess(
  * on the board page — same decision order as {@link getBoardAccess} (creator
  * check first, then the all-grants `board_members` lookup) so the two stay
  * behaviorally identical without re-querying `boards`/`board_members`.
+ * The optional `folderLevel` is the caller's level through the board's folder
+ * (`listMyFolderBoardLevels`); the result is the higher of the two.
  */
 export function deriveBoardAccess(
   board: Pick<Board, "created_by">,
   grants: { userId: string; access: "editor" | "viewer" }[],
   userId: string,
+  folderLevel: FolderLevel | null = null,
 ): "owner" | "editor" | "viewer" | null {
   if (board.created_by === userId) return "owner";
-  return grants.find((g) => g.userId === userId)?.access ?? null;
+  return higherAccess(
+    grants.find((g) => g.userId === userId)?.access ?? null,
+    folderLevel,
+  );
 }
 
 /**

@@ -14,6 +14,24 @@ vi.mock("@/lib/folders/actions", () => ({
   deleteFolder: (...args: unknown[]) => deleteFolder(...args),
 }));
 
+vi.mock("@/components/folders/ShareFolderDialog", () => ({
+  ShareFolderDialog: ({
+    open,
+    returnFocusRef,
+  }: {
+    open: boolean;
+    returnFocusRef?: { current: HTMLElement | null };
+  }) =>
+    open ? (
+      <div>
+        share-dialog
+        <button type="button" onClick={() => returnFocusRef?.current?.focus()}>
+          return focus
+        </button>
+      </div>
+    ) : null,
+}));
+
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
 import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
 
@@ -28,7 +46,7 @@ beforeEach(() => {
 });
 
 /** Open the folder's ⋯ menu and pick one of its entries. */
-function openMenuAndSelect(entry: "Rename" | "Delete") {
+function openMenuAndSelect(entry: "Rename" | "Delete" | "Share folder…") {
   render(<BoardFolderMenu folder={folder} />);
   fireEvent.click(
     screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
@@ -37,6 +55,21 @@ function openMenuAndSelect(entry: "Rename" | "Delete") {
 }
 
 describe("BoardFolderMenu", () => {
+  it("opens the share dialog from the folder menu", async () => {
+    openMenuAndSelect("Share folder…");
+    expect(await screen.findByText("share-dialog")).toBeInTheDocument();
+  });
+
+  it("hands the dialog the folder's menu trigger to return focus to", async () => {
+    openMenuAndSelect("Share folder…");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "return focus" }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Folder actions for Acme Rebrand" }),
+    );
+  });
+
   it("renames the folder with the trimmed new name — and leaves the re-render to the action", async () => {
     openMenuAndSelect("Rename");
 

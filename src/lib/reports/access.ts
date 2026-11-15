@@ -1,5 +1,6 @@
 import "server-only";
 import { getBoardAccess, deriveBoardAccess } from "@/lib/boards/queries";
+import { listMyFolderBoardLevels } from "@/lib/boards/folder-levels";
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -166,13 +167,14 @@ export async function resolveReportAccessCore(
   // report binds no boards — a template, or an empty roll-up).
   const accessByBoardId = new Map<string, BoardAccessLevel>();
   if (boardIds.length > 0) {
-    const [boardsRes, grantsRes] = await Promise.all([
+    const [boardsRes, grantsRes, folderLevels] = await Promise.all([
       supabase.from("boards").select("id, created_by").in("id", boardIds),
       supabase
         .from("board_members")
         .select("board_id, user_id, access_level")
         .in("board_id", boardIds)
         .eq("user_id", user.id),
+      listMyFolderBoardLevels(supabase, boardIds),
     ]);
 
     const boardsById = new Map(
@@ -193,7 +195,12 @@ export async function resolveReportAccessCore(
       accessByBoardId.set(
         id,
         board
-          ? deriveBoardAccess(board, grantsByBoard.get(id) ?? [], user.id)
+          ? deriveBoardAccess(
+              board,
+              grantsByBoard.get(id) ?? [],
+              user.id,
+              folderLevels.get(id) ?? null,
+            )
           : null,
       );
     }

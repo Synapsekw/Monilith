@@ -36,17 +36,25 @@ type NavLink = {
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
+  /** Still offered to an org guest. Opt-in: a new link is hidden from guests
+   *  until someone decides it is safe to show them. */
+  guestVisible?: boolean;
 };
 
 const TOP: NavLink[] = [
   { label: "My Work", href: "/my-work", icon: ListTodo },
   { label: "Ask", href: "/ask", icon: AskAiMark },
 ];
-const PLANNING: NavLink[] = [
+export const PLANNING: NavLink[] = [
   // The folder gallery. It is the ONLY surface that lists unfiled dashboards,
   // and deleting `DashboardsNav` left it reachable from nowhere but ⌘K — which
   // mobile has no equivalent of at all.
-  { label: "Folders", href: "/dashboards", icon: FolderKanban },
+  {
+    label: "Folders",
+    href: "/dashboards",
+    icon: FolderKanban,
+    guestVisible: true,
+  },
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
   { label: "Reports", href: "/reports", icon: FileText },
@@ -121,8 +129,14 @@ export function SidebarNav({
   placements,
   workspaces,
   activeWorkspaceId = "",
+  isGuest = false,
   forceExpanded = false,
 }: {
+  /** A guest of the active org sees only what they were given: the org-wide
+   *  planning surfaces (goals, portfolios, reports, workload) are empty for
+   *  them, so their links are not offered. Optional so every existing call
+   *  site stays valid. */
+  isGuest?: boolean;
   orgs?: { id: string; name: string }[];
   activeOrgId?: string;
   boards: BoardListEntry[];
@@ -140,6 +154,9 @@ export function SidebarNav({
   const isCollapsed = !forceExpanded && hasHydrated && collapsed;
   const coarse = useCoarsePointer();
   const isActive = useActive();
+  const planning = isGuest
+    ? PLANNING.filter((item) => item.guestVisible)
+    : PLANNING;
 
   const boardsNav = (
     <BoardsNav
@@ -149,6 +166,7 @@ export function SidebarNav({
       placements={placements}
       activeWorkspaceId={activeWorkspaceId}
       collapsed={isCollapsed}
+      isGuest={isGuest}
     />
   );
 
@@ -184,7 +202,7 @@ export function SidebarNav({
                 />
               ))}
               <RailDivider />
-              {PLANNING.map((item) => (
+              {planning.map((item) => (
                 <RailLink
                   key={item.href}
                   item={item}
@@ -215,7 +233,7 @@ export function SidebarNav({
               ))}
             </nav>
             <NavSection storageKey="planning" title="Planning">
-              {PLANNING.map((item) => (
+              {planning.map((item) => (
                 <SidebarLink
                   key={item.href}
                   href={item.href}
