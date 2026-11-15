@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import {
   getMessages,
@@ -150,7 +150,7 @@ export async function createConversation(input: {
   }
 
   const workspaceId = await getActiveWorkspaceId(
-    await listWorkspacesCached(org.id),
+    await listVisibleWorkspaces(org.id),
   );
 
   const supabase = await createClient();

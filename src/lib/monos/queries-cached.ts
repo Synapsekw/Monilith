@@ -8,7 +8,9 @@ import type { OrgMono } from "./types";
 export const ORG_MONOS_LIMIT = 500;
 
 /**
- * Every Mono in the org (name, colour, owner; never brain). Cached under the
+ * Every Mono in the org (name, colour, owner; never brain). WHOLE ORG, SHARED
+ * BY EVERY VIEWER: a guest may see only the Monos on boards they can read, so
+ * read it through `@/lib/org/visible-roster`. Cached under the
  * SAME tag as the member roster, so every roster invalidation (member removed,
  * deactivated, Mono created or renamed) refreshes both. CALLER CONTRACT as
  * `listOrgMembersCached`: pass an org the caller may read; the explicit

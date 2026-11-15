@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { visibleOrgMembersFor } from "@/lib/org/visible-roster";
 import { labelEmail } from "@/lib/ui/member-label";
 import { localTodayISO } from "@/lib/boards/overdue";
 import type { Database } from "@/types/database.types";
@@ -62,7 +62,8 @@ export async function buildFolderPayload(
     h ? listLatestBriefs(supabase, h.boards, userId) : [],
   );
   const membersP = headP.then((h) =>
-    h ? listOrgMembersCached(h.folder.orgId) : [],
+    // Narrowed to the viewer: a guest gets the folder's people, not the org.
+    h ? visibleOrgMembersFor(supabase, userId, h.folder.orgId) : [],
   );
   // ONE Promise.all over every read, so a rejection anywhere is handled.
   const [head, layout, rollup, attention, access, burn, load, briefs, members] =

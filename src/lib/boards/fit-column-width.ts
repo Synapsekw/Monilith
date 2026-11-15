@@ -1,3 +1,4 @@
+import { HIDDEN_MEMBER } from "@/lib/ui/member-label";
 import { currencyOf, formatCurrency } from "@/lib/boards/currency";
 import { stripMarkdown } from "@/lib/boards/markdown";
 
@@ -269,7 +270,7 @@ function fitPeople(
       );
     } else if (ids.length === 1) {
       const member = byId.get(ids[0]);
-      const label = member?.fullName || member?.email || "Unknown";
+      const label = member?.fullName || member?.email || HIDDEN_MEMBER;
       row =
         AVATAR +
         AVATAR_GAP +

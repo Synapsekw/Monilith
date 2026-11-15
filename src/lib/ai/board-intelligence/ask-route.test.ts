@@ -27,8 +27,8 @@ vi.mock("@/lib/ai/entitlement", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: unknown[]) => runAi(...a),
 }));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: (...a: unknown[]) => listWorkspacesCached(...a),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleWorkspaces: (...a: unknown[]) => listWorkspacesCached(...a),
 }));
 vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: (...a: unknown[]) => getActiveWorkspaceId(...a),

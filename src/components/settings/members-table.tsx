@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ActionResult } from "@/lib/actions/result";
 import { StatusPill } from "@/components/ui/status-pill";
+import { GuestBadge } from "@/components/ui/guest-badge";
 
 type Role = Database["public"]["Enums"]["org_role"];
 
@@ -89,8 +90,9 @@ export function MembersTable({
               return (
                 <tr key={m.user_id}>
                   <td className="py-2.5 pr-3 align-middle">
-                    <div className="text-foreground font-medium">
-                      {m.full_name ?? "—"}
+                    <div className="text-foreground flex items-center gap-2 font-medium">
+                      <span>{m.full_name ?? "—"}</span>
+                      {m.role === "guest" ? <GuestBadge /> : null}
                     </div>
                     <div className="text-muted-foreground text-xs">
                       {m.email}

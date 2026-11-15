@@ -2,7 +2,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import * as z from "zod";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { proposedActionSchema, type ValidatedAction } from "./schema";
 import {
   resolveCreateItem,
@@ -121,8 +121,8 @@ const moveItemArgs = z.object({
 });
 
 async function membersFor(orgId: string): Promise<Member[]> {
-  const rows = await listOrgMembersCached(orgId);
-  // listOrgMembersCached returns OrgMember { userId, fullName, email, avatarUrl }.
+  const rows = await listVisibleOrgMembers(orgId);
+  // listVisibleOrgMembers returns OrgMember { userId, fullName, email, avatarUrl }.
   return rows.map((r) => ({ userId: r.userId, name: r.fullName ?? "Unknown" }));
 }
 

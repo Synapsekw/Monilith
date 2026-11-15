@@ -27,8 +27,8 @@ vi.mock("@/lib/ai/gateway", () => ({
 vi.mock("@/lib/boards/queries", () => ({
   getBoardPayload: (id: string) => getBoardPayload(id),
 }));
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: (id: string) => listOrgMembersCached(id),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: (id: string) => listOrgMembersCached(id),
 }));
 vi.mock("@/lib/boards/intelligence/signals", async (orig) => ({
   ...(await orig<typeof import("@/lib/boards/intelligence/signals")>()),

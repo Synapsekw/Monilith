@@ -86,8 +86,8 @@ vi.mock("./resolve", () => ({
     return { ok: true, rows: [] };
   }),
 }));
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: vi.fn(async () => {
+vi.mock("@/lib/org/visible-roster", () => ({
+  visibleOrgMembersFor: vi.fn(async () => {
     order.push("start:members");
     return [{ userId: "u1", fullName: "Ada", email: null, avatarUrl: null }];
   }),

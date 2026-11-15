@@ -11,6 +11,7 @@ import { Kicker } from "@/components/ui/kicker";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 import { MemberAvatar } from "./member-avatar";
+import { HIDDEN_MEMBER } from "@/lib/ui/member-label";
 import { AgentChip } from "@/components/mono/MonoChip";
 import { monoAccessibleLabel } from "@/lib/monos/labels";
 
@@ -107,8 +108,11 @@ export function DropdownCell({
   );
 }
 
+/** An assignee outside the roster the viewer was given (someone who left, or
+ *  a person a guest may not see) is a neutral "Member": no name, no email, no
+ *  avatar. */
 function memberLabel(member: EditorMember | undefined) {
-  return member?.fullName || member?.email || "Unknown";
+  return member?.fullName || member?.email || HIDDEN_MEMBER;
 }
 
 /** Beyond this many assignees the stack collapses to 3 avatars + a "+N" disc,

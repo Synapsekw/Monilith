@@ -2,6 +2,11 @@ import { memberInitials } from "@/lib/ui/initials";
 
 export const UNKNOWN_MEMBER = "Unknown member";
 
+/** What an assignee prints as when the viewer was not given that person: a
+ *  guest sees only the people they share access with, and an item can be
+ *  assigned to anyone in the org. Neutral on purpose: no name, no email. */
+export const HIDDEN_MEMBER = "Member";
+
 type Nameable = { fullName: string | null; email?: string | null };
 
 /** What to print for a person: their name, else their email, else "Unknown

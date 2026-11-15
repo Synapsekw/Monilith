@@ -4,7 +4,7 @@ import type { Database } from "@/types/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 import { serverToday, isoWeekday } from "@/lib/workload/rollup";
 import { EFFORT_FALLBACK } from "@/lib/workload/types";
@@ -23,7 +23,8 @@ import type {
 async function listOrgMembersForWorkload(
   orgId: string,
 ): Promise<WorkloadMember[]> {
-  const members = await listOrgMembersCached(orgId); // { userId, fullName, email, avatarUrl }[]
+  // Narrowed to the viewer: a guest gets only the people they share access with.
+  const members = await listVisibleOrgMembers(orgId);
   return members.map((m) => ({
     userId: m.userId,
     fullName: m.fullName,

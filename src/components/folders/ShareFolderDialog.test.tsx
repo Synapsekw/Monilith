@@ -27,6 +27,11 @@ vi.mock("@/lib/folders/sharing-actions", () => ({
   leaveFolder: (...a: unknown[]) => leaveFolder(...a),
 }));
 
+const loadFolderGuestIds = vi.fn();
+vi.mock("@/lib/folders/guest-actions", () => ({
+  loadFolderGuestIds: (...a: unknown[]) => loadFolderGuestIds(...a),
+}));
+
 const managerData = {
   canManage: true,
   myUserId: "me",
@@ -84,6 +89,53 @@ beforeEach(() => {
   ])
     m.mockReset();
   loadFolderAccess.mockResolvedValue({ ok: true, data: managerData });
+  loadFolderGuestIds.mockReset();
+  loadFolderGuestIds.mockResolvedValue({ ok: true, data: [] });
+});
+
+describe("ShareFolderDialog guest badge", () => {
+  const twoMembers = {
+    ...managerData,
+    members: [
+      { userId: "u1", fullName: "Dana Lee", avatarUrl: null, level: "viewer" },
+      { userId: "u3", fullName: "Gil Guest", avatarUrl: null, level: "viewer" },
+    ],
+  };
+
+  it("marks the members who are guests, and only them", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    loadFolderGuestIds.mockResolvedValue({ ok: true, data: ["u3"] });
+    open();
+    const guestRow = (await screen.findByText("Gil Guest")).closest("li")!;
+    expect(guestRow).toHaveTextContent("Guest");
+    expect(loadFolderGuestIds).toHaveBeenCalledWith({ folderId: "f1" });
+    const memberRow = screen.getByText("Dana Lee").closest("li")!;
+    expect(memberRow.textContent).not.toMatch(/Guest/);
+    expect(screen.getAllByText("Guest")).toHaveLength(1);
+  });
+
+  it("shows no badge when nobody is a guest", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    open();
+    await screen.findByText("Gil Guest");
+    expect(screen.queryByText("Guest")).toBeNull();
+  });
+
+  it("still lists the people when the guest read fails or throws", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    loadFolderGuestIds.mockResolvedValue({ ok: false, error: "nope" });
+    const first = open();
+    expect(await screen.findByText("Dana Lee")).toBeInTheDocument();
+    expect(screen.queryByText("Guest")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    first.unmount();
+
+    loadFolderGuestIds.mockRejectedValue(new Error("network"));
+    open();
+    expect(await screen.findByText("Dana Lee")).toBeInTheDocument();
+    expect(screen.queryByText("Guest")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("ShareFolderDialog", () => {
