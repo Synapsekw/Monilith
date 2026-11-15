@@ -17,6 +17,7 @@ import {
 } from "./format-workbook";
 import type { BoardPayload } from "@/lib/boards/queries";
 import { currencyOf } from "@/lib/boards/currency";
+import { relationCellTexts } from "@/lib/boards/relations";
 
 /** Characters forbidden in Excel worksheet names. */
 const FORBIDDEN_WS_NAME_RE = /[\[\]*?/\\:]/g;
@@ -88,6 +89,17 @@ export async function buildExportWorkbook(
       cellLookup.set(cv.item_id, colMap);
     }
     colMap.set(cv.column_id, cv.value);
+  }
+  // Relation columns have no cell value — their links live in `relation_links`.
+  // Seed the lookup with each relation cell's linked item names as text so the
+  // column exports what the board shows instead of a blank.
+  for (const cell of relationCellTexts(payload.relationLinks)) {
+    let colMap = cellLookup.get(cell.itemId);
+    if (!colMap) {
+      colMap = new Map();
+      cellLookup.set(cell.itemId, colMap);
+    }
+    colMap.set(cell.columnId, { text: cell.text });
   }
 
   // Sort groups by position

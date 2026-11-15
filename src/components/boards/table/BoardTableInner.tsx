@@ -55,6 +55,7 @@ import { type EditorMember } from "@/components/boards/cells/editors";
 import { NO_GRANTS, NO_MEMBERS } from "@/components/boards/empty-props";
 import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
+import { relationFitValues, withRelationText } from "@/lib/boards/relations";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { firstStatusColumn } from "@/lib/boards/overdue";
 import { countOptionUsage } from "@/lib/boards/option-edit";
@@ -384,13 +385,29 @@ export function BoardTableInner({
     () => ({ ...filter.state, q: deferredQ }),
     [filter.state, deferredQ],
   );
+  // Relation columns keep their links outside `cellValues`, so the filter /
+  // sort context gets a cell map with each relation cell's linked item names
+  // overlaid as text. Rebuilt only when the links or the cell map change, and
+  // the same map as `cellMap` on a board with no relation links.
+  const filterCellMap = useMemo(
+    () => withRelationText(cellMap, cache.relationLinks),
+    [cellMap, cache.relationLinks],
+  );
   const predicate = useMemo(
-    () => buildItemPredicate(effectiveFilterState, { columns, cellMap }),
-    [effectiveFilterState, columns, cellMap],
+    () =>
+      buildItemPredicate(effectiveFilterState, {
+        columns,
+        cellMap: filterCellMap,
+      }),
+    [effectiveFilterState, columns, filterCellMap],
   );
   const comparator = useMemo(
-    () => buildItemComparator(effectiveFilterState, { columns, cellMap }),
-    [effectiveFilterState, columns, cellMap],
+    () =>
+      buildItemComparator(effectiveFilterState, {
+        columns,
+        cellMap: filterCellMap,
+      }),
+    [effectiveFilterState, columns, filterCellMap],
   );
   const { visibleItemsByGroup, visibleCount } = useMemo(() => {
     const out = new Map<string, Item[]>();
@@ -506,9 +523,13 @@ export function BoardTableInner({
   // Value columns with no saved width fit their content, like the Name column
   // above. Empty until hydration, so the server and the first client render
   // agree on 180px tracks.
+  const fitCellValues = useMemo(() => {
+    const relation = relationFitValues(cache.relationLinks);
+    return relation.length === 0 ? cellValues : [...cellValues, ...relation];
+  }, [cellValues, cache.relationLinks]);
   const autoFitWidths = useColumnAutoFit({
     columns,
-    cellValues,
+    cellValues: fitCellValues,
     itemCount: items.length,
     members,
     enabled: hydrated,

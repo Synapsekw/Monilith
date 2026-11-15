@@ -94,7 +94,9 @@ const TEXTUAL = new Set([
   "numbers",
   "currency",
 ]);
-const UNMEASURED = new Set(["files", "relation", "mirror", "time_tracking"]);
+const UNMEASURED = new Set(["files", "mirror", "time_tracking"]);
+/** The pencil that edits a relation cell sits beside its chips (24px + gap). */
+const RELATION_EDIT = 28;
 
 const NO_MEMBERS: readonly FitMember[] = [];
 const NO_VALUES: readonly unknown[] = [];
@@ -166,6 +168,28 @@ function fitTextual(
     if (widest >= COLUMN_FIT_MAX) return COLUMN_FIT_MAX;
   }
   return widest + CELL_PAD;
+}
+
+/**
+ * A relation cell shows its linked item names as chips. Its links live outside
+ * `cell_values`, so the caller passes each cell as `{ text }` — the names
+ * joined (`relationFitValues` in relations.ts). With nothing linked yet the
+ * column keeps the default width.
+ */
+function fitRelation(values: readonly unknown[], measure: FitMeasure): number {
+  const seen = new Set<string>();
+  let widest = 0;
+  for (const raw of values) {
+    const text = asObj(raw)?.text;
+    if (typeof text !== "string" || !text || seen.has(text)) continue;
+    seen.add(text);
+    if (text.length > LONG_TEXT_CHARS) return COLUMN_FIT_MAX;
+    const w = measure(text, "chip") + CHIP_PAD;
+    if (w > widest) widest = w;
+    if (widest >= COLUMN_FIT_MAX) return COLUMN_FIT_MAX;
+  }
+  if (widest === 0) return COLUMN_FIT_DEFAULT;
+  return widest + CELL_PAD + RELATION_EDIT;
 }
 
 function fitOptions(
@@ -286,6 +310,7 @@ export function fitColumnWidth(
   let content: number;
   if (fixed !== undefined) content = fixed;
   else if (UNMEASURED.has(column.kind)) content = COLUMN_FIT_DEFAULT;
+  else if (column.kind === "relation") content = fitRelation(values, measure);
   else if (column.kind === "status" || column.kind === "dropdown")
     content = fitOptions(column.kind, values, settings, measure);
   else if (column.kind === "people")

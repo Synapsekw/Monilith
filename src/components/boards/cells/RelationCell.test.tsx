@@ -56,11 +56,66 @@ describe("RelationCell", () => {
     ).toBeInTheDocument();
   });
 
-  it("read-only cells render chips but no editor button is disabled-interactive", () => {
+  it("read-only cells render chips and no editor", () => {
     render(<RelationCell {...base} readOnly links={[mk("a", "A", 0)]} />);
+    expect(screen.getByText("A")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Edit linked items" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Edit linked items" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("tints a chip with the linked item's status colour and names the status", () => {
+    render(
+      <RelationCell
+        {...base}
+        links={[
+          {
+            ...mk("a", "Handover accepted", 0),
+            linkedItemStatus: { label: "Completed", color: "#00c875" },
+          },
+        ]}
+      />,
+    );
+    const chip = screen.getByText("Handover accepted").parentElement!;
+    expect(chip.style.getPropertyValue("--pill")).toBe("#00c875");
+    // Not colour alone: the status is in the tooltip too.
+    expect(
+      screen.getByTitle("Handover accepted · Completed"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a chip neutral when the linked item has no status", () => {
+    render(<RelationCell {...base} links={[mk("a", "A", 0)]} />);
+    const chip = screen.getByText("A").parentElement!;
+    expect(chip.style.getPropertyValue("--pill")).toBe("");
+    expect(chip.className).toContain("border");
+  });
+
+  it("links each chip to its item on the target board", () => {
+    render(
+      <RelationCell
+        {...base}
+        targetBoardId="tb1"
+        links={[mk("a", "Handover accepted", 0)]}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Open Handover accepted/ });
+    expect(link).toHaveAttribute("href", "/boards/tb1?item=t-a");
+  });
+
+  it("renders chips as plain labels when the target board is unknown", () => {
+    render(<RelationCell {...base} links={[mk("a", "A", 0)]} />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("keeps editing on its own button next to a filled cell's chips", () => {
+    render(
+      <RelationCell {...base} targetBoardId="tb1" links={[mk("a", "A", 0)]} />,
+    );
+    const edit = screen.getByRole("button", { name: "Edit linked items" });
+    // The chip link is a sibling of the editor, never nested inside it.
+    expect(edit.querySelector("a")).toBeNull();
+    expect(edit.className).toContain("pointer-coarse:size-11");
   });
 
   // ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────

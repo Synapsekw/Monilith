@@ -370,6 +370,70 @@ describe("buildExportWorkbook — people column", () => {
   });
 });
 
+describe("buildExportWorkbook — relation column", () => {
+  function makeRelationPayload(): BoardPayload {
+    const p = makePayload();
+    p.columns.push({
+      id: "col-rel",
+      name: "Clients",
+      kind: "relation",
+      board_id: "board-1",
+      org_id: "org-1",
+      position: 3,
+      settings: {},
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      width: null,
+    } as unknown as BoardPayload["columns"][number]);
+    const mk = (
+      id: string,
+      itemId: string,
+      name: string | null,
+      position: number,
+    ): BoardPayload["relationLinks"][number] => ({
+      id,
+      itemId,
+      columnId: "col-rel",
+      linkedItemId: `target-${id}`,
+      linkedItemName: name,
+      position,
+    });
+    p.relationLinks.push(
+      mk("l2", "item-1", "Globex", 1),
+      mk("l1", "item-1", "Acme Corp", 0),
+      mk("l3", "item-1", null, 2),
+      mk("l4", "item-2", "Initech", 0),
+    );
+    return p;
+  }
+
+  it("exports linked item names joined in position order, hidden names skipped", async () => {
+    const { buffer } = await buildExportWorkbook(makeRelationPayload(), "csv");
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    const idx = parsed.header.indexOf("Clients");
+    expect(idx).toBeGreaterThan(-1);
+    expect(parsed.rows[0][idx]).toBe("Acme Corp, Globex");
+    // The subitem row carries its own links.
+    expect(parsed.rows[1][idx]).toBe("Initech");
+  });
+
+  it("exports the same text in xlsx", async () => {
+    const { buffer } = await buildExportWorkbook(makeRelationPayload(), "xlsx");
+    const parsed = await parseWorkbook(buffer, "export.xlsx");
+    const idx = parsed.header.indexOf("Clients");
+    expect(parsed.rows[0][idx]).toBe("Acme Corp, Globex");
+  });
+
+  it("exports blank for a row with no links", async () => {
+    const p = makeRelationPayload();
+    p.relationLinks.length = 0;
+    const { buffer } = await buildExportWorkbook(p, "csv");
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    const idx = parsed.header.indexOf("Clients");
+    expect(parsed.rows[0][idx] ?? "").toBe("");
+  });
+});
+
 describe("buildExportWorkbook — XLSX export", () => {
   it("emits correct mime and ext for xlsx", async () => {
     const payload = makePayload();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardOperatorsForKind,
   operatorsForKind,
   valueControlFor,
   OPERATOR_LABEL,
@@ -40,6 +41,29 @@ describe("operatorsForKind", () => {
       "is_empty",
       "not_empty",
     ]);
+  });
+});
+
+describe("boardOperatorsForKind", () => {
+  it("offers text matching + empties for relation (board filter only)", () => {
+    expect(boardOperatorsForKind("relation")).toEqual([
+      "contains",
+      "eq",
+      "is_empty",
+      "not_empty",
+    ]);
+  });
+  it("leaves relation at empties-only for the server-evaluated builders", () => {
+    expect(operatorsForKind("relation")).toEqual(["is_empty", "not_empty"]);
+  });
+  it("matches operatorsForKind for every other kind", () => {
+    for (const kind of ["text", "status", "numbers", "date", "people"]) {
+      expect(boardOperatorsForKind(kind)).toEqual(operatorsForKind(kind));
+    }
+  });
+  it("relation value input is free text", () => {
+    expect(valueControlFor("relation", "contains")).toBe("text");
+    expect(valueControlFor("relation", "is_empty")).toBe("none");
   });
 });
 

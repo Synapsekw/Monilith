@@ -264,6 +264,137 @@ describe("getBoardPayload error contract", () => {
   });
 });
 
+describe("getBoardPayload linked-item status", () => {
+  const RELATION_COL = {
+    id: "rc1",
+    board_id: "b11",
+    org_id: "o1",
+    kind: "relation",
+    name: "Milestone",
+    position: 0,
+    width: null,
+    settings: { target_board_id: "tb1", allow_multiple: false },
+  };
+  const LINK = {
+    id: "rl1",
+    item_id: "i1",
+    column_id: "rc1",
+    linked_item_id: "m1",
+    position: 0,
+  };
+  const TARGET_STATUS_COL = {
+    id: "ts1",
+    position: 1,
+    settings: {
+      options: [{ id: "o-done", label: "Completed", color: "#00c875" }],
+    },
+  };
+
+  /** Routes each read by table plus the filter that tells the follow-up reads
+   *  (linked names, target status columns, linked status cells) apart from the
+   *  board-scoped ones on the same table. */
+  function relationMock(opts: {
+    boardId: string;
+    statusCells: Result;
+    seen?: Record<string, [string, unknown[]][]>;
+  }) {
+    return (table: string) => {
+      const filters: [string, unknown[]][] = [];
+      const pick = (): Result => {
+        const inOn = (col: string) =>
+          filters.some(([m, a]) => m === "in" && a[0] === col);
+        if (table === "boards")
+          return { data: { ...BOARD_ROW, id: opts.boardId }, error: null };
+        if (table === "relation_links") return { data: [LINK], error: null };
+        if (table === "columns")
+          return {
+            data: inOn("board_id") ? [TARGET_STATUS_COL] : [RELATION_COL],
+            error: null,
+          };
+        if (table === "items")
+          return {
+            data: inOn("id") ? [{ id: "m1", name: "Handover accepted" }] : [],
+            error: null,
+          };
+        if (table === "cell_values" && inOn("item_id")) return opts.statusCells;
+        return { data: [], error: null };
+      };
+      const chain: Record<string, unknown> = {};
+      for (const m of [
+        "select",
+        "eq",
+        "is",
+        "order",
+        "limit",
+        "range",
+        "not",
+        "in",
+        "or",
+      ])
+        chain[m] = (...args: unknown[]) => {
+          filters.push([m, args]);
+          if (opts.seen) (opts.seen[table] ??= []).push([m, args]);
+          return chain;
+        };
+      chain.maybeSingle = async () => pick();
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(pick());
+      return chain;
+    };
+  }
+
+  it("attaches the linked item's status label and colour to each link", async () => {
+    const seen: Record<string, [string, unknown[]][]> = {};
+    from.mockImplementation(
+      relationMock({
+        boardId: "b11",
+        seen,
+        statusCells: {
+          data: [
+            { item_id: "m1", column_id: "ts1", value: { optionId: "o-done" } },
+          ],
+          error: null,
+        },
+      }),
+    );
+
+    const payload = await getBoardPayload("b11");
+
+    expect(payload?.relationLinks).toEqual([
+      expect.objectContaining({
+        linkedItemId: "m1",
+        linkedItemName: "Handover accepted",
+        linkedItemStatus: { label: "Completed", color: "#00c875" },
+      }),
+    ]);
+    // The status read is bounded to the linked items and to status columns.
+    expect(seen["cell_values"]).toContainEqual(["in", ["item_id", ["m1"]]]);
+    expect(seen["cell_values"]).toContainEqual([
+      "eq",
+      ["columns.kind", "status"],
+    ]);
+    expect(seen["columns"]).toContainEqual(["in", ["board_id", ["tb1"]]]);
+  });
+
+  it("still loads the board when the status read fails (chips stay neutral)", async () => {
+    from.mockImplementation(
+      relationMock({
+        boardId: "b12",
+        statusCells: { data: null, error: { message: "status read broke" } },
+      }),
+    );
+
+    const payload = await getBoardPayload("b12");
+
+    expect(payload?.relationLinks).toEqual([
+      expect.objectContaining({
+        linkedItemName: "Handover accepted",
+        linkedItemStatus: null,
+      }),
+    ]);
+  });
+});
+
 describe("getBoardPayload dependencies read", () => {
   function recordingMock(calls: Record<string, [string, unknown[]][]>) {
     return (table: string) => {

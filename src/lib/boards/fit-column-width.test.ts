@@ -212,9 +212,33 @@ describe("fitColumnWidth — fixed and unmeasured kinds", () => {
     expect(fitColumnWidth(col("checkbox", "Done?"), [], measure)).toBe(84);
   });
 
-  it("files, relation, mirror and time tracking stay at 180 and are not measured", () => {
+  it("a relation column fits its widest chip plus the edit pencil", () => {
+    // "Handover accepted" → 17 × 7 = 119 chip text + 20 chip pad + 16 cell pad
+    // + 28 pencil = 183.
+    expect(
+      fitColumnWidth(
+        col("relation", "X"),
+        [{ text: "Short" }, { text: "Handover accepted" }, null],
+        measure,
+      ),
+    ).toBe(183);
+  });
+
+  it("a relation column with nothing linked keeps the default width", () => {
+    expect(fitColumnWidth(col("relation", "X"), [], measure)).toBe(
+      COLUMN_FIT_DEFAULT,
+    );
+  });
+
+  it("a relation column is capped like every other column", () => {
+    expect(
+      fitColumnWidth(col("relation", "X"), [{ text: "m".repeat(80) }], measure),
+    ).toBe(COLUMN_FIT_MAX);
+  });
+
+  it("files, mirror and time tracking stay at 180 and are not measured", () => {
     const spy = vi.fn(measure);
-    for (const kind of ["files", "relation", "mirror", "time_tracking"]) {
+    for (const kind of ["files", "mirror", "time_tracking"]) {
       expect(fitColumnWidth(col(kind, "X"), [{ anything: 1 }], spy)).toBe(
         COLUMN_FIT_DEFAULT,
       );
