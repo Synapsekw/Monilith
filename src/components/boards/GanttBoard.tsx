@@ -381,8 +381,9 @@ function GanttBoardInner({
         columns: cache.columns,
         cellMap,
         todayISO: today,
+        board: cache.board,
       }),
-    [cache.items, cache.columns, cellMap, today],
+    [cache.items, cache.columns, cache.board, cellMap, today],
   );
   const groupOfItem = useMemo(
     () => new Map(cache.items.map((i) => [i.id, i.group_id])),

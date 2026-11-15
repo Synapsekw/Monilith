@@ -10,6 +10,7 @@ import {
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
 import {
+  isDueColumn,
   isOverdue,
   isStatusValueComplete,
   localTodayISO,
@@ -111,10 +112,11 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
   const dependentsByItem = controls.dependentsByItem;
   // O(1) completeness for the overdue tint — see the note in ItemRow.
   const complete = isStatusValueComplete(
-    controls.statusColumn
-      ? (cellMap.get(cellKey(sub.id, controls.statusColumn.id)) ?? null)
+    controls.workRule.statusColumn
+      ? (cellMap.get(cellKey(sub.id, controls.workRule.statusColumn.id)) ??
+          null)
       : null,
-    controls.statusColumn,
+    controls.workRule,
   );
   // Temp-row rule — see the equivalent note in ./ItemRow.
   const pending = isOptimisticId(sub.id);
@@ -214,7 +216,9 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
             value={value}
             controls={controls}
             overdue={
-              col.kind === "date" && isOverdue(value, todayISO) && !complete
+              isDueColumn(controls.workRule, col.id) &&
+              isOverdue(value, todayISO) &&
+              !complete
             }
             dependents={
               col.kind === "priority"

@@ -26,8 +26,8 @@ export const SIGNAL_TONE: Record<SignalKind, SignalTone> = {
 };
 
 /**
- * Status option labels that read as "blocked" — the same label-regex idiom
- * `src/lib/boards/overdue.ts` uses for done (/done|complete/i). The default
+ * Status option labels that read as "blocked" — a label guess, like the
+ * done guess in `src/lib/boards/work-guess.ts`. The default
  * status column ships a "Stuck" option (`src/lib/boards/column-defaults.ts`).
  * Word-bounded: a bare substring match made "Unstuck" — the opposite state —
  * count as blocked.

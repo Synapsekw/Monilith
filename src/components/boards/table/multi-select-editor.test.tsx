@@ -51,6 +51,7 @@ function controls(over: Partial<CellControls> = {}): CellControls {
       { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
     ],
     renameItemInCache: vi.fn(),
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     ...over,
   } as unknown as CellControls;
 }

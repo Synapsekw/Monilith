@@ -26,6 +26,7 @@ const row = (
   minDue: null,
   maxDue: null,
   ...o,
+  doneDated: o.doneDated ?? o.done ?? 0,
 });
 
 describe("stageKey", () => {

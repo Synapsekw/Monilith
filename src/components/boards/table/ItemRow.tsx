@@ -10,6 +10,7 @@ import {
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
 import {
+  isDueColumn,
   isOverdue,
   isStatusValueComplete,
   localTodayISO,
@@ -163,14 +164,15 @@ export const ItemRow = memo(function ItemRow({
   // not recomputed per visible row.
   const dependentsByItem = controls.dependentsByItem;
   // Completeness for the overdue tint: one lookup of this item's cell in the
-  // board's first status column (resolved once per table render and threaded
+  // Work tracking rule's status column (resolved once per table render and threaded
   // via `controls`), instead of a filter+sort of every column and a scan of
   // every cell value on the board — per date cell, per render.
   const complete = isStatusValueComplete(
-    controls.statusColumn
-      ? (cellMap.get(cellKey(item.id, controls.statusColumn.id)) ?? null)
+    controls.workRule.statusColumn
+      ? (cellMap.get(cellKey(item.id, controls.workRule.statusColumn.id)) ??
+          null)
       : null,
-    controls.statusColumn,
+    controls.workRule,
   );
   // Temp-row rule (@/lib/boards/optimistic-id): until the server hands back a
   // real id, no id-keyed write may fire. Reorder and delete both are — the
@@ -340,7 +342,9 @@ export const ItemRow = memo(function ItemRow({
             value={value}
             controls={controls}
             overdue={
-              col.kind === "date" && isOverdue(value, todayISO) && !complete
+              isDueColumn(controls.workRule, col.id) &&
+              isOverdue(value, todayISO) &&
+              !complete
             }
             dependents={
               col.kind === "priority"

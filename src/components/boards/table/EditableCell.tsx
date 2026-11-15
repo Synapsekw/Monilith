@@ -256,16 +256,16 @@ export const EditableCell = memo(function EditableCell({
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
             if (column.kind === "status" && statusOptionChanged(value, v)) {
-              // "Done" is the Command Center's rule, not a second one: the
-              // board's FIRST status column holding a done/complete option
-              // (@/lib/boards/overdue, mirroring _board_health_flags). A
-              // second status column never completes an item, so it pops
-              // without a burst.
-              const first = controls.statusColumn;
+              // "Done" is the board's Work tracking rule, not a second one:
+              // the rule's status column holding one of its done options
+              // (@/lib/boards/overdue, twin of public.item_facts). Any other
+              // status column never completes an item, so it pops without a
+              // burst.
+              const rule = controls.workRule;
               const becameDone =
-                first?.id === column.id &&
-                !isStatusValueComplete(value, first) &&
-                isStatusValueComplete(v, first);
+                rule.statusColumn?.id === column.id &&
+                !isStatusValueComplete(value, rule) &&
+                isStatusValueComplete(v, rule);
               celebrateStatusEdit(() => cellRef.current, becameDone);
             }
             // Multi-value kinds (people, multi-select dropdown) commit once

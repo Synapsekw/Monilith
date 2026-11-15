@@ -3,12 +3,17 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  dueDateOf,
+  guessCompletedOption,
   guessDueColumn,
   guessStatusColumn,
+  isDoneOption,
+  isOverdueOn,
   looksBaselineName,
   looksDueName,
   looksDoneLabel,
   looksStartName,
+  resolveWorkRule,
   WORK_GUESS_SQL,
 } from "./work-guess";
 
@@ -190,6 +195,138 @@ describe("guessStatusColumn", () => {
       date("d", "Due", 0),
     ];
     expect(guessStatusColumn(cols)?.id).toBe("x");
+  });
+});
+
+describe("resolveWorkRule (the three choices item_facts makes per board)", () => {
+  const status = (id: string, position: number): Col => ({
+    id,
+    name: id,
+    kind: "status",
+    position,
+  });
+  const columns: Col[] = [
+    status("s2", 2),
+    status("s1", 1),
+    date("start", "Start", 3),
+    date("due", "Due", 4),
+    date("review", "Review", 5),
+    { id: "t", name: "Notes", kind: "text", position: 0 },
+  ];
+  const none = {
+    work_status_column_id: null,
+    work_done_option_ids: null,
+    work_due_column_id: null,
+  };
+
+  it("guesses everything when nothing is configured (or no settings are passed)", () => {
+    for (const rule of [
+      resolveWorkRule(columns),
+      resolveWorkRule(columns, none),
+    ]) {
+      expect(rule.statusColumn?.id).toBe("s1");
+      expect(rule.doneOptionIds).toBeNull();
+      expect(rule.dueColumn?.id).toBe("due");
+    }
+  });
+
+  it("takes the configured status column, done options and due column", () => {
+    const rule = resolveWorkRule(columns, {
+      work_status_column_id: "s2",
+      work_done_option_ids: ["x"],
+      work_due_column_id: "review",
+    });
+    expect(rule.statusColumn?.id).toBe("s2");
+    expect(rule.doneOptionIds).toEqual(["x"]);
+    expect(rule.dueColumn?.id).toBe("review");
+  });
+
+  it("done options apply only while a status column is configured", () => {
+    const rule = resolveWorkRule(columns, {
+      ...none,
+      work_done_option_ids: ["x"],
+    });
+    expect(rule.statusColumn?.id).toBe("s1");
+    expect(rule.doneOptionIds).toBeNull();
+  });
+
+  it("a stale or wrong-kind configured column gives no column, never the guess", () => {
+    const rule = resolveWorkRule(columns, {
+      work_status_column_id: "due", // a date column
+      work_done_option_ids: null,
+      work_due_column_id: "gone",
+    });
+    expect(rule.statusColumn).toBeNull();
+    expect(rule.dueColumn).toBeNull();
+  });
+});
+
+describe("isDoneOption", () => {
+  it("guess: the label decides", () => {
+    const rule = { doneOptionIds: null };
+    expect(isDoneOption(rule, "a", "Done")).toBe(true);
+    expect(isDoneOption(rule, "a", "Cancelled")).toBe(true);
+    expect(isDoneOption(rule, "a", "Incomplete")).toBe(false);
+    expect(isDoneOption(rule, "a", null)).toBe(false);
+    expect(isDoneOption(rule, null, "Done")).toBe(false);
+  });
+
+  it("configured: the ids decide, whatever the label says", () => {
+    const rule = { doneOptionIds: ["shipped"] };
+    expect(isDoneOption(rule, "shipped", "Shipped")).toBe(true);
+    expect(isDoneOption(rule, "done", "Done")).toBe(false);
+    expect(isDoneOption(rule, "", "Done")).toBe(false);
+  });
+
+  it("configured with an empty list: nothing is done", () => {
+    expect(isDoneOption({ doneOptionIds: [] }, "done", "Done")).toBe(false);
+  });
+});
+
+describe("dueDateOf / isOverdueOn", () => {
+  it.each([
+    [{ date: "2026-03-04" }, "2026-03-04"],
+    [{ date: "2026-03-01", end: "2026-03-09" }, "2026-03-09"],
+    [{ date: "2026-03-01", end: "" }, "2026-03-01"],
+    [{ date: "2026-03-04T08:00:00Z" }, "2026-03-04"],
+    [{ date: "2026-02-31" }, null],
+    [{ date: "2026-13-01" }, null],
+    [{ date: "TBD" }, null],
+    [{ date: "2026-03-01", end: "TBD" }, null],
+    [{}, null],
+    [null, null],
+    ["2026-03-04", null],
+  ])("%j -> %s", (value, expected) => {
+    expect(dueDateOf(value)).toBe(expected);
+  });
+
+  it("overdue = open and due strictly before today", () => {
+    expect(isOverdueOn("2026-03-04", false, "2026-03-05")).toBe(true);
+    expect(isOverdueOn("2026-03-05", false, "2026-03-05")).toBe(false);
+    expect(isOverdueOn("2026-03-04", true, "2026-03-05")).toBe(false);
+    expect(isOverdueOn(null, false, "2026-03-05")).toBe(false);
+  });
+});
+
+describe("guessCompletedOption (the option an automation SETS)", () => {
+  const o = (label: string) => ({ id: label, label });
+
+  it("prefers a completed option over a cancelled one, whatever the order", () => {
+    expect(
+      guessCompletedOption([o("Cancelled"), o("Working"), o("Done")])?.label,
+    ).toBe("Done");
+  });
+
+  it("falls back to a cancelled option when it is the only done-looking one", () => {
+    expect(guessCompletedOption([o("Working"), o("Cancelled")])?.label).toBe(
+      "Cancelled",
+    );
+  });
+
+  it("never picks a negated label", () => {
+    expect(
+      guessCompletedOption([o("Incomplete"), o("Not done")]),
+    ).toBeUndefined();
   });
 });
 

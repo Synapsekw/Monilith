@@ -81,6 +81,7 @@ export async function runBoardIntelligence(input: {
       cellValues: payload.cellValues,
       groups: payload.groups,
       dependencies: payload.dependencies,
+      board: payload.board,
     };
     const signals = computeSignals(signalsInput, {
       now,

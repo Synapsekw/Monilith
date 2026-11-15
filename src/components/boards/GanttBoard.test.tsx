@@ -1255,8 +1255,19 @@ describe("GanttBoard — grouped rows", () => {
 
 describe("GanttBoard — late bars and range", () => {
   it("marks an open, past-due item late and leaves a done one alone", () => {
-    // twoColPayload: "Spanned" is Done; "DotOnly" (2026-06-03) has no status.
-    renderBoard(twoColPayload());
+    // twoColPayload: "Spanned" is Done; "DotOnly" (2026-06-03) has no status
+    // and only a Start Date. Late follows the board's ONE due column, so this
+    // board names Start Date as its due column (Work tracking).
+    const payload = twoColPayload() as unknown as { board: object };
+    renderBoard({
+      ...payload,
+      board: {
+        ...payload.board,
+        work_status_column_id: null,
+        work_done_option_ids: null,
+        work_due_column_id: START_COL,
+      },
+    } as never);
     expect(screen.getByLabelText(barLabel("DotOnly"))).toHaveClass(
       "border-destructive",
     );
@@ -1264,6 +1275,15 @@ describe("GanttBoard — late bars and range", () => {
       "border-destructive",
     );
     expect(screen.getByText(/^\d+d late$/)).toBeInTheDocument();
+  });
+
+  it("a past Start date alone is not late: only the due column counts", () => {
+    // No settings: the guess picks "Due Date", where DotOnly has no value.
+    renderBoard(twoColPayload());
+    expect(screen.getByLabelText(barLabel("DotOnly"))).not.toHaveClass(
+      "border-destructive",
+    );
+    expect(screen.queryByText(/^\d+d late$/)).toBeNull();
   });
 
   it("widens the range so today is on the grid even when all dates are old", () => {

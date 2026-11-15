@@ -2,18 +2,23 @@
 
 import type { StatusColumn } from "@/lib/portfolios/queries";
 import { Label } from "@/components/ui/label";
+import { looksDoneLabel } from "@/lib/boards/work-guess";
 import { cn } from "@/lib/utils";
 
-const DONE_RE = /done|complete|closed|shipped/i;
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30";
 
-/** Default "done" option ids for a status column, guessed by option label. */
+/**
+ * Default "done" option ids for a status column: the shared Work tracking
+ * guess (`looksDoneLabel`), so the suggestion matches what boards, Today and
+ * folders treat as done. Only a starting point: the user's saved mapping is
+ * what counts afterwards.
+ */
 export function defaultDoneOptionIds(
   column: StatusColumn | undefined,
 ): string[] {
   if (!column) return [];
-  return column.options.filter((o) => DONE_RE.test(o.label)).map((o) => o.id);
+  return column.options.filter((o) => looksDoneLabel(o.label)).map((o) => o.id);
 }
 
 export type DoneMappingFieldsProps = {

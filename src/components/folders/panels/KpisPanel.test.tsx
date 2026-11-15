@@ -97,6 +97,46 @@ describe("KpisPanel", () => {
     expect(series(/^Due this week/)[0]).toBe(k.dueThisWeek);
   });
 
+  it("says the gap counts dated items, and keeps done items without a due date out of it", () => {
+    // Every done item loses its due date: Complete is unchanged, the gap is
+    // now 0 − planned, where it used to be done − planned.
+    const rows = fx.rollup!.map((r) => ({ ...r, doneDated: 0 }));
+    const undated = computeKpis(rows, FIXTURE_TODAY);
+    expect(undated.gap).toBe(-undated.plannedByToday);
+    expect(undated.donePct).toBe(k.donePct);
+    renderPanel({ rows });
+    expect(screen.getByText("dated items: done − planned")).toBeInTheDocument();
+    expect(screen.getByText(String(undated.gap))).toBeInTheDocument();
+  });
+
+  it("draws the Complete trend on the card's basis when some done items have no due date", () => {
+    // 5 of the done items have no due date, so the burn rows (dated items
+    // only) hold 5 fewer completions than the card counts.
+    const rows = fx.rollup!;
+    const total = k.total;
+    const withUndated = [
+      { ...rows[0]!, done: rows[0]!.done + 5, total: rows[0]!.total + 5 },
+      ...rows.slice(1),
+    ];
+    const kk = computeKpis(withUndated, FIXTURE_TODAY);
+    expect(kk.done - kk.doneDated).toBe(5);
+    renderPanel({
+      rows: withUndated,
+      burn: COVERS_TODAY,
+      stage: null,
+      board: null,
+    });
+    const points = screen
+      .getByRole("img", { name: /^Complete/ })
+      .getAttribute("aria-label")!
+      .split(": ")[1]!
+      .split(", ")
+      .map(Number);
+    // First charted week: 2 dated completions + the 5 undated ones.
+    expect(points[0]).toBe(Math.round(((2 + 5) / (total + 5)) * 100));
+    expect(points.at(-1)).toBe(kk.donePct);
+  });
+
   it("states more overdue as a red pill and more complete as a green one", () => {
     // Last week: one fewer overdue than the card, and one item complete. The
     // first week has a real completion, so history starts there (the

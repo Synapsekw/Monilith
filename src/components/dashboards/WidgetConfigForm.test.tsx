@@ -164,8 +164,9 @@ describe("WidgetConfigForm", () => {
     fireEvent.change(screen.getByLabelText("Status column"), {
       target: { value: "s1" },
     });
-    // "Done" and "Complete" match /done|complete|finished/i; "In Progress"
-    // does not — the preset is editable via the checkboxes afterwards.
+    // "Done" and "Complete" look done under the shared Work tracking guess
+    // (looksDoneLabel); "In Progress" does not — the preset is editable via
+    // the checkboxes afterwards.
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({

@@ -148,7 +148,7 @@ describe("temp-row read-only rule", () => {
 function rowControls(over: Partial<CellControls> = {}): CellControls {
   return controls({
     dependentsByItem: new Map<string, number>(),
-    statusColumn: null,
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     cache: { items: [], cellValues: [], attachments: [], timeEntries: [] },
     ...over,
   } as Partial<CellControls>);

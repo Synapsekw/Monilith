@@ -22,8 +22,15 @@
 //  * exotic code points: JS `iu` folds the Kelvin sign (U+212A) to k, Postgres
 //    `~*` does not.
 //
-// Other surfaces (overdue tint, board intelligence, goals, dashboards, health
-// flags) still use the older /done|complete/i rule; they are not unified yet.
+// ONE RULE (2026-11-15, vault/decisions decision-46): every surface reads done,
+// the due date and overdue through this rule. In SQL: item_facts, and through
+// it Today, My Work, query_items, the health widget, the weekly digest and
+// every folder RPC (_work_item_flags). In TypeScript: `resolveWorkRule` below,
+// used by the board's overdue tint, done burst, group progress, timeline
+// "late", Board Intelligence signals and reports (via @/lib/boards/overdue).
+// Goals, portfolios, the dashboard completion widget and automations keep the
+// done mapping the user stored per link; only their DEFAULT suggestion calls
+// `looksDoneLabel`.
 
 const NOT_LETTER_BEFORE = "(^|[^[:alpha:]])";
 const NOT_LETTER_AFTER = "([^[:alpha:]]|$)";
@@ -62,6 +69,19 @@ const NOT_DONE_LABEL =
 export function looksDoneLabel(label: string | null | undefined): boolean {
   if (!label) return false;
   return DONE_LABEL.test(label) && !NOT_DONE_LABEL.test(label);
+}
+
+/**
+ * The option to SET when work completes (automation recipes): the first one
+ * that looks done and is not a cancellation, else the first that looks done.
+ * "Cancelled" counts as done when READING a board, but it is not what
+ * "Completed sets 100%" should write.
+ */
+export function guessCompletedOption<T extends { label: string }>(
+  options: readonly T[],
+): T | undefined {
+  const done = options.filter((o) => looksDoneLabel(o.label));
+  return done.find((o) => !/cancel/iu.test(o.label)) ?? done[0];
 }
 
 export function looksDueName(name: string): boolean {
@@ -125,4 +145,98 @@ export function guessDueColumn<T extends GuessColumn>(
       }
       return byPositionThenId(a, b);
     })[0];
+}
+
+/** A board's Work tracking settings (`boards.work_*`); all null = guess. */
+export type WorkTrackingSettings = {
+  work_status_column_id: string | null;
+  work_done_option_ids: string[] | null;
+  work_due_column_id: string | null;
+};
+
+/**
+ * The rule a board's items are read with: which status column, which of its
+ * options mean done, and which ONE date column is the due date.
+ */
+export type WorkRule<T> = {
+  /** The column completeness is read from, or null (nothing is ever done). */
+  statusColumn: T | null;
+  /** Configured done option ids; null = guess from the option's label. */
+  doneOptionIds: readonly string[] | null;
+  /** The one column that holds the due date, or null (nothing is ever overdue). */
+  dueColumn: T | null;
+};
+
+/**
+ * Twin of the three choices `public.item_facts` makes per board:
+ *  * status column: the configured one (when it is still a status column on
+ *    this board; a stale id gives NO column, never a silent fallback), else
+ *    the guess;
+ *  * done options: the configured ids, which apply only while a status column
+ *    is configured too, else the label guess;
+ *  * due column: the configured one (same stale rule), else the guess.
+ */
+export function resolveWorkRule<T extends GuessColumn>(
+  columns: readonly T[],
+  settings?: Partial<WorkTrackingSettings> | null,
+): WorkRule<T> {
+  const statusId = settings?.work_status_column_id ?? null;
+  const dueId = settings?.work_due_column_id ?? null;
+  const doneIds = settings?.work_done_option_ids ?? null;
+  return {
+    statusColumn:
+      statusId === null
+        ? (guessStatusColumn(columns) ?? null)
+        : (columns.find((c) => c.id === statusId && c.kind === "status") ??
+          null),
+    doneOptionIds: statusId !== null && doneIds !== null ? doneIds : null,
+    dueColumn:
+      dueId === null
+        ? (guessDueColumn(columns) ?? null)
+        : (columns.find((c) => c.id === dueId && c.kind === "date") ?? null),
+  };
+}
+
+/**
+ * Whether a status option means done under `rule`: one of the configured ids,
+ * or, without configured ids, a label that looks done. `label` is the label
+ * of the option the cell holds in the rule's status column (null when the
+ * cell is empty or names an option that no longer exists).
+ */
+export function isDoneOption(
+  rule: Pick<WorkRule<unknown>, "doneOptionIds">,
+  optionId: string | null | undefined,
+  label: string | null | undefined,
+): boolean {
+  if (!optionId) return false;
+  if (rule.doneOptionIds !== null) return rule.doneOptionIds.includes(optionId);
+  return looksDoneLabel(label);
+}
+
+/**
+ * The due date a date cell carries, as `YYYY-MM-DD`, or null. Twin of the
+ * view's `due_date`: `end` when it is a non-empty string, else `date`; the
+ * first ten characters must be a real calendar date ("2026-02-31" and "TBD"
+ * are null).
+ */
+export function dueDateOf(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { date, end } = value as { date?: unknown; end?: unknown };
+  const raw = typeof end === "string" && end !== "" ? end : date;
+  if (typeof raw !== "string") return null;
+  const iso = raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const t = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== iso)
+    return null;
+  return iso;
+}
+
+/** Overdue: open, with a due date strictly before `todayISO`. */
+export function isOverdueOn(
+  due: string | null,
+  done: boolean,
+  todayISO: string,
+): boolean {
+  return !done && due !== null && due < todayISO;
 }

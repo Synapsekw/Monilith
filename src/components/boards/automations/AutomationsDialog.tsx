@@ -52,9 +52,7 @@ import {
   type Draft,
 } from "@/components/boards/automations/recipes";
 import { assertOnline } from "@/lib/offline/online-status";
-
-/** The completeness vocabulary shared with the overdue tint (spec §1). */
-const DONE_LABEL = /done|complete/i;
+import { guessCompletedOption } from "@/lib/boards/work-guess";
 
 function automationsKey(boardId: string) {
   return ["automations", boardId] as const;
@@ -330,13 +328,14 @@ export function AutomationsDialog({
   const canPercentSync =
     pureStatusColumns.length > 0 && percentColumns.length > 0;
 
-  /** First /done|complete/i-labeled option of the first status column
-   *  (fallback: its first option — the builder's picker lets the user correct it). */
+  /** The option of the first status column that the shared Work tracking
+   *  guess reads as "completed" (`guessCompletedOption`; fallback: its first
+   *  option — the builder's picker lets the user correct it). */
   function doneOptionId(): string {
     const opts = pureStatusColumns[0]
       ? columnOptions(pureStatusColumns[0])
       : [];
-    return (opts.find((o) => DONE_LABEL.test(o.label)) ?? opts[0])?.id ?? "";
+    return (guessCompletedOption(opts) ?? opts[0])?.id ?? "";
   }
 
   function startBuild(draft?: Draft) {

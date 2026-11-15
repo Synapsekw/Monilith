@@ -55,6 +55,7 @@ vi.mock("next/navigation", () => ({
 
 const STATUS_COL = "c-status";
 const DATE_COL = "c-date";
+const START_COL = "c-start";
 const DONE_OPT = "opt-done";
 const WORKING_OPT = "opt-working";
 
@@ -88,9 +89,18 @@ function cell(itemId: string, columnId: string, value: unknown) {
   };
 }
 
-function overduePayload() {
+function overduePayload(work: Record<string, unknown> = {}) {
   return {
-    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    board: {
+      id: "b1",
+      org_id: "o1",
+      name: "Board",
+      name_column_width: null,
+      work_status_column_id: null,
+      work_done_option_ids: null,
+      work_due_column_id: null,
+      ...work,
+    },
     groups: [
       {
         id: "g1",
@@ -123,6 +133,18 @@ function overduePayload() {
         org_id: "o1",
         name: "Due date",
         kind: "date",
+        position: 2,
+        width: null,
+        settings: {},
+      },
+      {
+        // Lower position than "Due date", and every item below started in the
+        // past: under the old rule (any past date cell) all of these tinted.
+        id: START_COL,
+        board_id: "b1",
+        org_id: "o1",
+        name: "Start",
+        kind: "date",
         position: 1,
         width: null,
         settings: {},
@@ -140,17 +162,20 @@ function overduePayload() {
       cell("i-done", DATE_COL, { date: localISO(-1) }),
       cell("i-future", STATUS_COL, { optionId: WORKING_OPT }),
       cell("i-future", DATE_COL, { date: localISO(1) }),
+      cell("i-overdue", START_COL, { date: localISO(-9) }),
+      cell("i-done", START_COL, { date: localISO(-9) }),
+      cell("i-future", START_COL, { date: localISO(-9) }),
     ],
     dependencies: [],
     views: [],
   } as never;
 }
 
-function renderBoard() {
+function renderBoard(work: Record<string, unknown> = {}) {
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
-      <BoardTable payload={overduePayload()} selectedViewId="v1" />
+      <BoardTable payload={overduePayload(work)} selectedViewId="v1" />
     </QueryClientProvider>,
   );
 }
@@ -179,6 +204,39 @@ describe("BoardTable overdue date tint", () => {
     expect(
       screen
         .getByRole("button", { name: "Due tomorrow Due date" })
+        .querySelector('[aria-label="Overdue"]'),
+    ).toBeNull();
+  });
+
+  it("never tints a date column that is not the due column (a past Start date)", () => {
+    renderBoard();
+    for (const name of ["Late and not done", "Late but done", "Due tomorrow"])
+      expect(
+        screen
+          .getByRole("button", { name: `${name} Start` })
+          .querySelector('[aria-label="Overdue"]'),
+      ).toBeNull();
+  });
+
+  it("follows the board's Work tracking settings: configured due column and done options", () => {
+    // Start is the configured due column, and "Working on it" the configured
+    // done option. So the open items are the ones marked "Done" by label
+    // (i-done), and the tint moves to the Start column.
+    renderBoard({
+      work_status_column_id: STATUS_COL,
+      work_done_option_ids: [WORKING_OPT],
+      work_due_column_id: START_COL,
+    });
+    const tinted = screen.getAllByLabelText("Overdue");
+    expect(tinted).toHaveLength(1);
+    expect(
+      screen
+        .getByRole("button", { name: "Late but done Start" })
+        .querySelector('[aria-label="Overdue"]'),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "Late and not done Due date" })
         .querySelector('[aria-label="Overdue"]'),
     ).toBeNull();
   });

@@ -35,7 +35,7 @@ function renderRow(boardItems: Item[], selectable = true) {
     addSubitem: vi.fn(),
     deleteItem: vi.fn(),
     dependentsByItem: new Map<string, number>(),
-    statusColumn: null,
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     cache: {
       items: boardItems,
       cellValues: [],

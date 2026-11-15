@@ -342,6 +342,24 @@ describe("OverviewTab", () => {
     expect(burn.style.getPropertyValue("--col")).toBe("1 / span 12");
   });
 
+  it("done items without a due date do not count as work left in the forecast", () => {
+    // Same burn rows; every group gains 50 done items that have no due date.
+    // They are not in the burn's completed line, so they must leave the
+    // forecast's target too: the reading must not change.
+    renderOverview();
+    const before = screen.getByTestId("burn-reading").textContent;
+    cleanup();
+    const fx = folderFixture();
+    renderOverview({
+      rollup: fx.rollup!.map((r) => ({
+        ...r,
+        total: r.total + 50,
+        done: r.done + 50,
+      })),
+    });
+    expect(screen.getByTestId("burn-reading").textContent).toBe(before);
+  });
+
   it("states the same gap in the reading as on the Gap card", () => {
     renderOverview();
     const k = computeKpis(folderFixture().rollup!, FIXTURE_TODAY);

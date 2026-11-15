@@ -97,7 +97,7 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
               color: k.gap < 0 ? "red" : "green",
             }
       }
-      subFact="done − planned"
+      subFact="dated items: done − planned"
       progress={
         k.gap === null || k.total === 0
           ? null
@@ -188,12 +188,21 @@ export function KpisPanel({
   const trends =
     burn === null || board !== null
       ? {}
-      : kpiTrends(burn, stage, todayISO, k.total, {
-          complete: k.donePct,
-          gap: k.gap,
-          overdue: k.overdue,
-          dueThisWeek: k.dueThisWeek,
-        });
+      : kpiTrends(
+          burn,
+          stage,
+          todayISO,
+          k.total,
+          {
+            complete: k.donePct,
+            gap: k.gap,
+            overdue: k.overdue,
+            dueThisWeek: k.dueThisWeek,
+          },
+          // The burn's completed line counts dated items only; the Complete
+          // card counts every done item.
+          k.done - k.doneDated,
+        );
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
   const live = cards.filter((key) => !IS_ZERO[key](k));
   // With no dated items the gap is undefined, and the "No due dates set" chip

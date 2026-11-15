@@ -246,7 +246,7 @@ describe("BurnPanel", () => {
     const fig = screen.getByRole("figure");
     expect(fig).toHaveAttribute(
       "aria-label",
-      "Planned vs completed: 20 planned in total, 13 completed. 7 behind plan today. At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
+      "Planned vs completed, items with a due date: 20 planned in total, 13 completed. 7 behind plan today. At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
     );
     expect(fig).toContainElement(screen.getByTestId("burn-chart"));
   });

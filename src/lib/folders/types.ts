@@ -66,6 +66,8 @@ export type RollupRow = {
   oldestOverdue: string | null;
   minDue: string | null;
   maxDue: string | null;
+  /** Done items that have a due date: the done side of "Gap to plan". */
+  doneDated: number;
 };
 
 export type BurnRow = {
