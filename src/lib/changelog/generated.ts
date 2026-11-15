@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-15",
+    kind: "new",
+    title: "Today on My Work",
+    description:
+      "My Work now opens with a ranked Today list: overdue first, then work someone is waiting on, due soon, unread replies and stalled items, each with the reason it is there.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "The assistant knows your day and your team's work",
+    description:
+      "Ask what to focus on today, how many items each person has, what a teammate is working on, or why an item is still open, and the assistant answers from your boards.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "new",
+    title: "Work tracking per board",
+    description:
+      "Board owners can choose which status means done and which column holds the due date, so Today and the assistant read each board correctly.",
+  },
+  {
     date: "2026-11-14",
     kind: "improved",
     title: "See more of every board",
