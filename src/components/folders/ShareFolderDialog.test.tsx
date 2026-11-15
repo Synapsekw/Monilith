@@ -57,6 +57,22 @@ function open() {
   );
 }
 
+/**
+ * The rows render as soon as the load resolves, but the load runs inside a
+ * transition, so every control stays disabled until that transition ends. Under
+ * load a click in between is a silent no-op. Wait until nothing is disabled
+ * (the Invite submit button is excluded: it is also disabled by an empty field).
+ */
+async function settled() {
+  await waitFor(() =>
+    expect(
+      document.querySelectorAll(
+        "input:disabled, select:disabled, button[type=button]:disabled",
+      ),
+    ).toHaveLength(0),
+  );
+}
+
 beforeEach(() => {
   for (const m of [
     loadFolderAccess,
@@ -87,6 +103,7 @@ describe("ShareFolderDialog", () => {
     shareFolder.mockResolvedValue({ ok: true, data: undefined });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Name or email"), {
       target: { value: "sam" },
     });
@@ -108,6 +125,7 @@ describe("ShareFolderDialog", () => {
     });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Name or email"), {
       target: { value: "pat@x.com" },
     });
@@ -136,6 +154,7 @@ describe("ShareFolderDialog", () => {
     });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Name or email"), {
       target: { value: "old@x.com" },
     });
@@ -155,6 +174,7 @@ describe("ShareFolderDialog", () => {
     inviteToFolder.mockResolvedValue({ ok: true, data: { kind: "shared" } });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Name or email"), {
       target: { value: "sam@x.com" },
     });
@@ -169,6 +189,7 @@ describe("ShareFolderDialog", () => {
   it("flags an invalid email on the field and announces it", async () => {
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     const input = screen.getByLabelText("Name or email");
     fireEvent.change(input, { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
@@ -208,6 +229,7 @@ describe("ShareFolderDialog", () => {
       });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     expect(screen.getByLabelText("Access for Dana Lee")).toHaveValue("viewer");
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
@@ -249,6 +271,7 @@ describe("ShareFolderDialog", () => {
     });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
     });
@@ -275,6 +298,7 @@ describe("ShareFolderDialog", () => {
     leaveFolder.mockResolvedValue({ ok: true, data: undefined });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     expect(screen.queryByLabelText("Name or email")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("Access for Dana Lee"),
@@ -289,6 +313,7 @@ describe("ShareFolderDialog", () => {
     revokeFolderInvitation.mockResolvedValue({ ok: true, data: undefined });
     open();
     await screen.findByText("Invited");
+    await settled();
     fireEvent.click(
       screen.getByRole("button", { name: "Revoke invitation for new@x.com" }),
     );
@@ -307,6 +332,7 @@ describe("ShareFolderDialog", () => {
     });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith("Link copied"));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
@@ -317,6 +343,7 @@ describe("ShareFolderDialog", () => {
   it("gives the icon-only buttons a coarse-pointer size and a name with the person", async () => {
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     for (const name of [
       "Remove Dana Lee",
       "Revoke invitation for new@x.com",
@@ -374,6 +401,7 @@ describe("ShareFolderDialog concurrency", () => {
     inviteToFolder.mockReturnValue(d.promise);
     render(<Harness />);
     await screen.findByText("Dana Lee");
+    await settled();
     typeEmail("pat@x.com");
     fireEvent.submit(form());
     fireEvent.submit(form());
@@ -389,6 +417,7 @@ describe("ShareFolderDialog concurrency", () => {
     unshareFolder.mockResolvedValue({ ok: true, data: undefined });
     render(<Harness />);
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
     });
@@ -405,15 +434,22 @@ describe("ShareFolderDialog concurrency", () => {
     revokeFolderInvitation.mockReturnValue(rev.promise);
     render(<Harness />);
     await screen.findByText("Invited");
+    await settled();
     const revoke = screen.getByRole("button", {
       name: "Revoke invitation for new@x.com",
     });
-    revoke.click();
-    revoke.click();
-    expect(revokeFolderInvitation).toHaveBeenCalledTimes(1);
+    act(() => {
+      revoke.click();
+      revoke.click();
+    });
+    await waitFor(() =>
+      expect(revokeFolderInvitation).toHaveBeenCalledTimes(1),
+    );
     await act(async () => {
       rev.resolve({ ok: true, data: undefined });
     });
+    await settled();
+    expect(revokeFolderInvitation).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a second Leave while the first is in flight", async () => {
@@ -432,13 +468,17 @@ describe("ShareFolderDialog concurrency", () => {
     leaveFolder.mockReturnValue(d.promise);
     render(<Harness />);
     await screen.findByText("Dana Lee");
+    await settled();
     const leave = screen.getByRole("button", { name: "Leave folder" });
-    leave.click();
-    leave.click();
-    expect(leaveFolder).toHaveBeenCalledTimes(1);
+    act(() => {
+      leave.click();
+      leave.click();
+    });
+    await waitFor(() => expect(leaveFolder).toHaveBeenCalledTimes(1));
     await act(async () => {
       d.resolve({ ok: true, data: undefined });
     });
+    expect(leaveFolder).toHaveBeenCalledTimes(1);
   });
 
   it("does not write state or count a change when the response lands after close", async () => {
@@ -447,6 +487,7 @@ describe("ShareFolderDialog concurrency", () => {
     inviteToFolder.mockReturnValue(d.promise);
     render(<Harness onChanged={onChanged} />);
     await screen.findByText("Dana Lee");
+    await settled();
     typeEmail("pat@x.com");
     fireEvent.submit(form());
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
@@ -462,6 +503,7 @@ describe("ShareFolderDialog concurrency", () => {
     expect(loadFolderAccess).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("reopen"));
     await screen.findByText("Dana Lee");
+    await settled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() =>
@@ -526,6 +568,7 @@ describe("ShareFolderDialog concurrency", () => {
       />,
     );
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.click(screen.getByRole("button", { name: "Leave folder" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Couldn't leave.",
@@ -547,6 +590,7 @@ describe("ShareFolderDialog onChanged", () => {
     const onChanged = vi.fn();
     render(<Harness onChanged={onChanged} />);
     await screen.findByText("Dana Lee");
+    await settled();
     await close();
     expect(onChanged).not.toHaveBeenCalled();
   });
@@ -556,6 +600,7 @@ describe("ShareFolderDialog onChanged", () => {
     shareFolder.mockResolvedValue({ ok: false, error: "Nope." });
     render(<Harness onChanged={onChanged} />);
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
     });
@@ -569,6 +614,7 @@ describe("ShareFolderDialog onChanged", () => {
     shareFolder.mockResolvedValue({ ok: true, data: undefined });
     render(<Harness onChanged={onChanged} />);
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.change(screen.getByLabelText("Access for Dana Lee"), {
       target: { value: "editor" },
     });
@@ -601,6 +647,7 @@ describe("ShareFolderDialog focus return", () => {
     render(<WithOpener />);
     fireEvent.click(screen.getByText("opener"));
     await screen.findByText("Dana Lee");
+    await settled();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(ref.current));
   });
@@ -614,6 +661,7 @@ describe("ShareFolderDialog focus after a row goes away", () => {
       .mockResolvedValue({ ok: true, data: { ...managerData, members: [] } });
     open();
     await screen.findByText("Dana Lee");
+    await settled();
     const remove = screen.getByRole("button", { name: "Remove Dana Lee" });
     remove.focus();
     fireEvent.click(remove);
@@ -644,6 +692,7 @@ describe("ShareFolderDialog focus after a row goes away", () => {
     const revoke = await screen.findByRole("button", {
       name: "Revoke invitation for new@x.com",
     });
+    await settled();
     revoke.focus();
     fireEvent.click(revoke);
     await waitFor(() =>
