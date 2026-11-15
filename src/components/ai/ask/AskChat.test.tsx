@@ -189,7 +189,7 @@ describe("AskChat", () => {
     vi.spyOn(window.history, "pushState").mockImplementation((_d, _u, url) => {
       calls.push(`push ${String(url)}`);
     });
-    createConversation.mockImplementationOnce(async () => {
+    vi.mocked(createConversation).mockImplementationOnce(async () => {
       calls.push("createConversation");
       return { ok: true, data: { conversationId: "c1" } };
     });
