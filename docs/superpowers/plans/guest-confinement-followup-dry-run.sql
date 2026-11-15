@@ -131,7 +131,8 @@ begin
         ('ok_guest_cannot_insert_report_boards', 'false', 'fixture missing'),
         ('ok_guest_cannot_delete_report_boards', 'false', 'fixture missing');
     else
-      insert into public.reports (org_id) values (v_org) returning id into v_report;
+      -- scope 'boards' is the only shape with no board_id (reports_scope_binding_ck).
+      insert into public.reports (org_id, scope) values (v_org, 'boards') returning id into v_report;
       insert into public.report_boards (org_id, report_id, board_id)
       values (v_org, v_report, v_board) returning id into v_rb;
 
