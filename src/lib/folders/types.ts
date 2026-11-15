@@ -88,6 +88,31 @@ export type LoadRow = {
   openDue: number;
 };
 
+/**
+ * `folder_burn_packed`'s single jsonb value, validated on the server and sent
+ * to the browser AS IS (only the non-zero cells, a few KB) instead of the
+ * dense `BurnRow[]` (about 500 KB for a 59-stage × 73-week folder). The client
+ * expands it once with `burnRowsOf` (src/lib/folders/packed.ts).
+ * Each row: [stage_index, week_offset, planned, completed, imported_done,
+ * overdue_open]; week_offset is whole weeks after `lo`.
+ */
+export type BurnPacked = {
+  lo: string | null;
+  hi: string | null;
+  stages: string[];
+  rows: [number, number, number, number, number, number][];
+};
+
+/**
+ * The load heat map's read, tri-state: `skipped` (the layout has no load
+ * section, or the folder has no dated items), `failed` (the read failed: the
+ * panel offers Retry), or `ready` with the server's week columns and rows.
+ */
+export type FolderLoad =
+  | { status: "skipped" }
+  | { status: "failed" }
+  | { status: "ready"; weeks: string[]; rows: LoadRow[] };
+
 export type AttentionReason = "overdue" | "blocked" | "unassigned" | "stale";
 
 export type AttentionRow = {
@@ -142,9 +167,11 @@ export type FolderPayload = {
   folder: FolderSummary;
   boards: FolderBoardRef[];
   rollup: RollupRow[] | null;
-  burn: BurnRow[] | null;
-  /** Board × week load grid. Null when not requested or the read failed. */
-  load: LoadRow[] | null;
+  /** The packed burn value; null when not requested or the read failed. The
+   *  client expands it to `BurnRow[]` once (CommandCenter). */
+  burnPacked: BurnPacked | null;
+  /** Board × week load grid: skipped, failed, or the server's weeks + rows. */
+  load: FolderLoad;
   attention: AttentionRow[] | null;
   briefs: IntelligenceBrief[];
   members: FolderMember[];

@@ -4,10 +4,8 @@ import type { LoadGrid } from "@/lib/folders/tower";
 /** The first column holds its own week and everything older (the RPC folds
  *  older weeks into it), so it is described by the start of the next week. */
 function weekWords(grid: LoadGrid, index: number): string {
-  const total = grid.weeks.length;
-  const back = Math.floor(total / 2);
-  const o = index - back;
-  if (index === 0)
+  const o = index - grid.now;
+  if (index === 0 && o < 0)
     return `before ${(grid.weeks[1] ?? grid.weeks[0])?.weekStart ?? ""}`;
   if (o < 0) return o === -1 ? "last week" : `${-o} weeks ago`;
   if (o === 0) return "this week";
@@ -77,10 +75,11 @@ export function LoadHeat({ grid }: { grid: LoadGrid }) {
                   <td key={i} className="p-0">
                     <Link
                       href={`/boards/${r.boardId}`}
+                      prefetch={false}
                       data-tone={past ? "late" : "ahead"}
                       aria-label={`${r.name}, ${when}: ${n} ${verb}`}
                       title={`${r.name}, ${i === 0 ? when : `week of ${week?.weekStart ?? ""}`}: ${n} ${verb}`}
-                      className="text-foreground hover:ring-border-bright focus-visible:ring-ring flex h-6 items-center justify-center rounded-sm font-mono tabular-nums outline-none hover:ring-1 focus-visible:ring-2"
+                      className="text-foreground hover:ring-border-bright focus-visible:ring-ring flex h-6 items-center justify-center rounded-sm font-mono tabular-nums outline-none hover:ring-1 focus-visible:ring-2 pointer-coarse:min-h-11"
                       style={{
                         backgroundColor: `color-mix(in oklab, var(${past ? "--status-red" : "--primary"}) ${mix}%, transparent)`,
                       }}

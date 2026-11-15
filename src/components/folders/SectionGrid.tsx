@@ -41,7 +41,7 @@ function isEmpty(node: ReactNode): boolean {
 
 /**
  * Render-time fill rule (2026-11-14 browser fix). A section that renders
- * nothing (load while `payload.load` is null, Intelligence with no briefs)
+ * nothing (load while its read is skipped, Intelligence with no briefs)
  * used to leave its grid cell empty, so its row showed a blank gap. The saved
  * config is NOT rewritten; only this render's placement changes:
  *   - a cell whose sections all render nothing is dropped;

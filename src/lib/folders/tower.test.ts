@@ -98,6 +98,65 @@ describe("kpiTrends", () => {
   });
 });
 
+describe("kpiTrends real-activity rule", () => {
+  const today = "2026-09-15"; // week of 2026-09-14
+  const now = { complete: 50, gap: -5, overdue: 3, dueThisWeek: 2 };
+
+  it("shows no complete, gap or overdue trend for a folder imported entirely this week", () => {
+    const rows = [
+      wk("2026-08-24", 4, 0),
+      wk("2026-08-31", 6, 0),
+      wk("2026-09-07", 5, 0),
+      wk("2026-09-14", 3, 10, 0, 10),
+      wk("2026-09-21", 2, 0),
+    ];
+    const t = kpiTrends(rows, null, today, 20, now);
+    expect(t.complete).toBeUndefined();
+    expect(t.gap).toBeUndefined();
+    expect(t.overdue).toBeUndefined();
+    expect(t.dueThisWeek?.points).toEqual([2, 2]);
+    // Without `now` the same rule holds.
+    const raw = kpiTrends(rows, null, today, 20);
+    expect(raw.gap).toBeUndefined();
+    expect(raw.complete).toBeUndefined();
+  });
+
+  it("keeps the overdue trend of a folder with overdue history but no completions", () => {
+    const rows = [
+      wk("2026-08-24", 4, 0, 0),
+      wk("2026-08-31", 2, 0, 2),
+      wk("2026-09-07", 1, 0, 3),
+      wk("2026-09-14", 1, 0, 3),
+    ];
+    const t = kpiTrends(rows, null, today, 8, { ...now, complete: 0 });
+    // History starts at 08-31, the first week with an open overdue item.
+    expect(t.overdue?.points).toEqual([2, 3, 3]);
+    expect(t.gap?.points).toEqual([-6, -7, -5]);
+    expect(t.complete?.points).toEqual([0, 0, 0]);
+  });
+
+  it("leaves this week's import out of the change pill but keeps the anchored points", () => {
+    const rows = [
+      wk("2026-08-31", 2, 0),
+      wk("2026-09-07", 3, 3), // real completions last week
+      wk("2026-09-14", 2, 12, 0, 10), // 2 real + 10 imported this week
+    ];
+    // Card values: 15 of 20 done = 75%; gap 15 − 7 = 8.
+    const t = kpiTrends(rows, null, today, 20, {
+      complete: 75,
+      gap: 8,
+      overdue: 0,
+    });
+    expect(t.gap?.points).toEqual([-2, 8]);
+    expect(t.gap?.points.at(-1)).toBe(8); // anchored on the card
+    expect(t.gap?.delta).toBe(0); // +10 raw, −10 imported
+    expect(trendChange("gap", t.gap!)).toEqual({ text: "flat", tone: "gray" });
+    expect(t.complete?.points).toEqual([15, 75]);
+    expect(t.complete?.delta).toBe(10); // 60 raw − 50 imported
+    expect(trendChange("complete", t.complete!).text).toBe("+10 pts this week");
+  });
+});
+
 describe("trendChange", () => {
   it("colours by meaning, not by sign, and always states the direction", () => {
     expect(
@@ -398,13 +457,17 @@ describe("a DAAS-shaped folder", () => {
     expect(sum(rows.slice(0, 1000), "completed")).toBeLessThan(663);
   });
 
-  it("puts the card's numbers at the end of the complete and gap trends", () => {
-    const t = kpiTrends(daasRows(false), null, today, 1953, card);
-    expect(t.complete?.points.at(-1)).toBe(34);
-    expect(t.gap?.points.at(-1)).toBe(-341);
-    expect(t.dueThisWeek?.points[0]).toBe(91);
-    // Old RPC: no overdue_open, so no overdue line of zeros.
-    expect(t.overdue).toBeUndefined();
+  it("draws no invented history for a folder whose activity is all this week", () => {
+    // Real-activity rule: every completion (and so every sign of activity)
+    // sits in the current week, so complete and gap have one point and are
+    // omitted; the forward due bars are unaffected.
+    for (const imported of [false, true]) {
+      const t = kpiTrends(daasRows(imported), null, today, 1953, card);
+      expect(t.complete).toBeUndefined();
+      expect(t.gap).toBeUndefined();
+      expect(t.overdue).toBeUndefined();
+      expect(t.dueThisWeek?.points[0]).toBe(91);
+    }
   });
 
   it("does not claim nothing was completed when the week's work is new", () => {
@@ -498,6 +561,56 @@ describe("loadGrid", () => {
     );
     expect(g.rows).toHaveLength(1);
     expect(g.rows[0]!.cells).toEqual([2, 0, 0, 0, 0, 0, 0]);
+  });
+
+  describe("with the server's weeks", () => {
+    // folder_load computed its window on a Sunday (week of 2026-09-14).
+    const server = [
+      "2026-08-24",
+      "2026-08-31",
+      "2026-09-07",
+      "2026-09-14",
+      "2026-09-21",
+      "2026-09-28",
+      "2026-10-05",
+    ];
+    const f = { stageKey: null, boardId: null };
+
+    it("draws exactly the server's columns with the now marker on today's week", () => {
+      const g = loadGrid(rows, boards, f, "2026-09-20", server);
+      expect(g.weeks.map((w) => w.weekStart)).toEqual(server);
+      expect(g.now).toBe(3);
+      expect(g.weeks[3]!.label).toBe("now");
+      expect(g.rows[0]!.cells).toEqual([7, 0, 0, 3, 0, 0, 0]);
+    });
+
+    it("keeps every column filled when the client date is one day ahead of the server's week", () => {
+      // Client clock: Monday 2026-09-21, one day after the server's Sunday.
+      const g = loadGrid(rows, boards, f, "2026-09-21", server);
+      expect(g.weeks.map((w) => w.weekStart)).toEqual(server);
+      // Nothing blanked: the cells are where the server put them.
+      expect(g.rows[0]!.cells).toEqual([7, 0, 0, 3, 0, 0, 0]);
+      expect(g.rows[1]!.cells).toEqual([0, 0, 0, 0, 0, 0, 4]);
+      // The marker follows the server week that contains the client's today.
+      expect(g.now).toBe(4);
+      expect(g.weeks.map((w) => w.label)).toEqual([
+        "≤ −4w",
+        "−3w",
+        "−2w",
+        "−1w",
+        "now",
+        "+1w",
+        "+2w",
+      ]);
+    });
+
+    it("falls back to the middle column when no server week contains today", () => {
+      const g = loadGrid(rows, boards, f, "2027-03-01", server);
+      expect(g.weeks.map((w) => w.weekStart)).toEqual(server);
+      expect(g.now).toBe(3);
+      expect(g.weeks[3]!.label).toBe("now");
+      expect(g.rows[0]!.cells).toEqual([7, 0, 0, 3, 0, 0, 0]);
+    });
   });
 
   it("returns zero rows of zeros for a board with nothing due", () => {

@@ -1,8 +1,82 @@
 import { resolveLayout } from "./layout";
 import { PRESETS, type PresetKey } from "./presets";
-import type { FolderPayload, RollupRow } from "./types";
+import type { BurnPacked, BurnRow, FolderPayload, RollupRow } from "./types";
 
 export const FIXTURE_TODAY = "2026-09-15";
+
+/** folder_load's window for FIXTURE_TODAY: three weeks back, three ahead. */
+export const FIXTURE_LOAD_WEEKS = [
+  "2026-08-24",
+  "2026-08-31",
+  "2026-09-07",
+  "2026-09-14",
+  "2026-09-21",
+  "2026-09-28",
+  "2026-10-05",
+];
+
+/**
+ * The fixture's dense burn rows, shaped like the post-migration
+ * folder_burn_packed output: every row carries `importedDone` and
+ * `overdueOpen` (one Build item arrived done in week one; the overdue item
+ * has been open since 2026-09-01).
+ */
+export function fixtureBurnRows(): BurnRow[] {
+  const r = (
+    stageKey: string,
+    weekStart: string,
+    planned: number,
+    completed: number,
+    importedDone: number,
+    overdueOpen: number,
+  ): BurnRow => ({
+    stageKey,
+    weekStart,
+    planned,
+    completed,
+    importedDone,
+    overdueOpen,
+  });
+  return [
+    r("build", "2026-08-24", 2, 1, 1, 0),
+    r("build", "2026-08-31", 3, 1, 0, 0),
+    r("build", "2026-09-07", 2, 1, 0, 1),
+    r("build", "2026-09-14", 3, 1, 0, 1),
+    r("build", "2026-09-21", 2, 0, 0, 0),
+    r("build", "2026-09-28", 2, 0, 0, 0),
+    r("qa", "2026-08-24", 0, 0, 0, 0),
+    r("qa", "2026-08-31", 1, 1, 0, 0),
+    r("qa", "2026-09-07", 1, 1, 0, 0),
+    r("qa", "2026-09-14", 0, 0, 0, 0),
+    r("qa", "2026-09-21", 0, 0, 0, 0),
+    r("qa", "2026-09-28", 0, 0, 0, 0),
+  ];
+}
+
+/** The inverse of `unpackBurnPacked`, for fixtures: dense rows (stage, then
+ *  week, whole weeks) to the packed value with the non-zero cells only. */
+export function packBurnRows(rows: BurnRow[]): BurnPacked {
+  if (rows.length === 0) return { lo: null, hi: null, stages: [], rows: [] };
+  const weeks = [...new Set(rows.map((r) => r.weekStart))].sort();
+  const stages = [...new Set(rows.map((r) => r.stageKey))];
+  const lo = weeks[0]!;
+  const hi = weeks[weeks.length - 1]!;
+  const offset = (w: string) =>
+    Math.round((Date.parse(w) - Date.parse(lo)) / (7 * 864e5));
+  const out: BurnPacked["rows"] = [];
+  for (const r of rows) {
+    const cell: BurnPacked["rows"][number] = [
+      stages.indexOf(r.stageKey),
+      offset(r.weekStart),
+      r.planned,
+      r.completed,
+      r.importedDone ?? 0,
+      r.overdueOpen ?? 0,
+    ];
+    if (cell.slice(2).some((n) => n > 0)) out.push(cell);
+  }
+  return { lo, hi, stages, rows: out };
+}
 
 const base = (
   o: Partial<RollupRow> &
@@ -169,25 +243,31 @@ export function folderFixture(): FolderPayload {
       { id: "b3", name: "Website", position: 2 },
     ],
     rollup,
-    burn: [
-      { stageKey: "build", weekStart: "2026-08-24", planned: 2, completed: 1 },
-      { stageKey: "build", weekStart: "2026-08-31", planned: 3, completed: 1 },
-      { stageKey: "build", weekStart: "2026-09-07", planned: 2, completed: 1 },
-      { stageKey: "build", weekStart: "2026-09-14", planned: 3, completed: 1 },
-      { stageKey: "build", weekStart: "2026-09-21", planned: 2, completed: 0 },
-      { stageKey: "build", weekStart: "2026-09-28", planned: 2, completed: 0 },
-      { stageKey: "qa", weekStart: "2026-08-24", planned: 0, completed: 0 },
-      { stageKey: "qa", weekStart: "2026-08-31", planned: 1, completed: 1 },
-      { stageKey: "qa", weekStart: "2026-09-07", planned: 1, completed: 1 },
-      { stageKey: "qa", weekStart: "2026-09-14", planned: 0, completed: 0 },
-      { stageKey: "qa", weekStart: "2026-09-21", planned: 0, completed: 0 },
-      { stageKey: "qa", weekStart: "2026-09-28", planned: 0, completed: 0 },
-    ],
-    load: [
-      { boardId: "b1", stageKey: "build", weekStart: "2026-08-24", openDue: 2 },
-      { boardId: "b1", stageKey: "build", weekStart: "2026-09-14", openDue: 3 },
-      { boardId: "b2", stageKey: "build", weekStart: "2026-09-21", openDue: 4 },
-    ],
+    burnPacked: packBurnRows(fixtureBurnRows()),
+    load: {
+      status: "ready",
+      weeks: FIXTURE_LOAD_WEEKS,
+      rows: [
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-08-24",
+          openDue: 2,
+        },
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-09-14",
+          openDue: 3,
+        },
+        {
+          boardId: "b2",
+          stageKey: "build",
+          weekStart: "2026-09-21",
+          openDue: 4,
+        },
+      ],
+    },
     attention: [
       {
         itemId: "i1",

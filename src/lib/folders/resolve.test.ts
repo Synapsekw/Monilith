@@ -125,34 +125,15 @@ const packedBurn = {
 };
 
 describe("resolveFolderBurn", () => {
-  it("calls folder_burn_packed ONCE and unpacks to dense rows with numeric tower columns", async () => {
+  it("calls folder_burn_packed ONCE and returns the validated value still packed", async () => {
     const client = clientWith(async () => ({ data: packedBurn, error: null }));
     const res = await resolveFolderBurn(client, "f1");
     expect(client.rpc).toHaveBeenCalledTimes(1);
     expect(client.rpc).toHaveBeenCalledWith("folder_burn_packed", {
       p_folder_id: "f1",
     });
-    expect(res).toEqual({
-      ok: true,
-      rows: [
-        {
-          stageKey: "build",
-          weekStart: "2026-09-07",
-          planned: 4,
-          completed: 2,
-          importedDone: 3,
-          overdueOpen: 5,
-        },
-        {
-          stageKey: "build",
-          weekStart: "2026-09-14",
-          planned: 0,
-          completed: 0,
-          importedDone: 0,
-          overdueOpen: 0,
-        },
-      ],
-    });
+    // Shipped to the browser as is; the client expands it (burnRowsOf).
+    expect(res).toEqual({ ok: true, packed: packedBurn });
   });
 
   it("returns no rows for a folder with no window", async () => {
@@ -162,7 +143,7 @@ describe("resolveFolderBurn", () => {
     }));
     expect(await resolveFolderBurn(client, "f1")).toEqual({
       ok: true,
-      rows: [],
+      packed: { lo: null, hi: null, stages: [], rows: [] },
     });
   });
 
@@ -210,7 +191,7 @@ describe("resolveFolderLoad", () => {
     rows: [["b1", "build", "2026-09-14", 3]],
   };
 
-  it("calls folder_load once and unpacks the rows", async () => {
+  it("calls folder_load once and unpacks the rows with the server's weeks", async () => {
     const client = clientWith(async () => ({ data: packedLoad, error: null }));
     const res = await resolveFolderLoad(client, "f1");
     expect(client.rpc).toHaveBeenCalledTimes(1);
@@ -219,6 +200,7 @@ describe("resolveFolderLoad", () => {
     });
     expect(res).toEqual({
       ok: true,
+      weeks: ["2026-09-14"],
       rows: [
         {
           boardId: "b1",

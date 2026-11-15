@@ -15,7 +15,10 @@ export type Tone = "green" | "red" | "blue" | "gray";
 export type Trend = {
   kind: "line" | "bars";
   points: number[];
-  /** Last point minus the one before it (bars: next week minus this week). */
+  /** Last point minus the one before it (bars: next week minus this week).
+   *  For complete and gap, the current week's imported completions
+   *  (`imported_done`) are taken out of it, so the change pill never presents
+   *  an import as progress; the points themselves are unchanged. */
   delta: number;
 };
 
@@ -37,6 +40,7 @@ type Wk = {
   weekStart: string;
   planned: number;
   completed: number;
+  importedDone: number;
   overdueOpen: number;
   plannedCum: number;
   completedCum: number;
@@ -45,17 +49,24 @@ type Wk = {
 function weekly(rows: BurnRow[], stage: string | null): Wk[] {
   const m = new Map<
     string,
-    { planned: number; completed: number; overdueOpen: number }
+    {
+      planned: number;
+      completed: number;
+      importedDone: number;
+      overdueOpen: number;
+    }
   >();
   for (const r of rows) {
     if (stage !== null && r.stageKey !== stage) continue;
     const w = m.get(r.weekStart) ?? {
       planned: 0,
       completed: 0,
+      importedDone: 0,
       overdueOpen: 0,
     };
     w.planned += r.planned;
     w.completed += r.completed;
+    w.importedDone += r.importedDone ?? 0;
     w.overdueOpen += r.overdueOpen ?? 0;
     m.set(r.weekStart, w);
   }
@@ -96,6 +107,17 @@ export type KpiNow = Partial<Record<KpiKey, number | null>>;
  *     draw zeros ending in the card's value, so with `now` the overdue trend
  *     is omitted until the column exists.
  * Without `now` the raw folder_burn series is returned.
+ *
+ * REAL-ACTIVITY RULE (2026-11-15 final fix): folder_burn's `planned` and
+ * `completed` have no "the item already existed" rule (only `overdue_open`
+ * does), so a folder imported this week would otherwise draw invented history
+ * (a Gap of −878 a week before any item existed). History for the scope
+ * therefore begins at the first week showing real activity: the first week
+ * with `overdue_open > 0` or `completed − imported_done > 0`. Earlier weeks
+ * are dropped from the complete, gap and overdue trends; a trend left with
+ * fewer than two points is omitted. The weekly change (`delta`) of complete
+ * and gap excludes the current week's `imported_done`. The forward due bars
+ * are not affected.
  */
 export function kpiTrends(
   rows: BurnRow[],
@@ -111,27 +133,43 @@ export function kpiTrends(
   // Only a row whose week contains today is the current week; when the burn
   // rows stop earlier the trend ends at the last real week.
   const inWeek = daysBetween(ws[cur]!.weekStart, todayISO) < 7;
-  const past = ws.slice(Math.max(0, cur - (TREND_WEEKS - 1)), cur + 1);
+  // Real-activity rule (see the JSDoc): history starts at the first week with
+  // an open overdue item or an organic (not imported) completion. No such
+  // week up to the current one means no history at all.
+  let first = ws.findIndex(
+    (w) => w.overdueOpen > 0 || w.completed - w.importedDone > 0,
+  );
+  if (first === -1 || first > cur) first = cur + 1;
+  const past = ws.slice(Math.max(first, cur - (TREND_WEEKS - 1)), cur + 1);
   const ahead = inWeek ? ws.slice(cur, cur + TREND_WEEKS) : [];
-  const line = (points: number[]): Trend => ({
+  // Completions imported in the current week: never counted as a change.
+  const importedNow = inWeek ? ws[cur]!.importedDone : 0;
+  const line = (points: number[], less = 0): Trend => ({
     kind: "line",
     points,
-    delta: points[points.length - 1]! - points[points.length - 2]!,
+    delta: points[points.length - 1]! - points[points.length - 2]! - less,
   });
-  // Anchor a past series on the card's value (see the rule above).
-  const anchored = (key: KpiKey, points: number[]): Trend | undefined => {
-    if (now === undefined || !(key in now)) return line(points);
+  // Anchor a past series on the card's value (see the rule above). `less` is
+  // taken out of the weekly change only (imported completions this week).
+  const anchored = (
+    key: KpiKey,
+    points: number[],
+    less = 0,
+  ): Trend | undefined => {
+    if (now === undefined || !(key in now))
+      return points.length < 2 ? undefined : line(points, less);
     const v = now[key];
     if (v === null || v === undefined) return undefined;
     const pts = inWeek
       ? [...points.slice(0, -1), v]
       : [...points, v].slice(-TREND_WEEKS);
-    return pts.length < 2 ? undefined : line(pts);
+    return pts.length < 2 ? undefined : line(pts, less);
   };
   const out: Partial<Record<KpiKey, Trend>> = {};
   const gap = anchored(
     "gap",
     past.map((w) => w.completedCum - w.plannedCum),
+    importedNow,
   );
   if (gap) out.gap = gap;
   const hasOverdue = rows.some((r) => r.overdueOpen !== undefined);
@@ -146,6 +184,7 @@ export function kpiTrends(
     const complete = anchored(
       "complete",
       past.map((w) => Math.round((w.completedCum / total) * 100)),
+      Math.round((importedNow / total) * 100),
     );
     if (complete) out.complete = complete;
   }
@@ -279,15 +318,28 @@ export function burnForecast(
   };
 }
 
-function fmtDay(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+/**
+ * A calendar date as the page states it: in UTC (the page's weeks are UTC
+ * weeks, so the browser's time zone must not move a date by a day), "Oct 12",
+ * with the year added when it is not `todayISO`'s year ("Jan 4, 2027").
+ */
+export function fmtDay(iso: string, todayISO?: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const otherYear =
+    todayISO !== undefined && iso.slice(0, 4) !== todayISO.slice(0, 4);
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    ...(otherYear ? { year: "numeric" } : {}),
     timeZone: "UTC",
   });
 }
 
-export function forecastReading(f: Forecast): string {
+/** The forecast in words. `todayISO` (optional) adds the year to a finish
+ *  date outside the current year; without it the forecast's current week is
+ *  the reference. */
+export function forecastReading(f: Forecast, todayISO?: string): string {
   if (f.remaining === 0) return "Everything in scope is done.";
   if (f.insufficientHistory) return "Not enough history yet to forecast.";
   const imported =
@@ -329,36 +381,59 @@ export function forecastReading(f: Forecast): string {
     f.weeksLate !== null && f.weeksLate > 0
       ? `, ${f.weeksLate} ${f.weeksLate === 1 ? "week" : "weeks"} after its last planned date`
       : "";
-  return `At ${pace} a week the folder finishes around ${fmtDay(f.finishWeek)}${late}.${imported}`;
+  const ref = todayISO ?? f.line[0]?.weekStart;
+  return `At ${pace} a week the folder finishes around ${fmtDay(f.finishWeek, ref)}${late}.${imported}`;
 }
 
 export type LoadGrid = {
   weeks: { weekStart: string; label: string; past: boolean }[];
   rows: { boardId: string; name: string; cells: number[] }[];
   max: number;
+  /** Index of the "now" column in `weeks`. */
+  now: number;
 };
 
+/**
+ * The board × week grid. With `serverWeeks` (folder_load's own `weeks`, which
+ * the page always passes) the columns ARE the server's weeks, so a client
+ * clock or time zone can never shift the window off the rows and blank the
+ * columns; the "now" marker is the server week containing `todayISO`, or the
+ * middle column when none does. Without it the window is computed from
+ * `todayISO` (LOAD_BACK weeks back to LOAD_AHEAD ahead). The first column
+ * also holds everything older (the RPC folds it there).
+ */
 export function loadGrid(
   rows: LoadRow[],
   boards: FolderBoardRef[],
   f: { stageKey: string | null; boardId: string | null },
   todayISO: string,
+  serverWeeks?: string[],
 ): LoadGrid {
-  const now = mondayOf(todayISO);
-  const weeks: LoadGrid["weeks"] = [];
-  for (let o = -LOAD_BACK; o <= LOAD_AHEAD; o++)
-    weeks.push({
-      weekStart: addDays(now, o * 7),
+  const starts =
+    serverWeeks !== undefined && serverWeeks.length > 0
+      ? [...serverWeeks].sort()
+      : Array.from({ length: LOAD_BACK + LOAD_AHEAD + 1 }, (_, i) =>
+          addDays(mondayOf(todayISO), (i - LOAD_BACK) * 7),
+        );
+  let nowAt = starts.findIndex(
+    (w) => w <= todayISO && daysBetween(w, todayISO) < 7,
+  );
+  if (nowAt === -1) nowAt = Math.floor(starts.length / 2);
+  const weeks: LoadGrid["weeks"] = starts.map((weekStart, i) => {
+    const o = i - nowAt;
+    return {
+      weekStart,
       label:
-        o === -LOAD_BACK
-          ? `≤ −${LOAD_BACK}w`
+        i === 0 && o < 0
+          ? `≤ −${-o}w`
           : o < 0
             ? `−${-o}w`
             : o === 0
               ? "now"
               : `+${o}w`,
       past: o < 0,
-    });
+    };
+  });
   const idx = new Map(weeks.map((w, i) => [w.weekStart, i]));
   const byBoard = new Map<string, number[]>();
   for (const r of rows) {
@@ -379,7 +454,12 @@ export function loadGrid(
       name: b.name,
       cells: byBoard.get(b.id) ?? weeks.map(() => 0),
     }));
-  return { weeks, rows: out, max: Math.max(0, ...out.flatMap((r) => r.cells)) };
+  return {
+    weeks,
+    rows: out,
+    max: Math.max(0, ...out.flatMap((r) => r.cells)),
+    now: nowAt,
+  };
 }
 
 export type AttentionGroup = {

@@ -217,12 +217,52 @@ describe("CommandCenter", () => {
       ...folderFixture(),
       boards: [],
       rollup: [],
-      burn: [],
+      burnPacked: null,
       attention: [],
     };
     render(wrap({ payload: empty }));
     expect(screen.getByText("Add boards to this folder")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Stages/ })).toBeDisabled();
+  });
+
+  it("expands the packed burn on the client for the chart and the KPI trends", () => {
+    params.current = new URLSearchParams("");
+    const p = folderFixture();
+    // The payload carries the PACKED value, not dense rows.
+    expect(p.burnPacked?.rows.length).toBeGreaterThan(0);
+    expect("burn" in p).toBe(false);
+    render(wrap({ payload: p }));
+    expect(screen.getByTestId("burn-chart")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /^Overdue, last/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("treats a packed burn that does not unpack as the failed burn state", () => {
+    params.current = new URLSearchParams("");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const p = {
+      ...folderFixture(),
+      burnPacked: {
+        lo: "2026-08-24",
+        hi: "2026-08-24",
+        stages: ["s"],
+        rows: [[5, 0, 1, 0, 0, 0]] as [
+          number,
+          number,
+          number,
+          number,
+          number,
+          number,
+        ][],
+      },
+    };
+    render(wrap({ payload: p }));
+    expect(screen.queryByTestId("burn-chart")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Retry" }).length,
+    ).toBeGreaterThan(0);
+    spy.mockRestore();
   });
 
   it("renders the widgets slot under #widgets", () => {

@@ -62,6 +62,7 @@ vi.mock("./resolve", () => ({
     order.push("end:load");
     return {
       ok: true,
+      weeks: ["2026-09-14"],
       rows: [
         {
           boardId: "b1",
@@ -128,7 +129,7 @@ describe("buildFolderPayload", () => {
     const p = await buildFolderPayload(supabase, "f1", "u1");
     expect(p).not.toBeNull();
     expect(p!.rollup).toEqual([]);
-    expect(p!.burn).toBeNull();
+    expect(p!.burnPacked).toBeNull();
     expect(p!.attention).toEqual([]);
     expect(p!.briefs).toHaveLength(1);
     expect(p!.members).toEqual([
@@ -174,8 +175,8 @@ describe("buildFolderPayload", () => {
       expect(startIdx[name]).toBeLessThan(firstEnd);
     }
 
-    // Wave B (briefs, members) needs head's result (board ids / org id), so
-    // it must only start once wave A's head read has ended.
+    // Briefs and members need head's result (board ids / org id), so they
+    // must only start once the head read has ended.
     expect(order.indexOf("start:briefs")).toBeGreaterThan(endIdx.head);
     expect(order.indexOf("start:members")).toBeGreaterThan(endIdx.head);
   });
@@ -214,7 +215,7 @@ describe("buildFolderPayload", () => {
     });
     const payload = await buildFolderPayload(supabase, "f1", "u1");
     expect(resolveFolderBurn).not.toHaveBeenCalled();
-    expect(payload?.burn).toBeNull();
+    expect(payload?.burnPacked).toBeNull();
   });
 
   it("still runs folder_burn when the layout has a stages tab but no burn section", async () => {
@@ -260,39 +261,53 @@ describe("buildFolderPayload", () => {
       vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
       const p = await buildFolderPayload(supabase, "f1", "u1");
       expect(resolveFolderLoad).not.toHaveBeenCalled();
-      expect(p!.load).toBeNull();
+      expect(p!.load).toEqual({ status: "skipped" });
     });
 
-    it("is skipped when the folder has no dated items", async () => {
+    it("is read alongside the rollup but discarded when the folder has no dated items", async () => {
       // default layout (project) has a load section; the rollup mock is [].
       const p = await buildFolderPayload(supabase, "f1", "u1");
-      expect(resolveFolderLoad).not.toHaveBeenCalled();
-      expect(p!.load).toBeNull();
+      expect(resolveFolderLoad).toHaveBeenCalledTimes(1);
+      expect(p!.load).toEqual({ status: "skipped" });
     });
 
-    it("runs in wave B beside the burn read when the layout wants it and dates exist", async () => {
+    it("is discarded when the rollup failed", async () => {
+      vi.mocked(resolveFolderRollup).mockResolvedValueOnce({
+        ok: false,
+        error: "boom",
+      });
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(p!.load).toEqual({ status: "skipped" });
+    });
+
+    it("carries the server's weeks and rows when the layout wants it and dates exist", async () => {
       vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
       const p = await buildFolderPayload(supabase, "f1", "u1");
       expect(resolveFolderLoad).toHaveBeenCalledTimes(1);
       expect(resolveFolderLoad).toHaveBeenCalledWith(supabase, "f1");
-      expect(p!.load).toEqual([
-        {
-          boardId: "b1",
-          stageKey: "build",
-          weekStart: "2026-09-14",
-          openDue: 3,
-        },
-      ]);
-      // Same wave as burn: both start before either ends, after head ended.
+      expect(p!.load).toEqual({
+        status: "ready",
+        weeks: ["2026-09-14"],
+        rows: [
+          {
+            boardId: "b1",
+            stageKey: "build",
+            weekStart: "2026-09-14",
+            openDue: 3,
+          },
+        ],
+      });
+      // Gated on the layout only: starts once the layout read has ended,
+      // beside the burn read.
       expect(order.indexOf("start:load")).toBeGreaterThan(
-        order.indexOf("end:head"),
+        order.indexOf("end:layout"),
       );
       expect(order.indexOf("start:load")).toBeLessThan(
         order.indexOf("end:burn"),
       );
     });
 
-    it("is null, not a throw, when the read fails", async () => {
+    it("is failed, not a throw and not skipped, when the read fails", async () => {
       vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
       vi.mocked(resolveFolderLoad).mockResolvedValueOnce({
         ok: false,
@@ -300,7 +315,42 @@ describe("buildFolderPayload", () => {
       });
       const p = await buildFolderPayload(supabase, "f1", "u1");
       expect(p).not.toBeNull();
-      expect(p!.load).toBeNull();
+      expect(p!.load).toEqual({ status: "failed" });
+    });
+  });
+
+  describe("read scheduling", () => {
+    it("issues burn and load as soon as the layout resolves, without awaiting the rollup", async () => {
+      type Rollup = Awaited<ReturnType<typeof resolveFolderRollup>>;
+      type LayoutRow = Awaited<ReturnType<typeof getFolderLayoutRow>>;
+      let releaseRollup: (v: Rollup) => void = () => {};
+      let releaseLayout: (v: LayoutRow) => void = () => {};
+      vi.mocked(resolveFolderRollup).mockReturnValueOnce(
+        new Promise<Rollup>((r) => {
+          releaseRollup = r;
+        }),
+      );
+      vi.mocked(getFolderLayoutRow).mockReturnValueOnce(
+        new Promise<LayoutRow>((r) => {
+          releaseLayout = r;
+        }),
+      );
+      const pending = buildFolderPayload(supabase, "f1", "u1");
+      await tick();
+      // The layout is unknown: nothing that depends on it is issued yet.
+      expect(resolveFolderBurn).not.toHaveBeenCalled();
+      expect(resolveFolderLoad).not.toHaveBeenCalled();
+      releaseLayout(null);
+      await tick();
+      // The rollup is STILL pending, yet both layout-gated reads are out.
+      expect(resolveFolderBurn).toHaveBeenCalledTimes(1);
+      expect(resolveFolderLoad).toHaveBeenCalledTimes(1);
+      releaseRollup({
+        ok: true,
+        rows: [{ minDue: "2026-09-01", maxDue: "2026-09-30" }] as never,
+      });
+      const p = await pending;
+      expect(p!.load.status).toBe("ready");
     });
   });
 });
