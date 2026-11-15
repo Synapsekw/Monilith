@@ -25,7 +25,19 @@ const TREND_COLOR: Partial<Record<KpiKey, StatusColor>> = {
   dueThisWeek: "blue",
 };
 
-function trendProp(key: KpiKey, t: Trend | undefined): TrendProp {
+/** The sparkline colour. The gap's follows the sign of the CURRENT gap
+ *  (ahead or on plan: the positive token; behind: red); the card's text
+ *  already says "ahead" or "behind", so colour is never the only signal. */
+export function trendColor(key: KpiKey, k: Kpis): StatusColor {
+  if (key === "gap") return k.gap !== null && k.gap < 0 ? "red" : "green";
+  return TREND_COLOR[key] ?? "blue";
+}
+
+function trendProp(
+  key: KpiKey,
+  t: Trend | undefined,
+  color: StatusColor,
+): TrendProp {
   if (!t || t.points.length < 2) return undefined;
   const change = trendChange(key, t);
   const span =
@@ -35,7 +47,7 @@ function trendProp(key: KpiKey, t: Trend | undefined): TrendProp {
   return {
     points: t.points,
     kind: t.kind,
-    color: TREND_COLOR[key] ?? "blue",
+    color,
     label: `${LABEL[key]}, ${span}: ${t.points.join(", ")}`,
     change: { text: change.text, color: change.tone },
   };
@@ -202,12 +214,12 @@ export function KpisPanel({
         >
           {live.map((key) => (
             <Fragment key={key}>
-              {CARD[key](k, trendProp(key, trends[key]))}
+              {CARD[key](k, trendProp(key, trends[key], trendColor(key, k)))}
             </Fragment>
           ))}
         </div>
       ) : null}
-      {quiet.length > 0 || !anyDue ? (
+      {quiet.length > 0 || (!anyDue && k.total > 0) ? (
         <ul
           aria-label="Nothing to report"
           className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs"
@@ -223,7 +235,8 @@ export function KpisPanel({
               <span className="tabular-nums">{CHIP_VALUE[key](k)}</span>
             </li>
           ))}
-          {!anyDue && rows.length > 0 ? (
+          {/* Only a folder WITH items can lack due dates. */}
+          {!anyDue && k.total > 0 ? (
             <li className="inline-flex items-center rounded-sm border px-2 py-0.5 font-mono">
               No due dates set
             </li>

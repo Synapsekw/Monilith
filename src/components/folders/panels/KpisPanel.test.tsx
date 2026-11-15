@@ -1,10 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { statusToneClasses } from "@/components/ui/status-pill";
 import type { BurnRow } from "@/lib/folders/types";
 import { computeKpis } from "@/lib/folders/rollup";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
-import { KpisPanel } from "./KpisPanel";
+import { KpisPanel, trendColor } from "./KpisPanel";
 
 const mockTrends = vi.hoisted(() => ({ short: false }));
 vi.mock("@/lib/folders/tower", async (orig) => {
@@ -98,16 +98,19 @@ describe("KpisPanel", () => {
   });
 
   it("states more overdue as a red pill and more complete as a green one", () => {
-    // Last week: one fewer overdue than the card, and 0% complete.
+    // Last week: one fewer overdue than the card, and one item complete. The
+    // first week has a real completion, so history starts there (the
+    // real-activity rule drops weeks before any activity).
     const burn = burnRows([
-      ["2026-08-31", 3, 0, 0],
+      ["2026-08-31", 3, 1, 0],
       ["2026-09-07", 3, 0, k.overdue - 1],
       ["2026-09-14", 4, 4, 0],
       ["2026-09-21", 5, 0, 0],
     ]);
     renderPanel({ burn });
     expectTone(pill("+1 this week"), "red");
-    expectTone(pill(`+${k.donePct} pts this week`), "green");
+    const before = Math.round((1 / k.total) * 100);
+    expectTone(pill(`+${k.donePct! - before} pts this week`), "green");
     expectTone(pill("5 next week"), "blue");
   });
 
@@ -207,6 +210,49 @@ describe("KpisPanel", () => {
     // "No due dates set" already explains it; no "Gap to plan —" chip.
     const chips = screen.getAllByTestId("kpi-chip").map((c) => c.textContent);
     expect(chips.some((c) => c?.startsWith("Gap to plan"))).toBe(false);
+  });
+
+  it("shows the no-due-dates chip only for a folder that has items", () => {
+    const undated = fx.rollup!.map((r) => ({
+      ...r,
+      minDue: null,
+      maxDue: null,
+    }));
+    const empty = undated.map((r) => ({
+      ...r,
+      total: 0,
+      done: 0,
+      inProgress: 0,
+      overdue: 0,
+      notStarted: 0,
+      blocked: 0,
+      stale: 0,
+      unassigned: 0,
+      incomplete: 0,
+      plannedByToday: 0,
+      dueThisWeek: 0,
+      dueThisWeekNotStarted: 0,
+      oldestOverdue: null,
+    }));
+    renderPanel({ rows: empty });
+    expect(screen.queryByText("No due dates set")).toBeNull();
+    cleanup();
+    renderPanel({ rows: undated });
+    expect(screen.getByText("No due dates set")).toBeInTheDocument();
+  });
+
+  it("colours the gap sparkline by the sign of the current gap", () => {
+    expect(trendColor("gap", { ...k, gap: -3 })).toBe("red");
+    expect(trendColor("gap", { ...k, gap: 4 })).toBe("green");
+    expect(trendColor("gap", { ...k, gap: 0 })).toBe("green");
+    expect(trendColor("overdue", k)).toBe("red");
+    expect(trendColor("complete", k)).toBe("green");
+    // Rendered: the fixture is behind plan, so its gap line is red.
+    renderPanel({ burn: COVERS_TODAY });
+    const gap = screen.getByRole("img", { name: /^Gap to plan/ });
+    expect(gap.getAttribute("style")).toContain(
+      `--status-${k.gap! < 0 ? "red" : "green"}`,
+    );
   });
 
   it("lays the cards out so any count from 1 to 6 fills the row", () => {

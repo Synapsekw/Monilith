@@ -8,6 +8,8 @@ import { StackedStatusBar } from "@/components/folders/charts/StackedStatusBar";
 import { StageMatrix } from "@/components/folders/charts/StageMatrix";
 import { BurnChart } from "@/components/folders/charts/BurnChart";
 import { BurnScopeNote } from "@/components/folders/charts/BurnScopeNote";
+import { BurnLegend } from "@/components/folders/charts/BurnLegend";
+import { burnSummary } from "@/components/folders/panels/BurnPanel";
 import type { BurnMode } from "@/components/folders/charts/BurnChartInner";
 import { burnSeries, carryOver, stageMatrix } from "@/lib/folders/rollup";
 import type { StageState, StageSummary } from "@/lib/folders/stages";
@@ -171,7 +173,13 @@ export function StagesTab({
             Add due dates to see planned vs completed
           </EmptyState>
         ) : (
-          <BurnChart points={points} mode={mode} />
+          <figure
+            aria-label={burnSummary(points, null, null)}
+            className="flex flex-col gap-2"
+          >
+            <BurnChart points={points} mode={mode} />
+            <BurnLegend mode={mode} />
+          </figure>
         )}
       </section>
 

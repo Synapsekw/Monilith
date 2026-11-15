@@ -26,7 +26,7 @@ import {
 } from "@/lib/folders/tower";
 import { stageKey, type StageSummary } from "@/lib/folders/stages";
 import type { KpiKey, LayoutSection } from "@/lib/validations/folder-layout";
-import type { FolderPayload, RollupRow } from "@/lib/folders/types";
+import type { BurnRow, FolderPayload, RollupRow } from "@/lib/folders/types";
 import { SectionChrome } from "@/components/folders/edit/SectionChrome";
 
 /**
@@ -45,8 +45,22 @@ function kickerFor(sections: LayoutSection[], id: string): string {
   return String(i + 1).padStart(2, "0");
 }
 
+/** What an absent section shows in Customize mode, so it can still be
+ *  hidden or moved. Outside Customize mode the section is not drawn. */
+function AbsentPlaceholder() {
+  return (
+    <p
+      data-testid="section-placeholder"
+      className="text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-xs"
+    >
+      Nothing to show for this folder right now
+    </p>
+  );
+}
+
 export function OverviewTab({
   payload,
+  burn: burnRows,
   rows,
   stages,
   stage,
@@ -63,6 +77,9 @@ export function OverviewTab({
   onSeeAllPeople,
 }: {
   payload: FolderPayload;
+  /** The dense burn rows, expanded once from `payload.burnPacked` by
+   *  CommandCenter. Null = not requested or failed. */
+  burn: BurnRow[] | null;
   rows: RollupRow[];
   stages: StageSummary[];
   stage: string | null;
@@ -86,9 +103,7 @@ export function OverviewTab({
 }) {
   const boards = boardSummaries(rows, payload.boards, stages);
   const burn =
-    payload.burn === null
-      ? null
-      : burnSeries(payload.burn, stage, payload.todayISO);
+    burnRows === null ? null : burnSeries(burnRows, stage, payload.todayISO);
   const anyDue = hasDatedItems(rows);
   // The RPC returns the folder's top ATTENTION_LIMIT (100) rows by severity;
   // narrowing them to the selected board and stage happens here, on the client.
@@ -129,7 +144,7 @@ export function OverviewTab({
   // there are burn rows; it stays false only for an absent/empty series (and
   // for hand-built rows without the column).
   const importedKnown =
-    payload.burn?.some((r) => r.importedDone !== undefined) ?? false;
+    burnRows?.some((r) => r.importedDone !== undefined) ?? false;
   const forecast =
     burn === null
       ? null
@@ -152,7 +167,7 @@ export function OverviewTab({
             todayISO={payload.todayISO}
             failed={payload.rollup === null}
             onRetry={onRetry}
-            burn={payload.burn}
+            burn={burnRows}
             stage={stage}
             board={board}
           />
@@ -171,6 +186,7 @@ export function OverviewTab({
             // this chart is folder-wide: state no gap at all then.
             gap={board === null ? burnScope.gap : null}
             stageBars={stageBars(stages)}
+            todayISO={payload.todayISO}
           />
         );
       case "boardStatus":
@@ -208,25 +224,32 @@ export function OverviewTab({
             kicker={kicker}
             title={s.title}
             milestones={milestones}
+            todayISO={payload.todayISO}
           />
         );
       case "load":
-        // No dates or no load rows: nothing to plot, so the section is
-        // not drawn at all.
-        return anyDue && payload.load !== null ? (
+        // No dates, or the read was skipped: nothing to plot, so the section
+        // is not drawn at all. A FAILED read shows the panel's Retry.
+        if (!anyDue || payload.load.status === "skipped") return null;
+        return (
           <LoadPanel
             kicker={kicker}
             title={s.title}
-            grid={loadGrid(
-              payload.load,
-              payload.boards,
-              { stageKey: stage, boardId: board },
-              payload.todayISO,
-            )}
-            failed={false}
+            grid={
+              payload.load.status === "ready"
+                ? loadGrid(
+                    payload.load.rows,
+                    payload.boards,
+                    { stageKey: stage, boardId: board },
+                    payload.todayISO,
+                    payload.load.weeks,
+                  )
+                : null
+            }
+            failed={payload.load.status === "failed"}
             onRetry={onRetry}
           />
-        ) : null;
+        );
       case "people":
         return (
           <PeoplePanel
@@ -234,6 +257,7 @@ export function OverviewTab({
             title={s.title}
             folderId={payload.folder.id}
             stage={stage}
+            board={board}
             members={payload.members}
             onSeeAll={onSeeAllPeople}
           />
@@ -242,9 +266,14 @@ export function OverviewTab({
         return null;
     }
   };
-  // Sections that actually draw this render. Customize mode numbers and moves
-  // over THESE, so Move up/down never lands next to an absent section.
-  const drawn = sections.filter((s) => panelFor(s) !== null);
+  // Sections that draw this render. In Customize mode every builtin section
+  // draws (an absent one as a slim placeholder, so it can still be hidden or
+  // moved); outside it, only those with something to show. Move up/down
+  // steps over THESE, so it never lands next to a section that is not drawn.
+  const nodes = new Map(sections.map((s) => [s.id, panelFor(s)]));
+  const drawn = sections.filter((s) =>
+    editing ? s.type === "builtin" : nodes.get(s.id) !== null,
+  );
   // A move in the saved config swaps ADJACENT sections; to pass the absent
   // ones between `s` and its drawn neighbour, repeat it that many times.
   const move = (id: string, dir: "up" | "down") => {
@@ -263,10 +292,11 @@ export function OverviewTab({
       <SectionGrid
         sections={sections}
         render={(s) => {
-          const node = panelFor(s);
-          // An absent section (node null) stays absent in Customize mode too:
-          // no empty chrome box, and SectionGrid lets its neighbour fill the row.
-          if (!editing || node === null || s.type !== "builtin") return node;
+          const node = nodes.get(s.id) ?? null;
+          // Outside Customize mode an absent section (node null) is not drawn
+          // and SectionGrid lets its neighbour fill the row. In Customize mode
+          // it keeps its chrome around a placeholder so it stays manageable.
+          if (!editing || s.type !== "builtin") return node;
           return (
             <SectionChrome
               panel={s.panel}
@@ -285,7 +315,7 @@ export function OverviewTab({
                   : undefined
               }
             >
-              {node}
+              {node ?? <AbsentPlaceholder />}
             </SectionChrome>
           );
         }}

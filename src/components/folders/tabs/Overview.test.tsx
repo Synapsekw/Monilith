@@ -5,6 +5,7 @@ import { computeKpis } from "@/lib/folders/rollup";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { canvasSections } from "@/lib/folders/layout";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
+import { burnRowsOf } from "@/lib/folders/packed";
 
 vi.mock("@/components/folders/charts/BurnChart", () => ({
   BurnChart: (p: { mode: string }) => (
@@ -12,11 +13,16 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
   ),
 }));
 vi.mock("@/components/folders/panels/PeoplePanel", () => ({
-  PeoplePanel: (p: { stage: string | null; onSeeAll?: () => void }) => (
+  PeoplePanel: (p: {
+    stage: string | null;
+    board?: string | null;
+    onSeeAll?: () => void;
+  }) => (
     <button
       type="button"
       data-testid="people-panel"
       data-stage={p.stage ?? ""}
+      data-board={p.board ?? ""}
       onClick={p.onSeeAll}
     >
       people
@@ -42,6 +48,7 @@ function renderOverview(
     <TooltipProvider>
       <OverviewTab
         payload={payload}
+        burn={burnRowsOf(payload.burnPacked)}
         rows={rows}
         stages={stages}
         stage={opts.stage ?? null}
@@ -117,7 +124,10 @@ describe("OverviewTab", () => {
       plannedByToday: 0,
       oldestOverdue: null,
     }));
-    renderOverview({ rollup: rows, burn: [] });
+    renderOverview({
+      rollup: rows,
+      burnPacked: { lo: null, hi: null, stages: [], rows: [] },
+    });
     expect(
       screen.getByRole("heading", { name: "Items by stage" }),
     ).toBeInTheDocument();
@@ -155,31 +165,28 @@ describe("OverviewTab", () => {
     );
   });
 
-  it("numbers and moves Customize sections over the ones that draw", () => {
+  it("numbers and moves Customize sections, absent ones included as placeholders", () => {
     const onMoveSection = vi.fn();
-    // Tower order: kpis, burn, load (absent), board-status, people, …
-    renderOverview({ load: null }, { editing: true, onMoveSection });
+    // Tower order: kpis, burn, load (absent: a placeholder), board-status, …
+    renderOverview(
+      { load: { status: "skipped" } },
+      { editing: true, onMoveSection },
+    );
     const ups = screen.getAllByRole("button", { name: "Move up" });
     const downs = screen.getAllByRole("button", { name: "Move down" });
-    // kpis, burn, board-status, people, attention, intelligence, milestones
-    expect(ups).toHaveLength(7);
+    // kpis, burn, load, board-status, people, attention, intelligence, milestones
+    expect(ups).toHaveLength(8);
     expect(ups[0]).toBeDisabled();
-    expect(downs[6]).toBeDisabled();
-    // board-status up passes the absent load section AND burn: two swaps.
-    fireEvent.click(ups[2]!);
-    expect(onMoveSection.mock.calls).toEqual([
-      ["board-status", "up"],
-      ["board-status", "up"],
-    ]);
+    expect(downs[7]).toBeDisabled();
+    // Every builtin section is drawn now, so each move is ONE adjacent swap.
+    fireEvent.click(ups[3]!); // board-status up past the load placeholder
+    expect(onMoveSection.mock.calls).toEqual([["board-status", "up"]]);
     onMoveSection.mockClear();
-    fireEvent.click(downs[1]!); // burn down past load and board-status
-    expect(onMoveSection.mock.calls).toEqual([
-      ["burn", "down"],
-      ["burn", "down"],
-    ]);
+    fireEvent.click(downs[1]!); // burn down onto the load placeholder
+    expect(onMoveSection.mock.calls).toEqual([["burn", "down"]]);
     onMoveSection.mockClear();
-    fireEvent.click(downs[2]!); // board-status down: people is adjacent
-    expect(onMoveSection.mock.calls).toEqual([["board-status", "down"]]);
+    fireEvent.click(ups[2]!); // the placeholder itself moves
+    expect(onMoveSection.mock.calls).toEqual([["load", "up"]]);
   });
 
   it("shows no scope caption when no board filter is set", () => {
@@ -255,6 +262,7 @@ describe("OverviewTab", () => {
     render(
       <OverviewTab
         payload={payload}
+        burn={burnRowsOf(payload.burnPacked)}
         rows={payload.rollup!}
         stages={buildStages(payload.rollup!, FIXTURE_TODAY)}
         stage={null}
@@ -267,9 +275,32 @@ describe("OverviewTab", () => {
   });
 
   it("renders no load section at all while the load rows are not supplied", () => {
-    renderOverview({ load: null });
+    renderOverview({ load: { status: "skipped" } });
     expect(screen.queryByText("Load by board and week")).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("shows the load section's Retry when the load read failed", () => {
+    const { onRetry } = renderOverview({ load: { status: "failed" } });
+    expect(screen.getByText("Load by board and week")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("narrows the people section to the board filter", () => {
+    renderOverview({}, { board: "b2" });
+    expect(screen.getByTestId("people-panel")).toHaveAttribute(
+      "data-board",
+      "b2",
+    );
+  });
+
+  it("draws KPI trends from the fixture's packed burn (the real path)", () => {
+    renderOverview();
+    // fixture rows carry importedDone/overdueOpen: the overdue trend shows.
+    expect(
+      screen.getByRole("img", { name: /^Overdue, last/ }),
+    ).toBeInTheDocument();
   });
 
   it("shows the reading line above the burn chart", () => {
@@ -277,21 +308,34 @@ describe("OverviewTab", () => {
     expect(screen.getByTestId("burn-reading")).toBeInTheDocument();
   });
 
-  it("draws no empty chrome box for an absent section in Customize mode", () => {
-    renderOverview({ load: null, briefs: [] }, { editing: true });
+  it("keeps an absent section manageable in Customize mode with a slim placeholder", () => {
+    renderOverview(
+      { load: { status: "skipped" }, briefs: [] },
+      { editing: true },
+    );
     expect(
-      screen.queryByRole("button", { name: "Hide Load by board and week" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Hide Load by board and week" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Hide Intelligence" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Hide Intelligence" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByTestId("section-placeholder")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Nothing to show for this folder right now"),
+    ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Hide Planned vs completed" }),
     ).toBeInTheDocument();
   });
 
+  it("leaves an absent section out entirely outside Customize mode", () => {
+    renderOverview({ load: { status: "skipped" }, briefs: [] });
+    expect(screen.queryByTestId("section-placeholder")).toBeNull();
+    expect(screen.queryByText("Intelligence")).toBeNull();
+  });
+
   it("lets the burn chart take the whole row while the load map is absent", () => {
-    renderOverview({ load: null });
+    renderOverview({ load: { status: "skipped" } });
     const burn = document
       .querySelector("[data-section-id='burn']")!
       .closest("[data-testid='section-group']") as HTMLElement;

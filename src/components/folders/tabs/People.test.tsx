@@ -121,6 +121,51 @@ describe("PeopleTab", () => {
     ).toBeNull();
     expect(getFolderWorkload).toHaveBeenCalledTimes(1); // stage switch = 0 new calls
   });
+
+  it("applies the board filter to every section, from the cache", async () => {
+    const qc = new QueryClient();
+    const ui = (board: string | null) => (
+      <QueryClientProvider client={qc}>
+        <PeopleTab
+          folderId="f1"
+          stage={null}
+          board={board}
+          members={members}
+          onWorkload={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const calls = vi.mocked(getFolderWorkload).mock.calls.length;
+    const { rerender } = render(ui(null));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: /Unassigned · 2 open/ }),
+      ).toBeInTheDocument(),
+    );
+    rerender(ui("b1"));
+    const owners = screen.getByTestId("owners-section");
+    // Ada's Mobile row drops out; only Backend remains.
+    expect(within(owners).getAllByText("Backend")).toHaveLength(2);
+    expect(within(owners).queryByText("Backend, Mobile")).toBeNull();
+    expect(within(owners).getByText("16 open · 2 overdue")).toBeInTheDocument();
+    // The only unassigned row is on Mobile.
+    expect(screen.queryByRole("link", { name: /Unassigned/ })).toBeNull();
+    expect(
+      screen.getByText("Every open item has an owner."),
+    ).toBeInTheDocument();
+    expect(vi.mocked(getFolderWorkload).mock.calls.length).toBe(calls + 1);
+  });
+});
+
+describe("peopleFromWorkload board filter", () => {
+  it("keeps only the selected board's rows", () => {
+    expect(
+      peopleFromWorkload(rows, null, members, "b2").map((p) => [
+        p.name,
+        p.open,
+      ]),
+    ).toEqual([["Ada Lovelace", 1]]);
+  });
 });
 
 describe("member display fallback", () => {

@@ -43,7 +43,7 @@ export function StageBars({ bars }: { bars: StageBar[] }) {
       </ul>
       <div className="text-muted-foreground flex gap-4 text-xs">
         <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-2 rounded-sm", STATUS_BG.blue)} /> Active
+          <span className={cn("size-2 rounded-sm", STATUS_BG.blue)} /> Not stale
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className={cn("size-2 rounded-sm", STATUS_BG.yellow)} /> Stale

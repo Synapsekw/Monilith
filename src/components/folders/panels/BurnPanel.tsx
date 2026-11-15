@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BurnChart } from "@/components/folders/charts/BurnChart";
+import { BurnLegend } from "@/components/folders/charts/BurnLegend";
 import { BurnScopeNote } from "@/components/folders/charts/BurnScopeNote";
 import { StageBars } from "@/components/folders/charts/StageBars";
 import type { BurnMode } from "@/components/folders/charts/BurnChartInner";
@@ -25,6 +26,32 @@ function gapSentence(gap: number): string {
 }
 
 /**
+ * The chart's text alternative: planned and completed totals over the charted
+ * window, the gap (when one is stated) and the forecast reading.
+ */
+export function burnSummary(
+  points: BurnPoint[],
+  gap: number | null,
+  forecast: Forecast | null,
+  todayISO?: string,
+): string {
+  const last = points[points.length - 1];
+  const planned = last?.plannedCum ?? 0;
+  const completed = last?.completedCum ?? 0;
+  const gapText =
+    gap === null
+      ? ""
+      : gap === 0
+        ? " On plan today."
+        : ` ${gapSentence(gap).trim()}`;
+  const reading =
+    forecast === null
+      ? ""
+      : ` ${forecast.insufficientHistory ? NOT_ENOUGH_HISTORY : forecastReading(forecast, todayISO)}`;
+  return `Planned vs completed: ${planned} planned in total, ${completed} completed.${gapText}${reading}`;
+}
+
+/**
  * "Planned vs completed" with a forecast, or, for a folder with no dates,
  * "Items by stage". `mode` is local UI state (cumulative/weekly), not folder
  * data, so it lives here rather than being threaded through Overview.
@@ -39,6 +66,7 @@ export function BurnPanel({
   forecast = null,
   gap = null,
   stageBars,
+  todayISO,
 }: {
   kicker: string;
   title?: string;
@@ -59,6 +87,8 @@ export function BurnPanel({
   gap?: number | null;
   /** Supplied by Overview; when the folder has no dates these replace the chart. */
   stageBars?: StageBar[];
+  /** The page's today, so a finish date in another year shows its year. */
+  todayISO?: string;
 }) {
   const [mode, setMode] = useState<BurnMode>("cumulative");
   if (!anyDue && stageBars !== undefined)
@@ -101,7 +131,7 @@ export function BurnPanel({
         <p data-testid="burn-reading" className="text-muted-foreground text-xs">
           {forecast.insufficientHistory
             ? NOT_ENOUGH_HISTORY
-            : `${gap === null ? "" : gapSentence(gap)}${forecastReading(forecast)}`}
+            : `${gap === null ? "" : gapSentence(gap)}${forecastReading(forecast, todayISO)}`}
         </p>
       ) : null}
       {burn === null ? (
@@ -111,11 +141,17 @@ export function BurnPanel({
           Add due dates to see planned vs completed
         </EmptyState>
       ) : (
-        <BurnChart
-          points={burn}
-          mode={mode}
-          forecast={mode === "cumulative" ? forecast?.line : undefined}
-        />
+        <figure
+          aria-label={burnSummary(burn, gap, forecast, todayISO)}
+          className="flex flex-col gap-2"
+        >
+          <BurnChart
+            points={burn}
+            mode={mode}
+            forecast={mode === "cumulative" ? forecast?.line : undefined}
+          />
+          <BurnLegend mode={mode} forecast={(forecast?.line.length ?? 0) > 1} />
+        </figure>
       )}
     </Panel>
   );

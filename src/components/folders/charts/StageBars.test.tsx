@@ -34,6 +34,12 @@ describe("StageBars", () => {
     expect(stale[1]!.style.width).toBe(`${(4 / 9) * 100}%`);
   });
 
+  it("labels the non-stale share Not stale, since it includes done items", () => {
+    render(<StageBars bars={bars} />);
+    expect(screen.getByText(/Not\s+stale/)).toBeInTheDocument();
+    expect(screen.queryByText("Active")).toBeNull();
+  });
+
   it("shows an empty state with no stages", () => {
     render(<StageBars bars={[]} />);
     expect(screen.getByText("No items yet.")).toBeInTheDocument();

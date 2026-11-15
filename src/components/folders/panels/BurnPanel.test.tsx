@@ -10,7 +10,7 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
     />
   ),
 }));
-import { BurnPanel } from "./BurnPanel";
+import { BurnPanel, burnSummary } from "./BurnPanel";
 
 const points = [
   {
@@ -228,5 +228,74 @@ describe("BurnPanel", () => {
     expect(
       screen.getByText("Add due dates to see planned vs completed"),
     ).toBeInTheDocument();
+  });
+
+  it("gives the chart a text alternative with totals, the gap and the forecast", () => {
+    render(
+      <BurnPanel
+        kicker="02"
+        board={null}
+        burn={points}
+        anyDue
+        onRetry={vi.fn()}
+        forecast={forecast}
+        gap={-7}
+        todayISO="2026-09-15"
+      />,
+    );
+    const fig = screen.getByRole("figure");
+    expect(fig).toHaveAttribute(
+      "aria-label",
+      "Planned vs completed: 20 planned in total, 13 completed. 7 behind plan today. At 3 a week the folder finishes around Oct 12, 3 weeks after its last planned date.",
+    );
+    expect(fig).toContainElement(screen.getByTestId("burn-chart"));
+  });
+
+  it("names the forecast year when the finish date is in another year", () => {
+    expect(
+      burnSummary(
+        points,
+        null,
+        { ...forecast, finishWeek: "2027-01-04" },
+        "2026-09-15",
+      ),
+    ).toContain("finishes around Jan 4, 2027");
+  });
+
+  it("shows a legend that tells Planned, Completed and Forecast apart by line style", () => {
+    render(
+      <BurnPanel
+        kicker="02"
+        board={null}
+        burn={points}
+        anyDue
+        onRetry={vi.fn()}
+        forecast={{
+          ...forecast,
+          line: [
+            { weekStart: "2026-09-14", value: 13 },
+            { weekStart: "2026-09-21", value: 16 },
+          ],
+        }}
+        gap={-7}
+      />,
+    );
+    const legend = screen.getByTestId("burn-legend");
+    const items = [...legend.querySelectorAll("li")].map((li) => [
+      li.textContent,
+      li.getAttribute("data-style"),
+    ]);
+    expect(items).toEqual([
+      ["Planned (dashed line)", "dashed"],
+      ["Completed (solid line)", "solid"],
+      ["Forecast (dotted line)", "dotted"],
+    ]);
+    // Weekly mode has no forecast and draws bars.
+    fireEvent.click(screen.getByRole("radio", { name: "Weekly" }));
+    expect(
+      [...screen.getByTestId("burn-legend").querySelectorAll("li")].map((li) =>
+        li.getAttribute("data-style"),
+      ),
+    ).toEqual(["bar", "bar"]);
   });
 });

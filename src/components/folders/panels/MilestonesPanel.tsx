@@ -1,22 +1,21 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import type { Milestone } from "@/lib/folders/rollup";
+import { fmtDay } from "@/lib/folders/tower";
 import { Panel } from "./Panel";
 
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
+/** Dates are formatted in UTC, like every week on this page, with the year
+ *  when it is not the current one. */
 export function MilestonesPanel({
   kicker,
   title = "Next milestones",
   milestones,
+  todayISO,
 }: {
   kicker: string;
   title?: string;
   milestones: Milestone[];
+  /** The page's today; a date outside its year shows the year. */
+  todayISO?: string;
 }) {
   return (
     <Panel kicker={kicker} title={title}>
@@ -32,7 +31,7 @@ export function MilestonesPanel({
             >
               <span className="font-medium">{m.name}</span>
               <span className="text-muted-foreground font-mono">
-                {fmtDate(m.endDate)} · {m.open} open
+                {fmtDay(m.endDate, todayISO)} · {m.open} open
               </span>
             </li>
           ))}

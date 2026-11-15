@@ -98,6 +98,53 @@ describe("PeoplePanel", () => {
     expect(getFolderWorkload).toHaveBeenCalledTimes(1);
   });
 
+  it("narrows people and the Unassigned row to the board filter without another request", async () => {
+    const onBoard = (r: WorkloadRow, boardId: string): WorkloadRow => ({
+      ...r,
+      boardId,
+      boardName: boardId === "b2" ? "Mobile" : "Backend",
+    });
+    getFolderWorkload.mockResolvedValue({
+      ok: true,
+      data: [
+        row("u1", 9, 4),
+        onBoard(row("u2", 3, 0), "b2"),
+        row(null, 5, 2),
+        onBoard(row(null, 7, 1), "b2"),
+      ],
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const ui = (board: string | null) => (
+      <QueryClientProvider client={qc}>
+        <PeoplePanel
+          kicker="05"
+          folderId="f1"
+          stage={null}
+          board={board}
+          members={members}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(null));
+    await waitFor(() =>
+      expect(screen.getByText("Grace Hopper")).toBeInTheDocument(),
+    );
+    const unassignedText = () =>
+      screen
+        .getAllByRole("listitem")
+        .map((li) => li.textContent ?? "")
+        .find((t) => t.includes("Unassigned"));
+    expect(unassignedText()).toContain("12");
+    rerender(ui("b2"));
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+    expect(screen.getByText("Grace Hopper")).toBeInTheDocument();
+    expect(unassignedText()).toContain("7");
+    expect(unassignedText()).not.toContain("12");
+    expect(getFolderWorkload).toHaveBeenCalledTimes(1);
+  });
+
   it("shows at most eight people and offers the full list", async () => {
     const many = Array.from({ length: 11 }, (_, i) => row(`x${i}`, 20 - i, 0));
     getFolderWorkload.mockResolvedValue({ ok: true, data: many });

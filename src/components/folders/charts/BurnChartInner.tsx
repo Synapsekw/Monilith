@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/chart";
 import type { BurnPoint } from "@/lib/folders/rollup";
 import { cn } from "@/lib/utils";
+import { burnAxisTick, burnAxisWidth } from "./burn-axis";
 
 export type BurnMode = "cumulative" | "weekly";
 
@@ -71,6 +72,13 @@ export function BurnChartInner({
     gapBase: mode === "cumulative" && p.isPast ? p.completedCum : 0,
     forecast: forecastByWeek.get(p.weekStart) ?? null,
   }));
+  // Size the Y axis to its longest tick label (four digits used to clip).
+  const yMax = Math.max(
+    0,
+    ...data.map((d) =>
+      Math.max(d.planned, d.completed, d.gap + d.gapBase, d.forecast ?? 0),
+    ),
+  );
   return (
     <ChartContainer
       config={CONFIG}
@@ -93,7 +101,8 @@ export function BurnChartInner({
           allowDecimals={false}
           tickLine={false}
           axisLine={false}
-          width={28}
+          tickFormatter={(v: number) => burnAxisTick(v)}
+          width={burnAxisWidth(yMax)}
         />
         <ChartTooltip
           content={

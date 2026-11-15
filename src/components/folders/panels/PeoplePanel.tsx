@@ -11,6 +11,7 @@ import {
   type WorkloadPerson,
 } from "@/components/folders/charts/WorkloadBars";
 import {
+  inWorkloadScope,
   peopleFromWorkload,
   workloadKey,
 } from "@/components/folders/tabs/People";
@@ -44,14 +45,16 @@ function useNearViewport<T extends Element>() {
 /**
  * Open and late work per person on the Overview. Reads the SAME query the
  * People tab reads (same key, 60 s stale time), fetched when this section
- * nears the viewport — never on first paint. Stage changes re-derive from the
- * cache.
+ * nears the viewport — never on first paint. Stage and board changes
+ * re-derive from the cache (no refetch), the same filters the People tab
+ * applies.
  */
 export function PeoplePanel({
   kicker,
   title = "Open work by person",
   folderId,
   stage,
+  board = null,
   members,
   onSeeAll,
 }: {
@@ -59,6 +62,8 @@ export function PeoplePanel({
   title?: string;
   folderId: string;
   stage: string | null;
+  /** The active board filter: narrows the people and the Unassigned row. */
+  board?: string | null;
   members: FolderMember[];
   /** Opens the People tab. Omitted when the layout has no People tab. */
   onSeeAll?: () => void;
@@ -95,9 +100,9 @@ export function PeoplePanel({
   else if (!q.data)
     body = <Skeleton data-testid="people-skeleton" className="h-40 w-full" />;
   else {
-    const people = peopleFromWorkload(q.data, stage, members);
+    const people = peopleFromWorkload(q.data, stage, members, board);
     const loose = q.data.filter(
-      (r) => r.userId === null && (stage === null || r.stageKey === stage),
+      (r) => r.userId === null && inWorkloadScope(r, stage, board),
     );
     const looseOpen = loose.reduce((s, r) => s + r.open, 0);
     const unassigned: WorkloadPerson | null =
