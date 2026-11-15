@@ -3,6 +3,11 @@
 import { useState, useTransition, type TransitionStartFunction } from "react";
 
 import { updateBoardWorkSettings } from "@/lib/boards/actions/work-settings";
+import {
+  guessDueColumn,
+  guessStatusColumn,
+  looksDoneLabel,
+} from "@/lib/boards/work-guess";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,7 +20,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-const DONE_RE = /done|complete/i;
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30";
 
@@ -142,10 +146,13 @@ function WorkTrackingForm({
   const [error, setError] = useState<string | null>(null);
 
   const chosenStatus = statusColumns.find((c) => c.id === statusId);
-  const guessedStatus = statusColumns[0];
+  // The same guesses public.item_facts makes, so "Automatic" shows what
+  // Today and the assistant will actually use.
+  const guessedStatus = guessStatusColumn(columns);
   const guessedDone = optionsOf(guessedStatus).filter((o) =>
-    DONE_RE.test(o.label),
+    looksDoneLabel(o.label),
   );
+  const guessedDue = guessDueColumn(columns);
 
   function changeStatus(next: string) {
     setStatusId(next);
@@ -204,7 +211,7 @@ function WorkTrackingForm({
               value={statusId}
               onChange={(e) => changeStatus(e.target.value)}
             >
-              <option value="">Automatic ({guessedStatus.name})</option>
+              <option value="">Automatic ({guessedStatus?.name})</option>
               {statusColumns.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -245,8 +252,8 @@ function WorkTrackingForm({
                   );
                 })}
                 <p className="text-muted-foreground text-xs">
-                  Leave all unticked to treat options named like Done or
-                  Complete as done.
+                  Leave all unticked to treat options named like Done, Complete
+                  or Cancelled as done.
                 </p>
               </>
             ) : (
@@ -274,8 +281,8 @@ function WorkTrackingForm({
           onChange={(e) => setDueId(e.target.value)}
         >
           <option value="">
-            {dateColumns.length > 0
-              ? `Automatic (${dateColumns[0].name})`
+            {guessedDue
+              ? `Automatic (${guessedDue.name})`
               : "Automatic (no date column)"}
           </option>
           {dateColumns.map((c) => (
