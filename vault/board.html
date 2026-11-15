@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "8b499ba3",
+        "value": "28f6960e",
         "tone": "warn",
-        "note": "Ahead of main: folder invites, the command center Tower, the Today block and assistant retrieval (with smarter due-date and done guesses), the large-board loading fix, the dense board table and the readable timelines. Awaiting a promotion PR."
+        "note": "Ahead of main: folder invites, the command center Tower, the Today block and assistant retrieval (with smarter due-date and done guesses), status-coloured relation chips with filter, search, sort and export, the large-board loading fix, the dense board table and the readable timelines. Awaiting a promotion PR."
       },
       {
         "name": "main",
@@ -204,6 +204,16 @@
         "owner",
         "verify",
         "ai",
+        "before promote"
+      ]
+    },
+    {
+      "title": "Check the Milestone link, then drop the text column",
+      "why": "Milestone on the 11 DAAS boards is now a link to a Milestones board, with chips coloured by status. Filter, sort and export on it were unit-tested only. Once they check out, delete the kept \"Milestone (text)\" column. Milestone status and dates are a one-time snapshot, not a roll-up.",
+      "tags": [
+        "owner",
+        "verify",
+        "boards",
         "before promote"
       ]
     },
@@ -496,14 +506,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-11-15-1309-folder-invites-and-command-center-tower",
-    "when": "2026-11-15 13:09",
-    "title": "Folder invites and the command center \"Tower\"",
+    "id": "2026-11-15-1839-milestones-board-and-relation-chips",
+    "when": "2026-11-15 18:39",
+    "title": "Milestones board and status-tinted relation chips",
     "bullets": [
-      "Folder invites: bring a member or an email onto a whole folder as viewer or editor; outsiders join as guests and see only their folders.",
-      "Command center Tower: KPI trends, burn forecast, load heat map, people section, boards with health and sort.",
-      "Fixed on the way: the burn chart read 4,088 rows through a 1,000-row cap and showed 14 of 56 stages. Still wrong on production until promotion.",
-      "Reviews caught four access holes before any migration was applied. Five migrations live on DEV."
+      "Milestone on the 11 DAAS boards was free text: 162 labels over 2,127 items. It is now a link to a new Milestones board, verified row by row.",
+      "The Milestones timeline draws bars from the earliest task start to the latest due date.",
+      "Relation chips take the linked item’s status colour, show the full name and open the item; a hover pencil edits.",
+      "Relation columns now work in board filter, search, sort and export. Merged to develop; not live until promotion."
     ]
   }
 }
