@@ -29,6 +29,13 @@ related: []
   and the auto-sent answer never rendered (a `replaceState` plus `revalidatePath("/ask")` swapped
   the page under the streaming chat). Both fixed and re-confirmed live.
 - Announced on `/updates` for 2026-11-15 (Today block, assistant questions, Work tracking).
+- Follow-up the same day, merged as `4e1ab69a` (`task/work-guess-defaults`): better default guesses.
+  The due column is picked by name (due/deadline/end/finish/target first, baseline names such as
+  "Original due" after, start-like last, then position) and "Cancelled" counts as done, with
+  negated labels ("Incomplete", "Not done") staying open. Rules live in `src/lib/boards/work-guess.ts`
+  with a parity test against the SQL; migrations `20261115073021` and `20261115075029`. On live data
+  12 boards moved from Start to Due/Finish, open overdue fell from 725 to 516, and 16 cancelled items
+  became done. Announced on `/updates` by a trailer on the feature commit.
 
 ## Why
 
@@ -50,7 +57,8 @@ Setup: pull `develop`, `pnpm build && pnpm start -p 3001`, sign in at `http://lo
 5. In `/ask`, try: "How many open items does each person have?", "What is <first name> working on
    that is due in the next two weeks?", "Why is <item name> still open?", "Find items about <topic>
    across all boards". Each should answer from data, not ask for ids.
-6. Open a board, **⋯ → Work tracking**. Pick the status column, the options that mean done, and the
+6. Open a board that has both "Start" and "Due" columns, **⋯ → Work tracking**: it should read
+   "Due date column: Automatic (Due)" and list Cancelled under "Currently treated as done". Then: Pick the status column, the options that mean done, and the
    due-date column; Save. Today and the assistant now follow that board's settings.
 
 ## Open threads
@@ -59,8 +67,9 @@ Setup: pull `develop`, `pnpm build && pnpm start -p 3001`, sign in at `http://lo
   second-org board through the external MCP connector.
 - `scripts/sql/verify-item-facts.sql` (stale-done-list case) never ran: the approval prompt expired.
   The view change returned identical rows to the old view over 2,500 items before it was applied.
-- Default guesses are weak on real data: the due-date guess takes the lowest-position date column
-  (Procurement: "Start"), and "Cancelled" is not treated as done, so cancelled items rank as overdue.
+- `scripts/sql/verify-item-facts.sql` also covers the new guess rules and is still unrun (approval
+  prompt expired twice). The board overdue chip, health flags, goals and dashboards keep the old
+  done rule, so cancelled items still read as open there.
 - 10 of 13 members in the largest org have no profile name and appear as "Unnamed member".
 - Unconfirmed why the OpenAI model treated optional tool fields as required; `tool({ strict: false })`
   in `buildAssistantTools` is the untested switch. The assistant lists all 20 items, not the top 5–7.
@@ -72,5 +81,5 @@ Setup: pull `develop`, `pnpm build && pnpm start -p 3001`, sign in at `http://lo
 
 ## Next session entry point
 
-Decide the two default-guess fixes (prefer a due/deadline/end column; treat cancelled as done) and
-ship them as one small task, then run the owed browser checks before promoting `develop`.
+Run `scripts/sql/verify-item-facts.sql` with the owner present to approve it, do the owed browser
+checks (Mono thread, dark theme, phone width), then promote `develop`.
