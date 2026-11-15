@@ -171,18 +171,27 @@ export const EditableCell = memo(function EditableCell({
         <RelationCell
           links={links}
           allowMultiple={relSettings.allow_multiple ?? true}
+          targetBoardId={targetBoardId || undefined}
           loadCandidates={(search) =>
             targetBoardId
               ? listRelationCandidates(targetBoardId, search)
               : Promise.resolve([])
           }
           onChange={(selection) => {
+            // A newly picked item keeps its chip colour without a reload when
+            // any other row already links to it (the common case: many rows
+            // share one milestone). Otherwise it stays neutral until refresh.
+            const knownStatus = (linkedItemId: string) =>
+              controls.cache.relationLinks.find(
+                (l) => l.linkedItemId === linkedItemId && l.linkedItemStatus,
+              )?.linkedItemStatus ?? null;
             const newLinks: RelationLink[] = selection.map((s, i) => ({
               id: `optimistic-${item.id}-${column.id}-${s.linkedItemId}`,
               itemId: item.id,
               columnId: column.id,
               linkedItemId: s.linkedItemId,
               linkedItemName: s.linkedItemName,
+              linkedItemStatus: knownStatus(s.linkedItemId),
               position: i,
             }));
             controls.setRelationLinks({

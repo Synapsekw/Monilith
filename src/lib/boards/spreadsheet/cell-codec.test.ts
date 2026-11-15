@@ -140,8 +140,14 @@ describe("cellToText", () => {
     expect(cellToText("people", { userIds: [] }, {}, resolve)).toBe("");
   });
 
-  it("renders relation as blank", () => {
+  it("renders relation as blank when no linked-name text was supplied", () => {
     expect(cellToText("relation", { itemIds: ["i1"] }, {})).toBe("");
+    expect(cellToText("relation", null, {})).toBe("");
+  });
+  it("renders relation as its joined linked-name text", () => {
+    expect(cellToText("relation", { text: "Acme, Globex" }, {})).toBe(
+      "Acme, Globex",
+    );
   });
 
   it("renders mirror as blank", () => {

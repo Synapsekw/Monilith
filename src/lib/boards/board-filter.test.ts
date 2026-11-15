@@ -602,3 +602,73 @@ describe("intel param (active intelligence chip)", () => {
     ).toBe(false);
   });
 });
+
+describe("relation columns (linked item names as text)", () => {
+  const relColumns: FilterColumnMeta[] = [
+    ...columns,
+    { id: "c-rel", kind: "relation", settings: {} },
+  ];
+  // The shape the call sites produce by overlaying relation text on the cell map.
+  const relCtx = (cells: Record<string, unknown>) => ({
+    columns: relColumns,
+    cellMap: new Map<string, unknown>(Object.entries(cells)),
+  });
+  const cells = {
+    [cellKey("i1", "c-rel")]: { text: "Acme Corp, Globex" },
+    [cellKey("i2", "c-rel")]: { text: "Initech" },
+  };
+  const rows = [item("i1"), item("i2"), item("i3")];
+  const withCondition = (
+    operator: "contains" | "eq" | "is_empty" | "not_empty",
+    value?: string,
+  ): BoardFilterState => ({
+    ...EMPTY_BOARD_FILTER,
+    conditions: {
+      combinator: "and",
+      conditions: [{ columnId: "c-rel", operator, value }],
+    },
+  });
+  const ids = (state: BoardFilterState) =>
+    rows.filter(buildItemPredicate(state, relCtx(cells))).map((r) => r.id);
+
+  it("isCellEmpty treats a relation cell with no linked names as empty", () => {
+    expect(isCellEmpty("relation", undefined)).toBe(true);
+    expect(isCellEmpty("relation", { text: "" })).toBe(true);
+    expect(isCellEmpty("relation", { text: "Acme" })).toBe(false);
+  });
+
+  it("contains matches a linked name, case-insensitively", () => {
+    expect(ids(withCondition("contains", "globex"))).toEqual(["i1"]);
+  });
+
+  it("eq matches the whole joined text", () => {
+    expect(ids(withCondition("eq", "Initech"))).toEqual(["i2"]);
+    expect(ids(withCondition("eq", "Acme Corp"))).toEqual([]);
+  });
+
+  it("is_empty / not_empty follow whether the row has linked names", () => {
+    expect(ids(withCondition("is_empty"))).toEqual(["i3"]);
+    expect(ids(withCondition("not_empty"))).toEqual(["i1", "i2"]);
+  });
+
+  it("quick search hits a linked item name", () => {
+    expect(ids({ ...EMPTY_BOARD_FILTER, q: "initech" })).toEqual(["i2"]);
+  });
+
+  it("sorts by linked names asc / desc with empties last", () => {
+    const sorted = (direction: "asc" | "desc") =>
+      [...rows]
+        .sort(
+          buildItemComparator(
+            {
+              ...EMPTY_BOARD_FILTER,
+              sort: { field: { kind: "column", columnId: "c-rel" }, direction },
+            },
+            relCtx(cells),
+          )!,
+        )
+        .map((r) => r.id);
+    expect(sorted("asc")).toEqual(["i1", "i2", "i3"]);
+    expect(sorted("desc")).toEqual(["i2", "i1", "i3"]);
+  });
+});

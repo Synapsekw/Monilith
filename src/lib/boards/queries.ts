@@ -7,6 +7,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
 import { fetchAllRows } from "@/lib/supabase/paginate";
+import {
+  resolveLinkedStatuses,
+  type LinkedItemStatus,
+} from "@/lib/boards/relation-status";
 import { mergeSharedBoards } from "@/lib/boards/shared-merge";
 import { warnIfAtCap } from "@/lib/supabase/cap-warning";
 import {
@@ -453,17 +457,71 @@ export const getBoardPayload = cache(
     const rawLinks = relationLinksRes.data ?? [];
     const linkedIds = [...new Set(rawLinks.map((l) => l.linked_item_id))];
     const namesById = new Map<string, string>();
+    let statusById = new Map<string, LinkedItemStatus>();
     if (linkedIds.length > 0) {
-      const { data: linkedItems, error: linkedErr } = await supabase
-        .from("items")
-        .select("id, name")
-        .in("id", linkedIds)
-        .is("archived_at", null);
-      if (linkedErr)
+      // Boards the relation columns point at — their status columns colour the
+      // chips. Read in the same round-trip as the names: both follow-ups key on
+      // ids already in hand, so neither waits on the other.
+      const targetBoardIds = [
+        ...new Set(
+          (columnsRes.data ?? [])
+            .filter((c) => c.kind === "relation")
+            .map(
+              (c) =>
+                (c.settings as { target_board_id?: string } | null)
+                  ?.target_board_id,
+            )
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ];
+      const [namesRes, statusColsRes, statusCellsRes] = await Promise.all([
+        supabase
+          .from("items")
+          .select("id, name")
+          .in("id", linkedIds)
+          .is("archived_at", null),
+        targetBoardIds.length > 0
+          ? supabase
+              .from("columns")
+              .select("id, position, settings")
+              .in("board_id", targetBoardIds)
+              .eq("kind", "status")
+          : null,
+        // Bounded to the linked items and to status-kind columns (inner join on
+        // the column so the kind filter runs server-side), ordered by the
+        // `(item_id, column_id)` PRIMARY KEY so the cap truncates determinately.
+        targetBoardIds.length > 0
+          ? fetchAllRows(
+              (from, to) =>
+                supabase
+                  .from("cell_values")
+                  .select("item_id, column_id, value, columns!inner(kind)")
+                  .in("item_id", linkedIds)
+                  .eq("columns.kind", "status")
+                  .order("item_id", { ascending: true })
+                  .order("column_id", { ascending: true })
+                  .range(from, to),
+              { cap: 4000 },
+            )
+          : null,
+      ]);
+      if (namesRes.error)
         throw new Error(
-          `Failed to load board linked items: ${linkedErr.message}`,
+          `Failed to load board linked items: ${namesRes.error.message}`,
         );
-      for (const it of linkedItems ?? []) namesById.set(it.id, it.name);
+      for (const it of namesRes.data ?? []) namesById.set(it.id, it.name);
+      // Chip colour is decoration: a failed status read leaves the chips
+      // neutral instead of failing the whole board.
+      if (
+        statusColsRes &&
+        statusCellsRes &&
+        !statusColsRes.error &&
+        !statusCellsRes.error
+      )
+        statusById = resolveLinkedStatuses(
+          statusCellsRes.data ?? [],
+          statusColsRes.data ?? [],
+        );
     }
     const relationLinks: RelationLink[] = rawLinks.map((l) => ({
       id: l.id,
@@ -471,6 +529,7 @@ export const getBoardPayload = cache(
       columnId: l.column_id,
       linkedItemId: l.linked_item_id,
       linkedItemName: namesById.get(l.linked_item_id) ?? null,
+      linkedItemStatus: statusById.get(l.linked_item_id) ?? null,
       position: l.position,
     }));
 

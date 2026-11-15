@@ -22,6 +22,21 @@ export function operatorsForKind(kind: string): FilterOperator[] {
   }
 }
 
+/**
+ * Operators for the BOARD filter, which is evaluated in memory against the
+ * loaded board (`board-filter.ts`) — where a relation cell is its linked item
+ * names as text, so it can be text-matched.
+ *
+ * Deliberately separate from {@link operatorsForKind}: the dashboard-widget and
+ * automation builders are evaluated in SQL over `cell_values`
+ * (`dashboard_list_rows` / the automations predicate), where a relation column
+ * has no row at all — `contains` / `eq` there would silently match nothing.
+ */
+export function boardOperatorsForKind(kind: string): FilterOperator[] {
+  if (kind === "relation") return ["contains", "eq", ...EMPTIES];
+  return operatorsForKind(kind);
+}
+
 export type ValueControl = "none" | "option" | "number" | "date" | "text";
 
 /** Which value input a (kind, operator) pair needs. */

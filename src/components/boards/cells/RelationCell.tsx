@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Plus } from "lucide-react";
+import { ColorChip } from "@/components/ui/color-chip";
+import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
   Popover,
   PopoverContent,
@@ -27,6 +30,9 @@ export type RelationCellProps = {
   onChange: (selection: RelationSelection[]) => void;
   readOnly?: boolean;
   maxChips?: number;
+  /** The board the links point at. When set, each chip opens its linked item
+   *  there; without it the chips are plain labels. */
+  targetBoardId?: string;
 };
 
 export function RelationCell({
@@ -36,6 +42,7 @@ export function RelationCell({
   onChange,
   readOnly = false,
   maxChips = 2,
+  targetBoardId,
 }: RelationCellProps) {
   const [open, setOpen] = useState(false);
   // `search` is the raw input value (instant echo, every keystroke); `query` is
@@ -108,46 +115,95 @@ export function RelationCell({
     onChange(next);
   }
 
-  const trigger = (
-    <button
-      type="button"
-      aria-label="Edit linked items"
-      disabled={readOnly}
-      className={cn(
-        "flex h-full w-full items-center gap-1.5 overflow-hidden rounded px-1 text-left",
-        "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-        "disabled:pointer-events-none",
-      )}
-    >
-      {shown.map((l) => (
-        <span
-          key={l.id}
-          className="bg-surface inline-flex max-w-[140px] items-center gap-1.5 truncate rounded-md border px-2 py-0.5 text-xs"
-        >
-          <span
-            aria-hidden
-            className="bg-muted-foreground/50 size-2 shrink-0 rounded-full"
-          />
-          <span className="truncate">{l.linkedItemName}</span>
+  const chips = shown.map((l) => {
+    const status = l.linkedItemStatus ?? null;
+    // Status is carried by colour AND by the label in the name/tooltip, which
+    // also shows a name the cell had to truncate.
+    const label = status
+      ? `${l.linkedItemName} · ${status.label}`
+      : (l.linkedItemName ?? "");
+    const chip = status ? (
+      <ColorChip
+        color={status.color}
+        className="min-w-0 hover:-translate-y-px hover:brightness-110"
+      >
+        <span className="truncate">{l.linkedItemName}</span>
+      </ColorChip>
+    ) : (
+      <span className="bg-surface hover:border-border-hover inline-flex max-w-full min-w-0 items-center rounded-sm border px-2.5 py-0.5 text-xs font-medium transition-colors">
+        <span className="truncate">{l.linkedItemName}</span>
+      </span>
+    );
+    if (!targetBoardId)
+      return (
+        <span key={l.id} title={label} className="inline-flex min-w-0">
+          {chip}
         </span>
-      ))}
+      );
+    return (
+      <Link
+        key={l.id}
+        href={`/boards/${targetBoardId}?item=${l.linkedItemId}`}
+        // A board shows dozens of these, each a distinct URL — prefetching
+        // them would fire an RSC request per visible row.
+        prefetch={false}
+        title={label}
+        aria-label={`Open ${label}`}
+        onClick={(e) => e.stopPropagation()}
+        className="focus-visible:ring-ring inline-flex min-w-0 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {chip}
+      </Link>
+    );
+  });
+
+  const chipRow = (
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+      {chips}
       {overflow > 0 && (
         <span className="text-muted-foreground shrink-0 text-xs">
           +{overflow} more
         </span>
       )}
-      {isEmpty && !readOnly && (
-        <span className="text-muted-foreground inline-flex size-5 shrink-0 items-center justify-center rounded border border-dashed pointer-coarse:size-11">
-          <Plus className="size-3.5" />
-        </span>
+    </div>
+  );
+
+  // Read-only cells (viewers) render the chips without an editor.
+  if (readOnly)
+    return (
+      <div className="flex h-full w-full items-center px-1">{chipRow}</div>
+    );
+
+  // An empty cell is one big "add" target; a filled one keeps the chips
+  // clickable and moves editing to a pencil that appears on hover (always
+  // visible on touch).
+  const trigger = isEmpty ? (
+    <button
+      type="button"
+      aria-label="Edit linked items"
+      className={cn(
+        "flex h-full w-full items-center gap-1.5 overflow-hidden rounded px-1 text-left",
+        "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
       )}
+    >
+      <span className="text-muted-foreground inline-flex size-5 shrink-0 items-center justify-center rounded border border-dashed pointer-coarse:size-11">
+        <Plus className="size-3.5" />
+      </span>
+    </button>
+  ) : (
+    <button
+      type="button"
+      aria-label="Edit linked items"
+      className={cn(
+        "text-muted-foreground inline-flex size-6 shrink-0 items-center justify-center rounded pointer-coarse:size-11",
+        "hover:bg-state-hover hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+      )}
+    >
+      <Pencil className="size-3.5" />
     </button>
   );
 
-  // Read-only cells (viewers) render the chips without an editor popover.
-  if (readOnly) return trigger;
-
-  return (
+  const popover = (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
@@ -161,5 +217,14 @@ export function RelationCell({
         />
       </PopoverContent>
     </Popover>
+  );
+
+  if (isEmpty) return popover;
+
+  return (
+    <div className="group flex h-full w-full min-w-0 items-center gap-1 px-1">
+      {chipRow}
+      <RevealOnHover className="shrink-0">{popover}</RevealOnHover>
+    </div>
   );
 }

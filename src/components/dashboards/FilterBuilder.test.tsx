@@ -61,4 +61,57 @@ describe("FilterBuilder", () => {
       expect.objectContaining({ conditions: [] }),
     );
   });
+
+  it("defaults a relation column to empties only (server-evaluated builders)", () => {
+    const cols: FilterColumn[] = [
+      { id: "c-rel", name: "Clients", kind: "relation", options: [] },
+    ];
+    const value: ListFilter = {
+      combinator: "and",
+      conditions: [{ columnId: "c-rel", operator: "is_empty" }],
+    };
+    render(<FilterBuilder columns={cols} value={value} onChange={vi.fn()} />);
+    const opts = Array.from(
+      screen.getByLabelText(/operator/i).querySelectorAll("option"),
+    ).map((o) => o.textContent);
+    expect(opts).toEqual(["is empty", "is not empty"]);
+  });
+
+  it("offers relation text matching when the filter is evaluated on the board", () => {
+    const cols: FilterColumn[] = [
+      { id: "c-rel", name: "Clients", kind: "relation", options: [] },
+    ];
+    const onChange = vi.fn();
+    render(
+      <FilterBuilder
+        columns={cols}
+        value={EMPTY}
+        onChange={onChange}
+        evaluatedIn="board"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conditions: [{ columnId: "c-rel", operator: "contains" }],
+      }),
+    );
+
+    render(
+      <FilterBuilder
+        columns={cols}
+        value={{
+          combinator: "and",
+          conditions: [{ columnId: "c-rel", operator: "contains" }],
+        }}
+        onChange={vi.fn()}
+        evaluatedIn="board"
+      />,
+    );
+    const opts = Array.from(
+      screen.getByLabelText(/operator/i).querySelectorAll("option"),
+    ).map((o) => o.textContent);
+    expect(opts).toEqual(["contains", "equals", "is empty", "is not empty"]);
+    expect(screen.getByLabelText(/filter value/i)).toBeTruthy();
+  });
 });

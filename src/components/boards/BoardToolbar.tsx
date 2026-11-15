@@ -62,6 +62,9 @@ const ADVANCED_KINDS = new Set([
   "numbers",
   "currency",
   "date",
+  // Matched as text over the linked item names (see boardOperatorsForKind
+  // in filter-meta.ts — FilterBuilder picks it via `evaluatedIn="board"`).
+  "relation",
 ]);
 
 function optionsOf(col: CacheColumn): ColumnOption[] {
@@ -344,6 +347,7 @@ export function BoardToolbar({
             columns={advancedColumns}
             value={state.conditions}
             onChange={setConditions}
+            evaluatedIn="board"
           />
         </PopoverContent>
       </Popover>

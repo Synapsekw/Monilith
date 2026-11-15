@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  boardOperatorsForKind,
   operatorsForKind,
   valueControlFor,
   OPERATOR_LABEL,
@@ -31,11 +32,21 @@ export function FilterBuilder({
   columns,
   value,
   onChange,
+  evaluatedIn = "server",
 }: {
   columns: FilterColumn[];
   value: ListFilter;
   onChange: (next: ListFilter) => void;
+  /** Where the resulting filter is evaluated, which decides the operators
+   *  offered per column kind. "server" (default) is the dashboard-widget /
+   *  automation path — SQL over `cell_values`. "board" is the in-memory board
+   *  filter, which can also text-match relation columns. A string rather than
+   *  a function prop so the board toolbar, which lazy-loads this component,
+   *  does not have to import the operator metadata eagerly. */
+  evaluatedIn?: "server" | "board";
 }) {
+  const operatorsFor =
+    evaluatedIn === "board" ? boardOperatorsForKind : operatorsForKind;
   const conditions = value.conditions ?? [];
 
   function update(next: Partial<ListFilter>) {
@@ -45,7 +56,7 @@ export function FilterBuilder({
   function addCondition() {
     const first = columns[0];
     if (!first) return;
-    const op = operatorsForKind(first.kind)[0];
+    const op = operatorsFor(first.kind)[0];
     update({
       conditions: [...conditions, { columnId: first.id, operator: op }],
     });
@@ -118,7 +129,7 @@ export function FilterBuilder({
                   const nextCol = columns.find((c) => c.id === e.target.value)!;
                   patchAt(i, {
                     columnId: nextCol.id,
-                    operator: operatorsForKind(nextCol.kind)[0],
+                    operator: operatorsFor(nextCol.kind)[0],
                     value: undefined,
                   });
                 }}
@@ -142,7 +153,7 @@ export function FilterBuilder({
                   })
                 }
               >
-                {operatorsForKind(kind).map((op) => (
+                {operatorsFor(kind).map((op) => (
                   <option key={op} value={op}>
                     {OPERATOR_LABEL[op]}
                   </option>

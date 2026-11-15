@@ -30,7 +30,7 @@ export type SortField =
 export type BoardSort = { field: SortField; direction: SortDirection };
 
 export type BoardFilterState = {
-  /** Quick text search over item name + text-column contents. */
+  /** Quick text search over item name + text / relation column contents. */
   q: string;
   /** People-column quick filter: user ids (OR — match any people cell). */
   people: string[];
@@ -206,7 +206,9 @@ export type FilterColumnMeta = {
 
 export type FilterContext = {
   columns: readonly FilterColumnMeta[];
-  /** `${item_id}:${column_id}` → raw cell value (the board's live cellMap). */
+  /** `${item_id}:${column_id}` → raw cell value (the board's live cellMap).
+   *  Relation columns have no cell value of their own — callers overlay their
+   *  linked-name text with `withRelationText` (relations.ts) before passing it. */
   cellMap: Map<string, unknown>;
 };
 
@@ -228,6 +230,9 @@ export function isCellEmpty(kind: ColumnKind, value: unknown): boolean {
   const v = rec(value);
   switch (kind) {
     case "text":
+    // A relation cell reaches the filter as `{ text }` — its linked item names
+    // joined (see `withRelationText` in relations.ts); no visible name = empty.
+    case "relation":
       return String(v.text ?? "") === "";
     case "status":
       return v.optionId == null;
@@ -370,7 +375,11 @@ export function buildItemPredicate(
   const status = new Set(state.status);
   const byId = new Map(ctx.columns.map((c) => [c.id, c]));
 
-  const textColumns = ctx.columns.filter((c) => c.kind === "text");
+  // Relation columns are searched as text too: their cell value is the joined
+  // linked item names, overlaid onto the cell map by the caller.
+  const textColumns = ctx.columns.filter(
+    (c) => c.kind === "text" || c.kind === "relation",
+  );
   const peopleColumns = ctx.columns.filter((c) => c.kind === "people");
   const statusColumns = ctx.columns.filter((c) => c.kind === "status");
   const conditions = state.conditions.conditions;
@@ -488,6 +497,9 @@ export function buildItemComparator(
         // stored string — otherwise punctuation/marker characters (`-`, `**`)
         // dominate the ordering instead of the visible text.
         return v.text ? stripMarkdown(String(v.text)) : null;
+      case "relation":
+        // Joined linked item names — plain text, nothing to strip.
+        return v.text ? String(v.text) : null;
       case "email":
         return v.email ? String(v.email) : null;
       case "phone":
