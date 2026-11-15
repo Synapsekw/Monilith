@@ -33,6 +33,26 @@ declare
   v_arch_item uuid := gen_random_uuid();
   v_in_arch_group uuid := gen_random_uuid();
   v_in_arch_board uuid := gen_random_uuid();
+  -- Better guesses (20261115073021): separate boards so the cases above stay put.
+  v_board3 uuid := gen_random_uuid();
+  v_board4 uuid := gen_random_uuid();
+  v_board5 uuid := gen_random_uuid();
+  v_group3 uuid := gen_random_uuid();
+  v_group4 uuid := gen_random_uuid();
+  v_group5 uuid := gen_random_uuid();
+  v_status3 uuid := gen_random_uuid();
+  v_start3 uuid := gen_random_uuid();
+  v_cal3 uuid := gen_random_uuid();
+  v_due3 uuid := gen_random_uuid();
+  v_start4 uuid := gen_random_uuid();
+  v_cal4 uuid := gen_random_uuid();
+  v_start5 uuid := gen_random_uuid();
+  v_cancelled uuid := gen_random_uuid();
+  v_incomplete uuid := gen_random_uuid();
+  v_notdone uuid := gen_random_uuid();
+  v_completed uuid := gen_random_uuid();
+  v_item4 uuid := gen_random_uuid();
+  v_item5 uuid := gen_random_uuid();
   r record;
   n int;
   ids uuid[];
@@ -205,6 +225,92 @@ begin
   select * into strict r from public.item_facts where item_id = v_open;
   if r.status_label is distinct from 'Approved' or r.is_done is distinct from false then
     raise exception 'stale done list: open item wrong: %', row_to_json(r); end if;
+
+  -- Better guesses (20261115073021). Parity: src/lib/boards/work-guess.test.ts
+  -- asserts the same labels and column names, so keep the two in step.
+  -- Board 3: 'Start' sits at a LOWER position than 'Due date', and 'Calendar'
+  -- (contains "end" but not as a word) sits between them. The due guess must
+  -- pick 'Due date'. Labels: Cancelled and Completed are done; Incomplete and
+  -- Not done are open.
+  insert into public.boards (id, org_id, workspace_id, name, created_by, position) values
+    (v_board3, v_org, v_ws, 'verify item_facts guesses', v_user, 0),
+    (v_board4, v_org, v_ws, 'verify item_facts no due name', v_user, 0),
+    (v_board5, v_org, v_ws, 'verify item_facts start only', v_user, 0);
+  insert into public.groups (id, org_id, board_id, name, position) values
+    (v_group3, v_org, v_board3, 'G', 0),
+    (v_group4, v_org, v_board4, 'G', 0),
+    (v_group5, v_org, v_board5, 'G', 0);
+  insert into public.columns (id, org_id, board_id, name, kind, position, settings) values
+    (v_status3, v_org, v_board3, 'Status', 'status', 0,
+      '{"options":[{"id":"k","label":"Cancelled","color":"#6"},{"id":"i","label":"Incomplete","color":"#7"},{"id":"n","label":"Not done","color":"#8"},{"id":"m","label":"Completed","color":"#9"}]}'),
+    (v_start3, v_org, v_board3, 'Start', 'date', 1, '{}'),
+    (v_cal3, v_org, v_board3, 'Calendar', 'date', 2, '{}'),
+    (v_due3, v_org, v_board3, 'Due date', 'date', 6, '{}'),
+    -- Board 4: no due-like name; 'Calendar' must beat the lower-position 'Start'.
+    (v_start4, v_org, v_board4, 'Start', 'date', 1, '{}'),
+    (v_cal4, v_org, v_board4, 'Calendar', 'date', 2, '{}'),
+    -- Board 5: a lone 'Start' column is still the fallback.
+    (v_start5, v_org, v_board5, 'Start', 'date', 1, '{}');
+  insert into public.items (id, org_id, board_id, group_id, name, position, created_by) values
+    (v_cancelled, v_org, v_board3, v_group3, 'cancelled', 1, v_user),
+    (v_incomplete, v_org, v_board3, v_group3, 'incomplete', 2, v_user),
+    (v_notdone, v_org, v_board3, v_group3, 'not done', 3, v_user),
+    (v_completed, v_org, v_board3, v_group3, 'completed', 4, v_user),
+    (v_item4, v_org, v_board4, v_group4, 'board 4 item', 1, v_user),
+    (v_item5, v_org, v_board5, v_group5, 'board 5 item', 1, v_user);
+  insert into public.cell_values (org_id, board_id, item_id, column_id, value) values
+    (v_org, v_board3, v_cancelled, v_status3, '{"optionId":"k"}'),
+    (v_org, v_board3, v_cancelled, v_start3, '{"date":"2026-01-01"}'),
+    (v_org, v_board3, v_cancelled, v_cal3, '{"date":"2026-02-02"}'),
+    (v_org, v_board3, v_cancelled, v_due3, '{"date":"2026-03-03"}'),
+    (v_org, v_board3, v_incomplete, v_status3, '{"optionId":"i"}'),
+    (v_org, v_board3, v_notdone, v_status3, '{"optionId":"n"}'),
+    (v_org, v_board3, v_completed, v_status3, '{"optionId":"m"}'),
+    (v_org, v_board4, v_item4, v_start4, '{"date":"2026-04-04"}'),
+    (v_org, v_board4, v_item4, v_cal4, '{"date":"2026-05-05"}'),
+    (v_org, v_board5, v_item5, v_start5, '{"date":"2026-06-06"}');
+
+  -- A: due column guess by name.
+  select * into strict r from public.item_facts where item_id = v_cancelled;
+  if r.due_column_id is distinct from v_due3 or r.due_date is distinct from date '2026-03-03' then
+    raise exception 'due guess must prefer Due date over Start/Calendar: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_item4;
+  if r.due_column_id is distinct from v_cal4 or r.due_date is distinct from date '2026-05-05' then
+    raise exception 'due guess must rank Start after Calendar: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_item5;
+  if r.due_column_id is distinct from v_start5 or r.due_date is distinct from date '2026-06-06' then
+    raise exception 'a lone Start column must still be the due guess: %', row_to_json(r); end if;
+  select count(*) into n from public.item_facts
+   where board_id = v_board3 and due_column_id is distinct from v_due3;
+  if n is distinct from 0 then raise exception 'every board 3 row must use Due date, % do not', n; end if;
+
+  -- B: done label guess.
+  select * into strict r from public.item_facts where item_id = v_cancelled;
+  if r.status_label is distinct from 'Cancelled' or r.is_done is distinct from true then
+    raise exception 'Cancelled must be done: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_completed;
+  if r.status_label is distinct from 'Completed' or r.is_done is distinct from true then
+    raise exception 'Completed must be done: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_incomplete;
+  if r.status_label is distinct from 'Incomplete' or r.is_done is distinct from false then
+    raise exception 'Incomplete must be open: %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_notdone;
+  if r.status_label is distinct from 'Not done' or r.is_done is distinct from false then
+    raise exception 'Not done must be open: %', row_to_json(r); end if;
+
+  -- Explicit settings still win over both guesses.
+  update public.boards
+     set work_due_column_id = v_start3,
+         work_status_column_id = v_status3,
+         work_done_option_ids = array['n']
+   where id = v_board3;
+  select * into strict r from public.item_facts where item_id = v_cancelled;
+  if r.due_column_id is distinct from v_start3 or r.due_date is distinct from date '2026-01-01'
+     or r.is_done is distinct from false then
+    raise exception 'explicit settings must override the guesses (cancelled): %', row_to_json(r); end if;
+  select * into strict r from public.item_facts where item_id = v_notdone;
+  if r.is_done is distinct from true then
+    raise exception 'explicit done list must override the guess (not done): %', row_to_json(r); end if;
 
   -- RLS (negative only): a member of ANOTHER org sees none of the fixture board.
   -- The positive case is skipped: it needs board/workspace visibility rows for
