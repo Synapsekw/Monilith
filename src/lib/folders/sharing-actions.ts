@@ -26,10 +26,25 @@ import type {
 
 const MEMBERS_LIMIT = 200;
 const GENERIC_ERROR = "Something went wrong. Please try again.";
+const SHARE_NEEDS_BOARD_OWNERSHIP =
+  "You can only share a folder when you own every board in it, or are an admin.";
 
 /** Maps a raised SQL exception to friendly, non-leaking copy. */
 function friendly(error: { message: string; code?: string }): string {
   const m = error.message.toLowerCase();
+  // share_folder / invite_to_folder: a grant on a folder reaches every board
+  // in it, so the caller must own each one (or be an org owner/admin). The
+  // message carries how many boards stand in the way.
+  if (m.includes("cannot share this folder")) {
+    const n = Number(/(\d+) of its boards/.exec(m)?.[1]);
+    const count =
+      n === 1
+        ? " 1 board in this folder belongs to someone else."
+        : n > 1
+          ? ` ${n} boards in this folder belong to someone else.`
+          : "";
+    return `${SHARE_NEEDS_BOARD_OWNERSHIP}${count}`;
+  }
   if (m.includes("not allowed to manage"))
     return "Only the folder's creator or an admin can invite people";
   if (m.includes("invalid email")) return "Enter a valid email address";

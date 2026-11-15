@@ -323,6 +323,35 @@ describe("inviteToFolder", () => {
   });
 });
 
+describe("the share guard refusal", () => {
+  const blocked = {
+    message: "cannot share this folder: 2 of its boards belong to someone else",
+    code: "42501",
+  };
+  const copy =
+    "You can only share a folder when you own every board in it, or are an admin. 2 boards in this folder belong to someone else.";
+
+  it("is reported by shareFolder and invalidates nothing", async () => {
+    rpc.mockResolvedValue({ data: null, error: blocked });
+    const r = await shareFolder({ folderId: F, userId: U, level: "editor" });
+    expect(r).toEqual({ ok: false, error: copy });
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("is reported by inviteToFolder, which sends no email and writes no audit row", async () => {
+    rpc.mockResolvedValue({ data: null, error: blocked });
+    const r = await inviteToFolder({
+      folderId: F,
+      email: "pat@x.com",
+      level: "editor",
+    });
+    expect(r).toEqual({ ok: false, error: copy });
+    expect(inviteUserByEmail).not.toHaveBeenCalled();
+    expect(auditInsert).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+});
+
 describe("revokeFolderInvitation", () => {
   it("calls revoke_folder_invitation", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
@@ -381,6 +410,29 @@ describe("error mapping", () => {
       "not a manager",
       { message: "not allowed to manage this folder", code: "42501" },
       "Only the folder's creator or an admin can invite people",
+    ],
+    [
+      "boards owned by someone else, several",
+      {
+        message:
+          "cannot share this folder: 3 of its boards belong to someone else",
+        code: "42501",
+      },
+      "You can only share a folder when you own every board in it, or are an admin. 3 boards in this folder belong to someone else.",
+    ],
+    [
+      "boards owned by someone else, one",
+      {
+        message:
+          "cannot share this folder: 1 of its boards belong to someone else",
+        code: "42501",
+      },
+      "You can only share a folder when you own every board in it, or are an admin. 1 board in this folder belongs to someone else.",
+    ],
+    [
+      "boards owned by someone else, count missing",
+      { message: "cannot share this folder", code: "42501" },
+      "You can only share a folder when you own every board in it, or are an admin.",
     ],
     [
       "unknown error never leaks the raw message",
