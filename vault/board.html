@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-14 17:56",
+  "updated": "2026-11-15 18:39",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "fd8155c0",
+        "value": "8b499ba3",
         "tone": "warn",
-        "note": "Ahead of main: the large-board loading fix, the dense board table (28px rows, one pinned column header, fitted and centered columns, hover peek) and the readable timelines (open on today, grouped board Gantt, roll-up-first folder timeline). Awaiting a promotion PR."
+        "note": "Ahead of main: folder invites, the command center Tower, the Today block and assistant retrieval (with smarter due-date and done guesses), the large-board loading fix, the dense board table and the readable timelines. Awaiting a promotion PR."
       },
       {
         "name": "main",
@@ -148,7 +148,7 @@
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel success on PR #151. The dense table and timeline rework are not live yet."
+        "note": "Vercel success on PR #151. Folder invites, the Tower, the Today block, the dense table and the timeline rework are not live yet."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on the Board Total merge (finish-task gates): 10,399 passed, 1 skipped.",
+        "note": "Green on every 2026-11-15 merge (finish-task gates); 14,137 passed at the Today block merge.",
         "label": "test"
       },
       {
@@ -180,22 +180,49 @@
       },
       {
         "name": "ledger",
-        "value": "180/180",
+        "value": "210/210",
         "tone": "ok",
-        "note": "180 committed files / 180 live DEV ledger rows, in sync. Leave board added one policy-only migration.",
+        "note": "210 committed files / 210 live DEV ledger rows, in sync.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Live-run Personal Monos before promoting",
-      "why": "Plans 1 and 2A are on develop but nobody has used a Mono in a browser: create one, add a key, chat, confirm a change and see the Mono as author, and check a teammate cannot assign it. Then write Plan 2B.",
+      "title": "Promote develop soon: the Tower changes saved layouts",
+      "why": "A folder layout saved on develop with the new Tower sections falls back to its preset on the old production code, and the folder burn chart on production still cuts off at 1,000 rows. Owed first: the email-invite and guest-view browser checks for folder invites.",
+      "tags": [
+        "owner",
+        "before promote",
+        "critical"
+      ]
+    },
+    {
+      "title": "Finish the Today block checks",
+      "why": "The Today block and the assistant's new read tools were run live in Chrome on an OpenAI model. Still unseen: a personal Mono thread asked about my day, dark theme, phone width. The fixture check for the due-date and done guesses (verify-item-facts.sql) has never run because its approval prompt expired; it needs the owner present.",
       "tags": [
         "owner",
         "verify",
         "ai",
-        "critical"
+        "before promote"
+      ]
+    },
+    {
+      "title": "Decide where Cancelled counts as done",
+      "why": "Today, My Work and the assistant now treat Cancelled as done and pick the Due column by name. The board overdue chip, health flags, goals and dashboards keep the old rule, so the same item can read as open there. Also: 10 of 13 members in the largest organisation have no profile name.",
+      "tags": [
+        "boards",
+        "follow-up"
+      ]
+    },
+    {
+      "title": "Live-run the MCP connection fixes",
+      "why": "Web sign-out no longer kills connectors and a dead connection now repairs itself, but only unit tests on a faked client prove it. Connect Claude, sign out and back in, wait an hour, call a tool. Then check Sign out everywhere empties the connected apps list.",
+      "tags": [
+        "owner",
+        "verify",
+        "mcp",
+        "before promote"
       ]
     },
     {
@@ -223,6 +250,14 @@
         "owner",
         "verify",
         "ai"
+      ]
+    },
+    {
+      "title": "Write Personal Monos Plan 2B",
+      "why": "Plans 1 and 2A are live since PR #151. Next is the inbox and wake-ups, automatic writes with approvals, a comment tool and the connector that drives a Mono. Before Monos reach managed organisations: meter personal-key turns at 0 credits and keep agents out of seat counts.",
+      "tags": [
+        "ai",
+        "plan"
       ]
     },
     {
@@ -459,27 +494,16 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/command-center-tower",
-      "head": "4d7d68f8",
-      "note": "prototype"
-    },
-    {
-      "branch": "task/folder-invites",
-      "head": "ff30da23",
-      "note": "building"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-11-14-1756-board-table-density-timeline-readability",
-    "when": "2026-11-14 17:56",
-    "title": "Board table density and timeline readability",
+    "id": "2026-11-15-1309-folder-invites-and-command-center-tower",
+    "when": "2026-11-15 13:09",
+    "title": "Folder invites and the command center \"Tower\"",
     "bullets": [
-      "On the DAAS boards 32 of 33 visible item names were cut off and both timelines opened nine months away from today.",
-      "Board table: 28px rows, one pinned column header, slim tinted group rows, hover peek, columns fitted to content and centered.",
-      "Timelines open on today; the board Gantt is grouped; the folder timeline opens as one row per board instead of 2,127 items.",
-      "Two branches, 17 tasks, merged to develop. Browser-checked in light theme only; touch and dark theme are owed."
+      "Folder invites: bring a member or an email onto a whole folder as viewer or editor; outsiders join as guests and see only their folders.",
+      "Command center Tower: KPI trends, burn forecast, load heat map, people section, boards with health and sort.",
+      "Fixed on the way: the burn chart read 4,088 rows through a 1,000-row cap and showed 14 of 56 stages. Still wrong on production until promotion.",
+      "Reviews caught four access holes before any migration was applied. Five migrations live on DEV."
     ]
   }
 }
