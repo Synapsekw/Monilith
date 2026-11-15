@@ -200,7 +200,7 @@ describe("inviteToFolder", () => {
     });
     expect(r).toEqual({
       ok: true,
-      data: { kind: "invited", delivery: "invite_email" },
+      data: { kind: "invited", delivery: "sent" },
     });
     expect(sendEmail).not.toHaveBeenCalled();
     expect(auditInsert).toHaveBeenCalledTimes(1);
@@ -221,7 +221,7 @@ describe("inviteToFolder", () => {
     });
     expect(r).toEqual({
       ok: true,
-      data: { kind: "invited", delivery: "notice_email" },
+      data: { kind: "invited", delivery: "sent" },
     });
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(sendEmail.mock.calls[0][0]).toMatchObject({
@@ -243,7 +243,7 @@ describe("inviteToFolder", () => {
       });
       expect(r).toEqual({
         ok: true,
-        data: { kind: "invited", delivery: "in_app" },
+        data: { kind: "invited", delivery: "sent" },
       });
     }
   });

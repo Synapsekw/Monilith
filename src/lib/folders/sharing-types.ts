@@ -38,8 +38,14 @@ export type FolderAccessData = {
  * has an account, the notifications bell only, or nothing (the invite email to
  * a new address failed).
  */
-export type InviteDeliveryKind =
-  "invite_email" | "notice_email" | "in_app" | "failed";
+/**
+ * What the INVITER is told. Deliberately coarse: the full `InviteDelivery`
+ * distinguishes a new address from one that already has an account, and
+ * handing that to the client would let anyone who can share a folder test
+ * whether an email address has a Monolith account. The detail goes to the
+ * admin audit log only.
+ */
+export type InviteDeliveryKind = "sent" | "failed";
 export type InviteOutcome =
   { kind: "shared" } | { kind: "invited"; delivery: InviteDeliveryKind };
 

@@ -242,7 +242,15 @@ export async function inviteToFolder(
       error: auditErr.message,
     });
 
-  return { ok: true, data: { kind: "invited", delivery } };
+  // The caller learns only "sent" or "failed": which channel was used reveals
+  // whether the address already has an account (see `InviteDeliveryKind`).
+  return {
+    ok: true,
+    data: {
+      kind: "invited",
+      delivery: delivery === "failed" ? "failed" : "sent",
+    },
+  };
 }
 
 export async function revokeFolderInvitation(

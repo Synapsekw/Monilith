@@ -90,15 +90,11 @@ function LevelSelect({
  * change. Reads carry their own sequence number so an older answer never
  * replaces a newer one.
  */
-/** What actually happened to the invitation, said plainly (never "sent" when
- *  nothing was sent). */
+/** What the inviter is told. One sentence for every delivered invitation, on
+ *  purpose: different copy for "has an account" would let anyone who can share
+ *  a folder test whether an address is registered. */
 const INVITE_NOTICE: Record<InviteDeliveryKind, string> = {
-  invite_email:
-    "Invitation emailed. They get access after they set a password and an administrator approves their account.",
-  notice_email:
-    "They already have a Monolith account, so we emailed them and added the invitation to their notifications. They get access when they accept it.",
-  in_app:
-    "They already have a Monolith account. No email was sent: the invitation is waiting in their notifications, and they get access when they accept it.",
+  sent: "Invitation saved. They are told by email, or in their Monolith notifications if they already use it. Access starts when they accept; a new account also needs an administrator's approval.",
   failed:
     "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
 };
