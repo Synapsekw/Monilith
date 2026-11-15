@@ -5,6 +5,27 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-15",
+    kind: "new",
+    title: "Invite people to a folder",
+    description:
+      "Add someone to a folder as a viewer or an editor and they get every board in it, including boards added later. Use the Invite button on the folder page or Share folder in the sidebar menu.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "A richer folder overview",
+    description:
+      "Folder pages now show trends on the key numbers, a burn chart with a forecast, a week-by-week load map per board, a people section, and attention items grouped by board. Folders without due dates show items by stage instead.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "Folder burn chart on large folders",
+    description:
+      "The burn chart no longer leaves out stages on folders with many boards and items.",
+  },
+  {
+    date: "2026-11-15",
     kind: "improved",
     title: "Smarter due dates and done statuses",
     description:
