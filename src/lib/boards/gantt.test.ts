@@ -4,6 +4,9 @@ import {
   detectViolations,
   onBarMoved,
   onBarResized,
+  groupTimelineRows,
+  rangeIncludingToday,
+  spanOfRows,
   timelineDayCount,
   visibleRows,
   type GanttRow,
@@ -266,5 +269,152 @@ describe("timelineDayCount", () => {
   });
   it("caps a far-future end date to guard against typos", () => {
     expect(timelineDayCount("2026-01-01", "2100-01-01", 90)).toBe(3660);
+  });
+});
+
+describe("rangeIncludingToday", () => {
+  it("widens a past-only range forward to today + 30", () => {
+    expect(
+      rangeIncludingToday("2026-02-01", "2026-03-01", "2026-11-14"),
+    ).toEqual({ startISO: "2026-02-01", endISO: "2026-12-14" });
+  });
+  it("widens a future-only range back to today − 14", () => {
+    expect(
+      rangeIncludingToday("2027-01-10", "2027-02-01", "2026-11-14"),
+    ).toEqual({ startISO: "2026-10-31", endISO: "2027-02-01" });
+  });
+  it("falls back to the padded today window when nothing is dated", () => {
+    expect(rangeIncludingToday(null, null, "2026-11-14")).toEqual({
+      startISO: "2026-10-31",
+      endISO: "2026-12-14",
+    });
+  });
+  it("leaves a range that already contains the window alone", () => {
+    expect(
+      rangeIncludingToday("2026-01-01", "2027-06-01", "2026-11-14"),
+    ).toEqual({ startISO: "2026-01-01", endISO: "2027-06-01" });
+  });
+});
+
+describe("groupTimelineRows", () => {
+  const row = (
+    itemId: string,
+    startCol: number,
+    spanCols: number,
+    over: Partial<GanttRow> = {},
+  ): GanttRow => ({
+    itemId,
+    name: itemId,
+    scheduled: true,
+    depth: 0,
+    parentId: null,
+    startCol,
+    spanCols,
+    ...over,
+  });
+  // Board order (position across the whole board), as buildGanttRows emits it.
+  const rows: GanttRow[] = [
+    row("a1", 2, 3),
+    row("b1", 0, 4, { hasChildren: true, childCount: 1 }),
+    row("b1c", 5, 5, { depth: 1, parentId: "b1" }),
+    row("b2", 8, 1),
+  ];
+  const groupOfItem = new Map([
+    ["a1", "g2"],
+    ["b1", "g1"],
+    ["b1c", "g1"],
+    ["b2", "g1"],
+  ]);
+  const groups = [
+    { id: "g2", name: "Build", position: 1 },
+    { id: "g1", name: "Discovery", position: 0 },
+    { id: "g3", name: "Empty", position: 2 },
+  ];
+  const base = {
+    collapsedGroups: new Set<string>(),
+    expanded: new Set<string>(),
+    isDone: (id: string) => id === "b2",
+    lateFor: (r: GanttRow) => (r.itemId === "b1" ? 4 : null),
+  };
+  const ids = (out: GanttRow[]) => out.map((r) => r.itemId);
+
+  it("emits a band per group in position order, then that group's rows", () => {
+    expect(ids(groupTimelineRows(rows, groupOfItem, groups, base))).toEqual([
+      "group:g1",
+      "b1",
+      "b2",
+      "group:g2",
+      "a1",
+    ]);
+  });
+
+  it("skips a group with nothing on the timeline", () => {
+    expect(
+      ids(groupTimelineRows(rows, groupOfItem, groups, base)),
+    ).not.toContain("group:g3");
+  });
+
+  it("summarises span, done share and late count over the group's scheduled rows", () => {
+    const band = groupTimelineRows(rows, groupOfItem, groups, base)[0]!;
+    expect(band).toMatchObject({
+      kind: "section",
+      level: 1,
+      name: "Discovery",
+      scheduled: false,
+    });
+    // b1 0–4, its hidden sub-item b1c 5–10, b2 8–9 → span 0–10; 1 of 3 done.
+    expect(band.summary).toEqual({
+      startCol: 0,
+      spanCols: 10,
+      donePct: 33,
+      lateCount: 1,
+    });
+  });
+
+  it("keeps a collapsed group's band and summary but hides its rows", () => {
+    const out = groupTimelineRows(rows, groupOfItem, groups, {
+      ...base,
+      collapsedGroups: new Set(["g1"]),
+    });
+    expect(ids(out)).toEqual(["group:g1", "group:g2", "a1"]);
+    expect(out[0]!.summary?.spanCols).toBe(10);
+  });
+
+  it("reveals the sub-items of an expanded parent inside its group", () => {
+    expect(
+      ids(
+        groupTimelineRows(rows, groupOfItem, groups, {
+          ...base,
+          expanded: new Set(["b1"]),
+        }),
+      ),
+    ).toEqual(["group:g1", "b1", "b1c", "b2", "group:g2", "a1"]);
+  });
+
+  it("collects rows whose group is unknown under a trailing band", () => {
+    const partial = new Map([
+      ["b1", "g1"],
+      ["b1c", "g1"],
+      ["b2", "g1"],
+    ]);
+    const out = groupTimelineRows(rows, partial, groups, base);
+    expect(ids(out)).toEqual([
+      "group:g1",
+      "b1",
+      "b2",
+      "group:__ungrouped__",
+      "a1",
+    ]);
+    expect(out[3]!.name).toBe("Other items");
+  });
+});
+
+describe("spanOfRows", () => {
+  it("is null when no row is scheduled", () => {
+    expect(
+      spanOfRows([
+        { itemId: "p", name: "p", scheduled: false, hasChildren: true },
+      ]),
+    ).toBeNull();
   });
 });

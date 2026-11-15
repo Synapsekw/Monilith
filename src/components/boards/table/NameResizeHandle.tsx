@@ -22,11 +22,23 @@ export function NameResizeHandle({
   onResize,
   onResizeEnd,
   onAutoFit,
+  onResizeCancel,
+  min = NAME_DRAG_MIN,
+  max = NAME_COL_MAX,
+  label = "Resize Name column (double-click to auto-fit)",
 }: {
   width: number;
   onResize: (w: number) => void;
   onResizeEnd: (w: number) => void;
   onAutoFit: () => void;
+  /** The browser took the gesture (e.g. for scrolling): nothing is committed;
+   * the caller drops any live width. */
+  onResizeCancel?: () => void;
+  /** Drag clamp. Defaults are the table Name column's bounds. */
+  min?: number;
+  max?: number;
+  /** Accessible name. The default is the table Name column's. */
+  label?: string;
 }) {
   // Coalesce per-pixel live-width updates to one state update per frame so the
   // drag stays smooth; the persist-on-release path (onResizeEnd) is unchanged.
@@ -38,16 +50,21 @@ export function NameResizeHandle({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = clampDragWidth(
-        startW + (ev.clientX - startX),
-        NAME_DRAG_MIN,
-        NAME_COL_MAX,
-      );
+      last = clampDragWidth(startW + (ev.clientX - startX), min, max);
       throttledResize(last);
     };
-    const up = () => {
+    const cleanup = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    const cancel = () => {
+      cleanup();
+      cancelThrottledResize();
+      onResizeCancel?.();
+    };
+    const up = () => {
+      cleanup();
       // Drop a still-pending live frame: it would land after onResizeEnd and
       // re-pin the live width the release handler just cleared.
       cancelThrottledResize();
@@ -55,16 +72,17 @@ export function NameResizeHandle({
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   }
 
   return (
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize Name column (double-click to auto-fit)"
+      aria-label={label}
       onPointerDown={onPointerDown}
       onDoubleClick={onAutoFit}
-      className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"
+      className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none"
     />
   );
 }

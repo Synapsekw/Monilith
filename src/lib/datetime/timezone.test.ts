@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  effectiveTimeZone,
   listTimeZones,
   timezoneLabel,
   zonedDayOf,
@@ -9,6 +10,15 @@ import {
 // Fixed reference dates make offset labels deterministic (no Date.now()).
 const WINTER = new Date("2026-01-15T12:00:00Z");
 const SUMMER = new Date("2026-07-15T12:00:00Z");
+
+describe("effectiveTimeZone (review I5)", () => {
+  it("prefers the member's own zone, then the org's, else null", () => {
+    expect(effectiveTimeZone("Asia/Tokyo", "Europe/Berlin")).toBe("Asia/Tokyo");
+    expect(effectiveTimeZone(null, "Europe/Berlin")).toBe("Europe/Berlin");
+    expect(effectiveTimeZone(undefined, "")).toBeNull();
+    expect(effectiveTimeZone(null, null)).toBeNull();
+  });
+});
 
 describe("listTimeZones", () => {
   it("returns a non-empty list including common zones", () => {

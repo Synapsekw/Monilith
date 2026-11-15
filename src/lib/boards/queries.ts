@@ -6,8 +6,28 @@ import { getUser } from "@/lib/auth/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
+import { fetchAllRows } from "@/lib/supabase/paginate";
+import {
+  resolveLinkedStatuses,
+  type LinkedItemStatus,
+} from "@/lib/boards/relation-status";
+import { mergeSharedBoards } from "@/lib/boards/shared-merge";
+import { warnIfAtCap } from "@/lib/supabase/cap-warning";
+import {
+  higherAccess,
+  listMyFolderBoardLevels,
+  type FolderLevel,
+} from "@/lib/boards/folder-levels";
 
 const UUID = z.string().uuid();
+
+/** Most live items (and dependencies) one board read returns. */
+export const BOARD_ITEMS_CAP = 5000;
+/**
+ * Most cell values one board read returns: 5000 items at a dozen filled cells.
+ * Raised from 20000 when imported plans (1,770 items × ~17 columns) overflowed.
+ */
+export const BOARD_CELLS_CAP = 60000;
 
 export type Board = Tables<"boards">;
 export type Group = Tables<"groups">;
@@ -64,6 +84,10 @@ export type SharedBoardEntry = {
   position: number;
   owner_name: string | null;
   access_level: "viewer" | "editor";
+  /** How the board reached the user: a direct board grant (which "Leave
+   *  board" can remove) or only through a folder they are on. A board granted
+   *  both ways is "direct". */
+  via: "direct" | "folder";
 };
 
 // Defensive cap on the sidebar board lists (hot path — runs on ~every nav via
@@ -96,38 +120,105 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
   }));
 }
 
-/** Boards shared WITH the current user by someone else. */
+/**
+ * Boards shared WITH the current user by someone else: granted directly, or
+ * reached through a folder they are a member of. Runs on the caller's RLS
+ * client, so the boards policy already enforces active org membership.
+ */
 export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
   const user = await getUser();
   if (!user) return [];
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("board_members")
-    .select("access_level, boards!inner(id, name, position, created_by)")
-    .eq("user_id", user.id)
-    .is("boards.archived_at", null)
-    .limit(MY_BOARDS_LIMIT)
-    .order("created_at", { ascending: true });
+  // The two grant reads are independent: one round trip, not two.
+  const [{ data, error }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level, boards!inner(id, name, position, created_by)")
+      .eq("user_id", user.id)
+      .is("boards.archived_at", null)
+      .order("created_at", { ascending: true })
+      .order("board_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+    // Folder path. A failed read here degrades to "direct grants only" rather
+    // than failing a list that is otherwise correct.
+    supabase
+      .from("folder_members")
+      .select("folder_id, access_level")
+      .eq("user_id", user.id)
+      .order("folder_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT),
+  ]);
   // Same fail-loud policy as listMyBoards: an error is not an empty list.
   if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
+  warnIfAtCap("listSharedBoards", "board_members", data, MY_BOARDS_LIMIT);
+  warnIfAtCap(
+    "listSharedBoards",
+    "folder_members",
+    memberships,
+    MY_BOARDS_LIMIT,
+  );
   const rows = (data ?? []).filter(
     (r) => r.boards && r.boards.created_by !== user.id,
   );
 
-  const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
+  const levelByFolder = new Map(
+    (memberships ?? []).map((r) => [r.folder_id, r.access_level] as const),
+  );
+  let folderRows: {
+    folder_id: string;
+    boards: { id: string; name: string; position: number; created_by: string };
+  }[] = [];
+  if (levelByFolder.size > 0) {
+    const { data: placed } = await supabase
+      .from("folder_boards")
+      .select("folder_id, boards!inner(id, name, position, created_by)")
+      .in("folder_id", [...levelByFolder.keys()])
+      .is("boards.archived_at", null)
+      .order("folder_id", { ascending: true })
+      .order("position", { ascending: true })
+      .order("board_id", { ascending: true })
+      .limit(MY_BOARDS_LIMIT);
+    warnIfAtCap("listSharedBoards", "folder_boards", placed, MY_BOARDS_LIMIT);
+    // Keep only rows whose folder the user holds a grant on (belt and braces:
+    // the `in` filter already says so, and a row without a level has none).
+    folderRows = (placed ?? []).filter(
+      (r) =>
+        r.boards &&
+        r.boards.created_by !== user.id &&
+        levelByFolder.has(r.folder_id),
+    );
+  }
+
+  const ownerIds = [
+    ...new Set([
+      ...rows.map((r) => r.boards.created_by),
+      ...folderRows.map((r) => r.boards.created_by),
+    ]),
+  ];
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, full_name")
     .in("id", ownerIds);
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
 
-  return rows.map((r) => ({
-    id: r.boards.id,
-    name: r.boards.name,
-    position: r.boards.position,
-    owner_name: nameById.get(r.boards.created_by) ?? null,
-    access_level: r.access_level,
-  }));
+  return mergeSharedBoards(
+    rows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: r.access_level,
+      via: "direct" as const,
+    })),
+    folderRows.map((r) => ({
+      id: r.boards.id,
+      name: r.boards.name,
+      position: r.boards.position,
+      owner_name: nameById.get(r.boards.created_by) ?? null,
+      access_level: levelByFolder.get(r.folder_id)!,
+      via: "folder" as const,
+    })),
+  );
 }
 
 /**
@@ -140,6 +231,11 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
  * so a non-owner's archive would report success while changing nothing. That is
  * the "lying success" the explicit check exists to prevent (spec F4 / decision
  * D5).
+ *
+ * `userId` MUST be the same user as the client's session (`auth.uid()`): the
+ * direct-grant half is read by `userId`, but the folder half
+ * (`my_folder_board_levels`) is resolved by the database from the session, not
+ * from this parameter. Passing a different user's id would mix two identities.
  */
 export async function getBoardAccessCore(
   supabase: SupabaseClient<Database>,
@@ -153,13 +249,21 @@ export async function getBoardAccessCore(
     .maybeSingle();
   if (!board) return null;
   if (board.created_by === userId) return "owner";
-  const { data: grant } = await supabase
-    .from("board_members")
-    .select("access_level")
-    .eq("board_id", boardId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return grant?.access_level ?? null;
+  const [{ data: grant }, folderLevels] = await Promise.all([
+    supabase
+      .from("board_members")
+      .select("access_level")
+      .eq("board_id", boardId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    // Resolved from auth.uid() by the RPC: `supabase` is the caller's own
+    // client on both the cookie path and the bridged MCP path.
+    listMyFolderBoardLevels(supabase, [boardId]),
+  ]);
+  return higherAccess(
+    grant?.access_level ?? null,
+    folderLevels.get(boardId) ?? null,
+  );
 }
 
 /** The current user's effective access to a board (or null if none). */
@@ -176,14 +280,20 @@ export async function getBoardAccess(
  * on the board page — same decision order as {@link getBoardAccess} (creator
  * check first, then the all-grants `board_members` lookup) so the two stay
  * behaviorally identical without re-querying `boards`/`board_members`.
+ * The optional `folderLevel` is the caller's level through the board's folder
+ * (`listMyFolderBoardLevels`); the result is the higher of the two.
  */
 export function deriveBoardAccess(
   board: Pick<Board, "created_by">,
   grants: { userId: string; access: "editor" | "viewer" }[],
   userId: string,
+  folderLevel: FolderLevel | null = null,
 ): "owner" | "editor" | "viewer" | null {
   if (board.created_by === userId) return "owner";
-  return grants.find((g) => g.userId === userId)?.access ?? null;
+  return higherAccess(
+    grants.find((g) => g.userId === userId)?.access ?? null,
+    folderLevel,
+  );
 }
 
 /**
@@ -227,32 +337,37 @@ export const getBoardPayload = cache(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
-      // Bounded over the board_id index. 5000 is a non-event for real boards but
-      // caps a pathological one; a server-side aggregate/pagination is the
-      // documented follow-up if a board exceeds this (matches attachments/time_entries).
-      supabase
-        .from("items")
-        .select("*")
-        .eq("board_id", boardId)
-        .is("archived_at", null)
-        .order("position", { ascending: true })
-        .limit(5000),
-      // Bounded over the board_id index. A board of 5000 items × several columns
-      // makes cell_values the widest table; 20000 is generous headroom while
-      // capping the pathological case; server-side pagination is the documented
-      // follow-up if a board exceeds this (matches attachments/time_entries).
-      // Select narrowed to the four columns any consumer reads (see
-      // `BoardCellValue`) — `board_id`/`org_id` are dropped. Ordered by the
-      // `(item_id, column_id)` PRIMARY KEY (`cell_values_pkey`, boards_core
-      // migration) so truncation at the cap is deterministic, not an arbitrary
-      // subset — the same key Postgres already indexes, so the sort is cheap.
-      supabase
-        .from("cell_values")
-        .select("item_id, column_id, value, updated_at")
-        .eq("board_id", boardId)
-        .order("item_id", { ascending: true })
-        .order("column_id", { ascending: true })
-        .limit(20000),
+      // Bounded over the board_id index; BOARD_ITEMS_CAP caps a pathological
+      // board (server-side pagination is the follow-up if one exceeds it).
+      // Paged: PostgREST caps each response at 1000 rows (`fetchAllRows`).
+      // `id` breaks position ties so pages never overlap or skip.
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("items")
+            .select("*")
+            .eq("board_id", boardId)
+            .is("archived_at", null)
+            .order("position", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_ITEMS_CAP },
+      ),
+      // Bounded over the board_id index and capped at BOARD_CELLS_CAP. Select
+      // narrowed to the four columns any consumer reads (see `BoardCellValue`).
+      // Ordered by the `(item_id, column_id)` PRIMARY KEY — a total order, so
+      // paging is stable and truncation at the cap is deterministic.
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("cell_values")
+            .select("item_id, column_id, value, updated_at")
+            .eq("board_id", boardId)
+            .order("item_id", { ascending: true })
+            .order("column_id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_CELLS_CAP },
+      ),
       supabase
         .from("board_views")
         .select("*")
@@ -264,15 +379,23 @@ export const getBoardPayload = cache(
       // read; a server-side follow-up applies if a board ever exceeds this
       // (matches items/cell_values/relation_links). The `.or()` filter string is
       // only built from a validated uuid — boardId is a raw route param here.
-      (UUID.safeParse(boardId).success
-        ? supabase
-            .from("item_dependencies")
-            .select("*")
-            .or(`board_id.eq.${boardId},predecessor_board_id.eq.${boardId}`)
-        : supabase.from("item_dependencies").select("*").eq("board_id", boardId)
-      )
-        .order("created_at", { ascending: true })
-        .limit(5000),
+      fetchAllRows(
+        (from, to) =>
+          (UUID.safeParse(boardId).success
+            ? supabase
+                .from("item_dependencies")
+                .select("*")
+                .or(`board_id.eq.${boardId},predecessor_board_id.eq.${boardId}`)
+            : supabase
+                .from("item_dependencies")
+                .select("*")
+                .eq("board_id", boardId)
+          )
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: BOARD_ITEMS_CAP },
+      ),
       supabase
         .from("attachments")
         .select("*")
@@ -292,12 +415,17 @@ export const getBoardPayload = cache(
         .limit(1000),
       // Bounded by relation_links_board_idx. Linked-item NAMES are resolved in a
       // second RLS-scoped query below (the targets live on another board).
-      supabase
-        .from("relation_links")
-        .select("*")
-        .eq("board_id", boardId)
-        .order("position", { ascending: true })
-        .limit(2000),
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("relation_links")
+            .select("*")
+            .eq("board_id", boardId)
+            .order("position", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { cap: 2000 },
+      ),
     ]);
 
     // A DB failure is not a 404: throw so the boards error boundary renders
@@ -329,17 +457,71 @@ export const getBoardPayload = cache(
     const rawLinks = relationLinksRes.data ?? [];
     const linkedIds = [...new Set(rawLinks.map((l) => l.linked_item_id))];
     const namesById = new Map<string, string>();
+    let statusById = new Map<string, LinkedItemStatus>();
     if (linkedIds.length > 0) {
-      const { data: linkedItems, error: linkedErr } = await supabase
-        .from("items")
-        .select("id, name")
-        .in("id", linkedIds)
-        .is("archived_at", null);
-      if (linkedErr)
+      // Boards the relation columns point at — their status columns colour the
+      // chips. Read in the same round-trip as the names: both follow-ups key on
+      // ids already in hand, so neither waits on the other.
+      const targetBoardIds = [
+        ...new Set(
+          (columnsRes.data ?? [])
+            .filter((c) => c.kind === "relation")
+            .map(
+              (c) =>
+                (c.settings as { target_board_id?: string } | null)
+                  ?.target_board_id,
+            )
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ];
+      const [namesRes, statusColsRes, statusCellsRes] = await Promise.all([
+        supabase
+          .from("items")
+          .select("id, name")
+          .in("id", linkedIds)
+          .is("archived_at", null),
+        targetBoardIds.length > 0
+          ? supabase
+              .from("columns")
+              .select("id, position, settings")
+              .in("board_id", targetBoardIds)
+              .eq("kind", "status")
+          : null,
+        // Bounded to the linked items and to status-kind columns (inner join on
+        // the column so the kind filter runs server-side), ordered by the
+        // `(item_id, column_id)` PRIMARY KEY so the cap truncates determinately.
+        targetBoardIds.length > 0
+          ? fetchAllRows(
+              (from, to) =>
+                supabase
+                  .from("cell_values")
+                  .select("item_id, column_id, value, columns!inner(kind)")
+                  .in("item_id", linkedIds)
+                  .eq("columns.kind", "status")
+                  .order("item_id", { ascending: true })
+                  .order("column_id", { ascending: true })
+                  .range(from, to),
+              { cap: 4000 },
+            )
+          : null,
+      ]);
+      if (namesRes.error)
         throw new Error(
-          `Failed to load board linked items: ${linkedErr.message}`,
+          `Failed to load board linked items: ${namesRes.error.message}`,
         );
-      for (const it of linkedItems ?? []) namesById.set(it.id, it.name);
+      for (const it of namesRes.data ?? []) namesById.set(it.id, it.name);
+      // Chip colour is decoration: a failed status read leaves the chips
+      // neutral instead of failing the whole board.
+      if (
+        statusColsRes &&
+        statusCellsRes &&
+        !statusColsRes.error &&
+        !statusCellsRes.error
+      )
+        statusById = resolveLinkedStatuses(
+          statusCellsRes.data ?? [],
+          statusColsRes.data ?? [],
+        );
     }
     const relationLinks: RelationLink[] = rawLinks.map((l) => ({
       id: l.id,
@@ -347,6 +529,7 @@ export const getBoardPayload = cache(
       columnId: l.column_id,
       linkedItemId: l.linked_item_id,
       linkedItemName: namesById.get(l.linked_item_id) ?? null,
+      linkedItemStatus: statusById.get(l.linked_item_id) ?? null,
       position: l.position,
     }));
 
@@ -393,14 +576,18 @@ export const getBoardPayload = cache(
           // reads `item_id`/`column_id`/`value`. Ordered by the same
           // `(item_id, column_id)` PRIMARY KEY for the same reason: this read is
           // capped too, so without it truncation at 4000 is an arbitrary subset.
-          supabase
-            .from("cell_values")
-            .select("item_id, column_id, value, updated_at")
-            .in("item_id", linkedItemIds)
-            .in("column_id", targetColumnIds)
-            .order("item_id", { ascending: true })
-            .order("column_id", { ascending: true })
-            .limit(4000),
+          fetchAllRows(
+            (from, to) =>
+              supabase
+                .from("cell_values")
+                .select("item_id, column_id, value, updated_at")
+                .in("item_id", linkedItemIds)
+                .in("column_id", targetColumnIds)
+                .order("item_id", { ascending: true })
+                .order("column_id", { ascending: true })
+                .range(from, to),
+            { cap: 4000 },
+          ),
           supabase
             .from("columns")
             .select("id, kind, settings")

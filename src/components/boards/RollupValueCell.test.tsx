@@ -50,4 +50,22 @@ describe("RollupValueCell", () => {
     );
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
   });
+
+  it("centers the roll-up under its column", () => {
+    const { container } = render(
+      <RollupValueCell
+        col={percentCol()}
+        items={twoItems()}
+        cellMap={new Map()}
+        cache={{} as BoardCache}
+        nowMs={0}
+      />,
+    );
+    const classes = (
+      container.firstElementChild as HTMLElement
+    ).className.split(/\s+/);
+    expect(classes).toContain("justify-center-safe");
+    expect(classes).toContain("text-center");
+    expect(classes).toContain("px-2");
+  });
 });

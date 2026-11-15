@@ -16,6 +16,7 @@ import {
 import { AI_STEP_ALLOWED_ACTIONS } from "@/lib/validations/automations";
 import type { AutomationAction } from "@/lib/validations/automations";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { getBoardAccess } from "@/lib/boards/queries";
 import { buildJobContext } from "./context";
 import { decideAction } from "./decide";
 
@@ -55,6 +56,14 @@ export async function previewAiStep(input: {
     const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, FEATURE);
+
+    // The service client bypasses RLS, so the caller's own access is checked
+    // FIRST, before any service read: this preview reads the board's newest
+    // item and its context. getBoardAccess is null for a missing board, so
+    // "no access" and "no such board" are the same answer and confirm nothing.
+    const access = await getBoardAccess(boardId);
+    if (access !== "owner" && access !== "editor")
+      return fail("Board not found.");
 
     const svc = createServiceClient();
     // Scope the board to the active org (the service client bypasses RLS).

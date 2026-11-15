@@ -1,16 +1,20 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { labelEmail } from "@/lib/ui/member-label";
 import { localTodayISO } from "@/lib/boards/overdue";
 import type { Database } from "@/types/database.types";
-import { layoutNeedsBurn, resolveLayout } from "./layout";
+import { layoutNeedsBurn, layoutNeedsLoad, resolveLayout } from "./layout";
 import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
 import {
   resolveFolderAttention,
   resolveFolderBurn,
+  resolveFolderLoad,
   resolveFolderRollup,
 } from "./resolve";
-import type { FolderPayload } from "./types";
+import { hasDatedItems } from "./rollup";
+import { getFolderAccessHead } from "./sharing-queries";
+import type { FolderLoad, FolderPayload } from "./types";
 
 /**
  * Rows `folder_attention` returns for the first paint.
@@ -25,48 +29,77 @@ import type { FolderPayload } from "./types";
 export const ATTENTION_LIMIT = 100;
 
 /**
- * First paint (spec §6): head reads + folder_layouts + folder_rollup +
- * folder_attention in ONE Promise.all on the request's RLS client (the RPCs
- * gate on auth.uid()), then the briefs read (needs the board ids). Members
- * come from the shell-warm `use cache` read. An RPC failure degrades that
- * panel to `null` (inline retry, spec §8) instead of failing the page.
+ * First paint (spec §6), every read on the request's RLS client (the RPCs
+ * gate on auth.uid()). Each read starts as soon as what it depends on
+ * resolves, not in whole waves:
+ *   - head, folder_layouts, folder_rollup, folder_attention and the access
+ *     head start at once;
+ *   - folder_burn_packed and folder_load depend only on the LAYOUT (a burn
+ *     section or stages tab; a load section), so each starts the moment the
+ *     layout row resolves, alongside the rollup. A load result is discarded
+ *     when the rollup shows no dated items (or failed): nothing to plot;
+ *   - briefs and members need the head (board ids, org id) and start when it
+ *     resolves.
+ * Critical path: max(head then briefs/members, layout then burn/load, rollup,
+ * attention, access), instead of the slowest first read PLUS the slowest
+ * second one. An RPC failure degrades that panel (inline retry, spec §8)
+ * instead of failing the page.
  */
 export async function buildFolderPayload(
   supabase: SupabaseClient<Database>,
   folderId: string,
   userId: string,
 ): Promise<FolderPayload | null> {
-  const [head, layoutRow, rollup, attention] = await Promise.all([
-    getFolderHead(supabase, folderId),
-    getFolderLayoutRow(supabase, folderId),
-    resolveFolderRollup(supabase, folderId),
-    resolveFolderAttention(supabase, folderId, ATTENTION_LIMIT),
-  ]);
+  const headP = getFolderHead(supabase, folderId);
+  const layoutP = getFolderLayoutRow(supabase, folderId).then(resolveLayout);
+  const burnP = layoutP.then((l) =>
+    layoutNeedsBurn(l.config) ? resolveFolderBurn(supabase, folderId) : null,
+  );
+  const loadP = layoutP.then((l) =>
+    layoutNeedsLoad(l.config) ? resolveFolderLoad(supabase, folderId) : null,
+  );
+  const briefsP = headP.then((h) =>
+    h ? listLatestBriefs(supabase, h.boards, userId) : [],
+  );
+  const membersP = headP.then((h) =>
+    h ? listOrgMembersCached(h.folder.orgId) : [],
+  );
+  // ONE Promise.all over every read, so a rejection anywhere is handled.
+  const [head, layout, rollup, attention, access, burn, load, briefs, members] =
+    await Promise.all([
+      headP,
+      layoutP,
+      resolveFolderRollup(supabase, folderId),
+      resolveFolderAttention(supabase, folderId, ATTENTION_LIMIT),
+      getFolderAccessHead(supabase, folderId),
+      burnP,
+      loadP,
+      briefsP,
+      membersP,
+    ]);
   if (!head) return null;
-  const layout = resolveLayout(layoutRow);
-  // Wave B. `folder_burn` joins the briefs/members wave instead of wave A: it
-  // is needed only when the layout has a burn section or a stages tab, and
-  // the briefs read already waited on `head`, so a project folder pays
-  // nothing extra.
-  const [briefs, members, burn] = await Promise.all([
-    listLatestBriefs(supabase, head.boards, userId),
-    listOrgMembersCached(head.folder.orgId),
-    layoutNeedsBurn(layout.config)
-      ? resolveFolderBurn(supabase, folderId)
-      : Promise.resolve(null),
-  ]);
+  const dated = rollup.ok && hasDatedItems(rollup.rows);
+  const folderLoad: FolderLoad =
+    load === null || !dated
+      ? { status: "skipped" }
+      : load.ok
+        ? { status: "ready", weeks: load.weeks, rows: load.rows }
+        : { status: "failed" };
   return {
     folder: head.folder,
     boards: head.boards,
     rollup: rollup.ok ? rollup.rows : null,
-    burn: burn && burn.ok ? burn.rows : null,
+    burnPacked: burn && burn.ok ? burn.packed : null,
+    load: folderLoad,
     attention: attention.ok ? attention.rows : null,
     briefs,
     members: members.map((m) => ({
       userId: m.userId,
       fullName: m.fullName,
+      email: labelEmail(m),
       avatarUrl: m.avatarUrl,
     })),
+    access,
     layout,
     generatedAt: new Date().toISOString(),
     todayISO: localTodayISO(),

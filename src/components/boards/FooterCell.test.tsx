@@ -120,4 +120,38 @@ describe("FooterCell", () => {
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("centers its content under the column, for editors and viewers", () => {
+    const { rerender } = render(
+      <FooterCell
+        aggregateKind="numbers"
+        values={numberValues}
+        current="sum"
+        allowed={allowedAggregations("numbers")}
+        canEdit
+        onChange={() => {}}
+      />,
+    );
+    const trigger = screen.getByRole("button").className.split(/\s+/);
+    expect(trigger).toContain("justify-center");
+    expect(trigger).toContain("w-full");
+    expect(trigger).toContain("px-2");
+    expect(trigger).not.toContain("justify-between");
+    expect(trigger).not.toContain("text-left");
+
+    rerender(
+      <FooterCell
+        aggregateKind="numbers"
+        values={numberValues}
+        current="sum"
+        allowed={allowedAggregations("numbers")}
+        canEdit={false}
+        onChange={() => {}}
+      />,
+    );
+    const readOnly = (
+      screen.getByText("30").closest("span.px-2") as HTMLElement
+    ).className.split(/\s+/);
+    expect(readOnly).toContain("justify-center");
+  });
 });

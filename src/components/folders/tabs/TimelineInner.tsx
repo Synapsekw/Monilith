@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useMutation,
@@ -19,15 +19,32 @@ import {
 } from "@/lib/boards/dependency-actions";
 import { itemDateRange } from "@/lib/boards/dates";
 import { addDependencyToBoardCaches } from "@/lib/boards/use-board-cache";
-import { onBarMoved, onBarResized, type SetCellArg } from "@/lib/boards/gantt";
+import {
+  BOARD_ROW_PREFIX,
+  GROUP_ROW_PREFIX,
+  onBarMoved,
+  onBarResized,
+  type SetCellArg,
+} from "@/lib/boards/gantt";
 import {
   boardScheduleOf,
   contextCellValues,
   type FolderTimelineData,
 } from "@/lib/boards/timeline-context";
 import { buildFolderTimeline, folderTimelineKey } from "@/lib/folders/timeline";
-import type { TimelineZoom } from "@/components/boards/gantt/utils";
-import { GanttCanvas } from "@/components/boards/gantt/GanttCanvas";
+import type { RollupRow } from "@/lib/folders/types";
+import {
+  DEFAULT_LABEL_W,
+  LABEL_W_MAX,
+  LABEL_W_MIN,
+  type TimelineZoom,
+} from "@/components/boards/gantt/utils";
+import {
+  GanttCanvas,
+  type GanttCanvasHandle,
+} from "@/components/boards/gantt/GanttCanvas";
+import { clampDragWidth } from "@/lib/boards/name-column-width";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kicker } from "@/components/ui/kicker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,7 +58,39 @@ const ZOOM_LABEL: Record<(typeof ZOOMS)[number], string> = {
 const MAX_SHOWN = 5000;
 const MAX_LINK_CANDIDATES = 200;
 
-type Props = { folderId: string; stage: string | null; board: string | null };
+/** Per-viewer, per-folder rail width. A folder has no view config to hold it,
+ * and it is a convenience, so it lives in localStorage. */
+const railKey = (folderId: string) =>
+  `monolith.folder-timeline.rail:${folderId}`;
+
+/** The stored width, clamped; DEFAULT_LABEL_W when absent, junk or blocked. */
+function readRailWidth(folderId: string): number {
+  try {
+    const raw = Number(localStorage.getItem(railKey(folderId)));
+    return Number.isFinite(raw) && raw > 0
+      ? clampDragWidth(raw, LABEL_W_MIN, LABEL_W_MAX)
+      : DEFAULT_LABEL_W;
+  } catch {
+    return DEFAULT_LABEL_W;
+  }
+}
+
+function writeRailWidth(folderId: string, width: number): void {
+  try {
+    localStorage.setItem(railKey(folderId), String(width));
+  } catch {
+    // Blocked or full store: the width simply isn't remembered.
+  }
+}
+
+type Props = {
+  folderId: string;
+  stage: string | null;
+  board: string | null;
+  /** The Command Center's rollup rows under the same stage/board filter —
+   * the source of each band's "% done · N late". */
+  rollup?: readonly RollupRow[];
+};
 
 /**
  * The folder's boards on one editable timeline. One Server Action fetch when
@@ -49,7 +98,7 @@ type Props = { folderId: string; stage: string | null; board: string | null };
  * stage/board filters re-derive from that cache. Writes patch the cache
  * optimistically and roll back on failure — never a refetch or refresh.
  */
-export function TimelineInner({ folderId, stage, board }: Props) {
+export function TimelineInner({ folderId, stage, board, rollup }: Props) {
   const q = useQuery({
     queryKey: folderTimelineKey(folderId),
     queryFn: async () => {
@@ -69,10 +118,12 @@ export function TimelineInner({ folderId, stage, board }: Props) {
     );
   return (
     <FolderTimelineChart
+      key={folderId}
       folderId={folderId}
       data={q.data}
       stage={stage}
       board={board}
+      rollup={rollup}
     />
   );
 }
@@ -111,19 +162,34 @@ function FolderTimelineChart({
   data,
   stage,
   board,
+  rollup,
 }: {
   folderId: string;
   data: FolderTimelineData;
   stage: string | null;
   board: string | null;
+  rollup?: readonly RollupRow[];
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [zoom, setZoom] = useState<TimelineZoom>("month");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [collapsedBoards, setCollapsedBoards] = useState<ReadonlySet<string>>(
+  // Roll-up first: both sets start empty, so the chart opens as one row per
+  // board. Deliberately not persisted.
+  const [expandedBoards, setExpandedBoards] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const canvasRef = useRef<GanttCanvasHandle>(null);
+  // This component only ever renders on the client (the tab is ssr: false),
+  // so reading the store in the initializer is safe.
+  const [labelWidth, setLabelWidth] = useState(() => readRailWidth(folderId));
+  function handleLabelWidthChange(width: number) {
+    setLabelWidth(width);
+    writeRailWidth(folderId, width);
+  }
 
   const view = useMemo(
     () =>
@@ -132,9 +198,20 @@ function FolderTimelineChart({
         boardId: board,
         expanded,
         zoom,
-        collapsedBoards,
+        expandedBoards,
+        expandedGroups,
+        rollup,
       }),
-    [data, stage, board, expanded, zoom, collapsedBoards],
+    [
+      data,
+      stage,
+      board,
+      expanded,
+      zoom,
+      expandedBoards,
+      expandedGroups,
+      rollup,
+    ],
   );
 
   const boards = useMemo(
@@ -156,8 +233,8 @@ function FolderTimelineChart({
     () =>
       view.rows.map((r) =>
         r.kind === "section" &&
-        r.itemId.startsWith("board:") &&
-        view.noDateBoards.has(r.itemId.slice("board:".length))
+        r.itemId.startsWith(BOARD_ROW_PREFIX) &&
+        view.noDateBoards.has(r.itemId.slice(BOARD_ROW_PREFIX.length))
           ? { ...r, name: `${r.name} · No dates on this board` }
           : r,
       ),
@@ -168,13 +245,8 @@ function FolderTimelineChart({
     [rows],
   );
 
-  // Late links: in-view arrows that break finish-to-start, plus late stubs.
-  const lateCount = useMemo(() => {
-    const late = new Set(view.violations);
-    for (const stubs of view.externalLinks.values())
-      for (const s of stubs) if (s.late) late.add(s.dependencyId);
-    return late.size;
-  }, [view.violations, view.externalLinks]);
+  // Late links across everything charted — independent of what is open.
+  const lateCount = view.totals.lateLinks;
 
   const cellMutation = useMutation({
     mutationFn: async (v: SetCellArg) => {
@@ -352,8 +424,10 @@ function FolderTimelineChart({
   }
 
   function isExpanded(id: string): boolean {
-    if (id.startsWith("board:"))
-      return !collapsedBoards.has(id.slice("board:".length));
+    if (id.startsWith(BOARD_ROW_PREFIX))
+      return expandedBoards.has(id.slice(BOARD_ROW_PREFIX.length));
+    if (id.startsWith(GROUP_ROW_PREFIX))
+      return expandedGroups.has(id.slice(GROUP_ROW_PREFIX.length));
     return expanded.has(id);
   }
   function toggle(id: string) {
@@ -363,8 +437,10 @@ function FolderTimelineChart({
       else next.add(key);
       return next;
     };
-    if (id.startsWith("board:"))
-      setCollapsedBoards((s) => flip(s, id.slice("board:".length)));
+    if (id.startsWith(BOARD_ROW_PREFIX))
+      setExpandedBoards((s) => flip(s, id.slice(BOARD_ROW_PREFIX.length)));
+    else if (id.startsWith(GROUP_ROW_PREFIX))
+      setExpandedGroups((s) => flip(s, id.slice(GROUP_ROW_PREFIX.length)));
     else setExpanded((s) => flip(s, id));
   }
 
@@ -386,27 +462,39 @@ function FolderTimelineChart({
             {lateCount} late {lateCount === 1 ? "link" : "links"}
           </span>
         ) : null}
-        <div
-          role="group"
-          aria-label="Zoom"
-          className="ml-auto flex items-center gap-1 rounded-md border p-0.5"
-        >
-          {ZOOMS.map((z) => (
-            <button
-              key={z}
-              type="button"
-              aria-pressed={zoom === z}
-              onClick={() => setZoom(z)}
-              className={cn(
-                "focus-visible:ring-ring rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3",
-                zoom === z
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-state-hover",
-              )}
-            >
-              {ZOOM_LABEL[z]}
-            </button>
-          ))}
+        <div className="ml-auto flex items-center gap-2">
+          <div
+            role="group"
+            aria-label="Zoom"
+            className="flex items-center gap-1 rounded-md border p-0.5"
+          >
+            {ZOOMS.map((z) => (
+              <button
+                key={z}
+                type="button"
+                aria-pressed={zoom === z}
+                onClick={() => setZoom(z)}
+                className={cn(
+                  "focus-visible:ring-ring rounded px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3",
+                  zoom === z
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-state-hover",
+                )}
+              >
+                {ZOOM_LABEL[z]}
+              </button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            disabled={rows.length === 0}
+            onClick={() => canvasRef.current?.scrollToToday()}
+          >
+            Today
+          </Button>
         </div>
       </div>
       {data.truncated ? (
@@ -426,6 +514,9 @@ function FolderTimelineChart({
             rangeStartISO={view.rangeStartISO}
             dayCount={view.dayCount}
             zoom={zoom}
+            handleRef={canvasRef}
+            labelWidth={labelWidth}
+            onLabelWidthChange={handleLabelWidthChange}
             colorFor={(row) => groupColor.get(row.itemId) ?? null}
             canEditItem={canEditItem}
             isExpanded={isExpanded}

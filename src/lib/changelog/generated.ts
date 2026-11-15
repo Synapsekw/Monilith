@@ -4,6 +4,97 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-15",
+    kind: "new",
+    title: "Invite people to a folder",
+    description:
+      "Add someone to a folder as a viewer or an editor and they get every board in it, including boards added later. Use the Invite button on the folder page or Share folder in the sidebar menu.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "A richer folder overview",
+    description:
+      "Folder pages now show trends on the key numbers, a burn chart with a forecast, a week-by-week load map per board, a people section, and attention items grouped by board. Folders without due dates show items by stage instead.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "Folder burn chart on large folders",
+    description:
+      "The burn chart no longer leaves out stages on folders with many boards and items.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "Smarter due dates and done statuses",
+    description:
+      "Today and the assistant now pick a board's due-date column by name and treat cancelled items as finished, unless the board owner has set Work tracking.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "new",
+    title: "Today on My Work",
+    description:
+      "My Work now opens with a ranked Today list: overdue first, then work someone is waiting on, due soon, unread replies and stalled items, each with the reason it is there.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "The assistant knows your day and your team's work",
+    description:
+      "Ask what to focus on today, how many items each person has, what a teammate is working on, or why an item is still open, and the assistant answers from your boards.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "new",
+    title: "Work tracking per board",
+    description:
+      "Board owners can choose which status means done and which column holds the due date, so Today and the assistant read each board correctly.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "See more of every board",
+    description:
+      "Board rows are more compact, columns size themselves to their content, and one column header stays pinned while you scroll.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Read long item names",
+    description:
+      "Item names get more room, and resting on a shortened name shows it in full.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Timelines open on today",
+    description:
+      "Board and folder timelines now open on the current date, group work under its group, and flag late items with how many days they are late.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "improved",
+    title: "Folder timeline starts as a summary",
+    description:
+      "A folder's timeline opens with one row per board showing progress and late work; open a board to see its groups and items.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "fixed",
+    title: "Large boards show every value",
+    description:
+      "Boards with hundreds of items no longer show blank rows; every cell loads, however big the board.",
+  },
+  {
+    date: "2026-11-14",
+    kind: "fixed",
+    title: "Column headers line up",
+    description:
+      "Column headers now sit directly above their values on boards that size the name column automatically.",
+  },
+  {
     date: "2026-11-14",
     kind: "new",
     title: "Twelve new colour themes and a bolder light mode",

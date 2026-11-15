@@ -26,6 +26,20 @@ export type ToolResult = {
   isError?: boolean;
 };
 
+/**
+ * Tool input with every `null` field dropped. Strict function-calling callers
+ * (OpenAI strict mode makes every property required) send `null` for a field
+ * they mean to leave out; read tools whose schemas accept `.nullish()` call
+ * this at the boundary so a `null` behaves exactly like an omitted field.
+ */
+export function withoutNulls(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, v]) => v !== null),
+  );
+}
+
 /** One field write in `create_item` / `update_item`: a column id plus its raw value. */
 export const fieldInput = z.object({
   columnId: z.string().uuid(),

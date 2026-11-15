@@ -5,6 +5,7 @@ import { assertOnline } from "@/lib/offline/online-status";
 import { createClient } from "@/lib/supabase/client";
 import { invitationsKey } from "./invitations";
 import { acceptInvitation, declineInvitation } from "./invitations-data";
+import { refreshAccessAfterInvitation } from "./invitation-actions";
 
 export function useInvitationMutations(userId: string) {
   const qc = useQueryClient();
@@ -15,6 +16,12 @@ export function useInvitationMutations(userId: string) {
     mutationFn: (inviteId: string) => {
       assertOnline();
       return acceptInvitation(createClient(), inviteId);
+    },
+    // accept_invitation ran in the browser, so the server's cached nav reads
+    // never saw it: expire this user's access entries (a failure here must not
+    // fail an accept that already succeeded).
+    onSuccess: (orgId) => {
+      void refreshAccessAfterInvitation(orgId).catch(() => {});
     },
     onSettled: invalidate,
   });

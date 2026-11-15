@@ -126,7 +126,7 @@ export async function renameColumnCore(
 
 export async function resizeColumnCore(
   supabase: SupabaseClient<Database>,
-  input: { columnId: string; width: number },
+  input: { columnId: string; width: number | null },
 ): Promise<ActionResult> {
   const boardId = await columnBoardId(supabase, input.columnId);
   if (!boardId) return fail("Column not found.");

@@ -254,6 +254,13 @@ for (const target of [globalThis, window]) {
   });
 }
 
+// jsdom has no canvas: HTMLCanvasElement.prototype.getContext logs a "Not
+// implemented" error on every call and returns null. Default it to a quiet
+// null so measuring helpers (src/lib/text-measure.ts) take their "no context"
+// path without noise. Tests that need a context still vi.spyOn it.
+HTMLCanvasElement.prototype.getContext = (() =>
+  null) as unknown as HTMLCanvasElement["getContext"];
+
 // Provide placeholder public env vars so modules that import the validated env
 // (e.g. the Supabase server client pulled in transitively by server actions)
 // can be loaded in the test environment. These are not real credentials.

@@ -6,7 +6,9 @@ import Link from "next/link";
 import {
   Eye,
   FileText,
+  ListChecks,
   MoreHorizontal,
+  MoveHorizontal,
   Trash2,
   Upload,
   UserPlus,
@@ -35,7 +37,8 @@ import { peopleOnly } from "@/lib/monos/people";
 import { once, useEverOpened } from "@/lib/ui/lazy-dialog";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/boards/queries";
-import type { CacheColumn } from "@/lib/boards/cache";
+import type { CacheBoard, CacheColumn } from "@/lib/boards/cache";
+import type { WorkTrackingSettings } from "@/components/boards/WorkTrackingDialog";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
@@ -57,6 +60,11 @@ const loadAutomationsDialog = once(() =>
     (m) => m.AutomationsDialog,
   ),
 );
+const loadWorkTrackingDialog = once(() =>
+  import("@/components/boards/WorkTrackingDialog").then(
+    (m) => m.WorkTrackingDialog,
+  ),
+);
 const loadShareDialog = once(() =>
   import("@/components/boards/ShareBoardDialog").then(
     (m) => m.ShareBoardDialog,
@@ -72,6 +80,7 @@ const loadImportWizard = once(() =>
 );
 
 const AutomationsDialog = dynamic(loadAutomationsDialog, { ssr: false });
+const WorkTrackingDialog = dynamic(loadWorkTrackingDialog, { ssr: false });
 const ShareBoardDialog = dynamic(loadShareDialog, { ssr: false });
 const BoardTrashDialog = dynamic(loadTrashDialog, { ssr: false });
 const ImportWizard = dynamic(loadImportWizard, { ssr: false });
@@ -111,6 +120,7 @@ export type BoardAccess = "owner" | "editor" | "viewer";
 export function BoardHeader({
   boardId,
   boardName,
+  board,
   views,
   selectedViewId,
   columns = EMPTY,
@@ -120,9 +130,15 @@ export function BoardHeader({
   grants = EMPTY,
   currentUserId = "",
   filterable = false,
+  onFitAllColumns,
 }: {
   boardId: string;
   boardName: string;
+  /** The board row from the shared cache; only its work-tracking settings are read. */
+  board: Pick<
+    CacheBoard,
+    "work_status_column_id" | "work_done_option_ids" | "work_due_column_id"
+  >;
   views: BoardView[];
   selectedViewId: string;
   columns?: CacheColumn[];
@@ -137,8 +153,11 @@ export function BoardHeader({
   currentUserId?: string;
   /** Show the filter/sort/search toolbar. Only the Table + Kanban views apply it. */
   filterable?: boolean;
+  /** Table view only: clear every saved column width (and the Name width) so
+   *  all columns fit their content. Absent in the other views. */
+  onFitAllColumns?: () => void;
 }) {
-  const { renameBoard } = useBoardMutations(boardId);
+  const { renameBoard, applyWorkSettings } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(boardName);
   const [isPending, startTransition] = useTransition();
@@ -146,11 +165,20 @@ export function BoardHeader({
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [workTrackingOpen, setWorkTrackingOpen] = useState(false);
   const [seedDraft, setSeedDraft] = useState<Draft | undefined>();
   const automationsMounted = useEverOpened(automationsOpen);
   const shareMounted = useEverOpened(shareOpen);
   const importMounted = useEverOpened(importOpen);
   const trashMounted = useEverOpened(trashOpen);
+  const workTrackingMounted = useEverOpened(workTrackingOpen);
+  // Read straight from the shared board cache; a saved dialog patches it
+  // (applyWorkSettings), so every view's header and any collaborator change agree.
+  const workSettings: WorkTrackingSettings = {
+    statusColumnId: board.work_status_column_id,
+    doneOptionIds: board.work_done_option_ids,
+    dueColumnId: board.work_due_column_id,
+  };
 
   // Board Intelligence (spec §2.3): "Always do this" hands the header a
   // prefilled automation draft, opening straight into the builder.
@@ -323,11 +351,23 @@ export function BoardHeader({
               <DropdownMenuItem onSelect={() => setAutomationsOpen(true)}>
                 <Zap className="size-3.5" /> Automations
               </DropdownMenuItem>
+              {/* Work tracking is a board write (RLS: can_edit_board) — hidden
+                from viewers like Import and Trash. */}
+              {!isViewer ? (
+                <DropdownMenuItem onSelect={() => setWorkTrackingOpen(true)}>
+                  <ListChecks className="size-3.5" /> Work tracking
+                </DropdownMenuItem>
+              ) : null}
               {/* Import/Trash are board writes — hidden from viewers (the RPCs
                 also reject them server-side). */}
               {!isViewer ? (
                 <DropdownMenuItem onSelect={() => setImportOpen(true)}>
                   <Upload className="size-3.5" /> Import
+                </DropdownMenuItem>
+              ) : null}
+              {!isViewer && onFitAllColumns ? (
+                <DropdownMenuItem onSelect={() => onFitAllColumns()}>
+                  <MoveHorizontal className="size-3.5" /> Fit all columns
                 </DropdownMenuItem>
               ) : null}
               {!isViewer ? (
@@ -353,6 +393,16 @@ export function BoardHeader({
               if (!next) setSeedDraft(undefined);
             }}
             seedDraft={seedDraft}
+          />
+        ) : null}
+        {!isViewer && workTrackingMounted ? (
+          <WorkTrackingDialog
+            boardId={boardId}
+            columns={columns}
+            current={workSettings}
+            onSaved={applyWorkSettings}
+            open={workTrackingOpen}
+            onOpenChange={setWorkTrackingOpen}
           />
         ) : null}
         {importMounted ? (

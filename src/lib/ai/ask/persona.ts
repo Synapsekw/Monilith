@@ -58,6 +58,7 @@ export function composeFolderScope(
     `The user is looking at the folder "${name}" (id ${folder.id}), a project made of these boards:`,
     ...(boards.length > 0 ? boards : ["- (no boards yet)"]),
     'Resolve "this project", "this folder", "here" and unqualified questions to those boards without calling list_boards first.',
-    "Call get_board_overview on a board before decoding its option and user ids.",
+    `For questions about the whole project, pass folderId "${folder.id}" to query_items, get_focus_today or search_items.`,
+    "Call get_board on a board before writing to it, to learn its columns and options.",
   ].join("\n");
 }

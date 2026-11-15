@@ -171,8 +171,15 @@ export function cellToText(
             ? "Normal"
             : "";
 
-      // Export-structure-only kinds: always blank in v1
+      // A relation column stores no cell value (its links live in
+      // `relation_links`). The board export supplies `{ text }` — the linked
+      // item names joined — so that is all this renders; any other caller
+      // passes no value and still gets blank. Export-only: relation is not an
+      // importable kind, so `textToCell` has no inverse.
       case "relation":
+        return typeof v.text === "string" ? v.text : "";
+
+      // Export-structure-only kinds: always blank in v1
       case "mirror":
       case "files":
       case "time_tracking":

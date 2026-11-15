@@ -2,100 +2,134 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getUser } from "@/lib/auth/session";
-import { optionSchema, type ColumnOption } from "@/lib/validations/boards";
-import { serverToday } from "@/lib/portfolios/rollup";
+import { resolveActiveOrg } from "@/lib/org/active";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
+import { todayInTimeZone } from "@/lib/focus/today";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
+import { getFocusTodayCore, type FocusResult } from "@/lib/focus/queries";
+import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   bucketMyWork,
   type MyWorkGroup,
   type MyWorkItem,
-  type MyWorkStatus,
 } from "@/lib/my-work/bucket";
 
 /**
- * Hot-path caps (AGENTS.md: bounded reads over indexed columns). The item cap
- * bounds the whole page; the column cap bounds the people-column pre-filter.
- * Both truncate silently — raise alongside pagination if a user ever approaches
- * them (a single person assigned to 500 open items is already far past useful).
+ * Hot-path cap (AGENTS.md: bounded reads over indexed columns). It bounds the
+ * whole page and truncates silently AFTER ordering by due date, so what is cut
+ * is the latest-due tail — raise alongside pagination if a user ever
+ * approaches it (a single person assigned to 500 open items is already far
+ * past useful).
  */
 export const MY_WORK_ITEM_LIMIT = 500;
-export const MY_WORK_COLUMN_LIMIT = 2000;
-
-function parseOptions(settings: unknown): ColumnOption[] {
-  const raw = (settings as { options?: unknown } | null)?.options ?? [];
-  return optionSchema.array().safeParse(raw).data ?? [];
-}
 
 /**
  * Client-injected core. Takes the client as a parameter so both the RSC path
  * (cookie-bound) and the MCP path (OAuth-bridged) share ONE implementation —
  * the `upsertCellCore` precedent. The RPC is SECURITY INVOKER, so RLS scopes
- * rows to the caller and no userId/orgId argument is needed.
+ * rows to the caller; `auth.uid()` supplies the user.
  *
- * Every item assigned to the current user across every board they can read,
- * enriched with board name, group, status and due date — in ONE round-trip.
- * The four serial TypeScript phases now live in public.get_my_work_items
- * (SECURITY INVOKER — every table still RLS-filtered by the caller; see the
- * migration). Status-option resolution stays here, behind the Zod optionSchema
- * boundary, from the raw settings jsonb the RPC returns per row.
+ * Open items assigned to the caller in ONE organization, earliest due first
+ * (ordered before the limit in SQL), read from the shared `item_facts` view so
+ * "open" and "due" mean the same thing here as in every other surface.
  *
  * Returns a discriminated result rather than swallowing RPC errors into `[]`:
  * the MCP path needs to tell a genuine failure apart from "no assigned items"
  * (surfaced as `isError: true` in `getMyWorkHandler`). The cookie-bound
- * `getMyWorkItems()` wrapper below maps `ok: false` back to `[]` so `/my-work`
- * behaviour is unchanged.
+ * `getMyWorkItems()` wrapper below maps `ok: false` back to `[]`.
  */
 export async function getMyWorkItemsCore(
   supabase: SupabaseClient<Database>,
-  limit: number = MY_WORK_ITEM_LIMIT,
+  args: { orgId: string; limit?: number },
 ): Promise<{ ok: true; items: MyWorkItem[] } | { ok: false; error: string }> {
-  const { data, error } = await supabase.rpc("get_my_work_items", {
-    p_limit: limit,
+  const { data, error } = await typedRpc(supabase, "get_my_open_work", {
+    p_org_id: args.orgId,
+    p_limit: args.limit ?? MY_WORK_ITEM_LIMIT,
   });
   if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: true, items: [] };
-
-  const items = data.map((r) => {
-    let status: MyWorkStatus | null = null;
-    if (r.status_option_id && r.status_settings) {
-      const opt = parseOptions(r.status_settings).find(
-        (o) => o.id === r.status_option_id,
-      );
-      if (opt) status = { label: opt.label, color: opt.color };
-    }
-    return {
-      itemId: r.item_id,
-      itemName: r.item_name,
-      boardId: r.board_id,
-      boardName: r.board_name ?? "Unknown board",
-      groupName: r.group_name,
-      status,
-      dueDate: r.due_date,
-    };
-  });
+  const items = (data ?? []).map((r) => ({
+    itemId: r.item_id,
+    itemName: r.item_name,
+    boardId: r.board_id,
+    boardName: r.board_name ?? "Unknown board",
+    groupName: r.group_name,
+    status:
+      r.status_label !== null
+        ? { label: r.status_label, color: r.status_color ?? "" }
+        : null,
+    dueDate: r.due_date,
+  }));
   return { ok: true, items };
 }
 
-/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+/** Cookie-bound wrapper — the RSC entry point: the active org's open items. */
 export async function getMyWorkItems(): Promise<MyWorkItem[]> {
   const user = await getUser();
   if (!user) return [];
+  const org = await resolveActiveOrg();
+  if (!org) return [];
   const supabase = await createClient();
-  const result = await getMyWorkItemsCore(supabase);
+  const result = await getMyWorkItemsCore(supabase, { orgId: org.id });
   return result.ok ? result.items : [];
 }
 
 /**
- * Page-level read: the assigned items, bucketed by due date, plus the server
- * clock the UI uses to tint overdue rows. `Date.now()` and the bucketing live
- * here (a server module) so the RSC page stays a pure render — mirrors how
- * workload/goals compute their clock inside the query layer.
+ * Whether the member's org may use the assistant. The entitlement check only
+ * has a throwing form (it is the route's gate), so a throw reads as "no" — the
+ * button simply is not offered, and the page never fails over it.
+ */
+async function aiAvailable(orgId: string): Promise<boolean> {
+  try {
+    await requireAiEntitlement(orgId, "ask_pulse");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Page-level read: the ranked Today list, the assigned items bucketed by due
+ * date, and whether to offer "Ask about my day". `today` is the member's own
+ * calendar day (profile zone, then org zone, then UTC) which the list uses to tint
+ * overdue rows. The clock and the bucketing live here (a server module) so
+ * the RSC page stays a pure render.
+ *
+ * One round of parallel reads on first paint: the list, the focus query and
+ * the entitlement do not wait on each other. A failed focus read degrades to
+ * `focus: null` (the block says so) and never takes the list down with it.
  */
 export async function getMyWorkPageData(): Promise<{
   today: string;
   groups: MyWorkGroup[];
+  focus: FocusResult | null;
+  canAsk: boolean;
 }> {
-  const today = serverToday(Date.now());
-  const items = await getMyWorkItems();
-  return { today, groups: bucketMyWork(items, today) };
+  const user = await getUser();
+  const org = user ? await resolveActiveOrg() : null;
+  const tz = user ? await getUserTimeZoneCached(user.id) : null;
+  const orgTimeZone = org?.timezone ?? null;
+  const { today } = todayInTimeZone(
+    effectiveTimeZone(tz, orgTimeZone),
+    Date.now(),
+  );
+  if (!user || !org) return { today, groups: [], focus: null, canAsk: false };
+
+  const supabase = await createClient();
+  const [list, focus, canAsk] = await Promise.all([
+    getMyWorkItemsCore(supabase, { orgId: org.id }),
+    getFocusTodayCore(supabase, {
+      orgId: org.id,
+      userId: user.id,
+      orgTimeZone,
+    }),
+    aiAvailable(org.id),
+  ]);
+  return {
+    today,
+    groups: bucketMyWork(list.ok ? list.items : [], today),
+    focus: focus.ok ? focus.data : null,
+    canAsk,
+  };
 }

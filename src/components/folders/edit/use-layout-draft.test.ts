@@ -31,7 +31,9 @@ describe("useLayoutDraft", () => {
     expect(panels(result.current.config)).toEqual([
       "burn",
       "kpis",
+      "load",
       "boardStatus",
+      "people",
       "attention",
       "intelligence",
       "milestones",
@@ -44,7 +46,9 @@ describe("useLayoutDraft", () => {
     expect(panels(result.current.config)).toEqual([
       "kpis",
       "burn",
+      "load",
       "boardStatus",
+      "people",
       "attention",
       "intelligence",
       "milestones",
@@ -68,7 +72,7 @@ describe("useLayoutDraft", () => {
     const section = (result.current.config.tabs[0].sections ?? []).find(
       (s) => s.id === "attention",
     );
-    expect(section?.layout).toEqual({ x: 0, y: 6, w: 12, h: 5 });
+    expect(section?.layout).toEqual({ x: 0, y: 10, w: 12, h: 5 });
   });
 
   it("pulls a right-column section back to x 0 when it is widened", () => {
@@ -80,7 +84,7 @@ describe("useLayoutDraft", () => {
     const section = (result.current.config.tabs[0].sections ?? []).find(
       (s) => s.id === "board-status",
     );
-    expect(section?.layout).toEqual({ x: 0, y: 2, w: 12, h: 4 });
+    expect(section?.layout).toEqual({ x: 0, y: 6, w: 12, h: 4 });
   });
 
   it("keeps a widened right-column section inside the 12 columns at every width", () => {
@@ -89,14 +93,14 @@ describe("useLayoutDraft", () => {
     const widened = (result.current.config.tabs[0].sections ?? []).find(
       (s) => s.id === "milestones",
     );
-    expect(widened?.layout).toEqual({ x: 4, y: 9, w: 8, h: 2 });
+    expect(widened?.layout).toEqual({ x: 4, y: 13, w: 8, h: 2 });
     // Narrowing again must not drag it back to x 0 — only the overflowing
     // case is clamped.
     act(() => result.current.setWidth("milestones", 4));
     const narrowed = (result.current.config.tabs[0].sections ?? []).find(
       (s) => s.id === "milestones",
     );
-    expect(narrowed?.layout).toEqual({ x: 4, y: 9, w: 4, h: 2 });
+    expect(narrowed?.layout).toEqual({ x: 4, y: 13, w: 4, h: 2 });
   });
 
   it("does not mutate the shared preset objects", () => {

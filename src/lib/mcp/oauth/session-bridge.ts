@@ -111,8 +111,15 @@ export async function mintSessionForUser(userId: string): Promise<Session> {
  * Mints a real GoTrue session for `userId` (see mintSessionForUser) and
  * stores it in Vault. Returns the new bridge_secret_id to persist on the
  * oauth_tokens row.
+ *
+ * Pass `replacesSecretId` when re-minting a bridge whose stored session has
+ * died, so the dead secret is dropped in the same call instead of lingering
+ * in Vault.
  */
-export async function mintBridgeSecret(userId: string): Promise<string> {
+export async function mintBridgeSecret(
+  userId: string,
+  replacesSecretId: string | null = null,
+): Promise<string> {
   const svc = createServiceClient();
   const session = await mintSessionForUser(userId);
 
@@ -120,7 +127,7 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
     svc,
     "oauth_bridge_rotate_secret",
     {
-      p_old_secret_id: null,
+      p_old_secret_id: replacesSecretId,
       p_secret: JSON.stringify(payloadFromSession(session)),
       p_name: bridgeSecretName(userId),
     },

@@ -51,7 +51,7 @@ import {
 } from "@/lib/ai/ask/stream-protocol";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
-import { zonedDayOf } from "@/lib/datetime/timezone";
+import { effectiveTimeZone, zonedDayOf } from "@/lib/datetime/timezone";
 import type { AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import type { Json } from "@/types/database.types";
 
@@ -130,7 +130,11 @@ export async function POST(req: Request) {
 
   const supabase = await createClient();
 
-  const timezone = (await getUserTimeZoneCached(user.id)) ?? "UTC";
+  // Same order as every "today" reader (profile, then org, then UTC), so the
+  // prompt's date and the tools' `today` agree.
+  const timezone =
+    effectiveTimeZone(await getUserTimeZoneCached(user.id), org.timezone) ??
+    "UTC";
 
   const conv = await supabase
     .from("ai_conversations")

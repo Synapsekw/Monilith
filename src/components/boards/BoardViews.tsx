@@ -262,6 +262,7 @@ export function BoardViews({
       />
     ) : selected?.kind === "timeline" ? (
       <GanttBoard
+        key={activeViewId}
         payload={payload}
         members={members}
         selectedViewId={activeViewId}

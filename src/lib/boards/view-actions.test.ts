@@ -218,6 +218,40 @@ describe("updateBoardView", () => {
     expect(res.ok).toBe(false);
     expect(onUpdate).not.toHaveBeenCalled();
   });
+
+  it("applies a label_width patch on a timeline view", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "timeline", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { zoom: "month", label_width: 380 },
+    });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({
+      config: { zoom: "month", label_width: 380 },
+    });
+  });
+
+  it("rejects a label_width outside the rail bounds", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "timeline", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { label_width: 900 },
+    });
+    expect(res.ok).toBe(false);
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("deleteBoardView", () => {

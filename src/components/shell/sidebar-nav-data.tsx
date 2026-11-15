@@ -4,6 +4,8 @@ import {
   listSharedBoardsCached,
 } from "@/lib/boards/queries-cached";
 import { listFoldersCached } from "@/lib/folders/queries-cached";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
+import { filterFolderNav } from "@/lib/folders/nav-filter";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { resolveActiveOrg } from "@/lib/org/active";
@@ -27,11 +29,25 @@ export async function getSidebarNavData(): Promise<
 
   // Folders join the EXISTING Promise.all — a sequential await here would add a
   // round-trip to first paint of every authenticated route.
-  const [boards, sharedBoards, folderData] = await Promise.all([
+  const [boards, sharedBoards, folderData, folderAccess] = await Promise.all([
     listMyBoardsCached(userId, activeWorkspaceId),
     listSharedBoardsCached(userId),
     listFoldersCached(orgId, activeWorkspaceId),
+    getFolderAccessForUserCached(userId, orgId),
   ]);
+
+  // Per-user narrowing of the org-wide cached folder read: a guest gets only
+  // their folders, and no one gets the placement of a board they cannot read.
+  const narrowed = folderData
+    ? filterFolderNav(folderData, {
+        isGuest: folderAccess.isGuest,
+        memberFolderIds: new Set(folderAccess.folderIds),
+        readableBoardIds: new Set([
+          ...boards.map((b) => b.id),
+          ...sharedBoards.map((b) => b.id),
+        ]),
+      })
+    : null;
 
   return {
     orgs,
@@ -44,10 +60,14 @@ export async function getSidebarNavData(): Promise<
     // data was supplied", as opposed to "this workspace has no folders". That
     // sentinel is what stops the prune effect wiping every persisted folder
     // collapse key on a one-off Supabase blip.
-    folders: folderData?.folders,
-    placements: folderData?.placements,
+    folders: narrowed?.folders,
+    placements: narrowed?.placements,
     workspaces,
     activeWorkspaceId,
+    // The caller's org role, from the same cached read that narrows the
+    // folders (no extra query), so a follow-up can hide the Goals, Portfolios,
+    // Reports and Workload links for guests.
+    isGuest: folderAccess.isGuest,
   };
 }
 

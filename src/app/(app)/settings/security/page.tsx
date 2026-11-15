@@ -37,7 +37,7 @@ export default async function SecuritySettingsPage() {
         </SettingRow>
         <SettingRow
           label="Active sessions"
-          description="Signs you out of Monolith everywhere, including devices you no longer have."
+          description="Signs you out of Monolith everywhere, including devices you no longer have, and disconnects your connected apps."
         >
           <SignOutEverywhereButton />
         </SettingRow>

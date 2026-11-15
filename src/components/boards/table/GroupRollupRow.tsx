@@ -9,7 +9,8 @@ import {
 } from "@/components/boards/SummaryRow";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
-import { ROW_HAIRLINE, ROW_HEIGHT } from "./shared";
+import { ROW_HAIRLINE } from "./shared";
+import { useRowHeight } from "./use-row-height";
 
 /**
  * Read-only per-column rollup row shown under a collapsed group's header, so a
@@ -34,13 +35,14 @@ export function GroupRollupRow({
 }) {
   // Snapshot "now" for any running time-tracking entry (keeps render pure).
   const [nowMs] = useState(() => Date.now());
+  const rowHeight = useRowHeight();
   return (
     <div
       // No bottom rule: the row above (GroupHeaderRow) never paints one either
       // — this row draws its OWN top hairline, same convention as every other
       // Quiet Grid row (see ROW_HAIRLINE).
       className={cn("bg-surface grid w-full", ROW_HAIRLINE)}
-      style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+      style={{ height: rowHeight.item, gridTemplateColumns: template }}
     >
       <div
         className={cn(

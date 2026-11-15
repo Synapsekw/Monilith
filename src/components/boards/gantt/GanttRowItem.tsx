@@ -31,11 +31,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BAR_H,
-  LABEL_W,
   MILESTONE,
   MIN_BAR_W,
+  OUTSIDE_LABEL_GAP,
   ROW_H,
+  barLabelFits,
   formatISO,
+  outsideBarLabel,
+  outsideLabelSide,
   parseISO,
   type BarDragData,
 } from "@/components/boards/gantt/utils";
@@ -43,15 +46,19 @@ import {
 const NO_STUBS: ExternalLinkStub[] = [];
 /** px between a bar's edge and its link stubs. */
 const STUB_GAP = 4;
+/** Stand-in when the canvas hands down no measurer: everything "fits". */
+const NO_MEASURE = () => 0;
 
 export function GanttRowItem({
   row,
   criticalLabel,
   rowIdx,
   totalW,
+  labelW,
+  trackStyle,
   dayW,
   todayOffset,
-  dayCount,
+  todayInRange,
   readOnly = false,
   isExpanded = false,
   onToggleExpand,
@@ -66,16 +73,22 @@ export function GanttRowItem({
   onItemTap,
   stubs = NO_STUBS,
   onStubTap,
+  lateDays = null,
+  measureLabel = NO_MEASURE,
 }: {
   row: GanttRow;
   /** Effective-critical marker text (see effectiveCriticalLabel), or null. */
   criticalLabel: string | null;
   rowIdx: number;
   totalW: number;
+  /** Width of the sticky name rail in px (resizable; owned by the canvas). */
+  labelW: number;
+  /** Weekend shading for the track (see weekendStripes); undefined = none. */
+  trackStyle?: CSSProperties;
   /** Pixels per day at the active zoom (see PX_PER_DAY). */
   dayW: number;
   todayOffset: number;
-  dayCount: number;
+  todayInRange: boolean;
   /** When true the bar can't be dragged/resized (e.g. timestamp-sourced dates). */
   readOnly?: boolean;
   /** For a parent row (row.hasChildren): whether its sub-items are revealed. */
@@ -102,6 +115,11 @@ export function GanttRowItem({
   /** Cross-board / out-of-view links drawn as chips beside the bar. */
   stubs?: ExternalLinkStub[];
   onStubTap?: (stub: ExternalLinkStub) => void;
+  /** Whole days late, or null when the item is on time (or lateness is not
+   * known on this timeline). */
+  lateDays?: number | null;
+  /** Width in px of a string at the bar-label font; 0 = not measurable. */
+  measureLabel?: (text: string) => number;
 }) {
   void rowIdx;
   void violations;
@@ -156,6 +174,10 @@ export function GanttRowItem({
       ? resizePreview.deltaDays
       : 0;
 
+  // Lateness is part of the bar's name, so it is never colour alone.
+  const barName =
+    lateDays !== null ? `${row.name}, ${lateDays}d late` : row.name;
+
   const barWidth = row.isMilestone
     ? BAR_H // diamond
     : Math.max(MIN_BAR_W, ((row.spanCols ?? 1) + previewDays) * dayW);
@@ -197,6 +219,32 @@ export function GanttRowItem({
     }
     return [...bySide];
   }, [stubs, barStartX, barEndX, totalW]);
+
+  // Inside label vs. the short label beside the bar (see outsideBarLabel).
+  const nameW = useMemo(() => measureLabel(row.name), [measureLabel, row.name]);
+  const insideFits = barLabelFits(barWidth, nameW, !readOnly);
+  const meta = outsideBarLabel({
+    lateDays,
+    insideFits,
+    isMilestone: !!row.isMilestone,
+    endISO: row.endISO ?? row.startISO,
+  });
+  const metaText = meta?.text ?? null;
+  const metaW = useMemo(
+    () => (metaText ? measureLabel(metaText) : 0),
+    [measureLabel, metaText],
+  );
+  const metaSide =
+    meta && row.scheduled && !isDragging && !resizePreview
+      ? outsideLabelSide({
+          barStartX,
+          barEndX,
+          trackW: totalW,
+          labelW: metaW,
+          afterTaken: stubGroups.some(([side]) => side === "after"),
+          beforeTaken: stubGroups.some(([side]) => side === "before"),
+        })
+      : null;
 
   // Predecessors of this item (items that must finish before this starts)
   // that the viewer may remove — the only ones the ⋯ menu lists.
@@ -303,7 +351,7 @@ export function GanttRowItem({
           "bg-background sticky left-0 z-10 flex shrink-0 items-center border-r pr-2",
           depth > 0 && "bg-surface-sunken",
         )}
-        style={{ width: LABEL_W, paddingLeft: 16 + depth * 16 }}
+        style={{ width: labelW, paddingLeft: 16 + depth * 16 }}
       >
         {intelMatch === true && (
           <span aria-hidden data-testid="intel-rule" className="intel-rule" />
@@ -345,7 +393,10 @@ export function GanttRowItem({
             <span className="sr-only">{criticalLabel}</span>
           </span>
         )}
-        <span className="text-foreground min-w-0 flex-1 truncate text-xs">
+        <span
+          title={row.name}
+          className="text-foreground min-w-0 flex-1 truncate text-xs"
+        >
           {row.name}
         </span>
         {row.hasChildren && row.childCount ? (
@@ -389,12 +440,14 @@ export function GanttRowItem({
 
       {/* Timeline track */}
       <div
+        data-testid="gantt-track"
         className="relative overflow-hidden"
-        style={{ width: totalW, height: ROW_H }}
+        style={{ width: totalW, height: ROW_H, ...trackStyle }}
       >
         {/* Today hairline */}
-        {todayOffset >= 0 && todayOffset <= dayCount && (
+        {todayInRange && (
           <div
+            data-today-line
             className="bg-destructive/30 absolute top-0 h-full w-px"
             style={{ left: todayOffset * dayW }}
             aria-hidden
@@ -412,6 +465,7 @@ export function GanttRowItem({
               grabCursor,
               color ? "" : "bg-primary",
               isDragging && "opacity-50",
+              lateDays !== null && "border-destructive border",
             )}
             style={{
               left: barLeft + dayW / 2 - MILESTONE / 2,
@@ -424,8 +478,8 @@ export function GanttRowItem({
             {...dragHandlers}
             role="button"
             tabIndex={0}
-            title={row.name}
-            aria-label={row.name}
+            title={barName}
+            aria-label={barName}
             onClick={handleTap}
             onKeyDown={handleTapKeyDown}
           >
@@ -441,6 +495,7 @@ export function GanttRowItem({
                 ? "bg-[color-mix(in_oklab,var(--pill)_15%,transparent)]"
                 : "bg-primary",
               isDragging && "opacity-50",
+              lateDays !== null && "border-destructive border",
             )}
             style={{
               left: barLeft,
@@ -464,21 +519,23 @@ export function GanttRowItem({
               {...dragHandlers}
               role="button"
               tabIndex={0}
-              aria-label={row.name}
+              aria-label={barName}
               onClick={handleTap}
               onKeyDown={handleTapKeyDown}
               className="flex h-full flex-1 items-center overflow-hidden px-2"
             >
-              <span
-                className={cn(
-                  "text-2xs truncate font-medium",
-                  color
-                    ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
-                    : "text-primary-foreground",
-                )}
-              >
-                {row.name}
-              </span>
+              {insideFits && (
+                <span
+                  className={cn(
+                    "text-2xs truncate font-medium",
+                    color
+                      ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
+                      : "text-primary-foreground",
+                  )}
+                >
+                  {row.name}
+                </span>
+              )}
             </div>
             {/* Right-edge resize handle (hidden for read-only bars) */}
             {!readOnly && (
@@ -517,6 +574,28 @@ export function GanttRowItem({
               <LinkStubs stubs={group} onTap={onStubTap} />
             </div>
           ))}
+
+        {/* Short label beside the bar: "Nd late", or the end date when the bar
+            is too short to carry its name (the name is in the rail). */}
+        {meta && metaSide && (
+          <span
+            data-testid="gantt-bar-meta"
+            className={cn(
+              "text-2xs pointer-events-none absolute -translate-y-1/2 whitespace-nowrap tabular-nums",
+              meta.late
+                ? "text-destructive font-medium"
+                : "text-muted-foreground",
+            )}
+            style={{
+              top: ROW_H / 2,
+              ...(metaSide === "after"
+                ? { left: barEndX + OUTSIDE_LABEL_GAP }
+                : { right: totalW - barStartX + OUTSIDE_LABEL_GAP }),
+            }}
+          >
+            {meta.text}
+          </span>
+        )}
       </div>
     </div>
   );

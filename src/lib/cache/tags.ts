@@ -12,6 +12,9 @@ export const boardsTag = (userId: string) => `boards:user:${userId}`;
 export const sharedBoardsTag = (userId: string) =>
   `shared-boards:user:${userId}`;
 export const foldersTag = (orgId: string) => `folders:org:${orgId}`;
+/** Which folders a user is a member of, and their role in the org. */
+export const folderMembersTag = (userId: string) =>
+  `folder-members:user:${userId}`;
 export const dashboardsTag = (orgId: string) => `dashboards:org:${orgId}`;
 export const workspacesTag = (orgId: string) => `workspaces:org:${orgId}`;
 export const platformAdminTag = (userId: string) =>

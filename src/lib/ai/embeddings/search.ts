@@ -5,18 +5,11 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
-import { runEmbedding } from "@/lib/ai/gateway";
-import { createEmbeddingClient } from "./client";
-import { toVectorLiteral } from "./index-actions";
+import { semanticSearchCore, type SemanticHit } from "./semantic-core";
 
 /** A semantic hit: an item plus the board it lives on (mirrors ItemSearchResult
  *  so the two surfaces render through one row shape). */
-export type SemanticSearchResult = {
-  id: string;
-  name: string;
-  boardId: string;
-  boardName: string;
-};
+export type SemanticSearchResult = SemanticHit;
 
 /** Find-similar has a third state beyond hits/empty: the item may not be
  *  embedded yet (the async sweep hasn't reached it), which the UI surfaces as a
@@ -71,28 +64,13 @@ export async function semanticSearchItems(
     const org = await resolveActiveOrg();
     if (!org) return [];
 
-    const client = createEmbeddingClient();
-    const { vectors } = await runEmbedding(
-      { orgId: org.id, userId: user.id, feature: "semantic_query" },
-      async () => {
-        const r = await client.embed([parsed.data.query]);
-        return {
-          result: { vectors: r.vectors },
-          usage: { inputTokens: r.inputTokens, outputTokens: 0 },
-          model: r.model,
-        };
-      },
-    );
-    const embedding = vectors[0];
-    if (!embedding) return [];
-
     const supabase = await createClient();
-    const { data, error } = await typedRpc(supabase, "match_items", {
-      p_query_embedding: toVectorLiteral(embedding),
-      p_limit: MATCH_LIMIT,
+    const res = await semanticSearchCore(supabase, {
+      orgId: org.id,
+      userId: user.id,
+      query: parsed.data.query,
     });
-    if (error) return [];
-    return mapRows(data as MatchRow[] | null);
+    return res.ok ? res.items : [];
   } catch {
     return [];
   }

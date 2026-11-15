@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { buildStages } from "@/lib/folders/stages";
 import { FIXTURE_TODAY, folderFixture } from "@/lib/folders/fixture";
+import { burnRowsOf } from "@/lib/folders/packed";
 vi.mock("@/components/folders/charts/BurnChart", () => ({
   BurnChart: () => <div data-testid="burn-chart" />,
 }));
@@ -18,7 +19,7 @@ describe("StagesTab", () => {
         stages={stages}
         stage={null}
         board={null}
-        burn={fx.burn}
+        burn={burnRowsOf(fx.burnPacked)}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
         onSelectStage={vi.fn()}
@@ -39,7 +40,7 @@ describe("StagesTab", () => {
         stages={stages}
         stage={null}
         board={null}
-        burn={fx.burn}
+        burn={burnRowsOf(fx.burnPacked)}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
         onSelectStage={onSelect}
@@ -63,7 +64,7 @@ describe("StagesTab", () => {
         stages={filteredStages}
         stage={null}
         board="b1"
-        burn={fx.burn}
+        burn={burnRowsOf(fx.burnPacked)}
         boards={filteredBoards}
         todayISO={FIXTURE_TODAY}
         onSelectStage={vi.fn()}
@@ -90,7 +91,7 @@ describe("StagesTab", () => {
         stages={stages}
         stage={null}
         board={null}
-        burn={fx.burn}
+        burn={burnRowsOf(fx.burnPacked)}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
         onSelectStage={vi.fn()}
@@ -107,7 +108,7 @@ describe("StagesTab", () => {
         stages={stages}
         stage={null}
         board={null}
-        burn={fx.burn}
+        burn={burnRowsOf(fx.burnPacked)}
         boards={fx.boards}
         todayISO={FIXTURE_TODAY}
         onSelectStage={vi.fn()}

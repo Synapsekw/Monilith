@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { folderLayoutConfigSchema } from "@/lib/validations/folder-layout";
 import { PRESETS, PRESET_KEYS } from "./presets";
-import { canvasSections, layoutNeedsBurn, resolveLayout } from "./layout";
+import {
+  canvasSections,
+  layoutNeedsBurn,
+  layoutNeedsLoad,
+  resolveLayout,
+} from "./layout";
 
 describe("presets", () => {
+  it("gives the crm and support presets the people section and no load map", () => {
+    for (const key of ["crm", "support"] as const) {
+      const panels = canvasSections(PRESETS[key], "overview").map((s) =>
+        s.type === "builtin" ? s.panel : "widget",
+      );
+      expect(panels).toContain("people");
+      expect(panels).not.toContain("load");
+    }
+  });
+
   it("every preset is a valid config", () => {
     for (const key of PRESET_KEYS)
       expect(folderLayoutConfigSchema.safeParse(PRESETS[key]).success).toBe(
@@ -11,14 +26,16 @@ describe("presets", () => {
       );
   });
 
-  it("the project preset is today's layout: six KPIs and all six panels", () => {
+  it("the project preset is the tower layout", () => {
     const sections = canvasSections(PRESETS.project, "overview");
     expect(
       sections.map((s) => (s.type === "builtin" ? s.panel : "widget")),
     ).toEqual([
       "kpis",
       "burn",
+      "load",
       "boardStatus",
+      "people",
       "attention",
       "intelligence",
       "milestones",
@@ -122,6 +139,33 @@ describe("layoutNeedsBurn", () => {
       layoutNeedsBurn(
         cfg([{ id: "o", label: "O", kind: "canvas", sections: [] }]),
       ),
+    ).toBe(false);
+  });
+});
+
+describe("layoutNeedsLoad", () => {
+  it("is true only when a canvas tab holds a builtin load section", () => {
+    expect(layoutNeedsLoad(PRESETS.project)).toBe(true);
+    expect(layoutNeedsLoad(PRESETS.blank)).toBe(false);
+    expect(
+      layoutNeedsLoad({
+        v: 1,
+        tabs: [
+          {
+            id: "overview",
+            label: "Overview",
+            kind: "canvas",
+            sections: [
+              {
+                id: "burn",
+                type: "builtin",
+                panel: "burn",
+                layout: { x: 0, y: 0, w: 6, h: 4 },
+              },
+            ],
+          },
+        ],
+      } as never),
     ).toBe(false);
   });
 });

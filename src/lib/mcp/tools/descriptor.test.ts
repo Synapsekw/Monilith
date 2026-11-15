@@ -13,7 +13,7 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
     const names = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.length).toBe(35);
+    expect(names.length).toBe(38);
   });
 
   it("classifies every tool with a legal capability and scope", () => {

@@ -4,6 +4,10 @@ import type { Database } from "@/types/database.types";
 import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { getBoardAccessCore } from "@/lib/boards/queries";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import {
+  boardAudienceRows,
+  invalidateSharedLists,
+} from "@/lib/folders/shared-lists";
 
 /** Create a board with auto-seeded Group 1 + Status/Owner/Date via RPC. */
 export async function createBoardCore(
@@ -19,10 +23,11 @@ export async function createBoardCore(
 }
 
 /**
- * Rename a board and expire every board_members grantee's cached
- * shared-boards entry (`shared-boards:user:<id>`) so recipients stop seeing
- * the stale name. Does NOT call `revalidatePath` — that is a Next.js request
- * concern the caller (the Server Action) still owns.
+ * Rename a board and expire the cached shared-boards entry
+ * (`shared-boards:user:<id>`) of everyone it is shared with — its board_members
+ * grantees and the members of its folder — so they stop seeing the stale name.
+ * Does NOT call `revalidatePath` — that is a Next.js request concern the caller
+ * (the Server Action) still owns.
  */
 export async function renameBoardCore(
   supabase: SupabaseClient<Database>,
@@ -34,11 +39,7 @@ export async function renameBoardCore(
     .eq("id", input.boardId);
   if (error) return fail(error.message);
 
-  const { data: members } = await supabase
-    .from("board_members")
-    .select("user_id")
-    .eq("board_id", input.boardId);
-  for (const m of members ?? []) updateTag(sharedBoardsTag(m.user_id));
+  invalidateSharedLists(await boardAudienceRows(supabase, input.boardId));
 
   return { ok: true, data: undefined };
 }
@@ -91,6 +92,8 @@ export async function archiveBoardCore(
     })
     .eq("id", input.boardId);
   if (error) return fail(error.message);
+  // Shared lists hide archived boards: expire every one that showed it.
+  invalidateSharedLists(await boardAudienceRows(supabase, input.boardId));
   return { ok: true, data: undefined };
 }
 
@@ -109,6 +112,7 @@ export async function restoreBoardCore(
     .update({ archived_at: null, archived_by: null })
     .eq("id", input.boardId);
   if (error) return fail(error.message);
+  invalidateSharedLists(await boardAudienceRows(supabase, input.boardId));
   return { ok: true, data: undefined };
 }
 

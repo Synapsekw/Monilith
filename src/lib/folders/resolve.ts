@@ -9,12 +9,14 @@ import {
 } from "@/lib/boards/timeline-context";
 import type {
   AttentionRow,
-  BurnRow,
+  BurnPacked,
   GalleryRow,
+  LoadRow,
   RollupRow,
   WorkloadRow,
 } from "./types";
 import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
+import { parseBurnPacked, unpackLoadPacked } from "./packed";
 
 type DB = SupabaseClient<Database>;
 export type Resolved<T> =
@@ -51,13 +53,6 @@ const rollupRowSchema = z.object({
   oldest_overdue: z.string().nullable(),
   min_due: z.string().nullable(),
   max_due: z.string().nullable(),
-});
-
-const burnRowSchema = z.object({
-  stage_key: z.string(),
-  week_start: z.string(),
-  planned: z.number(),
-  completed: z.number(),
 });
 
 /** Replaces the old hand-rolled reason guard — an unrecognized `reason`
@@ -175,26 +170,40 @@ export async function resolveFolderRollup(
   };
 }
 
+/**
+ * The burn chart's series: ONE execution of `folder_burn_packed` (a single
+ * jsonb value, so PostgREST's 1,000-row cap cannot truncate it and pages
+ * cannot overlap), VALIDATED here but left packed: the page ships the
+ * non-zero cells and the browser expands them (`burnRowsOf`). Any RPC error
+ * or malformed value fails the whole read (the panel's Retry) — never a
+ * partial chart.
+ */
 export async function resolveFolderBurn(
   supabase: DB,
   folderId: string,
-): Promise<Resolved<BurnRow>> {
-  const { data, error } = await typedRpc(supabase, "folder_burn", {
+): Promise<{ ok: true; packed: BurnPacked } | { ok: false; error: string }> {
+  const { data, error } = await typedRpc(supabase, "folder_burn_packed", {
     p_folder_id: folderId,
   });
-  if (error) return { ok: false, error: mapRpcError(error, "folder_burn") };
-  const parsed = z.array(burnRowSchema).safeParse(data ?? []);
-  if (!parsed.success)
-    return { ok: false, error: mapZodError(parsed.error, "folder_burn") };
-  return {
-    ok: true,
-    rows: parsed.data.map((r) => ({
-      stageKey: r.stage_key,
-      weekStart: r.week_start,
-      planned: r.planned,
-      completed: r.completed,
-    })),
-  };
+  if (error)
+    return { ok: false, error: mapRpcError(error, "folder_burn_packed") };
+  return parseBurnPacked(data);
+}
+
+/** The load heat map's rows: ONE `folder_load` execution (jsonb, bounded at
+ *  5,000 rows by the function), unpacked and validated, with the server's
+ *  week columns. */
+export async function resolveFolderLoad(
+  supabase: DB,
+  folderId: string,
+): Promise<
+  { ok: true; weeks: string[]; rows: LoadRow[] } | { ok: false; error: string }
+> {
+  const { data, error } = await typedRpc(supabase, "folder_load", {
+    p_folder_id: folderId,
+  });
+  if (error) return { ok: false, error: mapRpcError(error, "folder_load") };
+  return unpackLoadPacked(data);
 }
 
 export async function resolveFolderAttention(

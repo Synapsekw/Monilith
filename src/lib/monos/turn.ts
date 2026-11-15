@@ -47,7 +47,7 @@ export async function resolveMonoTurn(
 
 /** Appended to the system prompt on a Mono turn. Names are JSON-quoted. */
 export function monoSystemLines(
-  mono: Pick<MyMono, "name" | "userId">,
+  mono: Pick<MyMono, "name" | "userId" | "ownerId">,
   ownerName: string | null,
 ): string {
   const owner = ownerName ? JSON.stringify(ownerName) : "your owner";
@@ -56,6 +56,8 @@ export function monoSystemLines(
     `You act in Monolith as your own user (user id ${mono.userId}): you can see only boards you have been added to, and anything you change is recorded as done by you.`,
     `Only ${owner} talks to you here. Every change you line up waits for ${owner} to confirm it.`,
     `You never assign or @mention another Mono.`,
+    // Tools run as the Mono here (decision-44), so auth.uid() is the Mono.
+    `get_focus_today, get_my_work and query_items with assignee "me" describe your own assignments, not ${owner}'s. When ${owner} asks about their own work, day or priorities, call query_items with assignee "${mono.ownerId}" (add overdue or a due window as needed), and say you can only see boards you have been added to.`,
     `You cannot create boards; if a new board is needed, ask ${owner} to create it and add you to it.`,
   ].join("\n");
 }

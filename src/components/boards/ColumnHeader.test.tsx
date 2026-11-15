@@ -273,7 +273,7 @@ describe("ColumnHeader reorder affordances", () => {
 });
 
 describe("ColumnHeader — Quiet Grid", () => {
-  it("paints no vertical rule and pads to 16px", () => {
+  it("paints no vertical rule and reserves 24px each side for the pinned grip and menu", () => {
     const { container } = render(
       <ColumnHeader
         column={col()}
@@ -285,8 +285,49 @@ describe("ColumnHeader — Quiet Grid", () => {
       />,
     );
     const header = container.firstElementChild as HTMLElement;
+    const classes = header.className.split(/\s+/);
     expect(header.className).not.toMatch(/\bborder-l\b/);
-    expect(header.className).toContain("px-4");
+    expect(classes).toContain("px-6");
+    expect(classes).toContain("justify-center");
+    expect(classes).toContain("h-full");
+    expect(classes).not.toContain("pt-3.5");
+    // Coarse pointers keep the in-flow, left-to-right layout.
+    expect(classes).toContain("pointer-coarse:justify-start");
+    expect(classes).toContain("pointer-coarse:px-2");
+  });
+
+  it("centers the label on the column: the grip and the menu are taken out of the flow", () => {
+    render(
+      <ColumnHeader
+        column={col({ name: "Budget" })}
+        width={200}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        reorder={reorder()}
+      />,
+    );
+    const label = screen.getByText("Budget").className.split(/\s+/);
+    expect(label).toContain("text-center");
+    expect(label).toContain("truncate");
+
+    const menu = screen
+      .getByLabelText("Budget column menu")
+      .className.split(/\s+/);
+    expect(menu).toContain("absolute");
+    expect(menu).toContain("right-1");
+    expect(menu).toContain("pointer-coarse:static");
+    expect(menu).toContain("pointer-coarse:size-11");
+    expect(menu).toContain("pointer-coarse:opacity-100");
+
+    const grip = screen
+      .getByRole("button", { name: "Reorder Budget column" })
+      .className.split(/\s+/);
+    expect(grip).toContain("absolute");
+    expect(grip).toContain("left-0.5");
+    expect(grip).toContain("pointer-coarse:static");
+    expect(grip).toContain("pointer-coarse:size-11");
   });
 
   it("dims the column kicker", () => {
@@ -362,12 +403,72 @@ describe("ColumnHeader — resize is frame-throttled", () => {
     expect(onResize).toHaveBeenCalledTimes(calls);
   });
 
-  it("a click on the handle without a move sends no live update", () => {
+  it("a 1px jitter before release is not a drag: nothing live, nothing persisted", () => {
+    const { onResize, onResizeEnd, handle } = setup();
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    move(101);
+    release();
+    act(() => void vi.advanceTimersToNextFrame());
+    expect(onResize).not.toHaveBeenCalled();
+    expect(onResizeEnd).not.toHaveBeenCalled();
+  });
+
+  it("a drag from a 72px (auto-fit floor) column persists at least 80", () => {
+    const onResizeEnd = vi.fn();
+    render(
+      <ColumnHeader
+        column={col()}
+        width={72}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={onResizeEnd}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByLabelText("Resize Notes"), {
+      clientX: 100,
+    });
+    move(95);
+    release();
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd.mock.calls[0][0]).toBeGreaterThanOrEqual(80);
+  });
+
+  it("a press on the handle without a move is not a resize: nothing live, nothing persisted", () => {
     const { onResize, onResizeEnd, handle } = setup();
     fireEvent.pointerDown(handle, { clientX: 100 });
     release();
     act(() => void vi.advanceTimersToNextFrame());
     expect(onResize).not.toHaveBeenCalled();
-    expect(onResizeEnd).toHaveBeenCalledWith(180);
+    expect(onResizeEnd).not.toHaveBeenCalled();
+  });
+});
+
+describe("ColumnHeader — double-click to fit", () => {
+  it("asks to clear the saved width, and the two presses of the double-click persist nothing", () => {
+    const onAutoFit = vi.fn();
+    const onResizeEnd = vi.fn();
+    render(
+      <ColumnHeader
+        column={col({ width: 300 })}
+        width={300}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={onResizeEnd}
+        onAutoFit={onAutoFit}
+      />,
+    );
+    const handle = screen.getByRole("separator", { name: "Resize Notes" });
+    // A real double-click is two press/release pairs, then `dblclick`.
+    for (let i = 0; i < 2; i++) {
+      fireEvent.pointerDown(handle, { clientX: 100 });
+      act(() => {
+        window.dispatchEvent(new MouseEvent("pointerup"));
+      });
+    }
+    fireEvent.doubleClick(handle);
+    expect(onAutoFit).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd).not.toHaveBeenCalled();
   });
 });

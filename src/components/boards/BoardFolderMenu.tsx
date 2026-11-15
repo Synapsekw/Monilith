@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
 import { deleteFolder, renameFolder } from "@/lib/folders/actions";
 import { FOLDER_GONE_ERROR } from "@/lib/folders/types";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,15 +37,31 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Loaded on first open, like the folder header's copy of it.
+const ShareFolderDialog = dynamic(
+  () =>
+    import("@/components/folders/ShareFolderDialog").then(
+      (m) => m.ShareFolderDialog,
+    ),
+  { ssr: false },
+);
+
 export function BoardFolderMenu({
   folder,
 }: {
   folder: { id: string; name: string };
 }) {
   const router = useRouter();
+  // A guest keeps "Share folder…" (it opens read-only for them) but cannot
+  // rename or delete a folder, so those are not offered (see nav-guest).
+  const isGuest = useNavIsGuest();
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  // Mounted on first open and kept, so the close animation and focus return run.
+  const [shareMounted, setShareMounted] = useState(false);
   const [name, setName] = useState(folder.name);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +111,7 @@ export function BoardFolderMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={menuTrigger}
             type="button"
             variant="ghost"
             size="icon-xs"
@@ -102,26 +121,38 @@ export function BoardFolderMenu({
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem
             onSelect={() => {
-              setName(folder.name);
-              setError(null);
-              setRenameOpen(true);
+              setShareMounted(true);
+              setShareOpen(true);
             }}
           >
-            Rename
+            Share folder…
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => {
-              setError(null);
-              setDeleteOpen(true);
-            }}
-          >
-            Delete
-          </DropdownMenuItem>
+          {isGuest ? null : (
+            <>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setName(folder.name);
+                  setError(null);
+                  setRenameOpen(true);
+                }}
+              >
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => {
+                  setError(null);
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -194,6 +225,16 @@ export function BoardFolderMenu({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {shareMounted && (
+        <ShareFolderDialog
+          folderId={folder.id}
+          folderName={folder.name}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          returnFocusRef={menuTrigger}
+        />
+      )}
     </>
   );
 }

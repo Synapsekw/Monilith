@@ -4,6 +4,17 @@ import {
   buildQuarterTicks,
   buildMonthTicks,
   fittedDayW,
+  ROW_H,
+  BAR_H,
+  DEFAULT_LABEL_W,
+  LABEL_W_MIN,
+  LABEL_W_MAX,
+  todayScrollLeft,
+  weekendStripes,
+  barLabelFits,
+  formatShortDay,
+  outsideBarLabel,
+  outsideLabelSide,
 } from "@/components/boards/gantt/utils";
 
 describe("fittedDayW", () => {
@@ -81,5 +92,119 @@ describe("buildQuarterTicks", () => {
     expect(buildQuarterTicks("2026-01-01", span).length).toBeLessThan(
       buildMonthTicks("2026-01-01", span).length,
     );
+  });
+});
+
+describe("row geometry constants", () => {
+  it("uses compact rows and a 300px default rail clamped to 160–520", () => {
+    expect(ROW_H).toBe(32);
+    expect(BAR_H).toBe(20);
+    expect(DEFAULT_LABEL_W).toBe(300);
+    expect([LABEL_W_MIN, LABEL_W_MAX]).toEqual([160, 520]);
+  });
+});
+
+describe("todayScrollLeft", () => {
+  it("puts today 34% of the way across the visible track", () => {
+    expect(todayScrollLeft(200, 10, 1000)).toBe(1660);
+  });
+  it("never scrolls to a negative offset", () => {
+    expect(todayScrollLeft(10, 10, 1000)).toBe(0);
+  });
+});
+
+describe("weekendStripes", () => {
+  it("shades Saturday and Sunday on a Monday-first seven-day tile", () => {
+    // 2026-11-02 is a Monday.
+    expect(weekendStripes("2026-11-02", 10, "month")).toEqual({
+      backgroundImage:
+        "linear-gradient(to right, transparent 50px, var(--color-state-hover) 50px)",
+      backgroundSize: "70px 100%",
+      backgroundPosition: "0px 0",
+    });
+  });
+  it("offsets the tile by the weekday the range starts on", () => {
+    // 2026-11-01 is a Sunday: six days after Monday, at 28px a day.
+    expect(weekendStripes("2026-11-01", 28, "week")?.backgroundPosition).toBe(
+      "-168px 0",
+    );
+  });
+  it("draws nothing at quarter and year zoom, or without a range", () => {
+    expect(weekendStripes("2026-11-02", 4, "quarter")).toBeUndefined();
+    expect(weekendStripes("2026-11-02", 1.5, "year")).toBeUndefined();
+    expect(weekendStripes("", 10, "month")).toBeUndefined();
+  });
+});
+
+describe("barLabelFits", () => {
+  it("needs the text plus padding, plus the resize strip on an editable bar", () => {
+    expect(barLabelFits(80, 64, false)).toBe(true); // 64 + 16
+    expect(barLabelFits(80, 64, true)).toBe(false); // 64 + 16 + 8
+    expect(barLabelFits(88, 64, true)).toBe(true);
+  });
+  it("treats an unmeasured name as fitting", () => {
+    expect(barLabelFits(6, 0, true)).toBe(true);
+  });
+});
+
+describe("formatShortDay", () => {
+  it("prints month and day without drifting across time zones", () => {
+    expect(formatShortDay("2026-10-24")).toBe("Oct 24");
+    expect(formatShortDay("2026-01-01")).toBe("Jan 1");
+  });
+});
+
+describe("outsideBarLabel", () => {
+  const base = {
+    lateDays: null,
+    insideFits: true,
+    isMilestone: false,
+    endISO: "2026-10-24",
+  };
+  it("is nothing when the name fits and the item is on time", () => {
+    expect(outsideBarLabel(base)).toBeNull();
+  });
+  it("is the end date when the name does not fit", () => {
+    expect(outsideBarLabel({ ...base, insideFits: false })).toEqual({
+      text: "Oct 24",
+      late: false,
+    });
+  });
+  it("is the date for a milestone, which has no inside label", () => {
+    expect(outsideBarLabel({ ...base, isMilestone: true })?.text).toBe(
+      "Oct 24",
+    );
+  });
+  it("is 'Nd late' for a late item, even when the name fits", () => {
+    expect(outsideBarLabel({ ...base, lateDays: 21 })).toEqual({
+      text: "21d late",
+      late: true,
+    });
+  });
+});
+
+describe("outsideLabelSide", () => {
+  const base = {
+    barStartX: 100,
+    barEndX: 150,
+    trackW: 300,
+    labelW: 40,
+    afterTaken: false,
+    beforeTaken: false,
+  };
+  it("prefers the space after the bar", () => {
+    expect(outsideLabelSide(base)).toBe("after");
+  });
+  it("goes before the bar when stubs hold the after side or it would clip", () => {
+    expect(outsideLabelSide({ ...base, afterTaken: true })).toBe("before");
+    expect(outsideLabelSide({ ...base, barEndX: 280 })).toBe("before");
+  });
+  it("is not drawn when neither side has room", () => {
+    expect(
+      outsideLabelSide({ ...base, barStartX: 10, barEndX: 290 }),
+    ).toBeNull();
+    expect(
+      outsideLabelSide({ ...base, afterTaken: true, beforeTaken: true }),
+    ).toBeNull();
   });
 });

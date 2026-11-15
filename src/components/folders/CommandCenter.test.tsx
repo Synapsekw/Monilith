@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { folderFixture, folderFixtureWithPreset } from "@/lib/folders/fixture";
@@ -46,6 +47,13 @@ vi.mock("@/components/folders/charts/BurnChart", () => ({
 vi.mock("@/components/folders/tabs/Timeline", async () => ({
   TimelineTab: (await import("./tabs/TimelineInner")).TimelineInner,
 }));
+vi.mock("@/components/folders/panels/PeoplePanel", () => ({
+  PeoplePanel: (p: { stage: string | null; onSeeAll?: () => void }) => (
+    <button type="button" data-testid="people-panel" onClick={p.onSeeAll}>
+      people
+    </button>
+  ),
+}));
 vi.mock("@/lib/folders/layout-actions", () => ({
   saveFolderLayout: vi.fn(),
 }));
@@ -81,6 +89,18 @@ describe("CommandCenter", () => {
     routerPush.mockClear();
     routerRefresh.mockClear();
     toastError.mockClear();
+  });
+
+  it("opens the People tab from the overview's people section with no navigation", () => {
+    render(wrap({ payload: folderFixture() }));
+    fireEvent.click(screen.getByTestId("people-panel"));
+    // The search params are mocked, so the proof is the URL write that drives
+    // the real tab state: history.replaceState, not a router call.
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe(
+      "people",
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("renders the header, snapshot chip, tab strip and filter bar from the payload", () => {
@@ -119,6 +139,34 @@ describe("CommandCenter", () => {
     expect(routerPush).not.toHaveBeenCalled();
     expect(routerRefresh).not.toHaveBeenCalled();
   });
+
+  it("a folder with more than eight stages filters through the Stages menu and still writes ?stage=", async () => {
+    const user = userEvent.setup();
+    const payload = folderFixture();
+    const seed = payload.rollup![0]!;
+    // The fixture has 4 stages; six more makes 10.
+    payload.rollup = [
+      ...payload.rollup!,
+      ...Array.from({ length: 6 }, (_, i) => ({
+        ...seed,
+        groupId: `b1:extra-${i}`,
+        groupName: `Extra ${i}`,
+        groupPosition: 10 + i,
+      })),
+    ];
+    render(wrap({ payload }));
+    expect(
+      screen.queryByRole("group", { name: "Stage" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Stage" }));
+    await user.click(await screen.findByRole("option", { name: /Extra 3/ }));
+    expect(new URLSearchParams(window.location.search).get("stage")).toBe(
+      "extra 3",
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+    expect(getFolderWorkload).not.toHaveBeenCalled();
+  }, 15_000);
 
   it("loads the timeline only when its tab opens, and only once", async () => {
     // Tab state lives in the (mocked) search params, so "opening" a tab is a
@@ -169,12 +217,52 @@ describe("CommandCenter", () => {
       ...folderFixture(),
       boards: [],
       rollup: [],
-      burn: [],
+      burnPacked: null,
       attention: [],
     };
     render(wrap({ payload: empty }));
     expect(screen.getByText("Add boards to this folder")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Stages/ })).toBeDisabled();
+  });
+
+  it("expands the packed burn on the client for the chart and the KPI trends", () => {
+    params.current = new URLSearchParams("");
+    const p = folderFixture();
+    // The payload carries the PACKED value, not dense rows.
+    expect(p.burnPacked?.rows.length).toBeGreaterThan(0);
+    expect("burn" in p).toBe(false);
+    render(wrap({ payload: p }));
+    expect(screen.getByTestId("burn-chart")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /^Overdue, last/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("treats a packed burn that does not unpack as the failed burn state", () => {
+    params.current = new URLSearchParams("");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const p = {
+      ...folderFixture(),
+      burnPacked: {
+        lo: "2026-08-24",
+        hi: "2026-08-24",
+        stages: ["s"],
+        rows: [[5, 0, 1, 0, 0, 0]] as [
+          number,
+          number,
+          number,
+          number,
+          number,
+          number,
+        ][],
+      },
+    };
+    render(wrap({ payload: p }));
+    expect(screen.queryByTestId("burn-chart")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Retry" }).length,
+    ).toBeGreaterThan(0);
+    spy.mockRestore();
   });
 
   it("renders the widgets slot under #widgets", () => {

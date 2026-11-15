@@ -7,7 +7,7 @@ import { ROW_HEIGHT } from "@/components/boards/table/shared";
  * so only this content area shows the skeleton.
  *
  * Mirrors the real table's shape — a toolbar strip (view switcher, filters,
- * sort, group) above dense `ROW_HEIGHT` (36px) rows — so the swap-in doesn't
+ * sort, group) above dense `ROW_HEIGHT` (28px) rows — so the swap-in doesn't
  * jump the page around once the real data lands.
  */
 export default function BoardLoading() {

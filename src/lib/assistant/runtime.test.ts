@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import * as z from "zod";
 import { simulateReadableStream, tool } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import {
   ASSISTANT_MAX_OUTPUT_TOKENS,
   ASSISTANT_MAX_STEPS,
@@ -49,6 +50,46 @@ function scripted(steps: unknown[][]) {
 }
 
 const messages = [{ role: "user" as const, content: "hi" }];
+
+describe("ASSISTANT_PREAMBLE tool references", () => {
+  it("names only tools that exist in the catalog", () => {
+    const names = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.name));
+    const mentioned =
+      ASSISTANT_PREAMBLE.match(
+        /\b(?:get|list|query|search|manage|create|update)_[a-z_]+\b/g,
+      ) ?? [];
+    expect(mentioned.length).toBeGreaterThan(0);
+    for (const m of mentioned) expect(names.has(m), m).toBe(true);
+  });
+
+  it("routes focus, filtered and why questions to their tools", () => {
+    expect(ASSISTANT_PREAMBLE).toContain("get_focus_today");
+    expect(ASSISTANT_PREAMBLE).toContain("query_items");
+    expect(ASSISTANT_PREAMBLE).toContain("get_item_thread");
+  });
+
+  it("calls get_focus_today with no arguments unless a known folder is named (live-run defect A)", () => {
+    const line = ASSISTANT_PREAMBLE.split("\n").find((l) =>
+      l.includes("call get_focus_today"),
+    );
+    expect(line).toMatch(/with no arguments/);
+    expect(line).toMatch(/folderId/);
+    expect(line).toMatch(/never invent/i);
+    const tool = ALL_TOOL_DESCRIPTORS.find((d) => d.name === "get_focus_today");
+    expect(Object.keys(tool!.inputSchema)).toContain("folderId");
+  });
+
+  it("says query_items takes a person's name as assignee (review I4)", () => {
+    const line = ASSISTANT_PREAMBLE.split("\n").find((l) =>
+      l.includes("call query_items"),
+    );
+    expect(line).toMatch(/assignee/);
+    expect(line).toMatch(/person's name/);
+    // The parameter named in the prompt exists on the tool.
+    const tool = ALL_TOOL_DESCRIPTORS.find((d) => d.name === "query_items");
+    expect(Object.keys(tool!.inputSchema)).toContain("assignee");
+  });
+});
 
 describe("runAssistantLoop", () => {
   it("streams text as token events and returns it", async () => {

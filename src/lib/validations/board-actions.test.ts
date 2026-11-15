@@ -11,6 +11,8 @@ import {
   reorderBoardSchema,
   reorderGroupSchema,
   resizeNameColumnSchema,
+  resizeColumnSchema,
+  resetColumnWidthsSchema,
   updateGroupColorSchema,
   addSubitemSchema,
   deleteItemSchema,
@@ -110,6 +112,39 @@ describe("board action schemas", () => {
     expect(
       resizeNameColumnSchema.safeParse({ boardId: uuid, width: 12.5 }).success,
     ).toBe(false);
+  });
+
+  it("resizeColumn accepts an in-range width and null (back to auto-fit)", () => {
+    expect(
+      resizeColumnSchema.safeParse({ columnId: uuid, width: 300 }).success,
+    ).toBe(true);
+    expect(
+      resizeColumnSchema.safeParse({ columnId: uuid, width: null }).success,
+    ).toBe(true);
+  });
+
+  it("resizeColumn still rejects out-of-range, fractional and missing widths", () => {
+    expect(
+      resizeColumnSchema.safeParse({ columnId: uuid, width: 72 }).success,
+    ).toBe(false);
+    expect(
+      resizeColumnSchema.safeParse({ columnId: uuid, width: 5000 }).success,
+    ).toBe(false);
+    expect(
+      resizeColumnSchema.safeParse({ columnId: uuid, width: 120.5 }).success,
+    ).toBe(false);
+    expect(resizeColumnSchema.safeParse({ columnId: uuid }).success).toBe(
+      false,
+    );
+  });
+
+  it("resetColumnWidths requires a board uuid", () => {
+    expect(resetColumnWidthsSchema.safeParse({ boardId: uuid }).success).toBe(
+      true,
+    );
+    expect(resetColumnWidthsSchema.safeParse({ boardId: "nope" }).success).toBe(
+      false,
+    );
   });
 });
 

@@ -50,6 +50,7 @@ import {
   type KanbanColumn,
 } from "@/lib/boards/kanban";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
+import { withRelationText } from "@/lib/boards/relations";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
@@ -201,19 +202,25 @@ function KanbanBoardInner({
   // per keystroke or on unrelated re-renders.
   const filter = useBoardFilterSort();
   const intelItemIds = useIntelItemIds();
+  // Relation links live outside `cellValues`; overlay each relation cell's
+  // linked item names as text so filter / sort / search can read them.
+  const filterCellMap = useMemo(
+    () => withRelationText(cellMap, cache.relationLinks),
+    [cellMap, cache.relationLinks],
+  );
   const filteredItems = useMemo(() => {
     const predicate = buildItemPredicate(filter.state, {
       columns: cache.columns,
-      cellMap,
+      cellMap: filterCellMap,
     });
     const comparator = buildItemComparator(filter.state, {
       columns: cache.columns,
-      cellMap,
+      cellMap: filterCellMap,
     });
     let next = narrowItemsToSignal(cache.items, intelItemIds).filter(predicate);
     if (comparator) next = [...next].sort(comparator);
     return next;
-  }, [filter.state, cache.columns, cache.items, cellMap, intelItemIds]);
+  }, [filter.state, cache.columns, cache.items, filterCellMap, intelItemIds]);
 
   // These memos must be unconditional (above the early return) to keep hook
   // order stable. When groupColumn is null, kanbanColumns is an empty array
@@ -250,6 +257,7 @@ function KanbanBoardInner({
         <BoardHeader
           boardId={cache.board.id}
           boardName={cache.board.name}
+          board={cache.board}
           views={payload.views}
           selectedViewId={selectedViewId}
           columns={cache.columns}
@@ -313,6 +321,7 @@ function KanbanBoardInner({
       <BoardHeader
         boardId={cache.board.id}
         boardName={cache.board.name}
+        board={cache.board}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={cache.columns}

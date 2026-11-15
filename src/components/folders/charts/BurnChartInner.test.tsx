@@ -32,6 +32,7 @@ const points: BurnPoint[] = [
     completed: 1,
     plannedCum: 2,
     completedCum: 1,
+    importedDone: 0,
     isPast: true,
   },
   {
@@ -40,6 +41,7 @@ const points: BurnPoint[] = [
     completed: 1,
     plannedCum: 5,
     completedCum: 2,
+    importedDone: 0,
     isPast: true,
   },
   {
@@ -48,6 +50,7 @@ const points: BurnPoint[] = [
     completed: 0,
     plannedCum: 6,
     completedCum: 2,
+    importedDone: 0,
     isPast: false,
   },
 ];
@@ -68,5 +71,42 @@ describe("BurnChartInner", () => {
     );
     expect(container.querySelector(".recharts-bar")).not.toBeNull();
     expect(container.querySelector(".recharts-area")).toBeNull();
+  });
+  it("draws a second, dotted line for the forecast in cumulative mode", () => {
+    const { container } = render(
+      <BurnChartInner
+        points={points}
+        mode="cumulative"
+        forecast={[
+          { weekStart: points[points.length - 2]!.weekStart, value: 3 },
+          { weekStart: points[points.length - 1]!.weekStart, value: 5 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll(".recharts-line").length).toBe(2);
+  });
+  it("draws no forecast line in weekly mode even when one is supplied", () => {
+    const { container } = render(
+      <BurnChartInner
+        points={points}
+        mode="weekly"
+        forecast={[
+          { weekStart: points[1]!.weekStart, value: 3 },
+          { weekStart: points[2]!.weekStart, value: 5 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll(".recharts-line").length).toBe(0);
+    expect(container.querySelector(".recharts-bar")).not.toBeNull();
+  });
+  it.each([
+    ["empty", []],
+    ["single-point", [{ weekStart: "2026-09-14", value: 3 }]],
+  ])("draws no forecast line for an %s forecast", (_n, forecast) => {
+    const { container } = render(
+      <BurnChartInner points={points} mode="cumulative" forecast={forecast} />,
+    );
+    // Only the planned line remains.
+    expect(container.querySelectorAll(".recharts-line").length).toBe(1);
   });
 });

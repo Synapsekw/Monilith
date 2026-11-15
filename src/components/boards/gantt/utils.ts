@@ -1,12 +1,17 @@
+import type { CSSProperties } from "react";
 import { effectivePriority } from "@/lib/boards/priority";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const LABEL_W = 200; // px for the left name rail
-export const ROW_H = 40; // px per row
-export const BAR_H = 24; // px bar height
+// The name-rail bounds live in the lib (the server-side view schema needs them
+// too); re-exported so existing component imports keep working.
+export { DEFAULT_LABEL_W, LABEL_W_MIN, LABEL_W_MAX } from "@/lib/boards/gantt";
+// One height for EVERY row kind (item, sub-item, section band): the arrow
+// overlay and the rows-area height both compute from index * ROW_H.
+export const ROW_H = 32;
+export const BAR_H = 20; // px bar height
 export const MILESTONE = 13; // px milestone diamond (pre-rotation); centered in its day column
 export const MIN_BAR_W = 6; // px floor so a bar stays visible/clickable at coarse zoom
 
@@ -166,4 +171,119 @@ export function effectiveCriticalLabel(
   return auto
     ? `Critical (auto) — ${dependents} items depend on this`
     : "Critical";
+}
+
+// ---------------------------------------------------------------------------
+// Today anchor + weekend shading
+// ---------------------------------------------------------------------------
+
+/** Share of the visible track left of today when a timeline opens: a little
+ * recent past for context, most of the screen for what is coming. */
+export const TODAY_ANCHOR = 0.34;
+
+/** scrollLeft that puts today TODAY_ANCHOR of the way across the visible
+ * track. `trackWidth` is the scroller's width minus the sticky name rail. */
+export function todayScrollLeft(
+  todayOffset: number,
+  dayW: number,
+  trackWidth: number,
+): number {
+  return Math.max(
+    0,
+    Math.round(todayOffset * dayW - trackWidth * TODAY_ANCHOR),
+  );
+}
+
+/**
+ * Weekend shading for a track, as ONE repeating background: a seven-day tile
+ * (Monday first) whose last two days are tinted, shifted by the weekday the
+ * range starts on. Week and Month zoom only — at Quarter and Year a day is 4px
+ * or less and the stripes would be noise. The tint is the alpha-on-parent
+ * hover token, so it reads on every surface, theme and reach.
+ */
+export function weekendStripes(
+  rangeStartISO: string,
+  dayW: number,
+  zoom: TimelineZoom,
+): CSSProperties | undefined {
+  if (!rangeStartISO || (zoom !== "week" && zoom !== "month")) return undefined;
+  const sinceMonday = (new Date(parseISO(rangeStartISO)).getUTCDay() + 6) % 7;
+  const workdays = 5 * dayW;
+  return {
+    backgroundImage: `linear-gradient(to right, transparent ${workdays}px, var(--color-state-hover) ${workdays}px)`,
+    backgroundSize: `${7 * dayW}px 100%`,
+    backgroundPosition: `${-sinceMonday * dayW}px 0`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bar labels
+// ---------------------------------------------------------------------------
+
+/** The inside label's own horizontal padding (`px-2`, both sides). */
+export const BAR_LABEL_PAD = 16;
+/** The resize strip at the end of an editable bar (`w-2`). */
+export const BAR_RESIZE_W = 8;
+/** Space between a bar's edge and the label drawn beside it. */
+export const OUTSIDE_LABEL_GAP = 6;
+
+/**
+ * Does the name fit inside the bar? Decided from pixels — the bar's width
+ * against the measured text — never from character counts. An unmeasured name
+ * (0: no canvas) counts as fitting, which keeps the CSS-truncated label.
+ */
+export function barLabelFits(
+  barWidthPx: number,
+  textWidthPx: number,
+  editable: boolean,
+): boolean {
+  if (textWidthPx <= 0) return true;
+  return (
+    textWidthPx + BAR_LABEL_PAD + (editable ? BAR_RESIZE_W : 0) <= barWidthPx
+  );
+}
+
+/** "Oct 24" from YYYY-MM-DD, in UTC so the day never drifts. */
+export function formatShortDay(iso: string): string {
+  return new Date(parseISO(iso)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * The short label drawn beside a bar, or null for none. The name is already
+ * in the rail on the same row, so beside the bar goes what is missing: how
+ * late the item is, or — when the bar is too short to carry its name, and for
+ * a milestone, which has no inside label — its end date.
+ */
+export function outsideBarLabel(a: {
+  lateDays: number | null;
+  insideFits: boolean;
+  isMilestone: boolean;
+  endISO: string | undefined;
+}): { text: string; late: boolean } | null {
+  if (a.lateDays !== null) return { text: `${a.lateDays}d late`, late: true };
+  if ((a.insideFits && !a.isMilestone) || !a.endISO) return null;
+  return { text: formatShortDay(a.endISO), late: false };
+}
+
+/**
+ * Which side of the bar the outside label goes on. After the bar by default;
+ * before it when cross-board link stubs already hold the after side or the
+ * label would clip the track; null (not drawn) when neither side has room.
+ */
+export function outsideLabelSide(a: {
+  barStartX: number;
+  barEndX: number;
+  trackW: number;
+  labelW: number;
+  afterTaken: boolean;
+  beforeTaken: boolean;
+}): "after" | "before" | null {
+  const need = a.labelW + OUTSIDE_LABEL_GAP;
+  if (!a.afterTaken && a.barEndX + need <= a.trackW) return "after";
+  if (!a.beforeTaken && a.barStartX - need >= 0) return "before";
+  return null;
 }

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/chart";
 import type { BurnPoint } from "@/lib/folders/rollup";
 import { cn } from "@/lib/utils";
+import { burnAxisTick, burnAxisWidth } from "./burn-axis";
 
 export type BurnMode = "cumulative" | "weekly";
 
@@ -25,6 +26,7 @@ const CONFIG = {
   planned: { label: "Planned", color: "var(--muted-foreground)" },
   completed: { label: "Completed", color: "var(--primary)" },
   gap: { label: "Behind plan", color: "var(--status-red)" },
+  forecast: { label: "Forecast", color: "var(--primary)" },
 } satisfies ChartConfig;
 
 function weekLabel(iso: string): string {
@@ -36,20 +38,29 @@ function weekLabel(iso: string): string {
 
 /**
  * Planned vs completed (spec §5.2.2). Cumulative: dashed planned line, accent
- * completed area, red wedge for plannedCum − completedCum on past weeks, and a
+ * completed area, red wedge for plannedCum − completedCum on past weeks, a
+ * dotted forecast line from today when one is supplied, and a
  * dashed red "Today" marker on the last past week. Weekly: paired bars.
  * Pure — the parent owns the mode toggle (client state, 0 round-trips).
  */
 export function BurnChartInner({
   points,
   mode,
+  forecast,
   className,
 }: {
   points: BurnPoint[];
   mode: BurnMode;
+  forecast?: { weekStart: string; value: number }[];
   className?: string;
 }) {
   const todayWeek = [...points].reverse().find((p) => p.isPast)?.weekStart;
+  const forecastByWeek = new Map(
+    (mode === "cumulative" ? (forecast ?? []) : []).map((f) => [
+      f.weekStart,
+      f.value,
+    ]),
+  );
   const data = points.map((p) => ({
     week: p.weekStart,
     planned: mode === "cumulative" ? p.plannedCum : p.planned,
@@ -59,7 +70,15 @@ export function BurnChartInner({
         ? Math.max(0, p.plannedCum - p.completedCum)
         : 0,
     gapBase: mode === "cumulative" && p.isPast ? p.completedCum : 0,
+    forecast: forecastByWeek.get(p.weekStart) ?? null,
   }));
+  // Size the Y axis to its longest tick label (four digits used to clip).
+  const yMax = Math.max(
+    0,
+    ...data.map((d) =>
+      Math.max(d.planned, d.completed, d.gap + d.gapBase, d.forecast ?? 0),
+    ),
+  );
   return (
     <ChartContainer
       config={CONFIG}
@@ -82,7 +101,8 @@ export function BurnChartInner({
           allowDecimals={false}
           tickLine={false}
           axisLine={false}
-          width={28}
+          tickFormatter={(v: number) => burnAxisTick(v)}
+          width={burnAxisWidth(yMax)}
         />
         <ChartTooltip
           content={
@@ -128,6 +148,18 @@ export function BurnChartInner({
               strokeWidth={1.5}
               isAnimationActive={false}
             />
+            {forecastByWeek.size > 1 ? (
+              <Line
+                type="linear"
+                dataKey="forecast"
+                stroke="var(--color-forecast)"
+                strokeDasharray="2 5"
+                dot={false}
+                strokeWidth={1.5}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            ) : null}
           </>
         ) : (
           <>

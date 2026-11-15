@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { memberLabel as baseMemberLabel } from "@/lib/ui/member-label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -62,6 +63,9 @@ const ADVANCED_KINDS = new Set([
   "numbers",
   "currency",
   "date",
+  // Matched as text over the linked item names (see boardOperatorsForKind
+  // in filter-meta.ts — FilterBuilder picks it via `evaluatedIn="board"`).
+  "relation",
 ]);
 
 function optionsOf(col: CacheColumn): ColumnOption[] {
@@ -70,7 +74,7 @@ function optionsOf(col: CacheColumn): ColumnOption[] {
 }
 
 function memberLabel(m: HeaderMember): string {
-  return m.fullName ?? m.email ?? "Unknown member";
+  return baseMemberLabel(m);
 }
 
 function toggle(list: string[], id: string): string[] {
@@ -344,6 +348,7 @@ export function BoardToolbar({
             columns={advancedColumns}
             value={state.conditions}
             onChange={setConditions}
+            evaluatedIn="board"
           />
         </PopoverContent>
       </Popover>

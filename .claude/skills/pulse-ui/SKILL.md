@@ -223,8 +223,9 @@ so component code never reads it — keep using `bg-content-surface`, `bg-surfac
 - **Kickers** are a Keystone signature: JetBrains Mono, uppercase, 11px, `tracking-[0.12em]`,
   `text-kicker`, optional index prefix ("01 / SPRINT 24"). Use the `<Kicker index="01">`
   primitive (`src/components/ui/kicker.tsx`) — don't hand-roll the recipe.
-- Body/table text is `text-sm`/`text-xs`; board rows are dense (`ROW_HEIGHT = 36` in
-  `BoardTable.tsx`).
+- Body/table text is `text-sm`/`text-xs`; board table rows are dense: 28px (sub-items 26px) on
+  fine pointers and 44px on coarse pointers. Read the height from `useRowHeight()`
+  (`src/components/boards/table/use-row-height.ts`), never a bare constant.
 
 ## Signature interactions
 
@@ -291,8 +292,9 @@ chip radius.
   `focus-visible` ring, `aria-label`/`sr-only` text for icon-only controls, `aria-invalid` on
   errored fields. Monochrome + accent makes contrast tight — verify AA, don't convey state by
   color alone (pair status color with text/icon).
-- **Density:** generous whitespace, but board/table surfaces are information-dense — 36px
-  rows, hairline separators, truncation with tooltips.
+- **Density:** generous whitespace, but board/table surfaces are information-dense — 28px
+  rows, one sticky column header per board, slim sticky group rows, hairline separators, value
+  columns centered and fitted to their content, long names shown in full by the hover peek.
 
 ## App primitives (all shipped — reuse, don't rebuild)
 

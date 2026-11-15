@@ -253,6 +253,20 @@ export function replaceColumn(cache: BoardCache, col: CacheColumn): BoardCache {
   };
 }
 
+/**
+ * Clear every saved column width and the saved Name width ("Fit all columns").
+ * Immutable; a column already at null keeps its identity.
+ */
+export function clearColumnWidths(cache: BoardCache): BoardCache {
+  return {
+    ...cache,
+    board: { ...cache.board, name_column_width: null },
+    columns: cache.columns.map((c) =>
+      c.width === null ? c : { ...c, width: null },
+    ),
+  };
+}
+
 /** Remove a column and its cell values (mirrors the DB cascade). Immutable. */
 export function removeColumn(cache: BoardCache, columnId: string): BoardCache {
   return {

@@ -92,10 +92,12 @@ describe("semanticSearchItems", () => {
     const [, fnName, args] = typedRpc.mock.calls[0] as [
       unknown,
       string,
-      { p_query_embedding: string },
+      { p_query_embedding: string; p_org_id: string },
     ];
     expect(fnName).toBe("match_items");
     expect(args.p_query_embedding).toBe("[0.1,0.2]");
+    // Pinned to the active org (the item-panel search was unscoped before).
+    expect(args.p_org_id).toBe("o1");
     expect(res).toEqual([
       { id: "i1", name: "Onboarding", boardId: "b1", boardName: "HR" },
     ]);

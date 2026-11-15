@@ -580,6 +580,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "attachments_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "attachments_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
@@ -676,6 +697,13 @@ export type Database = {
             foreignKeyName: "automation_ai_jobs_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "automation_ai_jobs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
           },
@@ -717,6 +745,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "automations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_date_fires_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "automation_date_fires_item_id_fkey";
@@ -785,6 +820,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "automation_runs_item_id_fkey";
@@ -1435,6 +1477,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         Insert: {
@@ -1449,6 +1494,9 @@ export type Database = {
           org_id: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id: string;
         };
         Update: {
@@ -1463,6 +1511,9 @@ export type Database = {
           org_id?: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [
@@ -1472,6 +1523,48 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
           },
           {
             foreignKeyName: "boards_workspace_id_fkey";
@@ -1521,6 +1614,27 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "columns";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cell_values_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "cell_values_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "cell_values_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "cell_values_item_id_fkey";
@@ -1850,6 +1964,64 @@ export type Database = {
           },
         ];
       };
+      folder_invitations: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at: string;
+          email: string;
+          folder_id: string;
+          id: string;
+          invited_by: string | null;
+          org_id: string;
+          org_invitation_id: string | null;
+          status: string;
+        };
+        Insert: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          email: string;
+          folder_id: string;
+          id?: string;
+          invited_by?: string | null;
+          org_id: string;
+          org_invitation_id?: string | null;
+          status?: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          email?: string;
+          folder_id?: string;
+          id?: string;
+          invited_by?: string | null;
+          org_id?: string;
+          org_invitation_id?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_invitations_folder_id_org_id_fkey";
+            columns: ["folder_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "folder_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folder_invitations_org_invitation_id_fkey";
+            columns: ["org_invitation_id"];
+            isOneToOne: false;
+            referencedRelation: "org_invitations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folder_layouts: {
         Row: {
           config: Json;
@@ -1891,6 +2063,48 @@ export type Database = {
           },
           {
             foreignKeyName: "folder_layouts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      folder_members: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at: string;
+          folder_id: string;
+          granted_by: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          folder_id: string;
+          granted_by?: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          created_at?: string;
+          folder_id?: string;
+          granted_by?: string | null;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folder_members_folder_id_org_id_fkey";
+            columns: ["folder_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "folder_members_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -1988,6 +2202,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "columns";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goal_links_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "goal_links_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
           },
           {
             foreignKeyName: "goal_links_goal_id_fkey";
@@ -2206,6 +2434,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "item_activities_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "item_activities_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
@@ -2278,8 +2527,22 @@ export type Database = {
             foreignKeyName: "item_dependencies_predecessor_id_fkey";
             columns: ["predecessor_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_predecessor_id_fkey";
+            columns: ["predecessor_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_successor_id_fkey";
+            columns: ["successor_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_dependencies_successor_id_fkey";
@@ -2316,6 +2579,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embed_queue_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_embed_queue_item_id_fkey";
@@ -2368,6 +2638,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embeddings_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_embeddings_item_id_fkey";
@@ -2429,6 +2706,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_updates_item_id_fkey";
@@ -2510,6 +2794,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "items_parent_id_fkey";
@@ -2735,6 +3026,13 @@ export type Database = {
             foreignKeyName: "notifications_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "notifications_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
           },
@@ -2827,6 +3125,8 @@ export type Database = {
           client_id: string;
           created_at: string;
           id: string;
+          prev_refresh_rotated_at: string | null;
+          prev_refresh_token_hash: string | null;
           refresh_token_expires_at: string;
           refresh_token_hash: string;
           revoked_at: string | null;
@@ -2839,6 +3139,8 @@ export type Database = {
           client_id: string;
           created_at?: string;
           id?: string;
+          prev_refresh_rotated_at?: string | null;
+          prev_refresh_token_hash?: string | null;
           refresh_token_expires_at: string;
           refresh_token_hash: string;
           revoked_at?: string | null;
@@ -2851,6 +3153,8 @@ export type Database = {
           client_id?: string;
           created_at?: string;
           id?: string;
+          prev_refresh_rotated_at?: string | null;
+          prev_refresh_token_hash?: string | null;
           refresh_token_expires_at?: string;
           refresh_token_hash?: string;
           revoked_at?: string | null;
@@ -3219,6 +3523,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "portfolio_boards_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "portfolio_boards_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
             foreignKeyName: "portfolio_boards_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
@@ -3367,11 +3685,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "relation_links_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "relation_links_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_linked_item_id_fkey";
+            columns: ["linked_item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "relation_links_linked_item_id_fkey";
@@ -3551,6 +3897,13 @@ export type Database = {
             foreignKeyName: "time_allocations_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "time_allocations_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
           },
@@ -3614,6 +3967,27 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "columns";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "time_entries_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "time_entries_item_id_fkey";
@@ -4035,6 +4409,46 @@ export type Database = {
       };
     };
     Views: {
+      item_facts: {
+        Row: {
+          board_id: string | null;
+          due_column_id: string | null;
+          due_date: string | null;
+          group_id: string | null;
+          is_done: boolean | null;
+          item_id: string | null;
+          name: string | null;
+          org_id: string | null;
+          status_color: string | null;
+          status_column_id: string | null;
+          status_label: string | null;
+          status_option_id: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "items_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_monos: {
         Row: {
           color: string | null;
@@ -4139,6 +4553,10 @@ export type Database = {
         Returns: string;
       };
       _embed_sweep_ping: { Args: never; Returns: undefined };
+      _folder_board_level: {
+        Args: { p_board_id: string; p_user_id: string };
+        Returns: Database["public"]["Enums"]["board_access"];
+      };
       _folder_item_flags: {
         Args: { p_folder_id: string };
         Returns: {
@@ -4195,6 +4613,14 @@ export type Database = {
       _reassign_authorship_target: {
         Args: { p_leaving: string; p_org_id: string };
         Returns: string;
+      };
+      _redeem_folder_invitations: {
+        Args: { p_email: string; p_org_id: string; p_uid: string };
+        Returns: undefined;
+      };
+      _sync_mono_board_row: {
+        Args: { p_board_id: string; p_owner: string };
+        Returns: undefined;
       };
       _timeline_boards_json: { Args: { p_board_ids: string[] }; Returns: Json };
       _timeline_items_json: { Args: { p_item_ids: string[] }; Returns: Json };
@@ -4321,6 +4747,7 @@ export type Database = {
       };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
+      auth_user_full_orgs: { Args: never; Returns: string[] };
       auth_user_orgs: { Args: never; Returns: string[] };
       automation_ai_apply: {
         Args: { p_action: Json; p_job: string };
@@ -4331,6 +4758,14 @@ export type Database = {
         Returns: string;
       };
       board_dependency_context: { Args: { p_board_id: string }; Returns: Json };
+      board_folder_grants: {
+        Args: { p_board_id: string };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          folder_name: string;
+          user_id: string;
+        }[];
+      };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
@@ -4345,7 +4780,9 @@ export type Database = {
         Args: { p_portfolio_id: string };
         Returns: boolean;
       };
+      can_manage_folder: { Args: { p_folder_id: string }; Returns: boolean };
       can_read_board: { Args: { p_board_id: string }; Returns: boolean };
+      can_see_folder: { Args: { p_folder_id: string }; Returns: boolean };
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
         Returns: {
@@ -4357,6 +4794,26 @@ export type Database = {
       column_in_org: {
         Args: { p_column_id: string; p_org_id: string };
         Returns: boolean;
+      };
+      count_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_count_by: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          item_count: number;
+          key: string;
+          label: string;
+        }[];
       };
       create_board: {
         Args: { p_name: string; p_workspace_id: string };
@@ -4372,6 +4829,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4395,6 +4855,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4691,6 +5154,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4742,11 +5208,14 @@ export type Database = {
         Args: { p_folder_id: string };
         Returns: {
           completed: number;
+          imported_done: number;
+          overdue_open: number;
           planned: number;
           stage_key: string;
           week_start: string;
         }[];
       };
+      folder_burn_packed: { Args: { p_folder_id: string }; Returns: Json };
       folder_gallery: {
         Args: { p_workspace_id: string };
         Returns: {
@@ -4759,6 +5228,24 @@ export type Database = {
           item_count: number;
           overdue_count: number;
         }[];
+      };
+      folder_has_members: { Args: { p_folder_id: string }; Returns: boolean };
+      folder_invitation_states: {
+        Args: { p_folder_id: string };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          email: string;
+          id: string;
+          state: string;
+        }[];
+      };
+      folder_load: {
+        Args: {
+          p_folder_id: string;
+          p_weeks_ahead?: number;
+          p_weeks_back?: number;
+        };
+        Returns: Json;
       };
       folder_rollup: {
         Args: { p_folder_id: string };
@@ -4803,6 +5290,31 @@ export type Database = {
           user_id: string;
         }[];
       };
+      get_focus_today: {
+        Args: {
+          p_folder_id?: string;
+          p_limit?: number;
+          p_org_id: string;
+          p_stall_days?: number;
+          p_today: string;
+        };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          days_overdue: number;
+          days_quiet: number;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_label: string;
+          tier: number;
+          tier_total: number;
+          unread_count: number;
+          waiting: Json;
+          waiting_count: number;
+        }[];
+      };
       get_my_agent_last_runs: {
         Args: never;
         Returns: {
@@ -4824,6 +5336,19 @@ export type Database = {
           org_id: string;
           owner_id: string;
           user_id: string;
+        }[];
+      };
+      get_my_open_work: {
+        Args: { p_limit?: number; p_org_id: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_color: string;
+          status_label: string;
         }[];
       };
       get_my_work_items: {
@@ -4890,26 +5415,40 @@ export type Database = {
         Args: { p_board_id: string; p_payload: Json };
         Returns: undefined;
       };
+      invite_to_folder: {
+        Args: {
+          p_email: string;
+          p_folder_id: string;
+          p_level: Database["public"]["Enums"]["board_access"];
+        };
+        Returns: string;
+      };
       is_board_member: { Args: { p_board_id: string }; Returns: boolean };
+      is_folder_member: { Args: { p_folder_id: string }; Returns: boolean };
       is_member_of: {
         Args: { p_org_id: string; p_user: string };
         Returns: boolean;
       };
+      is_org_guest: { Args: { p_org_id: string }; Returns: boolean };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
       is_org_member_of: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: boolean;
       };
       is_platform_admin: { Args: never; Returns: boolean };
+      item_assignee_ids: { Args: { p_item: string }; Returns: Json };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      items_assigned_to: { Args: { p_user: string }; Returns: string[] };
       match_items: {
         Args: {
           p_board_id?: string;
+          p_board_ids?: string[];
           p_exclude_item_id?: string;
           p_limit?: number;
+          p_org_id?: string;
           p_query_embedding: string;
         };
         Returns: {
@@ -4939,6 +5478,13 @@ export type Database = {
         }[];
       };
       mono_records_cleanup: { Args: { p_limit?: number }; Returns: number };
+      my_folder_board_levels: {
+        Args: { p_board_ids: string[] };
+        Returns: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+        }[];
+      };
       my_pending_invitations: {
         Args: never;
         Returns: {
@@ -5052,6 +5598,60 @@ export type Database = {
         };
       };
       prune_mono_sessions: { Args: never; Returns: number };
+      query_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_org_id: string;
+          p_sort?: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          assignee_ids: Json;
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          is_done: boolean;
+          item_id: string;
+          item_name: string;
+          last_change: string;
+          status_label: string;
+          total: number;
+        }[];
+      };
+      query_items_base: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          board_id: string;
+          due_date: string;
+          group_id: string;
+          is_done: boolean;
+          item_id: string;
+          last_change: string;
+          name: string;
+          status_label: string;
+        }[];
+      };
       reactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
@@ -5093,6 +5693,7 @@ export type Database = {
       };
       restore_group: { Args: { p_group_id: string }; Returns: number };
       restore_item: { Args: { p_item_id: string }; Returns: number };
+      revoke_folder_invitation: { Args: { p_id: string }; Returns: undefined };
       save_board_view_prefs: {
         Args: { p_board_id: string; p_state: Json };
         Returns: undefined;
@@ -5172,6 +5773,14 @@ export type Database = {
         };
         Returns: undefined;
       };
+      share_folder: {
+        Args: {
+          p_folder_id: string;
+          p_level: Database["public"]["Enums"]["board_access"];
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
       start_timer: {
         Args: { p_column_id: string; p_item_id: string };
@@ -5197,6 +5806,10 @@ export type Database = {
       touch_board_visit: { Args: { p_board_id: string }; Returns: undefined };
       unshare_board: {
         Args: { p_board_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      unshare_folder: {
+        Args: { p_folder_id: string; p_user_id: string };
         Returns: undefined;
       };
       update_my_mono: {

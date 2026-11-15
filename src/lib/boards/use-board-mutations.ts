@@ -53,6 +53,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
     updateColumnSettingsMutation,
     removeColumnOptionMutation,
     resizeColumnMutation,
+    resetColumnWidthsMutation,
     reorderColumnMutation,
     deleteColumnMutation,
   } = useColumnMutations(ctx);
@@ -73,7 +74,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
     restoreGroupMutation,
     archiveGroupMutation,
   } = useGroupMutations(ctx);
-  const { renameBoardMutation, resizeNameColumnMutation } =
+  const { renameBoardMutation, resizeNameColumnMutation, applyWorkSettings } =
     useBoardRowMutations(ctx);
   const {
     addDependencyMutation,
@@ -157,6 +158,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
           onError: (err) => callbacks?.onError?.(err),
         },
       ),
+    applyWorkSettings,
     renameBoard: (name: string, callbacks?: { onSuccess?: () => void }) =>
       renameBoardMutation.mutate(
         { name },
@@ -184,8 +186,9 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
       ),
     renameColumn: (columnId: string, name: string) =>
       renameColumnMutation.mutate({ columnId, name }),
-    resizeColumn: (columnId: string, width: number) =>
+    resizeColumn: (columnId: string, width: number | null) =>
       resizeColumnMutation.mutate({ columnId, width }),
+    resetColumnWidths: () => resetColumnWidthsMutation.mutate(),
     reorderColumn: (columnId: string, position: number) =>
       reorderColumnMutation.mutate({ columnId, position }),
     deleteColumn: (columnId: string) =>

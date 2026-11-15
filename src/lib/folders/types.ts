@@ -1,4 +1,5 @@
 import type { ResolvedLayout } from "./layout";
+import type { FolderAccessHead } from "./sharing-types";
 
 /**
  * Shared, pure data contract for the folder command center. No DB, no React.
@@ -72,7 +73,45 @@ export type BurnRow = {
   weekStart: string;
   planned: number;
   completed: number;
+  /** Completions that happened on the item's creation day (arrived done). */
+  importedDone?: number;
+  /** Items overdue as of the end of that week; 0 for future weeks. */
+  overdueOpen?: number;
 };
+
+/** Open items by board, stage and the week they are planned for. Weeks older
+ *  than the window are folded into its first week by the RPC. */
+export type LoadRow = {
+  boardId: string;
+  stageKey: string;
+  weekStart: string;
+  openDue: number;
+};
+
+/**
+ * `folder_burn_packed`'s single jsonb value, validated on the server and sent
+ * to the browser AS IS (only the non-zero cells, a few KB) instead of the
+ * dense `BurnRow[]` (about 500 KB for a 59-stage × 73-week folder). The client
+ * expands it once with `burnRowsOf` (src/lib/folders/packed.ts).
+ * Each row: [stage_index, week_offset, planned, completed, imported_done,
+ * overdue_open]; week_offset is whole weeks after `lo`.
+ */
+export type BurnPacked = {
+  lo: string | null;
+  hi: string | null;
+  stages: string[];
+  rows: [number, number, number, number, number, number][];
+};
+
+/**
+ * The load heat map's read, tri-state: `skipped` (the layout has no load
+ * section, or the folder has no dated items), `failed` (the read failed: the
+ * panel offers Retry), or `ready` with the server's week columns and rows.
+ */
+export type FolderLoad =
+  | { status: "skipped" }
+  | { status: "failed" }
+  | { status: "ready"; weeks: string[]; rows: LoadRow[] };
 
 export type AttentionReason = "overdue" | "blocked" | "unassigned" | "stale";
 
@@ -119,6 +158,8 @@ export type IntelligenceBrief = {
 export type FolderMember = {
   userId: string;
   fullName: string | null;
+  /** From the org roster the viewer can already read; the display fallback. */
+  email?: string | null;
   avatarUrl: string | null;
 };
 
@@ -126,10 +167,16 @@ export type FolderPayload = {
   folder: FolderSummary;
   boards: FolderBoardRef[];
   rollup: RollupRow[] | null;
-  burn: BurnRow[] | null;
+  /** The packed burn value; null when not requested or the read failed. The
+   *  client expands it to `BurnRow[]` once (CommandCenter). */
+  burnPacked: BurnPacked | null;
+  /** Board × week load grid: skipped, failed, or the server's weeks + rows. */
+  load: FolderLoad;
   attention: AttentionRow[] | null;
   briefs: IntelligenceBrief[];
   members: FolderMember[];
+  /** Who the folder is shared with (avatar stack) and whether the caller may manage it. */
+  access: FolderAccessHead;
   /** Resolved per-folder command center layout. Absent row = project preset. */
   layout: ResolvedLayout;
   generatedAt: string;

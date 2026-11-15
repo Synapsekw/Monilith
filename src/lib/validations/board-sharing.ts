@@ -11,5 +11,9 @@ export const unshareBoardSchema = z.object({
   userId: z.string().uuid(),
 });
 
+export const boardFolderGrantsSchema = z.object({
+  boardId: z.string().uuid(),
+});
+
 export type ShareBoardInput = z.infer<typeof shareBoardSchema>;
 export type UnshareBoardInput = z.infer<typeof unshareBoardSchema>;

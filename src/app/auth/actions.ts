@@ -272,9 +272,14 @@ async function forgetLastBoard(): Promise<void> {
   (await cookies()).delete(LAST_BOARD_COOKIE);
 }
 
+/**
+ * Ends this browser's session only. The scope is explicit because supabase-js
+ * defaults `signOut()` to "global", which revokes every session the user has —
+ * other devices, and the sessions that back their connected MCP apps.
+ */
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "local" });
   await forgetLastBoard();
   redirect("/login");
 }
@@ -282,12 +287,28 @@ export async function signOut(): Promise<void> {
 /**
  * Revoke every session for this user on every device, not just this browser.
  * `scope: "global"` invalidates all refresh tokens server-side — the escape
- * hatch for "I signed in on a machine I no longer control". Plain signOut()
- * above only clears the local session, which would leave that machine logged
- * in until its refresh token expired.
+ * hatch for "I signed in on a machine I no longer control".
+ *
+ * Connected MCP apps are disconnected too: their tokens live on the machines
+ * that connected them, and a connection can re-establish its own Supabase
+ * session (`getRequestClient`), so revoking sessions alone would not cut them
+ * off. Deleting the rows also frees their Vault secrets (before-delete trigger).
  */
 export async function signOutEverywhere(): Promise<void> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { error } = await createServiceClient()
+      .from("oauth_tokens")
+      .delete()
+      .eq("user_id", user.id);
+    if (error)
+      console.error("[signOutEverywhere] MCP disconnect failed:", {
+        error: error.message,
+      });
+  }
   await supabase.auth.signOut({ scope: "global" });
   await forgetLastBoard();
   redirect("/login");

@@ -101,10 +101,15 @@ vi.mock("@/components/boards/CalendarBoard", () => ({
     <div data-testid="calendar">calendar:{selectedViewId}</div>
   ),
 }));
+// Records each mount so a test can tell a remount from a re-render.
+const ganttMounts = vi.hoisted(() => [] as string[]);
 vi.mock("@/components/boards/GanttBoard", () => ({
-  GanttBoard: ({ selectedViewId }: { selectedViewId: string }) => (
-    <div data-testid="gantt">gantt:{selectedViewId}</div>
-  ),
+  GanttBoard: ({ selectedViewId }: { selectedViewId: string }) => {
+    useEffect(() => {
+      ganttMounts.push(selectedViewId);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount only
+    return <div data-testid="gantt">gantt:{selectedViewId}</div>;
+  },
 }));
 // Stub the detail panel — its data hooks (React Query/Realtime) are out of
 // scope for this routing test; here it's closed (no `?item=`) regardless.
@@ -222,6 +227,42 @@ describe("BoardViews", () => {
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
     expect(screen.queryByTestId("calendar")).not.toBeInTheDocument();
+  });
+
+  it("remounts the gantt when switching between two timeline views", async () => {
+    const twoTimelines = {
+      ...payload,
+      views: [
+        { id: "v1", kind: "table", name: "Main Table" },
+        { id: "v4", kind: "timeline", name: "Timeline A" },
+        { id: "v5", kind: "timeline", name: "Timeline B" },
+      ],
+    } as unknown as BoardPayload;
+    const ui = () => (
+      <BoardViews
+        payload={twoTimelines}
+        members={[]}
+        initialViewId="v1"
+        currentUserId="u1"
+        access="owner"
+        grants={[]}
+        viewPrefs={EMPTY_BOARD_VIEW_PREFS}
+        lastSeenAt={null}
+      />
+    );
+    ganttMounts.length = 0;
+    viewParam = "v4";
+    const qc = new QueryClient();
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>{ui()}</QueryClientProvider>,
+    );
+    expect(await screen.findByText("gantt:v4")).toBeInTheDocument();
+    viewParam = "v5";
+    rerender(<QueryClientProvider client={qc}>{ui()}</QueryClientProvider>);
+    expect(await screen.findByText("gantt:v5")).toBeInTheDocument();
+    // Same component type at the same position: without a key per view the
+    // second view would reuse (and keep the state of) the first.
+    expect(ganttMounts).toEqual(["v4", "v5"]);
   });
 
   it("lazy-loads the non-default renderers (keeps them out of first paint)", () => {

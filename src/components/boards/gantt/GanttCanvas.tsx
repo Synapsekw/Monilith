@@ -3,11 +3,14 @@
 import {
   useEffect,
   useId,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
@@ -15,10 +18,14 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { useTextMeasurer } from "@/lib/text-measure";
 import type { GanttDependency, GanttRow } from "@/lib/boards/gantt";
 import { Kicker } from "@/components/ui/kicker";
 import {
-  LABEL_W,
+  DEFAULT_LABEL_W,
+  LABEL_W_MAX,
+  LABEL_W_MIN,
+  MIN_BAR_W,
   ROW_H,
   PX_PER_DAY,
   fittedDayW,
@@ -26,16 +33,25 @@ import {
   buildQuarterTicks,
   parseISO,
   todayISO,
+  todayScrollLeft,
+  weekendStripes,
   type BarDragData,
   type TimelineZoom,
 } from "@/components/boards/gantt/utils";
 import { GanttRowItem } from "@/components/boards/gantt/GanttRowItem";
+import { NameResizeHandle } from "@/components/boards/table/NameResizeHandle";
 import type { ExternalLinkStub } from "@/components/boards/gantt/LinkStubs";
 
 // useLayoutEffect warns during SSR; this client component still pre-renders on
 // the server, so fall back to useEffect there (same guard as GroupSection).
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/** What a toolbar may ask of the canvas without reaching into its scroller. */
+export type GanttCanvasHandle = {
+  /** Smooth-scroll so today sits TODAY_ANCHOR across the visible track. */
+  scrollToToday: () => void;
+};
 
 export type GanttCanvasProps = {
   /** Rows already in display order (items, optionally section rows). */
@@ -52,6 +68,10 @@ export type GanttCanvasProps = {
   /** Bar color for a row; null keeps the default primary fill. */
   colorFor: (row: GanttRow) => string | null;
   criticalLabelFor?: (itemId: string) => string | null;
+  /** Whole days an item is late, or null. Late bars get a destructive border
+   * and an "Nd late" label. Omit where lateness is not known (the folder
+   * timeline, whose payload carries no status). */
+  lateFor?: (row: GanttRow) => number | null;
   canEditItem: (itemId: string) => boolean;
   /** Expanded parents; for a board band (section level 0), whether it is open. */
   isExpanded?: (itemId: string) => boolean;
@@ -73,6 +93,14 @@ export type GanttCanvasProps = {
   onStubTap: (stub: ExternalLinkStub) => void;
   /** Rendered under the rows (board Gantt passes UnscheduledSection). */
   footer?: ReactNode;
+  /** Width of the name rail in px. Defaults to DEFAULT_LABEL_W (300). */
+  labelWidth?: number;
+  /** Given → the rail header shows a drag handle. Called ONCE on drag end with
+   * an integer clamped to LABEL_W_MIN..LABEL_W_MAX, and with DEFAULT_LABEL_W on
+   * double-click. Never called while dragging. */
+  onLabelWidthChange?: (width: number) => void;
+  /** Imperative handle (a plain prop, not `ref`): the toolbar's Today button. */
+  handleRef?: Ref<GanttCanvasHandle>;
 };
 
 /**
@@ -92,6 +120,7 @@ export function GanttCanvas({
   zoom,
   colorFor,
   criticalLabelFor,
+  lateFor,
   canEditItem,
   isExpanded,
   onToggleExpand,
@@ -104,6 +133,9 @@ export function GanttCanvas({
   onItemTap,
   onStubTap,
   footer,
+  labelWidth,
+  onLabelWidthChange,
+  handleRef,
 }: GanttCanvasProps) {
   const dndId = useId();
   // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
@@ -118,6 +150,13 @@ export function GanttCanvas({
       ? buildQuarterTicks(rangeStartISO, dayCount)
       : buildMonthTicks(rangeStartISO, dayCount);
   }, [rangeStartISO, dayCount, zoom]);
+
+  // Live width while the rail handle is dragged (local state only — the parent
+  // hears about it once, on release).
+  const [liveLabelW, setLiveLabelW] = useState<number | null>(null);
+  const labelW =
+    liveLabelW ??
+    Math.min(LABEL_W_MAX, Math.max(LABEL_W_MIN, labelWidth ?? DEFAULT_LABEL_W));
 
   // Pixels per day at the active zoom. Row day-offsets are scale-independent;
   // this multiplier is the only thing that turns them into on-screen width. The
@@ -158,7 +197,7 @@ export function GanttCanvas({
     setRowScrollMargin((prev) => (prev === top ? prev : top));
     // Track width available to the timeline (scroller minus the sticky name
     // rail) — drives the fill-to-width day scale (see fittedDayW / dayW).
-    const width = scroller.clientWidth - LABEL_W;
+    const width = scroller.clientWidth - labelW;
     setTrackWidth((prev) => (prev === width ? prev : width));
   });
 
@@ -169,12 +208,12 @@ export function GanttCanvas({
     const scroller = scrollRef.current;
     if (!scroller || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
-      const width = scroller.clientWidth - LABEL_W;
+      const width = scroller.clientWidth - labelW;
       setTrackWidth((prev) => (prev === width ? prev : width));
     });
     ro.observe(scroller);
     return () => ro.disconnect();
-  }, []);
+  }, [labelW]);
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -234,6 +273,55 @@ export function GanttCanvas({
   const todayOffset = rangeStartISO
     ? Math.round((parseISO(today) - parseISO(rangeStartISO)) / 86_400_000)
     : -1;
+  const todayInRange = todayOffset >= 0 && todayOffset <= dayCount;
+
+  // Open on today. Runs after the first layout that has a real track width,
+  // and again when the zoom changes (a new dayW makes the old offset
+  // meaningless). Keyed by zoom through a ref — NOT by the data — so a drag,
+  // a collapse or a realtime edit that shifts the range never moves the
+  // viewport out from under the user.
+  const scrolledForZoom = useRef<TimelineZoom | null>(null);
+  useIsoLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || trackWidth <= 0 || !todayInRange) return;
+    if (scrolledForZoom.current === zoom) return;
+    scrolledForZoom.current = zoom;
+    scroller.scrollLeft = todayScrollLeft(todayOffset, dayW, trackWidth);
+  }, [zoom, trackWidth, todayInRange, todayOffset, dayW]);
+
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      scrollToToday() {
+        const scroller = scrollRef.current;
+        if (!scroller || !todayInRange) return;
+        const left = todayScrollLeft(
+          todayOffset,
+          dayW,
+          Math.max(0, trackWidth),
+        );
+        // An explicit smooth scroll ignores the global reduced-motion CSS rule.
+        const reduce =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        // Element.scrollTo is missing in some embedded webviews (and jsdom).
+        if (typeof scroller.scrollTo === "function")
+          scroller.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
+        else scroller.scrollLeft = left;
+      },
+    }),
+    [todayInRange, todayOffset, dayW, trackWidth],
+  );
+
+  // Weekend shading, computed once per canvas and handed to every track.
+  const trackStyle = useMemo(
+    () => weekendStripes(rangeStartISO, dayW, zoom),
+    [rangeStartISO, dayW, zoom],
+  );
+
+  // Measures bar labels at the label's own type: text-2xs (11px), medium.
+  // Caches per string, so rows never re-measure; re-created after font load.
+  const measureLabel = useTextMeasurer("500", "11px");
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, delta } = event;
@@ -258,13 +346,39 @@ export function GanttCanvas({
             <div className="bg-background sticky top-0 z-20 flex border-b">
               {/* Name rail header */}
               <div
+                data-testid="gantt-rail-header"
                 className="bg-background hover:border-border-hover sticky left-0 z-10 flex shrink-0 items-center border-r px-4 py-2.5"
-                style={{ width: LABEL_W }}
+                style={{ width: labelW }}
               >
                 <Kicker>Item</Kicker>
+                {onLabelWidthChange && (
+                  <NameResizeHandle
+                    width={labelW}
+                    min={LABEL_W_MIN}
+                    max={LABEL_W_MAX}
+                    label="Resize name rail (double-click to reset)"
+                    onResize={setLiveLabelW}
+                    onResizeCancel={() => setLiveLabelW(null)}
+                    onResizeEnd={(w) => {
+                      setLiveLabelW(null);
+                      // A click that never moved ends at the current width:
+                      // nothing to persist.
+                      if (w !== labelW) onLabelWidthChange(w);
+                    }}
+                    onAutoFit={() => {
+                      setLiveLabelW(null);
+                      if (labelW !== DEFAULT_LABEL_W)
+                        onLabelWidthChange(DEFAULT_LABEL_W);
+                    }}
+                  />
+                )}
               </div>
               {/* Timeline header */}
-              <div className="relative" style={{ width: totalW, height: 38 }}>
+              <div
+                data-testid="gantt-track-header"
+                className="relative"
+                style={{ width: totalW, height: 38 }}
+              >
                 {/* Header tick labels (month, or quarter at Year zoom) */}
                 {headerTicks.map((tick) => (
                   <div
@@ -276,7 +390,7 @@ export function GanttCanvas({
                   </div>
                 ))}
                 {/* Today line */}
-                {todayOffset >= 0 && todayOffset <= dayCount && (
+                {todayInRange && (
                   <div
                     className="bg-destructive/70 absolute top-0 z-10 h-full w-px"
                     style={{ left: todayOffset * dayW }}
@@ -310,6 +424,11 @@ export function GanttCanvas({
                       <SectionBand
                         row={row}
                         totalW={totalW}
+                        labelW={labelW}
+                        dayW={dayW}
+                        todayOffset={todayOffset}
+                        todayInRange={todayInRange}
+                        trackStyle={trackStyle}
                         expanded={isExpanded?.(row.itemId) ?? true}
                         onToggle={onToggleExpand}
                       />
@@ -319,9 +438,11 @@ export function GanttCanvas({
                         criticalLabel={criticalLabelFor?.(row.itemId) ?? null}
                         rowIdx={vr.index}
                         totalW={totalW}
+                        labelW={labelW}
+                        trackStyle={trackStyle}
                         dayW={dayW}
                         todayOffset={todayOffset}
-                        dayCount={dayCount}
+                        todayInRange={todayInRange}
                         readOnly={!canEditItem(row.itemId)}
                         isExpanded={isExpanded?.(row.itemId) ?? false}
                         onToggleExpand={onToggleExpand}
@@ -336,6 +457,8 @@ export function GanttCanvas({
                         onItemTap={onItemTap}
                         stubs={externalLinks?.get(row.itemId)}
                         onStubTap={onStubTap}
+                        lateDays={lateFor?.(row) ?? null}
+                        measureLabel={measureLabel}
                       />
                     )}
                   </div>
@@ -347,7 +470,7 @@ export function GanttCanvas({
                 <svg
                   className="pointer-events-none absolute inset-0"
                   style={{
-                    width: LABEL_W + totalW,
+                    width: labelW + totalW,
                     height: rows.length * ROW_H,
                   }}
                   aria-hidden
@@ -356,12 +479,12 @@ export function GanttCanvas({
                     ({ dep, predIdx, succIdx, predRow, succRow }) => {
                       const isViolation = violations.has(dep.id);
                       const predEndX =
-                        LABEL_W +
+                        labelW +
                         ((predRow.startCol ?? 0) + (predRow.spanCols ?? 1)) *
                           dayW;
                       const predMidY = predIdx * ROW_H + ROW_H / 2;
                       const succStartX =
-                        LABEL_W + (succRow.startCol ?? 0) * dayW;
+                        labelW + (succRow.startCol ?? 0) * dayW;
                       const succMidY = succIdx * ROW_H + ROW_H / 2;
                       const mx = (predEndX + succStartX) / 2;
                       const d = `M${predEndX},${predMidY} C${mx},${predMidY} ${mx},${succMidY} ${succStartX},${succMidY}`;
@@ -411,26 +534,53 @@ export function GanttCanvas({
 
 /**
  * A label band spanning the whole row — a board (level 0, the stronger surface
- * step) or a group (level 1, lighter, indented). No bar, no picker; the name
- * stays pinned to the rail while the track scrolls sideways. A board band
- * becomes a collapse toggle when the canvas is given `onToggleExpand`.
+ * step) or a group (level 1, lighter, indented). No draggable bar, no picker;
+ * the name stays pinned to the rail while the track scrolls sideways. Any band
+ * becomes a collapse toggle when the canvas is given `onToggleExpand` (the
+ * caller decides what a band id means). A band with a `summary` draws the span
+ * of everything under it as a thin bar, filled to its done share, with
+ * "35% · 8 late" in the rail. Always exactly ROW_H tall: the arrow overlay
+ * computes y from the row index.
  */
 function SectionBand({
   row,
   totalW,
+  labelW,
+  dayW,
+  todayOffset,
+  todayInRange,
+  trackStyle,
   expanded,
-  onToggle,
+  onToggle: onToggleProp,
 }: {
   row: GanttRow;
   totalW: number;
+  labelW: number;
+  dayW: number;
+  todayOffset: number;
+  todayInRange: boolean;
+  trackStyle?: CSSProperties;
   expanded: boolean;
   onToggle?: (itemId: string) => void;
 }) {
   const isBoard = (row.level ?? 0) === 0;
+  // A band with nothing under it is a plain heading, not a dead toggle.
+  const onToggle = row.collapsible === false ? undefined : onToggleProp;
+  const summaryId = useId();
+  const summary = row.summary;
+  const pct =
+    summary && summary.donePct !== null ? `${summary.donePct}%` : null;
+  const late =
+    summary && summary.lateCount !== null && summary.lateCount > 0
+      ? `${summary.lateCount} late`
+      : null;
+  // Text equivalent of the (aria-hidden) span bar and the visual meta text.
+  const summaryText = [pct && `${pct} done`, late].filter(Boolean).join(", ");
   const label = (
     <span
       role="heading"
       aria-level={isBoard ? 3 : 4}
+      title={row.name}
       className={cn(
         "min-w-0 truncate text-xs",
         isBoard
@@ -448,24 +598,26 @@ function SectionBand({
         "flex border-b",
         isBoard ? "bg-surface-muted" : "bg-surface",
       )}
-      style={{ height: ROW_H, width: LABEL_W + totalW }}
+      style={{ height: ROW_H, width: labelW + totalW }}
     >
       <div
         className={cn(
-          "sticky left-0 z-10 flex min-w-0 items-center pr-2",
+          "sticky left-0 z-10 flex min-w-0 shrink-0 items-center pr-2",
           isBoard ? "bg-surface-muted" : "bg-surface",
         )}
         style={{
-          width: LABEL_W,
-          paddingLeft: isBoard && onToggle ? 8 : isBoard ? 16 : 32,
+          width: labelW,
+          // The toggle carries its own 4px of padding; a plain label does not.
+          paddingLeft: onToggle ? (isBoard ? 8 : 24) : isBoard ? 16 : 32,
         }}
       >
-        {isBoard && onToggle ? (
+        {onToggle ? (
           <button
             type="button"
             onClick={() => onToggle(row.itemId)}
             aria-expanded={expanded}
             aria-label={`${expanded ? "Collapse" : "Expand"} ${row.name}`}
+            aria-describedby={summaryText ? summaryId : undefined}
             className="hover:bg-state-hover focus-visible:ring-ring flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
           >
             {expanded ? (
@@ -483,6 +635,58 @@ function SectionBand({
           </button>
         ) : (
           label
+        )}
+        {summaryText && (
+          <span id={summaryId} className="sr-only">
+            {summaryText}
+          </span>
+        )}
+        {(pct || late) && (
+          <span
+            data-testid="gantt-section-meta"
+            aria-hidden
+            className="text-muted-foreground text-2xs ml-auto shrink-0 pl-2 tabular-nums"
+          >
+            {pct}
+            {pct && late ? " · " : null}
+            {late ? <span className="text-destructive">{late}</span> : null}
+          </span>
+        )}
+      </div>
+      {/* The band's track: same weekend tint and today hairline as an item
+          row, so the today line reads as one unbroken rule down the chart. */}
+      <div
+        data-testid="gantt-section-track"
+        className="relative shrink-0"
+        style={{ width: totalW, height: ROW_H, ...trackStyle }}
+      >
+        {summary && (
+          <div
+            data-testid="gantt-summary"
+            aria-hidden
+            className="bg-muted-foreground/20 absolute h-2 overflow-hidden rounded-full"
+            style={{
+              left: summary.startCol * dayW,
+              width: Math.max(MIN_BAR_W, summary.spanCols * dayW),
+              top: ROW_H / 2 - 4,
+            }}
+          >
+            {summary.donePct !== null && (
+              <div
+                data-testid="gantt-summary-fill"
+                className="bg-brand-gradient h-full"
+                style={{ width: `${summary.donePct}%` }}
+              />
+            )}
+          </div>
+        )}
+        {todayInRange && (
+          <div
+            data-today-line
+            className="bg-destructive/30 absolute top-0 h-full w-px"
+            style={{ left: todayOffset * dayW }}
+            aria-hidden
+          />
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { GanttCanvasProps } from "@/components/boards/gantt/GanttCanvas";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
+import type { RollupRow } from "@/lib/folders/types";
 
 const m = vi.hoisted(() => ({
   getFolderTimeline: vi.fn(),
@@ -18,6 +19,7 @@ const m = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   toastError: vi.fn(),
+  scrollToToday: vi.fn(),
   canvas: { current: null as GanttCanvasProps | null },
 }));
 
@@ -34,15 +36,25 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: m.push, refresh: m.refresh }),
 }));
 // The real canvas is exercised in its own suite; here a probe records the
-// props so the tests can assert what the tab hands it and drive its callbacks.
-vi.mock("@/components/boards/gantt/GanttCanvas", () => ({
-  GanttCanvas: (p: GanttCanvasProps) => {
-    m.canvas.current = p;
-    return (
-      <div data-testid="canvas">{p.rows.map((r) => r.name).join("|")}</div>
-    );
-  },
-}));
+// props so the tests can assert what the tab hands it and drive its callbacks,
+// and answers the imperative handle the Today button calls.
+vi.mock("@/components/boards/gantt/GanttCanvas", () => {
+  // `handleRef` is a plain prop holding a ref object; fill it the way the real
+  // canvas's useImperativeHandle would.
+  const answerHandle = (ref: GanttCanvasProps["handleRef"]) => {
+    if (ref && typeof ref === "object")
+      ref.current = { scrollToToday: m.scrollToToday };
+  };
+  return {
+    GanttCanvas: (p: GanttCanvasProps) => {
+      m.canvas.current = p;
+      answerHandle(p.handleRef);
+      return (
+        <div data-testid="canvas">{p.rows.map((r) => r.name).join("|")}</div>
+      );
+    },
+  };
+});
 
 import { TimelineInner } from "./TimelineInner";
 
@@ -114,13 +126,13 @@ const data: FolderTimelineData = {
   truncated: false,
 };
 
-const renderTab = () => {
+const renderTab = (rollup?: RollupRow[]) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <TimelineInner folderId="f1" stage={null} board={null} />
+      <TimelineInner folderId="f1" stage={null} board={null} rollup={rollup} />
     </QueryClientProvider>,
   );
   return client;
@@ -130,9 +142,17 @@ const canvas = () => {
   return m.canvas.current;
 };
 
+/** Roll-up first: item rows exist only once a board and its group are open. */
+const openGroup = (boardId: string, groupId: string) => {
+  act(() => canvas().onToggleExpand?.(`board:${boardId}`));
+  act(() => canvas().onToggleExpand?.(`group:${groupId}`));
+};
+const canvasText = () => screen.getByTestId("canvas").textContent;
+
 beforeEach(() => {
   vi.clearAllMocks();
   m.canvas.current = null;
+  localStorage.clear();
 });
 
 describe("TimelineInner", () => {
@@ -158,32 +178,46 @@ describe("TimelineInner", () => {
     ).toBeInTheDocument();
   });
 
-  it("draws board and group bands and notes a board with no dates", async () => {
+  it("opens as one row per board and drills down board → group → items", async () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
     renderTab();
-    expect(await screen.findByTestId("canvas")).toHaveTextContent(
+    await screen.findByTestId("canvas");
+    expect(canvasText()).toBe("Platform|Sites · No dates on this board");
+    expect(canvas().isExpanded?.(`board:${A}`)).toBe(false);
+    act(() => canvas().onToggleExpand?.(`board:${A}`));
+    expect(canvasText()).toBe("Platform|MVP|Sites · No dates on this board");
+    expect(canvas().isExpanded?.(`board:${A}`)).toBe(true);
+    expect(canvas().isExpanded?.(`group:${GA}`)).toBe(false);
+    act(() => canvas().onToggleExpand?.(`group:${GA}`));
+    expect(canvasText()).toBe(
       "Platform|MVP|QCC build|Bench test|Sites · No dates on this board",
     );
+    expect(canvas().isExpanded?.(`group:${GA}`)).toBe(true);
     // Bars take their group's colour; edits only where the board allows.
     const qcc = canvas().rows.find((r) => r.name === "QCC build")!;
     expect(canvas().colorFor(qcc)).toBe("#579bfc");
     expect(canvas().canEditItem(I1)).toBe(true);
   });
 
-  it("zoom and board collapse re-derive locally with no new fetch", async () => {
+  it("zoom, expand and collapse re-derive locally with no new fetch", async () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
     renderTab();
     await screen.findByTestId("canvas");
     expect(screen.getByText(/2 boards · 2 items/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
     expect(canvas().zoom).toBe("week");
-    expect(canvas().isExpanded?.(`board:${A}`)).toBe(true);
-    act(() => canvas().onToggleExpand?.(`board:${A}`));
-    expect(screen.getByTestId("canvas")).toHaveTextContent(
-      "Platform|Sites · No dates on this board",
+    openGroup(A, GA);
+    expect(canvasText()).toBe(
+      "Platform|MVP|QCC build|Bench test|Sites · No dates on this board",
     );
-    expect(canvas().isExpanded?.(`board:${A}`)).toBe(false);
-    // The header counts the data, not the rows left visible by a collapse.
+    act(() => canvas().onToggleExpand?.(`board:${A}`));
+    expect(canvasText()).toBe("Platform|Sites · No dates on this board");
+    // Reopening the board finds its group still open.
+    act(() => canvas().onToggleExpand?.(`board:${A}`));
+    expect(canvasText()).toBe(
+      "Platform|MVP|QCC build|Bench test|Sites · No dates on this board",
+    );
+    // The header counts the data, not the rows left visible.
     expect(screen.getByText(/2 boards · 2 items/)).toBeInTheDocument();
     expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
   });
@@ -193,6 +227,7 @@ describe("TimelineInner", () => {
     m.upsertCell.mockResolvedValue({ ok: true, data: { cell: {} } });
     const client = renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     await act(async () => canvas().onMoveBar(I1, 2));
     expect(m.upsertCell).toHaveBeenCalledWith({
       itemId: I1,
@@ -215,6 +250,7 @@ describe("TimelineInner", () => {
     m.upsertCell.mockResolvedValue({ ok: false, error: "No access." });
     const client = renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     await act(async () => canvas().onMoveBar(I1, 2));
     expect(m.toastError).toHaveBeenCalledWith("No access.", {
       id: `timeline-write:${I1}`,
@@ -284,6 +320,7 @@ describe("TimelineInner", () => {
     m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
     renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     const row = canvas().rows.find((r) => r.itemId === I1)!;
     expect(canvas().linkCandidates(row)).toEqual([
       { itemId: I2, name: "Bench test · Platform" },
@@ -316,9 +353,10 @@ describe("TimelineInner", () => {
       },
     });
     renderTab();
-    expect(await screen.findByTestId("canvas")).toHaveTextContent(
-      "Site survey",
-    );
+    await screen.findByTestId("canvas");
+    openGroup(A, GA);
+    openGroup(B, GB);
+    expect(screen.getByTestId("canvas")).toHaveTextContent("Site survey");
     const row = canvas().rows.find((r) => r.itemId === I3)!;
     expect(canvas().canEditItem(I3)).toBe(false);
     expect(canvas().linkCandidates(row)).toEqual([]);
@@ -356,6 +394,7 @@ describe("TimelineInner", () => {
     });
     renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     const row = canvas().rows.find((r) => r.itemId === I1)!;
     expect(canvas().linkCandidates(row)).toEqual([]);
   });
@@ -365,6 +404,7 @@ describe("TimelineInner", () => {
     m.upsertCell.mockResolvedValue({ ok: true, data: { cell: {} } });
     renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     await act(async () => canvas().onResizeBar(I1, "2026-11-14"));
     expect(m.upsertCell).toHaveBeenCalledWith({
       itemId: I1,
@@ -386,6 +426,7 @@ describe("TimelineInner", () => {
       .mockResolvedValueOnce({ ok: true, data: { cell: {} } });
     const client = renderTab();
     await screen.findByTestId("canvas");
+    openGroup(A, GA);
     await act(async () => canvas().onMoveBar(I1, 1));
     // TanStack notifies observers on a later tick — let the patch render.
     await waitFor(() =>
@@ -406,5 +447,104 @@ describe("TimelineInner", () => {
     expect(m.toastError).toHaveBeenCalledWith("No access.", {
       id: `timeline-write:${I1}`,
     });
+  });
+
+  it("puts the rollup's progress on board and group bands", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab([
+      { boardId: A, groupId: GA, total: 20, done: 7, overdue: 8 } as RollupRow,
+    ]);
+    await screen.findByTestId("canvas");
+    const band = (id: string) =>
+      canvas().rows.find((r) => r.itemId === id)?.summary;
+    expect(band(`board:${A}`)).toMatchObject({ donePct: 35, lateCount: 8 });
+    act(() => canvas().onToggleExpand?.(`board:${A}`));
+    expect(band(`group:${GA}`)).toMatchObject({ donePct: 35, lateCount: 8 });
+    // A board with nothing dated draws no summary bar at all.
+    expect(band(`board:${B}`)).toBeUndefined();
+  });
+
+  it("counts late links while every board is still closed", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ...data,
+        // I1 (11-10) is meant to start after I2 ends (11-12): late.
+        dependencies: [
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            predecessor_id: I2,
+            successor_id: I1,
+          },
+        ],
+      },
+    });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvasText()).toBe("Platform|Sites · No dates on this board");
+    expect(screen.getByText("1 late link")).toBeInTheDocument();
+  });
+
+  it("marks a no-dates board band as not collapsible", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    const rows = canvas().rows;
+    expect(rows.find((r) => r.itemId === `board:${B}`)?.collapsible).toBe(
+      false,
+    );
+    expect(rows.find((r) => r.itemId === `board:${A}`)?.collapsible).not.toBe(
+      false,
+    );
+  });
+
+  it("disables the Today button when there is nothing on the timeline", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data: empty });
+    renderTab();
+    await screen.findByText("No boards match these filters.");
+    const today = await screen.findByRole("button", { name: "Today" });
+    expect(today).toBeDisabled();
+  });
+
+  it("has a Today button that asks the canvas to scroll, with no fetch", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(m.scrollToToday).toHaveBeenCalledTimes(1);
+    expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
+    expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it("opens the rail at 300px and remembers a new width for this folder", async () => {
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(300);
+    act(() => canvas().onLabelWidthChange?.(420));
+    expect(canvas().labelWidth).toBe(420);
+    expect(localStorage.getItem("monolith.folder-timeline.rail:f1")).toBe(
+      "420",
+    );
+    expect(m.getFolderTimeline).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores a stored rail width, clamped to the rail's bounds", async () => {
+    localStorage.setItem("monolith.folder-timeline.rail:f1", "9000");
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(520);
+  });
+
+  it("falls back to 300px when the store is blocked or holds junk", async () => {
+    const getItem = vi.spyOn(localStorage, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    m.getFolderTimeline.mockResolvedValueOnce({ ok: true, data });
+    renderTab();
+    await screen.findByTestId("canvas");
+    expect(canvas().labelWidth).toBe(300);
+    getItem.mockRestore();
   });
 });

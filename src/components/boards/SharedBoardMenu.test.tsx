@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const BOARD = { id: "b1", name: "Roadmap" };
+const BOARD = { id: "b1", name: "Roadmap", via: "direct" as const };
 const open = () =>
   userEvent.click(
     screen.getByRole("button", { name: /board actions for roadmap/i }),
@@ -111,5 +111,25 @@ describe("SharedBoardMenu", () => {
     await settle();
     expect(screen.getByRole("alert")).toHaveTextContent("Board not found.");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("does not offer Leave board for a board reached only through a folder", async () => {
+    render(
+      <SharedBoardMenu
+        board={{ ...BOARD, via: "folder" }}
+        folders={[]}
+        currentFolderId="f1"
+      />,
+    );
+    await open();
+    const item = screen.getByRole("menuitem", { name: /Leave board/ });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    expect(item).toHaveTextContent(
+      "Shared through a folder. Leave the folder to remove it.",
+    );
+    await userEvent.click(item);
+    await settle();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(leaveBoard).not.toHaveBeenCalled();
   });
 });

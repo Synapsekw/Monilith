@@ -31,6 +31,8 @@ vi.mock("@/lib/supabase/service", () => ({
       // second call keyed on an already-rotated (stale) hash matches nothing.
       update: (patch: Record<string, unknown>) => {
         const filters: { col: string; val: unknown }[] = [];
+        // ISO timestamps compare correctly as strings.
+        const greater: { col: string; val: string }[] = [];
         const builder = {
           eq(col: string, val: unknown) {
             filters.push({ col, val });
@@ -40,12 +42,20 @@ vi.mock("@/lib/supabase/service", () => ({
             filters.push({ col, val });
             return builder;
           },
+          gt(col: string, val: string) {
+            greater.push({ col, val });
+            return builder;
+          },
           select: () => ({
             maybeSingle: () => {
-              const idx = rows.findIndex((r) =>
-                filters.every((f) =>
-                  f.val === null ? r[f.col] == null : r[f.col] === f.val,
-                ),
+              const idx = rows.findIndex(
+                (r) =>
+                  filters.every((f) =>
+                    f.val === null ? r[f.col] == null : r[f.col] === f.val,
+                  ) &&
+                  greater.every(
+                    (g) => typeof r[g.col] === "string" && r[g.col]! > g.val,
+                  ),
               );
               if (idx === -1) {
                 return Promise.resolve({ data: null, error: null });
@@ -101,22 +111,57 @@ describe("rotateTokenPair (atomic)", () => {
     expect(rotated?.refreshToken).not.toBe(issued.refreshToken);
   });
 
-  it("returns null on a second concurrent-style call with the same now-stale refresh token", async () => {
+  // A client whose token response was lost in transit (dropped connection,
+  // retried request) still holds only the PREVIOUS refresh token. Without a
+  // grace window that single lost response strands the connection for good.
+  it("accepts the just-rotated refresh token again inside the grace window", async () => {
     const issued = await issueTokenPair({
       clientId: "client-3",
       userId: "user-3",
       bridgeSecretId: "secret-3",
     });
 
-    // Two "concurrent" callers both present the original refresh token. Only the
-    // first UPDATE can match the row (its hash is still the pre-rotation hash);
-    // once that succeeds the row's hash has already changed, so the second call
-    // — presenting the same stale token — must fail rather than double-rotate.
     const first = await rotateTokenPair(issued.refreshToken, "client-3");
-    const second = await rotateTokenPair(issued.refreshToken, "client-3");
+    const retry = await rotateTokenPair(issued.refreshToken, "client-3");
 
     expect(first).not.toBeNull();
-    expect(second).toBeNull();
+    expect(retry).not.toBeNull();
+    expect(retry?.refreshToken).not.toBe(first?.refreshToken);
+    // The retry's pair is the live one.
+    const found = await lookupTokenByAccessToken(retry!.accessToken);
+    expect(found?.user_id).toBe("user-3");
+  });
+
+  it("rejects the previous refresh token once the grace window has passed", async () => {
+    vi.useFakeTimers({ now: new Date("2026-11-15T10:00:00Z") });
+    try {
+      const issued = await issueTokenPair({
+        clientId: "client-3b",
+        userId: "user-3b",
+        bridgeSecretId: "secret-3b",
+      });
+      await rotateTokenPair(issued.refreshToken, "client-3b");
+
+      vi.setSystemTime(new Date("2026-11-15T10:01:01Z"));
+      const late = await rotateTokenPair(issued.refreshToken, "client-3b");
+
+      expect(late).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let the grace window cross clients", async () => {
+    const issued = await issueTokenPair({
+      clientId: "client-3c",
+      userId: "user-3c",
+      bridgeSecretId: "secret-3c",
+    });
+    await rotateTokenPair(issued.refreshToken, "client-3c");
+
+    const other = await rotateTokenPair(issued.refreshToken, "wrong-client");
+
+    expect(other).toBeNull();
   });
 
   it("rejects a client_id mismatch", async () => {

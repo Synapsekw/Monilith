@@ -7,10 +7,12 @@ import {
   removeColumnOption,
   renameColumn,
   reorderColumn,
+  resetColumnWidths,
   resizeColumn,
   updateColumnSettings,
 } from "@/lib/boards/actions";
 import {
+  clearColumnWidths,
   insertColumn,
   removeColumn,
   replaceColumn,
@@ -163,7 +165,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
   const resizeColumnMutation = useMutation<
     unknown,
     Error,
-    { columnId: string; width: number },
+    { columnId: string; width: number | null },
     Ctx
   >({
     mutationFn: async (vars) => {
@@ -180,6 +182,45 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
       rollback(ctx);
       showMutationError(
         "Couldn't resize the column — your change was undone.",
+        err,
+      );
+    },
+  });
+
+  const resetColumnWidthsMutation = useMutation<unknown, Error, void, Ctx>({
+    mutationFn: async () => {
+      assertOnline();
+      const res = await resetColumnWidths({ boardId });
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    // Targeted rollback, like every other mutation here: put back exactly the
+    // widths this cleared, over the CURRENT cache, so a peer's edit to
+    // anything else that landed meanwhile survives.
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (!previous) return {};
+      const priorNameWidth = previous.board.name_column_width;
+      const priorWidths = new Map(previous.columns.map((c) => [c.id, c.width]));
+      qc.setQueryData<BoardCache>(key, clearColumnWidths(previous));
+      return {
+        rollback: (c) => ({
+          ...c,
+          board: { ...c.board, name_column_width: priorNameWidth },
+          columns: c.columns.map((col) => {
+            const prior = priorWidths.get(col.id);
+            return prior === undefined || prior === col.width
+              ? col
+              : { ...col, width: prior };
+          }),
+        }),
+      };
+    },
+    onError: (err, _v, ctx) => {
+      rollback(ctx);
+      showMutationError(
+        "Couldn't fit the columns — your change was undone.",
         err,
       );
     },
@@ -245,6 +286,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     updateColumnSettingsMutation,
     removeColumnOptionMutation,
     resizeColumnMutation,
+    resetColumnWidthsMutation,
     reorderColumnMutation,
     deleteColumnMutation,
   };

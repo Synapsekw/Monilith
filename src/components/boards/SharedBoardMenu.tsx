@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
+import { useNavIsGuest } from "@/components/boards/nav-guest";
 
 /**
  * Row menu for a board somebody else shared with me. A shared board is not
@@ -34,6 +35,9 @@ import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
  * it out of my sidebar. The board and everyone else's access are untouched; the
  * owner can invite me again. The trigger's label names the board because
  * several of these rows can sit side by side in one folder.
+ *
+ * A board I reach only through a folder has no grant of mine to drop, so
+ * Leave board is shown disabled with the way out: leave the folder.
  */
 export function SharedBoardMenu({
   board,
@@ -41,13 +45,15 @@ export function SharedBoardMenu({
   currentFolderId,
   isActive = false,
 }: {
-  board: { id: string; name: string };
+  board: { id: string; name: string; via: "direct" | "folder" };
   folders: FolderSummary[];
   currentFolderId: string | null;
   /** The board is the one open on screen — leaving it navigates away. */
   isActive?: boolean;
 }) {
   const router = useRouter();
+  // A guest cannot file boards: no Move to folder (see nav-guest).
+  const isGuest = useNavIsGuest();
   const [isPending, startTransition] = useTransition();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,21 +89,37 @@ export function SharedBoardMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <MoveToFolderMenu
-            boardId={board.id}
-            folders={folders}
-            currentFolderId={currentFolderId}
-          />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => {
-              setError(null);
-              setLeaveOpen(true);
-            }}
-          >
-            Leave board
-          </DropdownMenuItem>
+          {isGuest ? null : (
+            <>
+              <MoveToFolderMenu
+                boardId={board.id}
+                folders={folders}
+                currentFolderId={currentFolderId}
+              />
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {board.via === "folder" ? (
+            <DropdownMenuItem
+              disabled
+              className="flex-col items-start gap-0.5 whitespace-normal"
+            >
+              <span>Leave board</span>
+              <span className="text-muted-foreground text-xs">
+                Shared through a folder. Leave the folder to remove it.
+              </span>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => {
+                setError(null);
+                setLeaveOpen(true);
+              }}
+            >
+              Leave board
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
