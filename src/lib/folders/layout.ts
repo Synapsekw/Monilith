@@ -66,3 +66,14 @@ export function layoutNeedsBurn(config: FolderLayoutConfig): boolean {
       ),
   );
 }
+
+/**
+ * Whether `folder_load` must run: only a canvas tab holding a builtin `load`
+ * section draws the heat map. The payload also skips the read for a folder
+ * with no dated items (see `hasDatedItems`).
+ */
+export function layoutNeedsLoad(config: FolderLayoutConfig): boolean {
+  return config.tabs.some((t) =>
+    (t.sections ?? []).some((s) => s.type === "builtin" && s.panel === "load"),
+  );
+}

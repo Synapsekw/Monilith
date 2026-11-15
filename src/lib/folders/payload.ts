@@ -4,13 +4,15 @@ import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { labelEmail } from "@/lib/ui/member-label";
 import { localTodayISO } from "@/lib/boards/overdue";
 import type { Database } from "@/types/database.types";
-import { layoutNeedsBurn, resolveLayout } from "./layout";
+import { layoutNeedsBurn, layoutNeedsLoad, resolveLayout } from "./layout";
 import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
 import {
   resolveFolderAttention,
   resolveFolderBurn,
+  resolveFolderLoad,
   resolveFolderRollup,
 } from "./resolve";
+import { hasDatedItems } from "./rollup";
 import { getFolderAccessHead } from "./sharing-queries";
 import type { FolderPayload } from "./types";
 
@@ -51,19 +53,22 @@ export async function buildFolderPayload(
   // is needed only when the layout has a burn section or a stages tab, and
   // the briefs read already waited on `head`, so a project folder pays
   // nothing extra.
-  const [briefs, members, burn] = await Promise.all([
+  const needsLoad =
+    layoutNeedsLoad(layout.config) && rollup.ok && hasDatedItems(rollup.rows);
+  const [briefs, members, burn, load] = await Promise.all([
     listLatestBriefs(supabase, head.boards, userId),
     listOrgMembersCached(head.folder.orgId),
     layoutNeedsBurn(layout.config)
       ? resolveFolderBurn(supabase, folderId)
       : Promise.resolve(null),
+    needsLoad ? resolveFolderLoad(supabase, folderId) : Promise.resolve(null),
   ]);
   return {
     folder: head.folder,
     boards: head.boards,
     rollup: rollup.ok ? rollup.rows : null,
     burn: burn && burn.ok ? burn.rows : null,
-    load: null,
+    load: load && load.ok ? load.rows : null,
     attention: attention.ok ? attention.rows : null,
     briefs,
     members: members.map((m) => ({

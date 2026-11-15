@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import {
-  BURN_ROW_CAP,
   resolveFolderAttention,
   resolveFolderBurn,
   resolveFolderGallery,
+  resolveFolderLoad,
   resolveFolderRollup,
   resolveFolderTimeline,
   resolveFolderWorkload,
@@ -116,130 +116,23 @@ describe("resolveFolderRollup", () => {
   });
 });
 
-/** folder_burn is read in `.range()` pages (PostgREST caps a response at
- *  max_rows = 1000), so its mock client returns a builder with `range`. */
-function pagedClient(all: unknown[] | { error: { message: string } }) {
-  const range = vi.fn(async (from: number, to: number) =>
-    Array.isArray(all)
-      ? { data: all.slice(from, to + 1), error: null }
-      : { data: null, error: all.error },
-  );
-  const order = vi.fn();
-  const builder = { order, range };
-  order.mockImplementation(() => builder);
-  const client = {
-    rpc: vi.fn(() => builder),
-  } as unknown as SupabaseClient<Database>;
-  return { client, range, order };
-}
-
-const burnRow = (i: number) => ({
-  stage_key: `s${String(Math.floor(i / 73)).padStart(2, "0")}`,
-  week_start: new Date(Date.UTC(2026, 0, 5) + (i % 73) * 7 * 864e5)
-    .toISOString()
-    .slice(0, 10),
-  planned: 1,
-  completed: i % 3 === 0 ? 1 : 0,
-});
+/** A packed burn value: window 2026-09-07..2026-09-14 (2 weeks), one stage. */
+const packedBurn = {
+  lo: "2026-09-07",
+  hi: "2026-09-14",
+  stages: ["build"],
+  rows: [[0, 0, 4, 2, 3, 5]],
+};
 
 describe("resolveFolderBurn", () => {
-  it("orders every page by stage_key, then week_start, so pages are stable", async () => {
-    const { client, order } = pagedClient([burnRow(0)]);
-    await resolveFolderBurn(client, "f1");
-    expect(order.mock.calls).toEqual([["stage_key"], ["week_start"]]);
-  });
-
-  it("fails rather than chart a series with a repeated (stage, week)", async () => {
-    const { client } = pagedClient([burnRow(0), burnRow(1), burnRow(0)]);
-    expect(await resolveFolderBurn(client, "f1")).toEqual({
-      ok: false,
-      error: FOLDER_DATA_ERROR,
-    });
-  });
-
-  it("calls folder_burn and camel-cases the row", async () => {
-    const { client, range } = pagedClient([
-      {
-        stage_key: "build",
-        week_start: "2026-09-07",
-        planned: 4,
-        completed: 2,
-      },
-    ]);
+  it("calls folder_burn_packed ONCE and unpacks to dense rows with numeric tower columns", async () => {
+    const client = clientWith(async () => ({ data: packedBurn, error: null }));
     const res = await resolveFolderBurn(client, "f1");
-    expect(client.rpc).toHaveBeenCalledWith("folder_burn", {
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(client.rpc).toHaveBeenCalledWith("folder_burn_packed", {
       p_folder_id: "f1",
     });
-    expect(range).toHaveBeenCalledWith(0, 999);
     expect(res).toEqual({
-      ok: true,
-      rows: [
-        {
-          stageKey: "build",
-          weekStart: "2026-09-07",
-          planned: 4,
-          completed: 2,
-        },
-      ],
-    });
-  });
-
-  it("leaves the tower columns undefined on a pre-migration folder_burn", async () => {
-    const { client } = pagedClient([
-      {
-        stage_key: "build",
-        week_start: "2026-09-07",
-        planned: 4,
-        completed: 2,
-      },
-    ]);
-    const res = await resolveFolderBurn(client, "f1");
-    if (!res.ok) throw new Error("expected ok");
-    expect(res.rows[0]!.importedDone).toBeUndefined();
-    expect(res.rows[0]!.overdueOpen).toBeUndefined();
-  });
-
-  it("reads every page of a folder with more rows than max_rows (DAAS: 4,088)", async () => {
-    const all = Array.from({ length: 4088 }, (_, i) => burnRow(i));
-    const { client, range } = pagedClient(all);
-    const res = await resolveFolderBurn(client, "f1");
-    if (!res.ok) throw new Error("expected ok");
-    expect(res.rows).toHaveLength(4088);
-    expect(res.rows.reduce((s, r) => s + r.planned, 0)).toBe(4088);
-    expect(range.mock.calls.map((c) => c[0])).toEqual([
-      0, 1000, 2000, 3000, 4000,
-    ]);
-  });
-
-  it("fails rather than chart a truncated series at the row cap", async () => {
-    const all = Array.from({ length: BURN_ROW_CAP + 5 }, (_, i) => burnRow(i));
-    const { client } = pagedClient(all);
-    expect(await resolveFolderBurn(client, "f1")).toEqual({
-      ok: false,
-      error: FOLDER_DATA_ERROR,
-    });
-  });
-
-  it("maps a page error", async () => {
-    const { client } = pagedClient({ error: { message: "boom" } });
-    expect(await resolveFolderBurn(client, "f1")).toEqual({
-      ok: false,
-      error: FOLDER_DATA_ERROR,
-    });
-  });
-
-  it("maps non-zero imported_done and overdue_open through", async () => {
-    const { client } = pagedClient([
-      {
-        stage_key: "build",
-        week_start: "2026-09-07",
-        planned: 4,
-        completed: 2,
-        imported_done: 3,
-        overdue_open: 5,
-      },
-    ]);
-    expect(await resolveFolderBurn(client, "f1")).toEqual({
       ok: true,
       rows: [
         {
@@ -250,15 +143,104 @@ describe("resolveFolderBurn", () => {
           importedDone: 3,
           overdueOpen: 5,
         },
+        {
+          stageKey: "build",
+          weekStart: "2026-09-14",
+          planned: 0,
+          completed: 0,
+          importedDone: 0,
+          overdueOpen: 0,
+        },
       ],
     });
   });
 
-  it("rejects a row with a missing/renamed column", async () => {
-    const { client } = pagedClient([
-      { stage_key: "build", week_start: "2026-09-07", planned: 4 },
-    ]);
+  it("returns no rows for a folder with no window", async () => {
+    const client = clientWith(async () => ({
+      data: { lo: null, hi: null, stages: [], rows: [] },
+      error: null,
+    }));
     expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: true,
+      rows: [],
+    });
+  });
+
+  it("maps an RPC error to the data error", async () => {
+    const client = clientWith(async () => ({
+      data: null,
+      error: { message: "boom" },
+    }));
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_DATA_ERROR,
+    });
+  });
+
+  it("maps P0002 to the folder-gone message", async () => {
+    const client = clientWith(async () => ({
+      data: null,
+      error: { code: "P0002", message: "x" },
+    }));
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_GONE_ERROR,
+    });
+  });
+
+  it("fails closed on a malformed value, never a partial chart", async () => {
+    for (const data of [
+      null,
+      [],
+      { lo: "2026-09-07" },
+      { ...packedBurn, rows: [[0, 9, 1, 1, 0, 0]] },
+    ]) {
+      const client = clientWith(async () => ({ data, error: null }));
+      expect(await resolveFolderBurn(client, "f1")).toEqual({
+        ok: false,
+        error: FOLDER_DATA_ERROR,
+      });
+    }
+  });
+});
+
+describe("resolveFolderLoad", () => {
+  const packedLoad = {
+    weeks: ["2026-09-14"],
+    rows: [["b1", "build", "2026-09-14", 3]],
+  };
+
+  it("calls folder_load once and unpacks the rows", async () => {
+    const client = clientWith(async () => ({ data: packedLoad, error: null }));
+    const res = await resolveFolderLoad(client, "f1");
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(client.rpc).toHaveBeenCalledWith("folder_load", {
+      p_folder_id: "f1",
+    });
+    expect(res).toEqual({
+      ok: true,
+      rows: [
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-09-14",
+          openDue: 3,
+        },
+      ],
+    });
+  });
+
+  it("maps an RPC error and a malformed value to the data error", async () => {
+    const err = clientWith(async () => ({
+      data: null,
+      error: { message: "boom" },
+    }));
+    expect(await resolveFolderLoad(err, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_DATA_ERROR,
+    });
+    const bad = clientWith(async () => ({ data: { weeks: 1 }, error: null }));
+    expect(await resolveFolderLoad(bad, "f1")).toEqual({
       ok: false,
       error: FOLDER_DATA_ERROR,
     });

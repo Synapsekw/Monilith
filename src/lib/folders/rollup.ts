@@ -321,3 +321,9 @@ export function burnSeries(
       };
     });
 }
+
+/** True when any board has a dated item. The Overview hides the load section
+ *  without one, and the payload skips `folder_load` on the same rule. */
+export function hasDatedItems(rows: readonly RollupRow[]): boolean {
+  return rows.some((r) => r.minDue !== null || r.maxDue !== null);
+}

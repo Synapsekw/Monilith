@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildStages } from "./stages";
+import { unpackBurnPacked } from "./packed";
 import { burnSeries, type BurnPoint } from "./rollup";
 import { FIXTURE_TODAY, folderFixture } from "./fixture";
 import {
@@ -550,5 +551,47 @@ describe("attentionGroups and stageBars", () => {
       done: stages[0]!.done,
       stale: stages[0]!.stale,
     });
+  });
+});
+
+describe("packed burn rows feed the tower as known values", () => {
+  // 4 weeks from 2026-09-07, stage build: 3 imported-done in week 0, overdue open 0,1,1,2.
+  const packed = unpackBurnPacked({
+    lo: "2026-09-07",
+    hi: "2026-09-28",
+    stages: ["build"],
+    rows: [
+      [0, 0, 4, 4, 3, 0],
+      [0, 1, 4, 1, 0, 1],
+      [0, 2, 4, 1, 0, 1],
+      [0, 3, 4, 1, 0, 2],
+    ],
+  });
+  if (!packed.ok) throw new Error("fixture must unpack");
+  const rows = packed.rows;
+
+  it("always carries numeric imported_done and overdue_open", () => {
+    expect(
+      rows.every(
+        (r) =>
+          typeof r.importedDone === "number" &&
+          typeof r.overdueOpen === "number",
+      ),
+    ).toBe(true);
+  });
+
+  it("shows the overdue trend (the column is known, zeros included)", () => {
+    const t = kpiTrends(rows, null, "2026-09-29", 16);
+    expect(t.overdue?.points).toEqual([0, 1, 1, 2]);
+  });
+
+  it("lets the forecast say completions were imported", () => {
+    const series = burnSeries(rows, null, "2026-09-29");
+    const f = burnForecast(series, 16, { importedKnown: true })!;
+    expect(f.importedKnown).toBe(true);
+    expect(f.importedDone).toBe(3);
+    expect(forecastReading(f)).toContain(
+      "3 items arrived already done and are left out of the pace.",
+    );
   });
 });

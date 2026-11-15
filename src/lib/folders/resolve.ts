@@ -1,7 +1,6 @@
 import "server-only";
 import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchAllRows } from "@/lib/supabase/paginate";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import type { Database } from "@/types/database.types";
 import {
@@ -12,10 +11,12 @@ import type {
   AttentionRow,
   BurnRow,
   GalleryRow,
+  LoadRow,
   RollupRow,
   WorkloadRow,
 } from "./types";
 import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
+import { unpackBurnPacked, unpackLoadPacked } from "./packed";
 
 type DB = SupabaseClient<Database>;
 export type Resolved<T> =
@@ -53,34 +54,6 @@ const rollupRowSchema = z.object({
   min_due: z.string().nullable(),
   max_due: z.string().nullable(),
 });
-
-/** `imported_done` / `overdue_open` are optional so this still parses against
- *  a database that has not had the folder_tower migration yet. They stay
- *  `undefined` (not 0) when absent, so the client can tell "unknown" from
- *  "none": kpiTrends hides the overdue trend and forecastReading avoids an
- *  imported claim until the columns exist. */
-const burnRowSchema = z.object({
-  stage_key: z.string(),
-  week_start: z.string(),
-  planned: z.number(),
-  completed: z.number(),
-  imported_done: z.number().optional(),
-  overdue_open: z.number().optional(),
-});
-
-/**
- * Most folder_burn rows the page will chart. folder_burn returns a dense
- * stage x week grid (every stage gets every week of a window of at most 104
- * weeks), so a folder with many group names easily passes PostgREST's
- * max_rows = 1000: DAAS on 2026-11-14 had 56 stages x 73 weeks = 4,088 rows,
- * and the single un-paged read silently got the first 1,000 (14 stages, by
- * stage_key) — a burn chart of 301 planned / 96 done beside a rollup of
- * 1,953 / 663. The read pages with `.range()` (rows are totally ordered by
- * stage_key, week_start, which is unique), and a folder past this cap fails
- * the panel instead of charting a truncated series. 20,000 rows is ~192
- * stages at the full 104-week window.
- */
-export const BURN_ROW_CAP = 20_000;
 
 /** Replaces the old hand-rolled reason guard — an unrecognized `reason`
  * value now fails the whole batch (see `mapZodError`) instead of the row
@@ -198,80 +171,35 @@ export async function resolveFolderRollup(
 }
 
 /**
- * ── SEAM: packed burn read ─────────────────────────────────────────────────
- * Today: the paged dense read below (`resolveFolderBurnPaged`). Once
- * 20261114145347_folder_tower.sql is applied AND `pnpm db:types` has added
- * `folder_burn_packed` to database.types.ts, replace ONLY the body of this
- * function with:
- *
- *   const { data, error } = await typedRpc(supabase, "folder_burn_packed", {
- *     p_folder_id: folderId,
- *   });
- *   if (error) return { ok: false, error: mapRpcError(error, "folder_burn_packed") };
- *   return unpackBurnPacked(data); // ./packed — dense, zero-filled BurnRow[]
- *
- * One execution, one jsonb value, no max_rows cap; `resolveFolderBurnPaged`,
- * BURN_ROW_CAP and the paging tests can then go.
+ * The burn chart's series: ONE execution of `folder_burn_packed` (a single
+ * jsonb value, so PostgREST's 1,000-row cap cannot truncate it and pages
+ * cannot overlap), unpacked to the dense zero-filled `BurnRow[]`. Any RPC
+ * error or malformed value fails the whole read (the panel's Retry) — never a
+ * partial chart. `imported_done` / `overdue_open` always arrive as numbers.
  */
 export async function resolveFolderBurn(
   supabase: DB,
   folderId: string,
 ): Promise<Resolved<BurnRow>> {
-  return resolveFolderBurnPaged(supabase, folderId);
+  const { data, error } = await typedRpc(supabase, "folder_burn_packed", {
+    p_folder_id: folderId,
+  });
+  if (error)
+    return { ok: false, error: mapRpcError(error, "folder_burn_packed") };
+  return unpackBurnPacked(data);
 }
 
-async function resolveFolderBurnPaged(
+/** The load heat map's rows: ONE `folder_load` execution (jsonb, bounded at
+ *  5,000 rows by the function), unpacked and validated. */
+export async function resolveFolderLoad(
   supabase: DB,
   folderId: string,
-): Promise<Resolved<BurnRow>> {
-  const { data, error } = await fetchAllRows<unknown>(
-    (from, to) =>
-      typedRpc(supabase, "folder_burn", { p_folder_id: folderId })
-        // Explicit total order for offset paging: (stage_key, week_start) is
-        // unique per folder_burn row, so no row repeats or vanishes between
-        // pages (the function's own ORDER BY is not a PostgREST guarantee).
-        .order("stage_key")
-        .order("week_start")
-        .range(from, to),
-    // Every page re-runs the whole function (~650 ms on DAAS), so pages go
-    // four at a time, not the helper's default eight: DAAS costs five runs.
-    { cap: BURN_ROW_CAP + 1, wave: 4 },
-  );
-  if (error) return { ok: false, error: mapRpcError(error, "folder_burn") };
-  if ((data?.length ?? 0) > BURN_ROW_CAP) {
-    console.error(
-      `[folders] folder_burn returned more than ${BURN_ROW_CAP} rows; not charting a truncated series`,
-    );
-    return { ok: false, error: FOLDER_DATA_ERROR };
-  }
-  const parsed = z.array(burnRowSchema).safeParse(data ?? []);
-  if (!parsed.success)
-    return { ok: false, error: mapZodError(parsed.error, "folder_burn") };
-  // Pages are separate executions; a write between them can shift offsets.
-  // A repeated (stage, week) means the pages overlapped: fail (Retry) rather
-  // than double-count it.
-  const seen = new Set<string>();
-  for (const r of parsed.data) {
-    const k = `${r.stage_key}\u0000${r.week_start}`;
-    if (seen.has(k)) {
-      console.error(
-        "[folders] folder_burn pages overlapped (repeated stage/week)",
-      );
-      return { ok: false, error: FOLDER_DATA_ERROR };
-    }
-    seen.add(k);
-  }
-  return {
-    ok: true,
-    rows: parsed.data.map((r) => ({
-      stageKey: r.stage_key,
-      weekStart: r.week_start,
-      planned: r.planned,
-      completed: r.completed,
-      importedDone: r.imported_done,
-      overdueOpen: r.overdue_open,
-    })),
-  };
+): Promise<Resolved<LoadRow>> {
+  const { data, error } = await typedRpc(supabase, "folder_load", {
+    p_folder_id: folderId,
+  });
+  if (error) return { ok: false, error: mapRpcError(error, "folder_load") };
+  return unpackLoadPacked(data);
 }
 
 export async function resolveFolderAttention(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildStages } from "./stages";
 import {
+  hasDatedItems,
   band,
   boardHealth,
   boardSummaries,
@@ -167,5 +168,16 @@ describe("burnSeries", () => {
     expect(burnSeries(burn, "qa", FIXTURE_TODAY).map((p) => p.planned)).toEqual(
       [0, 3, 0],
     );
+  });
+});
+
+describe("hasDatedItems", () => {
+  it("is true when any board has a min or max due date", () => {
+    const [r] = folderFixture().rollup!;
+    expect(hasDatedItems([{ ...r!, minDue: null, maxDue: null }])).toBe(false);
+    expect(hasDatedItems([{ ...r!, minDue: "2026-09-01", maxDue: null }])).toBe(
+      true,
+    );
+    expect(hasDatedItems([])).toBe(false);
   });
 });

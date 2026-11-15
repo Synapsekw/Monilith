@@ -56,6 +56,22 @@ vi.mock("./resolve", () => ({
     order.push("end:rollup");
     return { ok: true, rows: [] };
   }),
+  resolveFolderLoad: vi.fn(async () => {
+    order.push("start:load");
+    await tick();
+    order.push("end:load");
+    return {
+      ok: true,
+      rows: [
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-09-14",
+          openDue: 3,
+        },
+      ],
+    };
+  }),
   resolveFolderBurn: vi.fn(async () => {
     order.push("start:burn");
     await tick();
@@ -86,7 +102,12 @@ vi.mock("./sharing-queries", () => ({
 }));
 
 import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
-import { resolveFolderAttention, resolveFolderBurn } from "./resolve";
+import {
+  resolveFolderAttention,
+  resolveFolderBurn,
+  resolveFolderLoad,
+  resolveFolderRollup,
+} from "./resolve";
 import { ATTENTION_LIMIT, buildFolderPayload } from "./payload";
 
 const supabase = {} as SupabaseClient<Database>;
@@ -217,5 +238,69 @@ describe("buildFolderPayload", () => {
     const payload = await buildFolderPayload(supabase, "f1", "u1");
     expect(payload?.layout.preset).toBe("project");
     expect(payload?.layout.version).toBe(0);
+  });
+
+  describe("folder_load", () => {
+    const dated = {
+      ok: true as const,
+      rows: [{ minDue: "2026-09-01", maxDue: "2026-09-30" }] as never,
+    };
+
+    it("is skipped when the layout has no load section", async () => {
+      vi.mocked(getFolderLayoutRow).mockResolvedValueOnce({
+        preset: "blank",
+        config: {
+          v: 1,
+          tabs: [
+            { id: "overview", label: "Overview", kind: "canvas", sections: [] },
+          ],
+        },
+        version: 3,
+      });
+      vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(resolveFolderLoad).not.toHaveBeenCalled();
+      expect(p!.load).toBeNull();
+    });
+
+    it("is skipped when the folder has no dated items", async () => {
+      // default layout (project) has a load section; the rollup mock is [].
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(resolveFolderLoad).not.toHaveBeenCalled();
+      expect(p!.load).toBeNull();
+    });
+
+    it("runs in wave B beside the burn read when the layout wants it and dates exist", async () => {
+      vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(resolveFolderLoad).toHaveBeenCalledTimes(1);
+      expect(resolveFolderLoad).toHaveBeenCalledWith(supabase, "f1");
+      expect(p!.load).toEqual([
+        {
+          boardId: "b1",
+          stageKey: "build",
+          weekStart: "2026-09-14",
+          openDue: 3,
+        },
+      ]);
+      // Same wave as burn: both start before either ends, after head ended.
+      expect(order.indexOf("start:load")).toBeGreaterThan(
+        order.indexOf("end:head"),
+      );
+      expect(order.indexOf("start:load")).toBeLessThan(
+        order.indexOf("end:burn"),
+      );
+    });
+
+    it("is null, not a throw, when the read fails", async () => {
+      vi.mocked(resolveFolderRollup).mockResolvedValueOnce(dated);
+      vi.mocked(resolveFolderLoad).mockResolvedValueOnce({
+        ok: false,
+        error: "boom",
+      });
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(p).not.toBeNull();
+      expect(p!.load).toBeNull();
+    });
   });
 });

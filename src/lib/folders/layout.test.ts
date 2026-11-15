@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { folderLayoutConfigSchema } from "@/lib/validations/folder-layout";
 import { PRESETS, PRESET_KEYS } from "./presets";
-import { canvasSections, layoutNeedsBurn, resolveLayout } from "./layout";
+import {
+  canvasSections,
+  layoutNeedsBurn,
+  layoutNeedsLoad,
+  resolveLayout,
+} from "./layout";
 
 describe("presets", () => {
   it("gives the crm and support presets the people section and no load map", () => {
@@ -134,6 +139,33 @@ describe("layoutNeedsBurn", () => {
       layoutNeedsBurn(
         cfg([{ id: "o", label: "O", kind: "canvas", sections: [] }]),
       ),
+    ).toBe(false);
+  });
+});
+
+describe("layoutNeedsLoad", () => {
+  it("is true only when a canvas tab holds a builtin load section", () => {
+    expect(layoutNeedsLoad(PRESETS.project)).toBe(true);
+    expect(layoutNeedsLoad(PRESETS.blank)).toBe(false);
+    expect(
+      layoutNeedsLoad({
+        v: 1,
+        tabs: [
+          {
+            id: "overview",
+            label: "Overview",
+            kind: "canvas",
+            sections: [
+              {
+                id: "burn",
+                type: "builtin",
+                panel: "burn",
+                layout: { x: 0, y: 0, w: 6, h: 4 },
+              },
+            ],
+          },
+        ],
+      } as never),
     ).toBe(false);
   });
 });

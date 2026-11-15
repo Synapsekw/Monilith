@@ -15,6 +15,7 @@ import {
   burnSeries,
   computeKpis,
   filterRows,
+  hasDatedItems,
   nextMilestones,
 } from "@/lib/folders/rollup";
 import {
@@ -88,7 +89,7 @@ export function OverviewTab({
     payload.burn === null
       ? null
       : burnSeries(payload.burn, stage, payload.todayISO);
-  const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
+  const anyDue = hasDatedItems(rows);
   // The RPC returns the folder's top ATTENTION_LIMIT (100) rows by severity;
   // narrowing them to the selected board and stage happens here, on the client.
   const attentionInScope =
@@ -124,7 +125,9 @@ export function OverviewTab({
       : filterRows(payload.rollup, { stageKey: stage, boardId: null }),
     payload.todayISO,
   );
-  // Pre-migration folder_burn has no imported_done column: unknown, not 0.
+  // folder_burn_packed always carries imported_done, so this is known whenever
+  // there are burn rows; it stays false only for an absent/empty series (and
+  // for hand-built rows without the column).
   const importedKnown =
     payload.burn?.some((r) => r.importedDone !== undefined) ?? false;
   const forecast =
