@@ -180,6 +180,10 @@ function KanbanBoardInner({
   }
 
   const [, startTransition] = useTransition();
+  // The board's one edit bit (direct board grant or folder grant). View only:
+  // cards do not drag, there is no inline add, and "Group by" regroups for the
+  // session without saving the view config.
+  const canEdit = access !== "viewer";
 
   const groupColumn = resolveKanbanGroupColumn(cache.columns, {
     group_column_id: groupColumnOverride,
@@ -282,7 +286,7 @@ function KanbanBoardInner({
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || !groupColumn) return;
+    if (!canEdit || !over || !groupColumn) return;
     const data = active.data.current as CardDragData | undefined;
     if (!data) return;
     const toCol = kanbanColumns.find((c) => c.id === over.id);
@@ -301,6 +305,8 @@ function KanbanBoardInner({
     const previous = groupColumnOverride;
     // Apply immediately so the memoized regroup happens this render — no refetch.
     setGroupColumnOverride(columnId);
+    // View only: the regroup is local. The view config is a board write.
+    if (!canEdit) return;
     // Persist in the background; on failure revert the override + surface it.
     startTransition(async () => {
       const res = await updateBoardView({
@@ -370,6 +376,7 @@ function KanbanBoardInner({
               members={members}
               firstGroupId={firstGroupId}
               groupColumnId={groupColumn.id}
+              canEdit={canEdit}
               addItem={addItem}
               setCell={setCell}
               dependentsByItem={dependentsByItem}
@@ -388,11 +395,14 @@ function KanbanColumnView({
   members,
   firstGroupId,
   groupColumnId,
+  canEdit,
   addItem,
   setCell,
   dependentsByItem,
 }: {
   column: KanbanColumn;
+  /** False for view-only access: cards do not drag and there is no quick-add. */
+  canEdit: boolean;
   cellMap: Map<string, CacheCellValue["value"]>;
   cardColumns: CardColumns;
   members: EditorMember[];
@@ -489,6 +499,7 @@ function KanbanColumnView({
                   cardColumns={cardColumns}
                   members={members}
                   dependents={dependentsByItem.get(card.id) ?? 0}
+                  canEdit={canEdit}
                 />
               </div>
             );
@@ -496,15 +507,17 @@ function KanbanColumnView({
         </div>
       </div>
 
-      {/* Quick-add control — outside the scroll container */}
-      <AddCardInput
-        groupId={firstGroupId}
-        columnLabel={column.label}
-        optionId={column.optionId}
-        groupColumnId={groupColumnId}
-        addItem={addItem}
-        setCell={setCell}
-      />
+      {/* Quick-add control — outside the scroll container. Editors only. */}
+      {canEdit && (
+        <AddCardInput
+          groupId={firstGroupId}
+          columnLabel={column.label}
+          optionId={column.optionId}
+          groupColumnId={groupColumnId}
+          addItem={addItem}
+          setCell={setCell}
+        />
+      )}
     </section>
   );
 }
@@ -516,8 +529,11 @@ const KanbanCard = memo(function KanbanCard({
   cardColumns,
   members,
   dependents = 0,
+  canEdit,
 }: {
   item: CacheItem;
+  /** False for view-only access: the card is not a draggable at all. */
+  canEdit: boolean;
   fromColId: string;
   cellMap: Map<string, CacheCellValue["value"]>;
   cardColumns: CardColumns;
@@ -531,7 +547,11 @@ const KanbanCard = memo(function KanbanCard({
   const pending = isOptimisticId(item.id);
   const intelMatch = useIntelMatch(item.id);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: item.id, disabled: pending, data: dragData });
+    useDraggable({
+      id: item.id,
+      disabled: pending || !canEdit,
+      data: dragData,
+    });
 
   // The in-view presence signal for a Kanban card is "someone is dragging it":
   // two people grabbing the same card is a real collision. Broadcast focus
@@ -558,10 +578,13 @@ const KanbanCard = memo(function KanbanCard({
     <article
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      // View only: no listeners and no draggable attributes, so no mouse,
+      // touch (long-press) or keyboard sensor can start a drag.
+      {...(canEdit ? listeners : undefined)}
+      {...(canEdit ? attributes : undefined)}
       className={cn(
-        "bg-surface focus-visible:ring-ring shadow-card card-lift border-border hover:border-border-hover relative cursor-grab rounded-lg border p-3 text-left focus-visible:ring-2 focus-visible:outline-none",
+        "bg-surface focus-visible:ring-ring shadow-card card-lift border-border hover:border-border-hover relative rounded-lg border p-3 text-left focus-visible:ring-2 focus-visible:outline-none",
+        canEdit && "cursor-grab",
         isDragging && "opacity-50",
         intelRowClasses(intelMatch),
       )}

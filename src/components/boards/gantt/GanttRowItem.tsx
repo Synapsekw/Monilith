@@ -60,6 +60,7 @@ export function GanttRowItem({
   todayOffset,
   todayInRange,
   readOnly = false,
+  canLink = true,
   isExpanded = false,
   onToggleExpand,
   color,
@@ -91,6 +92,9 @@ export function GanttRowItem({
   todayInRange: boolean;
   /** When true the bar can't be dragged/resized (e.g. timestamp-sourced dates). */
   readOnly?: boolean;
+  /** False for view-only access: the ⋯ menu offers no "Blocked by…" picker,
+   * and is not rendered at all when there is also no link to remove. */
+  canLink?: boolean;
   /** For a parent row (row.hasChildren): whether its sub-items are revealed. */
   isExpanded?: boolean;
   onToggleExpand?: (itemId: string) => void;
@@ -136,6 +140,9 @@ export function GanttRowItem({
     useDraggable({
       id: `gantt-bar-${row.itemId}`,
       data: dragData,
+      // A read-only bar is not a draggable for any sensor (mouse, touch,
+      // keyboard) — not merely one whose listeners are withheld below.
+      disabled: readOnly,
     });
 
   // In-view presence signal: someone is dragging this bar/milestone. Broadcast
@@ -404,38 +411,43 @@ export function GanttRowItem({
             {row.childCount}
           </span>
         ) : null}
-        {/* ⋯ menu for dependency management */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Options for ${row.name}`}
-              className="text-muted-foreground hover:text-foreground size-6 opacity-0 group-hover:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
-            >
-              <MoreHorizontal className="size-3.5" aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <LinkCandidateItems
-              getCandidates={getLinkCandidates}
-              hasPredecessors={predecessorDeps.length > 0}
-              onPick={(predecessorId) =>
-                onAddDependency({ predecessorId, successorId: row.itemId })
-              }
-            />
-            {predecessorDeps.map((dep) => (
-              <DropdownMenuItem
-                key={dep.id}
-                variant="destructive"
-                onSelect={() => onRemoveDependency({ dependencyId: dep.id })}
+        {/* ⋯ menu for dependency management — only when it has something to
+            offer: a link to draw (canLink) or one this user may remove. */}
+        {(canLink || predecessorDeps.length > 0) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Options for ${row.name}`}
+                className="text-muted-foreground hover:text-foreground size-6 opacity-0 group-hover:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
               >
-                Remove dep #{dep.id.slice(0, 6)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <MoreHorizontal className="size-3.5" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {canLink && (
+                <LinkCandidateItems
+                  getCandidates={getLinkCandidates}
+                  hasPredecessors={predecessorDeps.length > 0}
+                  onPick={(predecessorId) =>
+                    onAddDependency({ predecessorId, successorId: row.itemId })
+                  }
+                />
+              )}
+              {predecessorDeps.map((dep) => (
+                <DropdownMenuItem
+                  key={dep.id}
+                  variant="destructive"
+                  onSelect={() => onRemoveDependency({ dependencyId: dep.id })}
+                >
+                  Remove dep #{dep.id.slice(0, 6)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Timeline track */}

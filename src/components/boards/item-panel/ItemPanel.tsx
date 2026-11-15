@@ -97,7 +97,8 @@ function ItemPanelInner({
   boardName: string;
   /** The board's first timeline view config — decides which dates mark "Late". */
   timelineConfig: TimelineViewConfig;
-  /** False for read-only viewers: hides adding/removing dependencies. */
+  /** False for view-only access: hides adding/removing dependencies, the
+   *  update composer and the file upload (each mirrors its table's RLS). */
   canEdit: boolean;
   currentUserId: string;
   columns: readonly Column[];
@@ -220,7 +221,9 @@ function ItemPanelInner({
           <div key={tab} className="animate-fadein">
             {tab === "fields" && (
               <div className="space-y-4 py-6">
-                {itemId && (
+                {/* Every assist entry ends in a board write (a cell upsert or
+                    new subitems), so view-only access does not get it. */}
+                {itemId && canEdit && (
                   <ItemAssistPanel
                     itemId={itemId}
                     boardId={boardId}
@@ -267,6 +270,8 @@ function ItemPanelInner({
                 cache={updates.data}
                 isError={updates.isError}
                 members={members}
+                canEdit={canEdit}
+                currentUserId={currentUserId}
                 onAdd={mutations.addUpdate}
                 onDelete={mutations.deleteUpdate}
               />
@@ -290,6 +295,7 @@ function ItemPanelInner({
                 uploadError={attachmentMutations.uploadError}
                 onUpload={attachmentMutations.uploadFile}
                 onDelete={attachmentMutations.deleteAttachment}
+                canEdit={canEdit}
               />
             )}
           </div>

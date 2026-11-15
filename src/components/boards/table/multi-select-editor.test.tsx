@@ -42,6 +42,7 @@ function column(kind: string, settings: Record<string, unknown> = {}): Column {
 
 function controls(over: Partial<CellControls> = {}): CellControls {
   return {
+    canEdit: true,
     setEditing: useEditingCell.getState().setEditing,
     setCell: vi.fn(),
     clearCellValue: vi.fn(),

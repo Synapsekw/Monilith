@@ -58,6 +58,7 @@ const SECOND = statusColumn("c2", 2);
 
 function controls(over: Partial<CellControls> = {}): CellControls {
   return {
+    canEdit: true,
     setEditing: useEditingCell.getState().setEditing,
     setCell: vi.fn(),
     clearCellValue: vi.fn(),

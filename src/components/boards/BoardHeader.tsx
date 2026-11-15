@@ -294,6 +294,7 @@ export function BoardHeader({
           boardId={boardId}
           views={views}
           selectedViewId={selectedViewId}
+          canEdit={!isViewer}
         />
 
         {/* Right control cluster — filter/search toolbar, presence, primary Share,

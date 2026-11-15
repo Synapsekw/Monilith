@@ -1459,3 +1459,77 @@ describe("GanttBoard — Today and the name rail", () => {
     });
   });
 });
+
+describe("GanttBoard view-only access", () => {
+  function renderAs(
+    access: "owner" | "viewer",
+    payload: unknown = payloadFixture(),
+  ) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <GanttBoard
+          payload={payload as never}
+          members={[]}
+          selectedViewId={VIEW_ID}
+          access={access}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    updateBoardView.mockClear();
+    setCell.mockReset();
+    addDependency.mockReset();
+    removeDependency.mockReset();
+  });
+
+  it("gives a viewer no bar resize handle and no draggable bar", () => {
+    renderAs("viewer");
+    expect(screen.queryAllByLabelText(/^resize (?!name rail)/i)).toHaveLength(
+      0,
+    );
+    const bar = screen.getByRole("button", { name: barLabel("Item Alpha") });
+    expect(bar).not.toHaveAttribute("aria-roledescription");
+    expect(bar.className).not.toContain("cursor-grab");
+  });
+
+  it("gives a viewer no dependency menu on the name rail", () => {
+    renderAs("viewer");
+    expect(
+      screen.queryByRole("button", { name: "Options for Item Alpha" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Options for Item Beta" }),
+    ).toBeNull();
+  });
+
+  it("opens the item panel for a viewer instead of the quick-edit peek", () => {
+    renderAs("viewer", twoColPayload());
+    fireEvent.click(screen.getByLabelText("Spanned"));
+    expect(screen.queryByRole("dialog", { name: /^edit /i })).toBeNull();
+    expect(itemParam()).toBe("i1");
+  });
+
+  it("changes zoom for a viewer without saving the view config", () => {
+    renderAs("viewer");
+    fireEvent.click(screen.getByRole("button", { name: /^week$/i }));
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("keeps an editor's resize handle, dependency menu and peek", () => {
+    renderAs("owner", twoColPayload());
+    expect(
+      screen.getAllByLabelText(/^resize (?!name rail)/i).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Options for Spanned" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Spanned"));
+    expect(
+      screen.getByRole("dialog", { name: "Edit Spanned" }),
+    ).toBeInTheDocument();
+  });
+});

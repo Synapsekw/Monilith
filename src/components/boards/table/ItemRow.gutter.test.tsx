@@ -27,6 +27,7 @@ function item(id: string, parentId: string | null, name: string): Item {
 function renderRow(boardItems: Item[], selectable = true) {
   const controls = {
     setEditing: vi.fn(),
+    canEdit: true,
     setCell: vi.fn(),
     clearCellValue: vi.fn(),
     members: [],

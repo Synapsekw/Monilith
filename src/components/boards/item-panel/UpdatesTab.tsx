@@ -90,10 +90,21 @@ export function UpdatesTab({
   cache,
   isError = false,
   members,
+  canEdit = true,
+  currentUserId,
   onAdd,
   onDelete,
 }: {
   itemId: string;
+  /**
+   * False for view-only access. Mirrors the item_updates RLS, no new rule:
+   * posting needs edit on the board, so the composer is not rendered; deleting
+   * is allowed to the author or an editor, so a viewer keeps Delete only on
+   * updates they wrote themselves.
+   */
+  canEdit?: boolean;
+  /** The signed-in user — decides which updates a viewer may delete. */
+  currentUserId?: string;
   cache: UpdatesCache | undefined;
   isError?: boolean;
   members: readonly (Member & { mono?: MonoMemberMeta })[];
@@ -158,7 +169,7 @@ export function UpdatesTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {!open ? (
+      {!canEdit ? null : !open ? (
         <Button
           variant="outline"
           className="text-muted-foreground w-full justify-start font-normal"
@@ -238,16 +249,18 @@ export function UpdatesTab({
                       <DateTime value={u.created_at} />
                     </Kicker>
                   </span>
-                  <RevealOnHover>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(u.id)}
-                      aria-label="Delete update"
-                    >
-                      Delete
-                    </Button>
-                  </RevealOnHover>
+                  {(canEdit || u.author_id === currentUserId) && (
+                    <RevealOnHover>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDelete(u.id)}
+                        aria-label="Delete update"
+                      >
+                        Delete
+                      </Button>
+                    </RevealOnHover>
+                  )}
                 </div>
                 <p className="whitespace-pre-wrap">
                   {renderBody(u.body_text, mentionNames)}

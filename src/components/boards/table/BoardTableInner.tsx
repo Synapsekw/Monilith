@@ -551,7 +551,10 @@ export function BoardTableInner({
     [topLevel, childrenByParent],
   );
 
-  // Viewers see footer values read-only; editors can pick the aggregation.
+  // The board's one edit bit. A direct board grant and a folder grant both
+  // resolve to the same `access` on the board page, so this covers both. It is
+  // threaded through the bundles below (cells, rows, groups, column header) —
+  // a viewer gets values and links, and nothing that writes.
   const canEdit = access !== "viewer";
   // Snapshot now once at mount for time-tracking footer totals — a bare Date.now()
   // in render violates react-hooks/purity (same pattern as the rollup cells).
@@ -585,6 +588,7 @@ export function BoardTableInner({
   // so a dialog, a scroll or a cell edit no longer re-creates it.
   const columnControls: ColumnHeaderControls = useMemo(
     () => ({
+      canEdit,
       nameWidth,
       liveWidths,
       autoFitWidths,
@@ -613,7 +617,7 @@ export function BoardTableInner({
       onEditCurrency: (c) => setCurrencyFor(c),
       onSmartFill: (c) => setSmartFillFor(c),
     }),
-    [nameWidth, liveWidths, autoFitWidths, m],
+    [canEdit, nameWidth, liveWidths, autoFitWidths, m],
   );
 
   // "Fit all columns" (board menu): one Server Action clears every saved
@@ -663,6 +667,7 @@ export function BoardTableInner({
   // toggle no longer re-creates `controls` and the row/cell React.memo can skip.
   const controls: CellControls = useMemo(
     () => ({
+      canEdit,
       setEditing,
       setCell: m.setCell,
       clearCellValue: m.clearCellValue,
@@ -691,6 +696,7 @@ export function BoardTableInner({
       setRelationLinks: m.setRelationLinks,
     }),
     [
+      canEdit,
       setEditing,
       m,
       members,
@@ -758,6 +764,9 @@ export function BoardTableInner({
 
   function handleBoardDragEnd(e: DragEndEvent) {
     setActiveDrag(null);
+    // View only: nothing is draggable (no handle, sortables disabled), so this
+    // is unreachable for a viewer; the guard keeps it that way.
+    if (!canEdit) return;
     const { active, over } = e;
     if (!over) return;
     const activeType = active.data.current?.type;

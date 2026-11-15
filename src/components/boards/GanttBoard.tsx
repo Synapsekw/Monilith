@@ -95,6 +95,11 @@ function GanttBoardInner({
 
   const router = useRouter();
   const [, startTransition] = useTransition();
+  // The board's one edit bit (direct board grant or folder grant). View only:
+  // bars do not move or resize, no dependency is drawn or removed, a tap opens
+  // the item panel (never the quick-edit peek), and zoom / column picks / the
+  // rail width change for the session without saving the view config.
+  const canEdit = access !== "viewer";
 
   // Resolve the selected view and its config
   const selectedView = payload.views.find((v) => v.id === selectedViewId);
@@ -491,7 +496,9 @@ function GanttBoardInner({
    * the ItemPanel so the peek never renders empty.
    */
   function handleItemTap(itemId: string, anchorRect: DOMRect) {
-    if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
+    // View only: the peek is an editor, so a viewer goes straight to the panel.
+    if (canEdit && (statusColumn || percentColumn))
+      setQuickEdit({ itemId, anchorRect });
     else openItemPanel(itemId);
   }
 
@@ -502,6 +509,9 @@ function GanttBoardInner({
     zoom?: TimelineZoom;
     label_width?: number;
   }) {
+    // View only: every caller has already applied the change to local state;
+    // the view config is a board write and is not theirs to save.
+    if (!canEdit) return;
     const merged = {
       date_column_id: startColId,
       end_column_id: endColId,
@@ -553,13 +563,14 @@ function GanttBoardInner({
     // rail must not flash back to the old width for a frame.
     setLabelWidth(width);
     // One write, on drag end (the canvas never calls this mid-drag). A viewer
-    // resizes for the session only: the view config is not theirs to write.
-    if (access !== "viewer") persistConfig({ label_width: width });
+    // resizes for the session only: `persistConfig` does not write for them.
+    persistConfig({ label_width: width });
   }
 
   // Bar move / resize write back through the board's date source(s).
   const startWriteId = startSourceId ?? resolvedDateColumn.id;
   function handleMoveBar(itemId: string, deltaDays: number) {
+    if (!canEdit) return;
     const range = itemDateRange(itemId, cache.cellValues, startWriteId);
     if (!range) return;
     onBarMoved(
@@ -572,6 +583,7 @@ function GanttBoardInner({
     );
   }
   function handleResizeBar(itemId: string, newEndISO: string) {
+    if (!canEdit) return;
     // Same range the row item used to hand back: the row's own resolved span.
     const row = rows.find((r) => r.itemId === itemId);
     const range = { start: row?.startISO ?? "", end: row?.endISO ?? "" };
@@ -718,21 +730,23 @@ function GanttBoardInner({
             dependentsByItem.get(itemId) ?? 0,
           )
         }
-        canEditItem={() => !readOnly}
+        canEditItem={() => canEdit && !readOnly}
+        canLinkItem={() => canEdit}
         lateFor={(row) => late.lateDays.get(row.itemId) ?? null}
         isExpanded={isRowExpanded}
         onToggleExpand={toggleRow}
         onMoveBar={handleMoveBar}
         onResizeBar={handleResizeBar}
-        onAddDependency={(vars) =>
+        onAddDependency={(vars) => {
+          if (!canEdit) return;
           mutations.addDependency(vars, {
             onError: (err) => toast.error(err.message),
-          })
-        }
+          });
+        }}
         onRemoveDependency={mutations.removeDependency}
         // Arrows here are same-board links only (cross-board ones are stubs),
         // so removal follows this board's access.
-        canRemoveDependency={() => access !== "viewer"}
+        canRemoveDependency={() => canEdit}
         linkCandidates={(row) =>
           scheduledRows
             .filter((o) => o.itemId !== row.itemId)
@@ -748,7 +762,7 @@ function GanttBoardInner({
         }
       />
 
-      {quickEdit && (
+      {canEdit && quickEdit && (
         <ItemQuickEdit
           target={quickEdit}
           itemName={

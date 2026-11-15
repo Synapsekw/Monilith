@@ -118,6 +118,8 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
   );
   // Temp-row rule — see the equivalent note in ./ItemRow.
   const pending = isOptimisticId(sub.id);
+  // View only — see the equivalent note in ./ItemRow.
+  const canEdit = controls.canEdit;
   const {
     setNodeRef,
     attributes,
@@ -125,9 +127,18 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: sub.id, disabled: pending });
+  } = useSortable({ id: sub.id, disabled: pending || !canEdit });
 
-  const dragHandle = (
+  // View only: an empty slot the width of the fine-pointer handle, so names
+  // keep the column they have for editors (and the subitem thread keeps its
+  // geometry). Dropped on coarse pointers, where the handle is a 44px target.
+  const dragHandle = !canEdit ? (
+    <span
+      aria-hidden
+      data-drag-slot=""
+      className="inline-block h-6 w-4 shrink-0 pointer-coarse:hidden"
+    />
+  ) : (
     <button
       type="button"
       disabled={pending}
@@ -183,12 +194,14 @@ export const SortableSubitemRow = memo(function SortableSubitemRow({
         autoFocusRename={sub.id === renamingItemId}
         onRenameSettled={onRenameSettled}
         trailing={
-          <RowMenu
-            label={sub.name}
-            hasChildren={false}
-            disabled={pending}
-            onDelete={() => controls.deleteItem(sub.id)}
-          />
+          canEdit ? (
+            <RowMenu
+              label={sub.name}
+              hasChildren={false}
+              disabled={pending}
+              onDelete={() => controls.deleteItem(sub.id)}
+            />
+          ) : null
         }
       />
       {columns.map((col) => {

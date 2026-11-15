@@ -73,6 +73,10 @@ export type GanttCanvasProps = {
    * timeline, whose payload carries no status). */
   lateFor?: (row: GanttRow) => number | null;
   canEditItem: (itemId: string) => boolean;
+  /** Whether a row may draw a new dependency. Omitted = every row may (the
+   * caller's `linkCandidates` decides what is offered). The board Gantt
+   * passes it to hide the ⋯ menu for view-only access. */
+  canLinkItem?: (itemId: string) => boolean;
   /** Expanded parents; for a board band (section level 0), whether it is open. */
   isExpanded?: (itemId: string) => boolean;
   /** Toggles a parent's sub-items — and, when given, collapses a board band. */
@@ -122,6 +126,7 @@ export function GanttCanvas({
   criticalLabelFor,
   lateFor,
   canEditItem,
+  canLinkItem,
   isExpanded,
   onToggleExpand,
   onMoveBar,
@@ -444,6 +449,7 @@ export function GanttCanvas({
                         todayOffset={todayOffset}
                         todayInRange={todayInRange}
                         readOnly={!canEditItem(row.itemId)}
+                        canLink={canLinkItem?.(row.itemId) ?? true}
                         isExpanded={isExpanded?.(row.itemId) ?? false}
                         onToggleExpand={onToggleExpand}
                         color={colorFor(row)}

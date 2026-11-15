@@ -177,6 +177,9 @@ export const ItemRow = memo(function ItemRow({
   // server rejects them, the cache rolls back and the user gets a toast for a
   // gesture that looked like it worked.
   const pending = isOptimisticId(item.id);
+  // View only: the row is not a sortable (no mouse, touch or keyboard sensor
+  // can pick it up) and renders no handle, add-subitem button or row menu.
+  const canEdit = controls.canEdit;
   const {
     setNodeRef,
     attributes,
@@ -186,7 +189,7 @@ export const ItemRow = memo(function ItemRow({
     isDragging,
   } = useSortable({
     id: item.id,
-    disabled: pending,
+    disabled: pending || !canEdit,
     data: { type: "item", groupId: item.group_id },
   });
 
@@ -194,7 +197,16 @@ export const ItemRow = memo(function ItemRow({
   // start further left and still line up with each other.
   const reserveChevron = boardHasSubitems(controls.cache.items);
 
-  const dragHandle = (
+  // View only: an empty slot the width of the fine-pointer handle, so names
+  // keep the column they have for editors (and the subitem thread keeps its
+  // geometry). Dropped on coarse pointers, where the handle is a 44px target.
+  const dragHandle = !canEdit ? (
+    <span
+      aria-hidden
+      data-drag-slot=""
+      className="inline-block h-6 w-4 shrink-0 pointer-coarse:hidden"
+    />
+  ) : (
     <button
       type="button"
       disabled={pending}
@@ -236,7 +248,7 @@ export const ItemRow = memo(function ItemRow({
       />
     ) : null;
 
-  const trailing = (
+  const trailing = !canEdit ? null : (
     <>
       {childCount === 0 && (
         <button

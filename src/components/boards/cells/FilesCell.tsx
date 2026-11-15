@@ -27,7 +27,8 @@ export function FilesCell({
   /** Optional thumbnail-transform URLs (image rows only); falls back to full-res. */
   thumbUrls?: Record<string, string>;
   onOpen: (index: number) => void;
-  onUpload: (file: File) => void;
+  /** Absent for view-only access: the chips still open, nothing uploads. */
+  onUpload?: (file: File) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const shown = files.slice(0, MAX);
@@ -72,31 +73,35 @@ export function FilesCell({
       {overflow > 0 && (
         <span className="text-muted-foreground text-xs">+{overflow}</span>
       )}
-      <button
-        type="button"
-        aria-label="Add file"
-        onClick={(e) => {
-          e.stopPropagation();
-          input.current?.click();
-        }}
-        className="text-muted-foreground hover:text-foreground grid place-items-center pointer-coarse:size-11"
-      >
-        {files.length ? (
-          <Plus className="size-3.5" />
-        ) : (
-          <Paperclip className="size-3.5" />
-        )}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          for (const f of Array.from(e.target.files ?? [])) onUpload(f);
-          e.currentTarget.value = "";
-        }}
-      />
+      {onUpload && (
+        <>
+          <button
+            type="button"
+            aria-label="Add file"
+            onClick={(e) => {
+              e.stopPropagation();
+              input.current?.click();
+            }}
+            className="text-muted-foreground hover:text-foreground grid place-items-center pointer-coarse:size-11"
+          >
+            {files.length ? (
+              <Plus className="size-3.5" />
+            ) : (
+              <Paperclip className="size-3.5" />
+            )}
+          </button>
+          <input
+            ref={input}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              for (const f of Array.from(e.target.files ?? [])) onUpload(f);
+              e.currentTarget.value = "";
+            }}
+          />
+        </>
+      )}
     </span>
   );
 }

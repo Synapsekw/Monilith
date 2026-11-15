@@ -39,6 +39,7 @@ const dependentsByItem: CellControls["dependentsByItem"] = new Map();
 
 function makeControls(cache: BoardCache): CellControls {
   return {
+    canEdit: true,
     setEditing: noop,
     setCell: noop,
     clearCellValue: noop,
