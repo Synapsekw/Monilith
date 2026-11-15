@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import { composeBoardScope, composeFolderScope } from "./persona";
 
 const BASE = "You are the AI assistant for Monolith.";
@@ -63,6 +64,18 @@ describe("composeFolderScope", () => {
     expect(out).toContain("- Backend (id b1)");
     expect(out).toContain("- Mobile (id b2)");
     expect(out).toContain('"this project"');
+  });
+  it("points a folder thread at tools that exist, with the folder id", () => {
+    const out = composeFolderScope("BASE", {
+      id: "f1",
+      name: "Launch",
+      boards: [{ id: "b1", name: "Roadmap" }],
+    });
+    expect(out).not.toContain("get_board_overview");
+    expect(out).toContain('folderId "f1"');
+    const names = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.name));
+    for (const m of out.match(/\b(?:get|list|query|search)_[a-z_]+\b/g) ?? [])
+      expect(names.has(m), m).toBe(true);
   });
   it("neutralises a newline-smuggled instruction in a board name", () => {
     const out = composeFolderScope("base", {

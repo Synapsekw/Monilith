@@ -79,19 +79,30 @@ const SOLID_TEXT: Record<StatusColor, string> = {
  * hues); dark mode uses the token directly (≥5.19:1 on `--background`).
  * Deriving both from the token keeps this correct if the reskin retunes hues.
  */
+/**
+ * The soft tone's TEXT half, exported so other surfaces that want AA-safe
+ * status-coloured text without a pill (e.g. a tier label) share one recipe.
+ */
+export const STATUS_SOFT_TEXT: Record<StatusColor, string> = {
+  gray: "text-[color:color-mix(in_oklab,var(--status-gray)_65%,black)] dark:text-status-gray",
+  blue: "text-[color:color-mix(in_oklab,var(--status-blue)_65%,black)] dark:text-status-blue",
+  green: "text-[color:color-mix(in_oklab,var(--status-green)_65%,black)] dark:text-status-green",
+  yellow: "text-[color:color-mix(in_oklab,var(--status-yellow)_65%,black)] dark:text-status-yellow",
+  orange: "text-[color:color-mix(in_oklab,var(--status-orange)_65%,black)] dark:text-status-orange",
+  red: "text-[color:color-mix(in_oklab,var(--status-red)_65%,black)] dark:text-status-red",
+  purple: "text-[color:color-mix(in_oklab,var(--status-purple)_65%,black)] dark:text-status-purple",
+  teal: "text-[color:color-mix(in_oklab,var(--status-teal)_65%,black)] dark:text-status-teal",
+};
+
 const SOFT: Record<StatusColor, string> = {
-  gray: "bg-status-gray/15 text-[color:color-mix(in_oklab,var(--status-gray)_65%,black)] dark:text-status-gray",
-  blue: "bg-status-blue/15 text-[color:color-mix(in_oklab,var(--status-blue)_65%,black)] dark:text-status-blue",
-  green:
-    "bg-status-green/15 text-[color:color-mix(in_oklab,var(--status-green)_65%,black)] dark:text-status-green",
-  yellow:
-    "bg-status-yellow/15 text-[color:color-mix(in_oklab,var(--status-yellow)_65%,black)] dark:text-status-yellow",
-  orange:
-    "bg-status-orange/15 text-[color:color-mix(in_oklab,var(--status-orange)_65%,black)] dark:text-status-orange",
-  red: "bg-status-red/15 text-[color:color-mix(in_oklab,var(--status-red)_65%,black)] dark:text-status-red",
-  purple:
-    "bg-status-purple/15 text-[color:color-mix(in_oklab,var(--status-purple)_65%,black)] dark:text-status-purple",
-  teal: "bg-status-teal/15 text-[color:color-mix(in_oklab,var(--status-teal)_65%,black)] dark:text-status-teal",
+  gray: `bg-status-gray/15 ${STATUS_SOFT_TEXT.gray}`,
+  blue: `bg-status-blue/15 ${STATUS_SOFT_TEXT.blue}`,
+  green: `bg-status-green/15 ${STATUS_SOFT_TEXT.green}`,
+  yellow: `bg-status-yellow/15 ${STATUS_SOFT_TEXT.yellow}`,
+  orange: `bg-status-orange/15 ${STATUS_SOFT_TEXT.orange}`,
+  red: `bg-status-red/15 ${STATUS_SOFT_TEXT.red}`,
+  purple: `bg-status-purple/15 ${STATUS_SOFT_TEXT.purple}`,
+  teal: `bg-status-teal/15 ${STATUS_SOFT_TEXT.teal}`,
 };
 
 /**

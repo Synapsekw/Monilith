@@ -74,7 +74,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
     restoreGroupMutation,
     archiveGroupMutation,
   } = useGroupMutations(ctx);
-  const { renameBoardMutation, resizeNameColumnMutation } =
+  const { renameBoardMutation, resizeNameColumnMutation, applyWorkSettings } =
     useBoardRowMutations(ctx);
   const {
     addDependencyMutation,
@@ -158,6 +158,7 @@ export function useBoardMutations(boardId: string, currentUserId = "") {
           onError: (err) => callbacks?.onError?.(err),
         },
       ),
+    applyWorkSettings,
     renameBoard: (name: string, callbacks?: { onSuccess?: () => void }) =>
       renameBoardMutation.mutate(
         { name },

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getFolderHead, type FolderHead } from "@/lib/folders/queries";
 import { folderIdSchema } from "@/lib/validations/folders";
 import { AskChat } from "@/components/ai/ask/AskChat";
+import { startPromptFor } from "@/lib/ai/ask/start-prompts";
 
 /**
  * New-chat entry: an empty composer. The conversation row is minted on first
@@ -13,14 +14,22 @@ import { AskChat } from "@/components/ai/ask/AskChat";
  * `?folder=<id>` scopes the first message to that folder's boards — the
  * folder head is one indexed read, RLS-filtered, and a hidden folder falls
  * back to a plain chat.
+ *
+ * `?start=<key>` opens the chat already asking a fixed question (see
+ * `startPromptFor`; My Work's "Ask about my day" uses `today`). Only known keys
+ * resolve, so the link never carries the message text.
  */
 export default async function NewAskPage({
   searchParams,
 }: {
-  searchParams: Promise<{ folder?: string | string[] }>;
+  searchParams: Promise<{
+    folder?: string | string[];
+    start?: string | string[];
+  }>;
 }) {
   await requireUser();
-  const raw = (await searchParams).folder;
+  const params = await searchParams;
+  const raw = params.folder;
   const parsed = folderIdSchema.safeParse(Array.isArray(raw) ? raw[0] : raw);
   const head = parsed.success ? await readFolderHead(parsed.data) : null;
   return (
@@ -29,6 +38,7 @@ export default async function NewAskPage({
       initialMessages={[]}
       folderId={head?.folder.id}
       title={head ? `Ask about ${head.folder.name}` : "New chat"}
+      autoSend={startPromptFor(params.start)}
     />
   );
 }

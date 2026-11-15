@@ -3,18 +3,8 @@ import { ListTodo } from "lucide-react";
 import { ColorChip } from "@/components/ui/color-chip";
 import { Kicker } from "@/components/ui/kicker";
 import { cn } from "@/lib/utils";
+import { formatDue } from "@/lib/my-work/format";
 import type { MyWorkGroup, MyWorkItem } from "@/lib/my-work/bucket";
-
-/** `YYYY-MM-DD` → compact `Jul 4`, parsed in UTC so no timezone drift. */
-function formatDue(iso: string): string {
-  const t = Date.parse(`${iso}T00:00:00Z`);
-  if (Number.isNaN(t)) return iso;
-  return new Date(t).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 function Row({ item, today }: { item: MyWorkItem; today: string }) {
   const overdue = item.dueDate !== null && item.dueDate < today;

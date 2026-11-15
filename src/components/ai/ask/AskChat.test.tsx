@@ -84,6 +84,7 @@ vi.mock("@/lib/boards/use-resync-boards", () => ({
   useResyncBoards: () => resync,
 }));
 import { AskChat } from "./AskChat";
+import { armAskStart } from "@/lib/ai/ask/start-prompts";
 import {
   appendUserMessage,
   createConversation,
@@ -100,6 +101,7 @@ const ACTION = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
   send.mockImplementation(
     async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
       onEvent({ type: "token", text: "Answer" });
@@ -149,6 +151,102 @@ function ask(question = "what's overdue?") {
 }
 
 describe("AskChat", () => {
+  it("sends the autoSend message once when the link armed it", async () => {
+    armAskStart("What should I focus on today?");
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "What should I focus on today?",
+      }),
+    );
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  // Live-run defect B. The auto-sent turn must touch the URL exactly like a
+  // typed first message: one pushState to /ask/<id> once the conversation
+  // exists, and nothing before. A `replaceState("/ask")` at mount dropped the
+  // `?start` search the rendered page segment is keyed on, so the
+  // createConversation action's revalidation (fetched for the router's
+  // canonical URL) re-rendered a DIFFERENT page segment and the streaming chat
+  // instance was swapped out for an empty one; the answer only showed after
+  // Back. jsdom has no app router, so this pins the history calls, which are
+  // the cause; the swap itself can only be seen in a browser.
+  it("rewrites the URL only once the conversation exists, the same as a typed send", async () => {
+    armAskStart("What should I focus on today?");
+    const calls: string[] = [];
+    vi.spyOn(window.history, "replaceState").mockImplementation(
+      (_d, _u, url) => {
+        calls.push(`replace ${String(url)}`);
+      },
+    );
+    vi.spyOn(window.history, "pushState").mockImplementation((_d, _u, url) => {
+      calls.push(`push ${String(url)}`);
+    });
+    vi.mocked(createConversation).mockImplementationOnce(async () => {
+      calls.push("createConversation");
+      return { ok: true, data: { conversationId: "c1" } };
+    });
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+    expect(calls).toEqual(["createConversation", "push /ask/c1"]);
+  });
+
+  it("does not send a second time when the page is remounted with the same props (browser Back)", async () => {
+    armAskStart("What should I focus on today?");
+    const props = {
+      conversationId: null,
+      initialMessages: [],
+      autoSend: "What should I focus on today?",
+    };
+    const first = render(<AskChat {...props} />);
+    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+    first.unmount();
+    render(<AskChat {...props} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send when ?start is present but no link armed it (shared or foreign link)", async () => {
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("never auto-sends into an existing conversation", async () => {
+    render(
+      <AskChat
+        conversationId="c9"
+        initialMessages={[USER_ROW, ANSWER_ROW]}
+        autoSend="What should I focus on today?"
+      />,
+    );
+    await Promise.resolve();
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("sends a first message, streams the answer, and persists both turns", async () => {
     const pushState = vi.spyOn(window.history, "pushState");
     render(<AskChat conversationId={null} initialMessages={[]} />);

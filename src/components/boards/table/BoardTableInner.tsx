@@ -804,6 +804,7 @@ export function BoardTableInner({
       <BoardHeader
         boardId={board.id}
         boardName={board.name}
+        board={board}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={columns}

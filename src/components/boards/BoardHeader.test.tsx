@@ -12,7 +12,7 @@ import type { BoardPresence } from "@/lib/boards/use-board-presence";
 const renameBoard = vi.fn();
 
 vi.mock("@/lib/boards/use-board-mutations", () => ({
-  useBoardMutations: () => ({ renameBoard }),
+  useBoardMutations: () => ({ renameBoard, applyWorkSettings: vi.fn() }),
 }));
 
 vi.mock("./ViewSwitcher", () => ({
@@ -74,6 +74,12 @@ vi.mock("@/lib/boards/sharing-actions", () => ({
   unshareBoard: vi.fn(),
 }));
 
+const BOARD = {
+  work_status_column_id: null,
+  work_done_option_ids: null,
+  work_due_column_id: null,
+};
+
 const views = [
   { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
 ];
@@ -114,6 +120,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
       />,
@@ -140,6 +147,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
       />,
@@ -159,6 +167,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="owner"
@@ -183,6 +192,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="editor"
@@ -210,6 +220,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="viewer"
@@ -241,6 +252,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="owner"
@@ -265,6 +277,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="viewer"
@@ -287,6 +300,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         columns={[
@@ -325,6 +339,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="owner"
@@ -342,6 +357,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="owner"
@@ -361,6 +377,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="owner"
@@ -411,6 +428,7 @@ describe("BoardHeader", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
       />,
@@ -431,6 +449,7 @@ describe("BoardHeader — Fit all columns", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="editor"
@@ -451,6 +470,7 @@ describe("BoardHeader — Fit all columns", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="editor"
@@ -472,6 +492,7 @@ describe("BoardHeader — Fit all columns", () => {
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
+        board={BOARD}
         views={views}
         selectedViewId="v1"
         access="viewer"
@@ -487,5 +508,43 @@ describe("BoardHeader — Fit all columns", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Fit all columns" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("hides Work tracking from viewers and offers it to editors", async () => {
+    const { unmount } = renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        board={BOARD}
+        views={views}
+        selectedViewId="v1"
+        access="viewer"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    await screen.findByRole("menuitem", { name: "Automations" });
+    expect(
+      screen.queryByRole("menuitem", { name: "Work tracking" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        board={BOARD}
+        views={views}
+        selectedViewId="v1"
+        access="editor"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Work tracking" }),
+    ).toBeInTheDocument();
   });
 });

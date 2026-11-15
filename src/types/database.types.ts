@@ -580,6 +580,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "attachments_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "attachments_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
@@ -676,6 +697,13 @@ export type Database = {
             foreignKeyName: "automation_ai_jobs_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "automation_ai_jobs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
           },
@@ -717,6 +745,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "automations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_date_fires_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "automation_date_fires_item_id_fkey";
@@ -785,6 +820,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "automation_runs_item_id_fkey";
@@ -1435,6 +1477,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         Insert: {
@@ -1449,6 +1494,9 @@ export type Database = {
           org_id: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id: string;
         };
         Update: {
@@ -1463,6 +1511,9 @@ export type Database = {
           org_id?: string;
           position?: number;
           updated_at?: string;
+          work_done_option_ids?: string[] | null;
+          work_due_column_id?: string | null;
+          work_status_column_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [
@@ -1472,6 +1523,48 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_due_column_id_fkey";
+            columns: ["work_due_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "boards_work_status_column_id_fkey";
+            columns: ["work_status_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
           },
           {
             foreignKeyName: "boards_workspace_id_fkey";
@@ -1521,6 +1614,27 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "columns";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cell_values_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "cell_values_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "cell_values_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "cell_values_item_id_fkey";
@@ -1990,6 +2104,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "goal_links_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "goal_links_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
             foreignKeyName: "goal_links_goal_id_fkey";
             columns: ["goal_id"];
             isOneToOne: false;
@@ -2206,6 +2334,27 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "item_activities_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "item_activities_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
@@ -2278,8 +2427,22 @@ export type Database = {
             foreignKeyName: "item_dependencies_predecessor_id_fkey";
             columns: ["predecessor_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_predecessor_id_fkey";
+            columns: ["predecessor_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_successor_id_fkey";
+            columns: ["successor_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_dependencies_successor_id_fkey";
@@ -2316,6 +2479,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embed_queue_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_embed_queue_item_id_fkey";
@@ -2368,6 +2538,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embeddings_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_embeddings_item_id_fkey";
@@ -2429,6 +2606,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "boards";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "item_updates_item_id_fkey";
@@ -2510,6 +2694,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "items_parent_id_fkey";
@@ -2730,6 +2921,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "feedback";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "notifications_item_id_fkey";
@@ -3219,6 +3417,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "portfolio_boards_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "portfolio_boards_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
             foreignKeyName: "portfolio_boards_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
@@ -3367,11 +3579,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "relation_links_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
             foreignKeyName: "relation_links_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_linked_item_id_fkey";
+            columns: ["linked_item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "relation_links_linked_item_id_fkey";
@@ -3551,6 +3791,13 @@ export type Database = {
             foreignKeyName: "time_allocations_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
+          },
+          {
+            foreignKeyName: "time_allocations_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
             referencedRelation: "items";
             referencedColumns: ["id"];
           },
@@ -3614,6 +3861,27 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "columns";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["due_column_id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["status_column_id"];
+          },
+          {
+            foreignKeyName: "time_entries_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "item_facts";
+            referencedColumns: ["item_id"];
           },
           {
             foreignKeyName: "time_entries_item_id_fkey";
@@ -4035,6 +4303,46 @@ export type Database = {
       };
     };
     Views: {
+      item_facts: {
+        Row: {
+          board_id: string | null;
+          due_column_id: string | null;
+          due_date: string | null;
+          group_id: string | null;
+          is_done: boolean | null;
+          item_id: string | null;
+          name: string | null;
+          org_id: string | null;
+          status_color: string | null;
+          status_column_id: string | null;
+          status_label: string | null;
+          status_option_id: string | null;
+          updated_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "items_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_monos: {
         Row: {
           color: string | null;
@@ -4358,6 +4666,26 @@ export type Database = {
         Args: { p_column_id: string; p_org_id: string };
         Returns: boolean;
       };
+      count_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_count_by: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          item_count: number;
+          key: string;
+          label: string;
+        }[];
+      };
       create_board: {
         Args: { p_name: string; p_workspace_id: string };
         Returns: {
@@ -4372,6 +4700,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4395,6 +4726,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4691,6 +5025,9 @@ export type Database = {
           org_id: string;
           position: number;
           updated_at: string;
+          work_done_option_ids: string[] | null;
+          work_due_column_id: string | null;
+          work_status_column_id: string | null;
           workspace_id: string;
         };
         SetofOptions: {
@@ -4803,6 +5140,31 @@ export type Database = {
           user_id: string;
         }[];
       };
+      get_focus_today: {
+        Args: {
+          p_folder_id?: string;
+          p_limit?: number;
+          p_org_id: string;
+          p_stall_days?: number;
+          p_today: string;
+        };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          days_overdue: number;
+          days_quiet: number;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_label: string;
+          tier: number;
+          tier_total: number;
+          unread_count: number;
+          waiting: Json;
+          waiting_count: number;
+        }[];
+      };
       get_my_agent_last_runs: {
         Args: never;
         Returns: {
@@ -4824,6 +5186,19 @@ export type Database = {
           org_id: string;
           owner_id: string;
           user_id: string;
+        }[];
+      };
+      get_my_open_work: {
+        Args: { p_limit?: number; p_org_id: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_color: string;
+          status_label: string;
         }[];
       };
       get_my_work_items: {
@@ -4901,15 +5276,19 @@ export type Database = {
         Returns: boolean;
       };
       is_platform_admin: { Args: never; Returns: boolean };
+      item_assignee_ids: { Args: { p_item: string }; Returns: Json };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      items_assigned_to: { Args: { p_user: string }; Returns: string[] };
       match_items: {
         Args: {
           p_board_id?: string;
+          p_board_ids?: string[];
           p_exclude_item_id?: string;
           p_limit?: number;
+          p_org_id?: string;
           p_query_embedding: string;
         };
         Returns: {
@@ -5052,6 +5431,60 @@ export type Database = {
         };
       };
       prune_mono_sessions: { Args: never; Returns: number };
+      query_items: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_org_id: string;
+          p_sort?: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          assignee_ids: Json;
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          is_done: boolean;
+          item_id: string;
+          item_name: string;
+          last_change: string;
+          status_label: string;
+          total: number;
+        }[];
+      };
+      query_items_base: {
+        Args: {
+          p_assignee?: string;
+          p_board_id?: string;
+          p_due_from?: string;
+          p_due_to?: string;
+          p_folder_id?: string;
+          p_group_id?: string;
+          p_org_id: string;
+          p_state?: string;
+          p_unassigned?: boolean;
+          p_updated_since?: string;
+        };
+        Returns: {
+          board_id: string;
+          due_date: string;
+          group_id: string;
+          is_done: boolean;
+          item_id: string;
+          last_change: string;
+          name: string;
+          status_label: string;
+        }[];
+      };
       reactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;

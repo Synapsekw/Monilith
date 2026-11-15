@@ -430,6 +430,7 @@ function GanttBoardInner({
         <BoardHeader
           boardId={cache.board.id}
           boardName={cache.board.name}
+          board={cache.board}
           views={payload.views}
           selectedViewId={selectedViewId}
           columns={cache.columns}
@@ -589,6 +590,7 @@ function GanttBoardInner({
       <BoardHeader
         boardId={cache.board.id}
         boardName={cache.board.name}
+        board={cache.board}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={cache.columns}

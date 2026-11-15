@@ -1,5 +1,6 @@
 "use client";
 
+import { consumeAskStart } from "@/lib/ai/ask/start-prompts";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -81,6 +82,7 @@ export function AskChat({
   onTurnEnd,
   onMessagesChange,
   speaker,
+  autoSend,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
@@ -126,6 +128,10 @@ export function AskChat({
   onMessagesChange?: (messages: UIMessage[]) => void;
   /** Who is answering, when not the org assistant (the My Mono tab). */
   speaker?: ChatSpeaker;
+  /** A message to send once, on mount, as the first turn of a NEW chat (e.g.
+   *  the My Work "Ask about my day" link). Ignored for an existing thread, and
+   *  inert unless the link armed the one-shot token (`armAskStart`). */
+  autoSend?: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -316,6 +322,28 @@ export function AskChat({
       onTurnEnd?.();
     }
   }
+
+  // One-shot first turn for a link-started chat. It sends only when the link
+  // armed a sessionStorage token (consumed here, so Back/remount cannot send
+  // again and a bare `?start=` URL never does). The ref keeps a StrictMode
+  // double-mount from consuming twice.
+  //
+  // The URL is deliberately NOT rewritten here: the turn's own pushState to
+  // /ask/<id> does that, exactly as for a typed first message. Stripping
+  // `?start` first (replaceState "/ask") left the router's canonical URL
+  // without the search its rendered page segment is keyed on, so the
+  // createConversation action's revalidation re-rendered a different page
+  // segment and swapped the streaming chat out for an empty one (live-run
+  // defect B). The token, not the URL, is what stops a second send.
+  const autoSent = useRef(false);
+  useEffect(() => {
+    if (!autoSend || conversationId || autoSent.current) return;
+    autoSent.current = true;
+    if (!consumeAskStart(autoSend)) return;
+    void onSubmit(autoSend);
+    // Mount-only by design: `onSubmit` closes over fresh state every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Resends the exact text `onSubmit` last failed on — the
    *  composer's Retry button. A no-op if nothing has failed (or a later send

@@ -1,3 +1,17 @@
+/**
+ * The zone a member's calendar day is read in: their own display zone
+ * (`profiles.timezone`), then their organization's (`organizations.timezone`),
+ * else null so the caller falls back to UTC. The single resolution order shared
+ * by `resolveUserTimeZone` and every "today" reader (My Work, the focus and
+ * work tools, the assistant prompt), so they always agree on the date.
+ */
+export function effectiveTimeZone(
+  profileTz: string | null | undefined,
+  orgTz: string | null | undefined,
+): string | null {
+  return profileTz || orgTz || null;
+}
+
 /** All IANA zones the runtime knows, or a minimal fallback.
  * Always includes "UTC" — some ICU builds omit the synthetic UTC alias. */
 export function listTimeZones(): string[] {

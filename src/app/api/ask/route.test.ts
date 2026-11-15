@@ -518,6 +518,23 @@ describe("POST /api/ask", () => {
     expect(staged?.calls).toHaveLength(50);
   });
 
+  it("dates the prompt in the org's zone when the member has none (review I5)", async () => {
+    const { getUserTimeZoneCached } =
+      await import("@/lib/profile/queries-cached");
+    vi.mocked(getUserTimeZoneCached).mockResolvedValueOnce(null);
+    activeOrg.current = { id: "org1", name: "Acme", timezone: "Asia/Tokyo" };
+    await readEvents();
+    const args = runAssistantLoop.mock.calls[0]![0];
+    expect(args.system).toContain("(timezone Asia/Tokyo)");
+  });
+
+  it("the member's own zone still wins over the org's", async () => {
+    activeOrg.current = { id: "org1", name: "Acme", timezone: "Asia/Tokyo" };
+    await readEvents();
+    const args = runAssistantLoop.mock.calls[0]![0];
+    expect(args.system).toContain("(timezone Europe/Berlin)");
+  });
+
   it("tells the model no page is in focus for a thread with no board", async () => {
     await readEvents();
     const args = runAssistantLoop.mock.calls[0]![0];
