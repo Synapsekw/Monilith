@@ -133,6 +133,8 @@ export type IntelligenceBrief = {
 export type FolderMember = {
   userId: string;
   fullName: string | null;
+  /** From the org roster the viewer can already read; the display fallback. */
+  email?: string | null;
   avatarUrl: string | null;
 };
 

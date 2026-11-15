@@ -111,7 +111,7 @@ describe("buildFolderPayload", () => {
     expect(p!.attention).toEqual([]);
     expect(p!.briefs).toHaveLength(1);
     expect(p!.members).toEqual([
-      { userId: "u1", fullName: "Ada", avatarUrl: null },
+      { userId: "u1", fullName: "Ada", email: null, avatarUrl: null },
     ]);
     // The Overview panel shows 20 but classifies by stage on the CLIENT, so
     // the RPC has to return a wider pool than the visible list (finding I4).

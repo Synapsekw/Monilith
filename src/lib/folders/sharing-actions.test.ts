@@ -375,11 +375,53 @@ describe("loadFolderAccess", () => {
       "u-me",
     ]);
     expect(r.data.members).toEqual([
-      { userId: "u-a", fullName: "Ann", avatarUrl: "a.png", level: "editor" },
+      {
+        userId: "u-a",
+        fullName: "Ann",
+        email: null,
+        avatarUrl: "a.png",
+        level: "editor",
+      },
     ]);
     expect(JSON.stringify(r.data.members)).not.toContain("@");
     expect(JSON.stringify(r.data.candidates)).not.toContain("@");
     expect(r.data.membersTruncated).toBe(false);
+  });
+
+  it("carries email only for nameless people (member and candidate)", async () => {
+    wire(true);
+    roster.push(
+      {
+        userId: "u-n",
+        fullName: null as never,
+        email: "n@x.com",
+        avatarUrl: null,
+      },
+      {
+        userId: "u-n2",
+        fullName: null as never,
+        email: "n2@x.com",
+        avatarUrl: null,
+      },
+    );
+    membersResult.data = [{ user_id: "u-n", access_level: "viewer" }];
+    try {
+      const r = await loadFolderAccess({ folderId: F });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.data.members[0]).toMatchObject({
+        userId: "u-n",
+        fullName: null,
+        email: "n@x.com",
+      });
+      const cands = Object.fromEntries(
+        r.data.candidates.map((c) => [c.userId, c.email]),
+      );
+      expect(cands["u-n2"]).toBe("n2@x.com");
+      expect(cands["u-b"]).toBeNull();
+    } finally {
+      roster.splice(3, 2);
+    }
   });
 
   it("gives a non-manager no invitations and no candidates, and never asks for them", async () => {

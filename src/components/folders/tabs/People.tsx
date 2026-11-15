@@ -13,19 +13,11 @@ import {
   WorkloadBars,
   type WorkloadPerson,
 } from "@/components/folders/charts/WorkloadBars";
+import { labelInitials, memberLabel } from "@/lib/ui/member-label";
 import type { FolderMember, WorkloadRow } from "@/lib/folders/types";
 
 export const workloadKey = (folderId: string) =>
   ["folder-workload", folderId] as const;
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 /** Per-person totals for the selected stage; the null (unassigned) row is excluded. */
 export function peopleFromWorkload(
@@ -41,7 +33,7 @@ export function peopleFromWorkload(
     const m = byId.get(r.userId);
     const cur = acc.get(r.userId) ?? {
       userId: r.userId,
-      name: m?.fullName ?? "Unknown member",
+      name: memberLabel(m ?? { fullName: null }),
       avatarUrl: m?.avatarUrl ?? null,
       open: 0,
       overdue: 0,
@@ -144,16 +136,19 @@ export function PeopleTab({
         ) : (
           <ul className="divide-y text-xs">
             {[...owns.entries()].map(([userId, o]) => {
-              const name = byId.get(userId)?.fullName ?? "Unknown member";
+              const name = memberLabel(byId.get(userId) ?? { fullName: null });
               const boards = [...o.boards].sort().join(", ");
               return (
                 <li key={userId} className="flex items-center gap-2 py-2">
                   <Avatar className="size-6 shrink-0">
                     <AvatarFallback className="text-2xs">
-                      {initials(name)}
+                      {labelInitials(name) || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="w-28 shrink-0 truncate font-medium">
+                  <span
+                    title={name}
+                    className="w-28 shrink-0 truncate font-medium"
+                  >
                     {name}
                   </span>
                   <span className="text-muted-foreground min-w-0 flex-1 truncate">

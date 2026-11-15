@@ -249,3 +249,22 @@ describe("PeoplePanel near-viewport loading", () => {
     expect(getFolderWorkload).toHaveBeenCalledTimes(0);
   });
 });
+
+describe("PeoplePanel member fallback", () => {
+  it("prints the email for a nameless member and Unknown member for neither", async () => {
+    getFolderWorkload.mockReset();
+    getFolderWorkload.mockResolvedValue({
+      ok: true,
+      data: [row("u1", 9, 0), row("u3", 2, 0)],
+    });
+    renderPanel({
+      members: [
+        { userId: "u1", fullName: null, email: "ada@x.com", avatarUrl: null },
+      ],
+    });
+    await waitFor(() =>
+      expect(screen.getByText("ada@x.com")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Unknown member")).toBeInTheDocument();
+  });
+});

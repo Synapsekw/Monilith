@@ -7,6 +7,7 @@ export type FolderAccessHead = {
 export type FolderAccessEntry = {
   userId: string;
   fullName: string | null;
+  email?: string | null;
   avatarUrl: string | null;
   level: FolderLevel;
 };
@@ -16,7 +17,11 @@ export type FolderInvitationEntry = {
   level: FolderLevel;
   state: "invited" | "awaiting_approval";
 };
-export type FolderCandidate = { userId: string; fullName: string | null };
+export type FolderCandidate = {
+  userId: string;
+  fullName: string | null;
+  email?: string | null;
+};
 export type FolderAccessData = {
   canManage: boolean;
   myUserId: string;

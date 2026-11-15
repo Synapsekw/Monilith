@@ -22,7 +22,7 @@ import type {
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
-import { memberInitials } from "@/lib/ui/initials";
+import { memberLabel, memberLabelInitials } from "@/lib/ui/member-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -229,7 +229,7 @@ export function ShareFolderDialog({
   const suggestions =
     data && needle.length > 0
       ? data.candidates
-          .filter((c) => (c.fullName ?? "").toLowerCase().includes(needle))
+          .filter((c) => memberLabel(c).toLowerCase().includes(needle))
           .slice(0, MAX_SUGGESTIONS)
       : [];
 
@@ -339,13 +339,16 @@ export function ShareFolderDialog({
             {suggestions.length > 0 && (
               <ul className="bg-surface-muted/40 divide-border divide-y rounded-lg border">
                 {suggestions.map((c) => {
-                  const name = c.fullName ?? "Unknown member";
+                  const name = memberLabel(c);
                   return (
                     <li
                       key={c.userId}
                       className="flex items-center gap-3 px-3 py-2"
                     >
-                      <span className="text-foreground min-w-0 flex-1 truncate text-sm">
+                      <span
+                        title={name}
+                        className="text-foreground min-w-0 flex-1 truncate text-sm"
+                      >
                         {name}
                       </span>
                       <Button
@@ -397,7 +400,7 @@ export function ShareFolderDialog({
         ) : (
           <ul className="bg-surface-muted/40 divide-border max-h-[min(50vh,20rem)] divide-y overflow-y-auto rounded-lg border">
             {data.members.map((m) => {
-              const name = m.fullName ?? "Unknown member";
+              const name = memberLabel(m);
               return (
                 <li
                   key={m.userId}
@@ -408,10 +411,13 @@ export function ShareFolderDialog({
                       <AvatarImage src={m.avatarUrl} alt="" />
                     ) : null}
                     <AvatarFallback className="bg-surface text-muted-foreground text-xs font-medium">
-                      {memberInitials(name) || "?"}
+                      {memberLabelInitials(m) || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
+                  <span
+                    title={name}
+                    className="text-foreground min-w-0 flex-1 truncate text-sm font-medium"
+                  >
                     {name}
                     {m.userId === data.myUserId ? (
                       <span className="text-muted-foreground font-normal">

@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
+import { labelInitials } from "@/lib/ui/member-label";
 import { STATUS_BG } from "@/components/ui/status-pill";
 
 export type WorkloadPerson = {
@@ -11,15 +12,6 @@ export type WorkloadPerson = {
 };
 /** Spec §5.5.1: constant in v1, configurable later. */
 export const OVERLOAD_THRESHOLD = 15;
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 /**
  * Open work per person. Bar length is open items scaled to the person with
@@ -66,10 +58,12 @@ export function WorkloadBars({
             <Avatar className="size-6">
               {p.avatarUrl ? <AvatarImage src={p.avatarUrl} alt="" /> : null}
               <AvatarFallback className="text-2xs">
-                {initials(p.name)}
+                {labelInitials(p.name) || "?"}
               </AvatarFallback>
             </Avatar>
-            <span className="w-32 truncate font-medium">{p.name}</span>
+            <span title={p.name} className="w-32 truncate font-medium">
+              {p.name}
+            </span>
             <div className="bg-surface-muted relative h-2 min-w-0 flex-1 overflow-hidden rounded-sm">
               <div
                 data-testid="workload-bar"

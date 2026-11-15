@@ -703,3 +703,58 @@ describe("ShareFolderDialog focus after a row goes away", () => {
     );
   });
 });
+
+describe("ShareFolderDialog member labels", () => {
+  it("shows email for nameless members and candidates, name only for named ones", async () => {
+    loadFolderAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        ...managerData,
+        members: [
+          {
+            userId: "u1",
+            fullName: "Dana Lee",
+            email: null,
+            avatarUrl: null,
+            level: "viewer",
+          },
+          {
+            userId: "u3",
+            fullName: null,
+            email: "pat.kim@x.com",
+            avatarUrl: null,
+            level: "editor",
+          },
+          {
+            userId: "u4",
+            fullName: null,
+            email: null,
+            avatarUrl: null,
+            level: "viewer",
+          },
+        ],
+        invitations: [],
+        candidates: [{ userId: "u2", fullName: null, email: "sam@x.com" }],
+      },
+    });
+    open();
+    const row = await screen.findByText("pat.kim@x.com");
+    expect(row).toHaveAttribute("title", "pat.kim@x.com");
+    expect(screen.getByText("Dana Lee")).toBeInTheDocument();
+    expect(screen.getByText("Unknown member")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Access for pat.kim@x.com"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove pat.kim@x.com" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Access for Dana Lee")).toBeInTheDocument();
+    await settled();
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value: "sam" },
+    });
+    expect(
+      screen.getByRole("button", { name: "Add sam@x.com" }),
+    ).toBeInTheDocument();
+  });
+});

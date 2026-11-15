@@ -123,3 +123,28 @@ describe("HeaderActions", () => {
     ).toHaveAttribute("href", "/ask?folder=f1");
   });
 });
+
+describe("HeaderActions avatar initials", () => {
+  it("uses the email's local part for a nameless member and the name otherwise", () => {
+    render(
+      <HeaderActions
+        {...base}
+        canExport
+        access={{ count: 3, memberIds: ["a", "b", "c"], canManage: false }}
+        members={[
+          {
+            userId: "a",
+            fullName: null,
+            email: "pat.kim@x.com",
+            avatarUrl: null,
+          },
+          { userId: "b", fullName: "Dana Lee", email: null, avatarUrl: null },
+          { userId: "c", fullName: null, email: null, avatarUrl: null },
+        ]}
+      />,
+    );
+    expect(screen.getByText("PK")).toBeInTheDocument();
+    expect(screen.getByText("DL")).toBeInTheDocument();
+    expect(screen.getByText("?")).toBeInTheDocument();
+  });
+});

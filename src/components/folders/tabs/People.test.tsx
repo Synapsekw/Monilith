@@ -122,3 +122,43 @@ describe("PeopleTab", () => {
     expect(getFolderWorkload).toHaveBeenCalledTimes(1); // stage switch = 0 new calls
   });
 });
+
+describe("member display fallback", () => {
+  const mixed = [
+    {
+      userId: "u1",
+      fullName: null,
+      email: "ada.lovelace@x.com",
+      avatarUrl: null,
+    },
+    { userId: "u2", fullName: "Grace Hopper", email: null, avatarUrl: null },
+  ];
+  it("labels a nameless member by email, a named one by name, a stranger Unknown member", () => {
+    const stranger = [...rows, { ...rows[2], userId: "gone" }];
+    const names = peopleFromWorkload(stranger, null, mixed).map((p) => p.name);
+    expect(names).toContain("ada.lovelace@x.com");
+    expect(names).toContain("Grace Hopper");
+    expect(names).toContain("Unknown member");
+  });
+
+  it("shows the email and its initials in who-owns-what", async () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <PeopleTab
+          folderId="f9"
+          stage={null}
+          members={mixed}
+          onWorkload={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const owners = await screen.findByTestId("owners-section");
+    expect(within(owners).getByText("ada.lovelace@x.com")).toHaveAttribute(
+      "title",
+      "ada.lovelace@x.com",
+    );
+    expect(within(owners).getByText("AL")).toBeInTheDocument();
+    expect(within(owners).queryByText("Unknown member")).toBeNull();
+  });
+});

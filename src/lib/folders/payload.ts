@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { labelEmail } from "@/lib/ui/member-label";
 import { localTodayISO } from "@/lib/boards/overdue";
 import type { Database } from "@/types/database.types";
 import { layoutNeedsBurn, resolveLayout } from "./layout";
@@ -68,6 +69,7 @@ export async function buildFolderPayload(
     members: members.map((m) => ({
       userId: m.userId,
       fullName: m.fullName,
+      email: labelEmail(m),
       avatarUrl: m.avatarUrl,
     })),
     access,
