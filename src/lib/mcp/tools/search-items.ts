@@ -2,7 +2,7 @@ import * as z from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { resolveOrgForScope } from "@/lib/mcp/org-scope";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 export const SEARCH_LIMIT = 20;
@@ -10,9 +10,9 @@ const FOLDER_BOARD_LIMIT = 200;
 
 const searchItemsInput = {
   query: z.string().trim().min(2).max(100),
-  orgId: z.string().uuid().optional(),
-  boardId: z.string().uuid().optional(),
-  folderId: z.string().uuid().optional(),
+  orgId: z.string().uuid().nullish(),
+  boardId: z.string().uuid().nullish(),
+  folderId: z.string().uuid().nullish(),
 };
 
 type Args = {
@@ -191,10 +191,10 @@ export async function searchItemsHandler(
 export const searchItemsDescriptor: ToolDescriptor = {
   name: "search_items",
   title: "Search items",
-  description: `Find items by name and by meaning across one board (boardId), one project folder (folderId) or the whole organization (neither). Returns at most ${SEARCH_LIMIT} items with their board and whether they matched on name or content. When \`semantic\` is false only names were searched.`,
+  description: `Find items by name and by meaning across one board (boardId), one project folder (folderId) or the whole organization (neither). boardId, folderId and orgId are optional: omit them (or pass null) to search everything the member can see, and never invent an id; use only ids returned by tools or given in context. Returns at most ${SEARCH_LIMIT} items with their board and whether they matched on name or content. When \`semantic\` is false only names were searched.`,
   inputSchema: searchItemsInput,
   capability: null,
   scope: "boardId",
   invoke: (ctx, input) =>
-    searchItemsHandler(ctx.getClient, ctx.actorId, input as Args),
+    searchItemsHandler(ctx.getClient, ctx.actorId, withoutNulls(input) as Args),
 };

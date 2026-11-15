@@ -2,7 +2,7 @@ import * as z from "zod";
 import { FOCUS_LIMIT, getFocusTodayCore } from "@/lib/focus/queries";
 import type { FocusTier } from "@/lib/focus/reason";
 import { resolveOrgForScope } from "@/lib/mcp/org-scope";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 const TIER_NAME: Record<FocusTier, string> = {
@@ -82,10 +82,10 @@ export async function getFocusTodayHandler(
 export const getFocusTodayDescriptor: ToolDescriptor = {
   name: "get_focus_today",
   title: "Get focus for today",
-  description: `What the connected user should work on first, already ranked: overdue, then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports null, meaning unknown, never 0). Pass folderId to limit it to one project. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
+  description: `What the connected user should work on first, already ranked: overdue, then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports null, meaning unknown, never 0). Both parameters are optional: call it with no arguments (or null) for everything the member can see. Pass folderId only to limit it to one project whose id you were given; never invent an id. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
   inputSchema: {
-    orgId: z.string().uuid().optional(),
-    folderId: z.string().uuid().optional(),
+    orgId: z.string().uuid().nullish(),
+    folderId: z.string().uuid().nullish(),
   },
   capability: null,
   scope: "none",
@@ -93,6 +93,6 @@ export const getFocusTodayDescriptor: ToolDescriptor = {
     getFocusTodayHandler(
       ctx.getClient,
       ctx.actorId,
-      input as { orgId?: string; folderId?: string },
+      withoutNulls(input) as { orgId?: string; folderId?: string },
     ),
 };

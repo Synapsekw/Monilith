@@ -65,11 +65,73 @@ describe("resolveOrgForScope", () => {
     expect(r).toEqual({ org: ORGS[1] });
   });
 
-  it("an explicit orgId wins and the board is not read", async () => {
-    const { client, reads } = scopeClient(tables);
-    const r = await resolveOrgForScope(client, { orgId: "o1", boardId: "b2" });
-    expect(r).toEqual({ org: ORGS[0] });
-    expect(reads).not.toContain("boards");
+  // Live-run defect A: the in-app assistant always pins orgId, and a model
+  // sent a made-up folderId. The row must be read even with an orgId given.
+  describe("with a pinned orgId the board or folder is still read", () => {
+    it("board in that org: the org", async () => {
+      const { client, reads } = scopeClient(tables);
+      const r = await resolveOrgForScope(client, {
+        orgId: "o2",
+        boardId: "b2",
+      });
+      expect(r).toEqual({ org: ORGS[1] });
+      expect(reads).toContain("boards");
+    });
+
+    it("folder in that org: the org", async () => {
+      const { client, reads } = scopeClient(tables);
+      const r = await resolveOrgForScope(client, {
+        orgId: "o2",
+        folderId: "f2",
+      });
+      expect(r).toEqual({ org: ORGS[1] });
+      expect(reads).toContain("folders");
+    });
+
+    it("an unreadable or made-up board is not found", async () => {
+      const { client } = scopeClient(tables);
+      expect(
+        await resolveOrgForScope(client, { orgId: "o2", boardId: "b-fake" }),
+      ).toEqual({ error: "Board not found." });
+    });
+
+    it("an unreadable or made-up folder is not found", async () => {
+      const { client } = scopeClient(tables);
+      expect(
+        await resolveOrgForScope(client, { orgId: "o2", folderId: "f-fake" }),
+      ).toEqual({ error: "Folder not found." });
+    });
+
+    it("a board in another org than the given one is refused", async () => {
+      const { client } = scopeClient(tables);
+      const r = await resolveOrgForScope(client, {
+        orgId: "o1",
+        boardId: "b2",
+      });
+      expect(r).toEqual({
+        error: "That board is not in organization o1.",
+      });
+    });
+
+    it("a folder in another org than the given one is refused", async () => {
+      const { client } = scopeClient(tables);
+      const r = await resolveOrgForScope(client, {
+        orgId: "o1",
+        folderId: "f2",
+      });
+      expect(r).toEqual({
+        error: "That folder is not in organization o1.",
+      });
+    });
+
+    it("a requested org the caller is not a member of is still refused", async () => {
+      const { client } = scopeClient(tables);
+      const r = await resolveOrgForScope(client, {
+        orgId: "o9",
+        boardId: "b2",
+      });
+      expect("error" in r && r.error).toMatch(/not a member/);
+    });
   });
 
   it("falls back to the first org when nothing scopes it", async () => {

@@ -104,26 +104,30 @@ export async function resolveOrgForTool(
 }
 
 /**
- * The org for a tool call scoped to a board or a project folder (review I2).
+ * The org for a tool call scoped to a board or a project folder.
  *
- * Without an `orgId`, `resolveOrgForTool` picks the caller's alphabetically
- * first org, so a board or folder in any other org would be filtered to an
- * empty result that reads exactly like "no match". When the call names a board
- * or folder and no org, the org is read from that row through the caller's own
- * RLS-scoped client: a row the caller cannot read comes back as "not found",
- * never as another org's answer. An explicit `orgId` still wins (and is still
- * checked for membership). A read failure throws, so the handler's catch
- * surfaces it instead of turning an outage into "not found".
+ * Review I2: without an `orgId`, `resolveOrgForTool` picks the caller's
+ * alphabetically first org, so a board or folder in any other org would be
+ * filtered to an empty result that reads exactly like "no match".
+ * Live-run defect A: the in-app assistant always pins `orgId`, and a model
+ * sent a made-up `folderId`; skipping the row read then filtered to a folder
+ * that does not exist and reported "nothing" as fact.
+ *
+ * So a given board or folder is ALWAYS read first, through the caller's own
+ * RLS-scoped client. A row the caller cannot read (or that does not exist) is
+ * "not found", the same message either way. A row in a different org than the
+ * given `orgId` is refused. Only then is the org resolved (and still checked
+ * for membership). A read failure throws, so the handler's catch surfaces it
+ * instead of turning an outage into "not found".
  */
 export async function resolveOrgForScope(
   supabase: SupabaseClient<Database>,
   scope: { orgId?: string; boardId?: string; folderId?: string },
 ): Promise<{ org: UserOrg } | { error: string }> {
-  if (scope.orgId || (!scope.boardId && !scope.folderId))
-    return resolveOrgForTool(supabase, scope.orgId);
-
-  let orgId: string | undefined;
+  let rowOrg: string | undefined;
+  let kind: "board" | "folder" | undefined;
   if (scope.boardId) {
+    kind = "board";
     const { data, error } = await supabase
       .from("boards")
       .select("org_id")
@@ -131,8 +135,9 @@ export async function resolveOrgForScope(
       .maybeSingle();
     if (error) throw new Error(`Failed to load board: ${error.message}`);
     if (!data) return { error: "Board not found." };
-    orgId = data.org_id;
+    rowOrg = data.org_id;
   } else if (scope.folderId) {
+    kind = "folder";
     const { data, error } = await supabase
       .from("folders")
       .select("org_id")
@@ -140,7 +145,14 @@ export async function resolveOrgForScope(
       .maybeSingle();
     if (error) throw new Error(`Failed to load folder: ${error.message}`);
     if (!data) return { error: "Folder not found." };
-    orgId = data.org_id;
+    rowOrg = data.org_id;
   }
-  return resolveOrgForTool(supabase, orgId);
+
+  const resolved = await resolveOrgForTool(supabase, scope.orgId ?? rowOrg);
+  if ("error" in resolved) return resolved;
+  if (rowOrg !== undefined && rowOrg !== resolved.org.id)
+    return {
+      error: `That ${kind} is not in organization ${resolved.org.id}.`,
+    };
+  return resolved;
 }

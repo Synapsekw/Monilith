@@ -125,6 +125,9 @@ function fixture(
       { id: "u2", timezone: null, full_name: "Ana Kovac", avatar_url: null },
       { id: "u1", timezone: "Asia/Tokyo", full_name: "Me", avatar_url: null },
     ],
+    // The scope rows the handler now always reads (live-run defect A).
+    boards: [{ id: "b1", org_id: "o1" }],
+    folders: [{ id: "f1", org_id: "o1" }],
     ...opts.tables,
   };
   const reads: string[] = [];
@@ -722,6 +725,89 @@ describe("queryItemsHandler org from scope (review I2)", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it("with the pinned org, a board in that org is queried (live-run defect A)", async () => {
+    const { rpc, getClient, reads } = fixture({
+      tables: { organizations: ORGS, boards: [{ id: "b2", org_id: "o2" }] },
+    });
+    await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o2", boardId: "b2" },
+      NOW,
+    );
+    expect(reads).toContain("boards");
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_org_id: "o2", p_board_id: "b2" }),
+    );
+  });
+
+  it("with the pinned org, a made-up folder is not found, never an empty list", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, folders: [{ id: "f2", org_id: "o2" }] },
+    });
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", folderId: "f-made-up" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe("Folder not found.");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("with the pinned org, a folder of another org is refused", async () => {
+    const { rpc, getClient } = fixture({
+      tables: { organizations: ORGS, folders: [{ id: "f2", org_id: "o2" }] },
+    });
+    const result = await queryItemsHandler(
+      getClient,
+      "u1",
+      { orgId: "o1", folderId: "f2" },
+      NOW,
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe("That folder is not in organization o1.");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("null optional fields behave like omitted ones (strict tool callers)", async () => {
+    const { rpc, getClient, reads } = fixture();
+    await queryItemsDescriptor.invoke({ getClient, actorId: "u1" } as never, {
+      orgId: "o1",
+      boardId: null,
+      folderId: null,
+      groupId: null,
+      assignee: null,
+      state: null,
+      overdue: null,
+      dueFrom: null,
+      dueTo: null,
+      updatedSince: null,
+      sort: null,
+      limit: null,
+      offset: null,
+      countBy: null,
+    });
+    expect(reads).not.toContain("boards");
+    expect(reads).not.toContain("folders");
+    expect(rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({
+        p_org_id: "o1",
+        p_board_id: null,
+        p_folder_id: null,
+        p_assignee: null,
+        p_unassigned: false,
+        p_state: "open",
+        p_sort: "due",
+        p_limit: QUERY_LIMIT,
+        p_offset: 0,
+      }),
+    );
+  });
+
   it("says the folder is not found when the caller cannot read it", async () => {
     const { rpc, getClient } = fixture({
       tables: { organizations: ORGS, folders: [] },
@@ -891,6 +977,17 @@ describe("queryItemsHandler assignee by name (review I4)", () => {
 });
 
 describe("queryItemsDescriptor", () => {
+  it("accepts null for every optional field and says to omit, not invent, ids", () => {
+    const schema = z.object(queryItemsDescriptor.inputSchema);
+    const allNull = Object.fromEntries(
+      Object.keys(queryItemsDescriptor.inputSchema).map((k) => [k, null]),
+    );
+    expect(schema.safeParse(allNull).success).toBe(true);
+    const d = queryItemsDescriptor.description;
+    expect(d).toMatch(/optional/i);
+    expect(d).toMatch(/never invent/i);
+  });
+
   it("tells the agent how counts and paging behave", () => {
     const d = queryItemsDescriptor.description;
     expect(d).toMatch(/once per assignee/);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 
 const semanticSearchCore = vi.fn();
 vi.mock("@/lib/ai/embeddings/semantic-core", () => ({
@@ -492,7 +493,7 @@ describe("searchItemsHandler org from scope (review I2)", () => {
     expect(semanticSearchCore).not.toHaveBeenCalled();
   });
 
-  it("an explicit orgId still wins over the board's org", async () => {
+  it("a board outside the given orgId is refused, not searched empty", async () => {
     const fake = fakeClient({
       organizations: ORGS,
       boards: [{ id: "b2", org_id: "o2" }],
@@ -505,12 +506,62 @@ describe("searchItemsHandler org from scope (review I2)", () => {
       boardId: "b2",
     });
 
-    expect(ids(res)).toEqual([]);
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe("That board is not in organization o1.");
+    expect(fake.reads("items")).toHaveLength(0);
+  });
+
+  it("a made-up folderId with a pinned org is not found (live-run defect A)", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      folders: [],
+      items: [item("i1", "Vendor contract", "b1", LIVE)],
+    });
+
+    const res = await searchItemsHandler(fake.getClient, "u1", {
+      query: "contract",
+      orgId: "o1",
+      folderId: "00000000-0000-4000-8000-000000000000",
+    });
+
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe("Folder not found.");
+    expect(fake.reads("items")).toHaveLength(0);
+  });
+
+  it("null scope fields behave like omitted ones (strict tool callers)", async () => {
+    const fake = fakeClient({
+      organizations: ORGS,
+      items: [item("i1", "Vendor contract", "b1", LIVE)],
+    });
+
+    const res = await searchItemsDescriptor.invoke(
+      { getClient: fake.getClient, actorId: "u1" } as never,
+      { query: "contract", orgId: "o1", boardId: null, folderId: null },
+    );
+
+    expect(ids(res)).toEqual(["i1"]);
     expect(fake.reads("boards")).toHaveLength(0);
+    expect(fake.reads("folders")).toHaveLength(0);
   });
 });
 
 describe("searchItemsDescriptor", () => {
+  it("accepts null for every optional field and says to omit, not invent, ids", () => {
+    const schema = z.object(searchItemsDescriptor.inputSchema);
+    expect(
+      schema.safeParse({
+        query: "contract",
+        orgId: null,
+        boardId: null,
+        folderId: null,
+      }).success,
+    ).toBe(true);
+    const d = searchItemsDescriptor.description;
+    expect(d).toMatch(/optional/i);
+    expect(d).toMatch(/never invent/i);
+  });
+
   it("declares the cross-board input shape and a board scope", () => {
     expect(Object.keys(searchItemsDescriptor.inputSchema).sort()).toEqual([
       "boardId",

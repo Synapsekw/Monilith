@@ -7,7 +7,7 @@ import {
 } from "@/lib/mcp/org-scope";
 import { todayInTimeZone } from "@/lib/focus/today";
 import { effectiveTimeZone } from "@/lib/datetime/timezone";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 import { nameMap, personName } from "./names";
 
@@ -17,22 +17,22 @@ export const QUERY_MAX_OFFSET = 1000;
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
 
 const input = {
-  orgId: z.string().uuid().optional(),
-  boardId: z.string().uuid().optional(),
-  folderId: z.string().uuid().optional(),
-  groupId: z.string().uuid().optional(),
+  orgId: z.string().uuid().nullish(),
+  boardId: z.string().uuid().nullish(),
+  folderId: z.string().uuid().nullish(),
+  groupId: z.string().uuid().nullish(),
   // "me", "unassigned", a user id, or a person's name (resolved in the handler
   // against the org's members, so a name never silently matches nothing).
-  assignee: z.string().trim().min(1).max(200).optional(),
-  state: z.enum(["open", "done", "any"]).optional(),
-  overdue: z.boolean().optional(),
-  dueFrom: isoDate.optional(),
-  dueTo: isoDate.optional(),
-  updatedSince: z.string().datetime({ offset: true }).optional(),
-  sort: z.enum(["due", "updated"]).optional(),
-  limit: z.number().int().min(1).max(QUERY_LIMIT).optional(),
-  offset: z.number().int().min(0).max(QUERY_MAX_OFFSET).optional(),
-  countBy: z.enum(["board", "assignee", "status"]).optional(),
+  assignee: z.string().trim().min(1).max(200).nullish(),
+  state: z.enum(["open", "done", "any"]).nullish(),
+  overdue: z.boolean().nullish(),
+  dueFrom: isoDate.nullish(),
+  dueTo: isoDate.nullish(),
+  updatedSince: z.string().datetime({ offset: true }).nullish(),
+  sort: z.enum(["due", "updated"]).nullish(),
+  limit: z.number().int().min(1).max(QUERY_LIMIT).nullish(),
+  offset: z.number().int().min(0).max(QUERY_MAX_OFFSET).nullish(),
+  countBy: z.enum(["board", "assignee", "status"]).nullish(),
 };
 
 export type QueryItemsArgs = {
@@ -272,10 +272,14 @@ export async function queryItemsHandler(
 export const queryItemsDescriptor: ToolDescriptor = {
   name: "query_items",
   title: "Query items",
-  description: `Filtered read of items across one board (boardId), one project folder (folderId) or the whole organization. Filters: assignee ("me", "unassigned", a user id, or a person's name such as "Ana" or "Ana Kovac"; a name that matches several members or none returns the candidates with their user ids, so ask which one is meant), state (open by default, done, any), overdue, dueFrom/dueTo, updatedSince, groupId. Sort by due date (default) or last change. Returns at most ${QUERY_LIMIT} items plus \`total\`, the number of items matching the filter; pass \`nextOffset\` back as \`offset\` for more (paging stops at offset ${QUERY_MAX_OFFSET}; then \`truncated\` is set, so narrow the filter). Set countBy (board, assignee or status) to get counts instead of items, which is the right call for "how many" and "how is it spread" questions. Assignee counts count an item once per assignee, so they can add up to more than \`total\`; unassigned items are counted under "Unassigned". Status counts merge statuses with the same name across boards. Counts list at most 100 groups. Prefer this over paging list_items.`,
+  description: `Filtered read of items across one board (boardId), one project folder (folderId) or the whole organization. Every parameter is optional: omit boardId, folderId and orgId (or pass null) to cover everything the member can see, and never invent an id; use only ids returned by tools or given in context. Filters: assignee ("me", "unassigned", a user id, or a person's name such as "Ana" or "Ana Kovac"; a name that matches several members or none returns the candidates with their user ids, so ask which one is meant), state (open by default, done, any), overdue, dueFrom/dueTo, updatedSince, groupId. Sort by due date (default) or last change. Returns at most ${QUERY_LIMIT} items plus \`total\`, the number of items matching the filter; pass \`nextOffset\` back as \`offset\` for more (paging stops at offset ${QUERY_MAX_OFFSET}; then \`truncated\` is set, so narrow the filter). Set countBy (board, assignee or status) to get counts instead of items, which is the right call for "how many" and "how is it spread" questions. Assignee counts count an item once per assignee, so they can add up to more than \`total\`; unassigned items are counted under "Unassigned". Status counts merge statuses with the same name across boards. Counts list at most 100 groups. Prefer this over paging list_items.`,
   inputSchema: input,
   capability: null,
   scope: "none",
   invoke: (ctx, raw) =>
-    queryItemsHandler(ctx.getClient, ctx.actorId, raw as QueryItemsArgs),
+    queryItemsHandler(
+      ctx.getClient,
+      ctx.actorId,
+      withoutNulls(raw) as QueryItemsArgs,
+    ),
 };

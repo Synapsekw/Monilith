@@ -68,6 +68,17 @@ describe("ASSISTANT_PREAMBLE tool references", () => {
     expect(ASSISTANT_PREAMBLE).toContain("get_item_thread");
   });
 
+  it("calls get_focus_today with no arguments unless a known folder is named (live-run defect A)", () => {
+    const line = ASSISTANT_PREAMBLE.split("\n").find((l) =>
+      l.includes("call get_focus_today"),
+    );
+    expect(line).toMatch(/with no arguments/);
+    expect(line).toMatch(/folderId/);
+    expect(line).toMatch(/never invent/i);
+    const tool = ALL_TOOL_DESCRIPTORS.find((d) => d.name === "get_focus_today");
+    expect(Object.keys(tool!.inputSchema)).toContain("folderId");
+  });
+
   it("says query_items takes a person's name as assignee (review I4)", () => {
     const line = ASSISTANT_PREAMBLE.split("\n").find((l) =>
       l.includes("call query_items"),
