@@ -134,6 +134,26 @@ describe("WorkTrackingDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("previews the label guess for an explicitly chosen column while nothing is ticked", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.selectOptions(screen.getByLabelText("Status column"), STATUS_ID);
+    expect(screen.getByText(/currently treated as done/i)).toHaveTextContent(
+      /^Currently treated as done: Done, Completed$/,
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Working" }));
+    expect(screen.queryByText(/currently treated as done/i)).toBeNull();
+    await user.selectOptions(
+      screen.getByLabelText("Status column"),
+      OTHER_STATUS_ID,
+    );
+    expect(
+      screen.getByText(
+        "No option looks like done yet, so every item counts as open.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("offers only status columns as status and only date columns as due", () => {
     setup();
     const status = screen.getByLabelText("Status column");

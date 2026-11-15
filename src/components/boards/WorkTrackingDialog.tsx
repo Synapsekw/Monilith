@@ -50,6 +50,26 @@ function optionsOf(column: WorkTrackingColumn | undefined): Option[] {
     .map((o) => ({ id: o.id, label: o.label, color: o.color }));
 }
 
+function guessedDoneOptions(column: WorkTrackingColumn | undefined): Option[] {
+  return optionsOf(column).filter((o) => looksDoneLabel(o.label));
+}
+
+function GuessedDonePreview({
+  options,
+  className,
+}: {
+  options: Option[];
+  className: string;
+}) {
+  return (
+    <p className={cn("text-muted-foreground", className)}>
+      {options.length > 0
+        ? `Currently treated as done: ${options.map((o) => o.label).join(", ")}`
+        : "No option looks like done yet, so every item counts as open."}
+    </p>
+  );
+}
+
 function byPosition(kind: string, columns: WorkTrackingColumn[]) {
   return columns
     .filter((c) => c.kind === kind)
@@ -149,9 +169,7 @@ function WorkTrackingForm({
   // The same guesses public.item_facts makes, so "Automatic" shows what
   // Today and the assistant will actually use.
   const guessedStatus = guessStatusColumn(columns);
-  const guessedDone = optionsOf(guessedStatus).filter((o) =>
-    looksDoneLabel(o.label),
-  );
+  const guessedDone = guessedDoneOptions(guessedStatus);
   const guessedDue = guessDueColumn(columns);
 
   function changeStatus(next: string) {
@@ -255,18 +273,17 @@ function WorkTrackingForm({
                   Leave all unticked to treat options named like Done, Complete
                   or Cancelled as done.
                 </p>
+                {/* Nothing ticked: the view applies the label guess within
+                    the chosen column, so preview it here too. */}
+                {doneIds.length === 0 ? (
+                  <GuessedDonePreview
+                    options={guessedDoneOptions(chosenStatus)}
+                    className="text-xs"
+                  />
+                ) : null}
               </>
             ) : (
-              <p className="text-muted-foreground text-sm">
-                {guessedDone.length > 0 ? (
-                  <>
-                    Currently treated as done:{" "}
-                    {guessedDone.map((o) => o.label).join(", ")}
-                  </>
-                ) : (
-                  "No option looks like done yet, so every item counts as open."
-                )}
-              </p>
+              <GuessedDonePreview options={guessedDone} className="text-sm" />
             )}
           </fieldset>
         </>
