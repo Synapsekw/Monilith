@@ -327,12 +327,19 @@ export function AskChat({
   // armed a sessionStorage token (consumed here, so Back/remount cannot send
   // again and a bare `?start=` URL never does). The ref keeps a StrictMode
   // double-mount from consuming twice.
+  //
+  // The URL is deliberately NOT rewritten here: the turn's own pushState to
+  // /ask/<id> does that, exactly as for a typed first message. Stripping
+  // `?start` first (replaceState "/ask") left the router's canonical URL
+  // without the search its rendered page segment is keyed on, so the
+  // createConversation action's revalidation re-rendered a different page
+  // segment and swapped the streaming chat out for an empty one (live-run
+  // defect B). The token, not the URL, is what stops a second send.
   const autoSent = useRef(false);
   useEffect(() => {
     if (!autoSend || conversationId || autoSent.current) return;
     autoSent.current = true;
     if (!consumeAskStart(autoSend)) return;
-    window.history.replaceState(null, "", "/ask");
     void onSubmit(autoSend);
     // Mount-only by design: `onSubmit` closes over fresh state every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
