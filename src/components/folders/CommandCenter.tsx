@@ -7,6 +7,7 @@ import { MetaChip } from "@/components/ui/meta-chip";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildStages } from "@/lib/folders/stages";
 import { filterRows } from "@/lib/folders/rollup";
+import { burnRowsOf } from "@/lib/folders/packed";
 import { canvasSections } from "@/lib/folders/layout";
 import type { PresetKey } from "@/lib/folders/presets";
 import type { FolderPayload, WorkloadRow } from "@/lib/folders/types";
@@ -62,6 +63,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
     useCommandCenterState(tabIds);
   const activeTab = layoutTabs.find((t) => t.id === tab);
   const canExport = activeTab?.kind === "canvas";
+  const peopleTabId = layoutTabs.find((t) => t.kind === "people")?.id ?? null;
 
   function handleCancel() {
     draft.revert();
@@ -77,6 +79,13 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
     setPresetChoice(key);
   }
   const rollup = useMemo(() => payload.rollup ?? [], [payload.rollup]);
+  // The server ships folder_burn_packed's non-zero cells; expand them ONCE
+  // here so every consumer (KPI trends, burn panel, Stages chart, forecast)
+  // keeps receiving the same dense BurnRow[]. Null = not requested / failed.
+  const burn = useMemo(
+    () => burnRowsOf(payload.burnPacked),
+    [payload.burnPacked],
+  );
   const stages = useMemo(
     () => buildStages(rollup, payload.todayISO),
     [rollup, payload.todayISO],
@@ -113,7 +122,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
   const people =
     workload === null
       ? null
-      : peopleFromWorkload(workload, stage, payload.members);
+      : peopleFromWorkload(workload, stage, payload.members, board);
   const counts = {
     stages: stages.length,
     boards: payload.boards.length,
@@ -194,7 +203,7 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               stages={stageTabStages}
               stage={stage}
               board={board}
-              burn={payload.burn}
+              burn={burn}
               boards={stageTabBoards}
               todayISO={payload.todayISO}
               onSelectStage={setStage}
@@ -221,12 +230,14 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
             <PeopleTab
               folderId={payload.folder.id}
               stage={stage}
+              board={board}
               members={payload.members}
               onWorkload={onWorkload}
             />
           ) : (
             <OverviewTab
               payload={payload}
+              burn={burn}
               rows={rows}
               stages={buildStages(rows, payload.todayISO)}
               stage={stage}
@@ -240,6 +251,9 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
               onSetSectionWidth={draft.setWidth}
               onRenameSection={draft.rename}
               onSetKpiCards={draft.setCards}
+              onSeeAllPeople={
+                peopleTabId === null ? undefined : () => setTab(peopleTabId)
+              }
             />
           )}
         </>

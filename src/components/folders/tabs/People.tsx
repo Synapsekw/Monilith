@@ -13,35 +13,41 @@ import {
   WorkloadBars,
   type WorkloadPerson,
 } from "@/components/folders/charts/WorkloadBars";
+import { labelInitials, memberLabel } from "@/lib/ui/member-label";
 import type { FolderMember, WorkloadRow } from "@/lib/folders/types";
 
 export const workloadKey = (folderId: string) =>
   ["folder-workload", folderId] as const;
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+/** True when a workload row is inside the stage and board filters. */
+export function inWorkloadScope(
+  r: WorkloadRow,
+  stage: string | null,
+  board: string | null = null,
+): boolean {
+  return (
+    (stage === null || r.stageKey === stage) &&
+    (board === null || r.boardId === board)
+  );
 }
 
-/** Per-person totals for the selected stage; the null (unassigned) row is excluded. */
+/** Per-person totals for the selected stage and board; the null (unassigned)
+ *  row is excluded. Filtering is client-side over the cached rows. */
 export function peopleFromWorkload(
   rows: WorkloadRow[],
   stage: string | null,
   members: FolderMember[],
+  board: string | null = null,
 ): WorkloadPerson[] {
   const byId = new Map(members.map((m) => [m.userId, m]));
   const acc = new Map<string, WorkloadPerson>();
   for (const r of rows) {
     if (r.userId === null) continue;
-    if (stage !== null && r.stageKey !== stage) continue;
+    if (!inWorkloadScope(r, stage, board)) continue;
     const m = byId.get(r.userId);
     const cur = acc.get(r.userId) ?? {
       userId: r.userId,
-      name: m?.fullName ?? "Unknown member",
+      name: memberLabel(m ?? { fullName: null }),
       avatarUrl: m?.avatarUrl ?? null,
       open: 0,
       overdue: 0,
@@ -57,16 +63,20 @@ export function peopleFromWorkload(
 
 /**
  * Spec §6: folder_workload is fetched ONCE on first open (Server Action →
- * TanStack Query, staleTime 60 s); stage switches re-derive from the cache.
+ * TanStack Query, staleTime 60 s); stage and board switches re-derive from
+ * the cache.
  */
 export function PeopleTab({
   folderId,
   stage,
+  board = null,
   members,
   onWorkload,
 }: {
   folderId: string;
   stage: string | null;
+  /** The active board filter; applied to every section here. */
+  board?: string | null;
   members: FolderMember[];
   onWorkload: (rows: WorkloadRow[]) => void;
 }) {
@@ -92,7 +102,7 @@ export function PeopleTab({
     );
 
   const rows = q.data;
-  const people = peopleFromWorkload(rows, stage, members);
+  const people = peopleFromWorkload(rows, stage, members, board);
   const byId = new Map(members.map((m) => [m.userId, m]));
   const owns = new Map<
     string,
@@ -100,7 +110,7 @@ export function PeopleTab({
   >();
   for (const r of rows) {
     if (r.userId === null) continue;
-    if (stage !== null && r.stageKey !== stage) continue;
+    if (!inWorkloadScope(r, stage, board)) continue;
     const cur = owns.get(r.userId) ?? {
       boards: new Set<string>(),
       open: 0,
@@ -112,7 +122,7 @@ export function PeopleTab({
     owns.set(r.userId, cur);
   }
   const unassigned = rows.filter(
-    (r) => r.userId === null && (stage === null || r.stageKey === stage),
+    (r) => r.userId === null && inWorkloadScope(r, stage, board),
   );
 
   return (
@@ -125,10 +135,11 @@ export function PeopleTab({
           <Kicker>01</Kicker>
           <h2 className="text-sm font-semibold">Workload</h2>
           <p className="text-muted-foreground text-xs">
-            Open items per person · red above {OVERLOAD_THRESHOLD}
+            Open items per person · late share in red · flagged over{" "}
+            {OVERLOAD_THRESHOLD}
           </p>
         </div>
-        <WorkloadBars people={people} />
+        <WorkloadBars people={people} stage={stage} />
       </section>
       <section
         data-testid="owners-section"
@@ -143,16 +154,19 @@ export function PeopleTab({
         ) : (
           <ul className="divide-y text-xs">
             {[...owns.entries()].map(([userId, o]) => {
-              const name = byId.get(userId)?.fullName ?? "Unknown member";
+              const name = memberLabel(byId.get(userId) ?? { fullName: null });
               const boards = [...o.boards].sort().join(", ");
               return (
                 <li key={userId} className="flex items-center gap-2 py-2">
                   <Avatar className="size-6 shrink-0">
                     <AvatarFallback className="text-2xs">
-                      {initials(name)}
+                      {labelInitials(name) || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="w-28 shrink-0 truncate font-medium">
+                  <span
+                    title={name}
+                    className="w-28 shrink-0 truncate font-medium"
+                  >
                     {name}
                   </span>
                   <span className="text-muted-foreground min-w-0 flex-1 truncate">

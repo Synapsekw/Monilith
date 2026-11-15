@@ -235,3 +235,26 @@ describe("ShareBoardDialog", () => {
     );
   });
 });
+
+describe("ShareBoardDialog nameless folder grantees", () => {
+  it("shows the email of a rostered nameless grantee and Unknown member for one outside the roster", async () => {
+    loadBoardFolderGrants.mockResolvedValue({
+      ok: true,
+      data: [
+        { userId: "u9", access: "viewer", folderName: "DAAS" },
+        { userId: "gone", access: "editor", folderName: "DAAS" },
+      ],
+    });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={[{ userId: "u9", fullName: null, email: "pat@x.com" }]}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(await screen.findByText("pat@x.com")).toBeInTheDocument();
+    expect(screen.getByText("Unknown member")).toBeInTheDocument();
+  });
+});

@@ -121,4 +121,89 @@ describe("PeopleTab", () => {
     ).toBeNull();
     expect(getFolderWorkload).toHaveBeenCalledTimes(1); // stage switch = 0 new calls
   });
+
+  it("applies the board filter to every section, from the cache", async () => {
+    const qc = new QueryClient();
+    const ui = (board: string | null) => (
+      <QueryClientProvider client={qc}>
+        <PeopleTab
+          folderId="f1"
+          stage={null}
+          board={board}
+          members={members}
+          onWorkload={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const calls = vi.mocked(getFolderWorkload).mock.calls.length;
+    const { rerender } = render(ui(null));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: /Unassigned · 2 open/ }),
+      ).toBeInTheDocument(),
+    );
+    rerender(ui("b1"));
+    const owners = screen.getByTestId("owners-section");
+    // Ada's Mobile row drops out; only Backend remains.
+    expect(within(owners).getAllByText("Backend")).toHaveLength(2);
+    expect(within(owners).queryByText("Backend, Mobile")).toBeNull();
+    expect(within(owners).getByText("16 open · 2 overdue")).toBeInTheDocument();
+    // The only unassigned row is on Mobile.
+    expect(screen.queryByRole("link", { name: /Unassigned/ })).toBeNull();
+    expect(
+      screen.getByText("Every open item has an owner."),
+    ).toBeInTheDocument();
+    expect(vi.mocked(getFolderWorkload).mock.calls.length).toBe(calls + 1);
+  });
+});
+
+describe("peopleFromWorkload board filter", () => {
+  it("keeps only the selected board's rows", () => {
+    expect(
+      peopleFromWorkload(rows, null, members, "b2").map((p) => [
+        p.name,
+        p.open,
+      ]),
+    ).toEqual([["Ada Lovelace", 1]]);
+  });
+});
+
+describe("member display fallback", () => {
+  const mixed = [
+    {
+      userId: "u1",
+      fullName: null,
+      email: "ada.lovelace@x.com",
+      avatarUrl: null,
+    },
+    { userId: "u2", fullName: "Grace Hopper", email: null, avatarUrl: null },
+  ];
+  it("labels a nameless member by email, a named one by name, a stranger Unknown member", () => {
+    const stranger = [...rows, { ...rows[2], userId: "gone" }];
+    const names = peopleFromWorkload(stranger, null, mixed).map((p) => p.name);
+    expect(names).toContain("ada.lovelace@x.com");
+    expect(names).toContain("Grace Hopper");
+    expect(names).toContain("Unknown member");
+  });
+
+  it("shows the email and its initials in who-owns-what", async () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <PeopleTab
+          folderId="f9"
+          stage={null}
+          members={mixed}
+          onWorkload={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const owners = await screen.findByTestId("owners-section");
+    expect(within(owners).getByText("ada.lovelace@x.com")).toHaveAttribute(
+      "title",
+      "ada.lovelace@x.com",
+    );
+    expect(within(owners).getByText("AL")).toBeInTheDocument();
+    expect(within(owners).queryByText("Unknown member")).toBeNull();
+  });
 });

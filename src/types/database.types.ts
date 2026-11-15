@@ -5208,11 +5208,14 @@ export type Database = {
         Args: { p_folder_id: string };
         Returns: {
           completed: number;
+          imported_done: number;
+          overdue_open: number;
           planned: number;
           stage_key: string;
           week_start: string;
         }[];
       };
+      folder_burn_packed: { Args: { p_folder_id: string }; Returns: Json };
       folder_gallery: {
         Args: { p_workspace_id: string };
         Returns: {
@@ -5235,6 +5238,14 @@ export type Database = {
           id: string;
           state: string;
         }[];
+      };
+      folder_load: {
+        Args: {
+          p_folder_id: string;
+          p_weeks_ahead?: number;
+          p_weeks_back?: number;
+        };
+        Returns: Json;
       };
       folder_rollup: {
         Args: { p_folder_id: string };

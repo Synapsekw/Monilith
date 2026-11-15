@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Printer, Settings2, Sparkles, UserPlus, Users } from "lucide-react";
-import { memberInitials } from "@/lib/ui/initials";
+import { memberLabelInitials } from "@/lib/ui/member-label";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { FolderAccessHead } from "@/lib/folders/sharing-types";
@@ -22,6 +22,7 @@ const STACK = 3;
 type HeaderMember = {
   userId: string;
   fullName: string | null;
+  email?: string | null;
   avatarUrl: string | null;
 };
 
@@ -75,7 +76,7 @@ export function HeaderActions({
                 />
               ) : null}
               <AvatarFallback className="bg-surface-muted text-muted-foreground text-3xs font-medium">
-                {memberInitials(byId.get(id)?.fullName ?? "") || "?"}
+                {memberLabelInitials(byId.get(id) ?? { fullName: null }) || "?"}
               </AvatarFallback>
             </Avatar>
           ))}

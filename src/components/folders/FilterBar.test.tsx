@@ -25,6 +25,30 @@ const stage = (i: number): StageSummary => ({
 });
 const stages = (n: number) => Array.from({ length: n }, (_, i) => stage(i + 1));
 
+describe("FilterBar hint", () => {
+  const bar = (itemCount: number, boardCount: number) => (
+    <FilterBar
+      stages={[]}
+      boards={Array.from({ length: boardCount }, (_, i) => ({
+        id: `b${i}`,
+        name: `Board ${i}`,
+        position: i,
+      }))}
+      stage={null}
+      board={null}
+      itemCount={itemCount}
+      onStage={vi.fn()}
+      onBoard={vi.fn()}
+    />
+  );
+  it("pluralises items and boards", () => {
+    const { rerender } = render(bar(1, 1));
+    expect(screen.getByText("1 item · 1 board")).toBeInTheDocument();
+    rerender(bar(0, 2));
+    expect(screen.getByText("0 items · 2 boards")).toBeInTheDocument();
+  });
+});
+
 function renderBar(count: number, selected: string | null = null) {
   const onStage = vi.fn();
   render(

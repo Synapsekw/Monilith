@@ -7,6 +7,7 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { folderMembersTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { labelEmail } from "@/lib/ui/member-label";
 import {
   folderAccessSchema,
   inviteToFolderSchema,
@@ -104,6 +105,9 @@ export async function loadFolderAccess(
       members: (membersRes.data ?? []).map((r) => ({
         userId: r.user_id,
         fullName: byId.get(r.user_id)?.fullName ?? null,
+        email: labelEmail(
+          byId.get(r.user_id) ?? { fullName: null, email: null },
+        ),
         avatarUrl: byId.get(r.user_id)?.avatarUrl ?? null,
         level: r.access_level === "editor" ? "editor" : "viewer",
       })),
@@ -119,7 +123,11 @@ export async function loadFolderAccess(
       candidates: canManage
         ? roster
             .filter((m) => !memberIds.has(m.userId))
-            .map((m) => ({ userId: m.userId, fullName: m.fullName }))
+            .map((m) => ({
+              userId: m.userId,
+              fullName: m.fullName,
+              email: labelEmail(m),
+            }))
         : [],
     },
   };

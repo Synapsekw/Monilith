@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
+import { memberLabel } from "@/lib/ui/member-label";
 import { cn } from "@/lib/utils";
 
 type Member = { userId: string; fullName: string | null; email: string | null };
@@ -141,7 +142,7 @@ export function ShareBoardDialog({
         ) : (
           <div className="bg-surface-muted/40 divide-border max-h-[min(60vh,22rem)] divide-y overflow-y-auto rounded-lg border">
             {members.map((m) => {
-              const name = m.fullName ?? m.email ?? "Unknown member";
+              const name = memberLabel(m);
               const current = access.get(m.userId) ?? "none";
               const secondary = m.fullName ? m.email : null;
               const folder = viaFolder.get(m.userId);
@@ -218,7 +219,7 @@ export function ShareBoardDialog({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="text-foreground block truncate text-sm font-medium">
-                    Unknown member
+                    {memberLabel({ fullName: null })}
                   </span>
                   <span className="text-muted-foreground block truncate text-xs">
                     Through folder {g.folderName} ·{" "}

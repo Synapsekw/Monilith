@@ -5,6 +5,7 @@ import {
   resolveFolderAttention,
   resolveFolderBurn,
   resolveFolderGallery,
+  resolveFolderLoad,
   resolveFolderRollup,
   resolveFolderTimeline,
   resolveFolderWorkload,
@@ -115,42 +116,113 @@ describe("resolveFolderRollup", () => {
   });
 });
 
+/** A packed burn value: window 2026-09-07..2026-09-14 (2 weeks), one stage. */
+const packedBurn = {
+  lo: "2026-09-07",
+  hi: "2026-09-14",
+  stages: ["build"],
+  rows: [[0, 0, 4, 2, 3, 5]],
+};
+
 describe("resolveFolderBurn", () => {
-  it("calls folder_burn and camel-cases the row", async () => {
+  it("calls folder_burn_packed ONCE and returns the validated value still packed", async () => {
+    const client = clientWith(async () => ({ data: packedBurn, error: null }));
+    const res = await resolveFolderBurn(client, "f1");
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(client.rpc).toHaveBeenCalledWith("folder_burn_packed", {
+      p_folder_id: "f1",
+    });
+    // Shipped to the browser as is; the client expands it (burnRowsOf).
+    expect(res).toEqual({ ok: true, packed: packedBurn });
+  });
+
+  it("returns no rows for a folder with no window", async () => {
     const client = clientWith(async () => ({
-      data: [
-        {
-          stage_key: "build",
-          week_start: "2026-09-07",
-          planned: 4,
-          completed: 2,
-        },
-      ],
+      data: { lo: null, hi: null, stages: [], rows: [] },
       error: null,
     }));
-    const res = await resolveFolderBurn(client, "f1");
-    expect(client.rpc).toHaveBeenCalledWith("folder_burn", {
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: true,
+      packed: { lo: null, hi: null, stages: [], rows: [] },
+    });
+  });
+
+  it("maps an RPC error to the data error", async () => {
+    const client = clientWith(async () => ({
+      data: null,
+      error: { message: "boom" },
+    }));
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_DATA_ERROR,
+    });
+  });
+
+  it("maps P0002 to the folder-gone message", async () => {
+    const client = clientWith(async () => ({
+      data: null,
+      error: { code: "P0002", message: "x" },
+    }));
+    expect(await resolveFolderBurn(client, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_GONE_ERROR,
+    });
+  });
+
+  it("fails closed on a malformed value, never a partial chart", async () => {
+    for (const data of [
+      null,
+      [],
+      { lo: "2026-09-07" },
+      { ...packedBurn, rows: [[0, 9, 1, 1, 0, 0]] },
+    ]) {
+      const client = clientWith(async () => ({ data, error: null }));
+      expect(await resolveFolderBurn(client, "f1")).toEqual({
+        ok: false,
+        error: FOLDER_DATA_ERROR,
+      });
+    }
+  });
+});
+
+describe("resolveFolderLoad", () => {
+  const packedLoad = {
+    weeks: ["2026-09-14"],
+    rows: [["b1", "build", "2026-09-14", 3]],
+  };
+
+  it("calls folder_load once and unpacks the rows with the server's weeks", async () => {
+    const client = clientWith(async () => ({ data: packedLoad, error: null }));
+    const res = await resolveFolderLoad(client, "f1");
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(client.rpc).toHaveBeenCalledWith("folder_load", {
       p_folder_id: "f1",
     });
     expect(res).toEqual({
       ok: true,
+      weeks: ["2026-09-14"],
       rows: [
         {
+          boardId: "b1",
           stageKey: "build",
-          weekStart: "2026-09-07",
-          planned: 4,
-          completed: 2,
+          weekStart: "2026-09-14",
+          openDue: 3,
         },
       ],
     });
   });
 
-  it("rejects a row with a missing/renamed column", async () => {
-    const client = clientWith(async () => ({
-      data: [{ stage_key: "build", week_start: "2026-09-07", planned: 4 }],
-      error: null,
+  it("maps an RPC error and a malformed value to the data error", async () => {
+    const err = clientWith(async () => ({
+      data: null,
+      error: { message: "boom" },
     }));
-    expect(await resolveFolderBurn(client, "f1")).toEqual({
+    expect(await resolveFolderLoad(err, "f1")).toEqual({
+      ok: false,
+      error: FOLDER_DATA_ERROR,
+    });
+    const bad = clientWith(async () => ({ data: { weeks: 1 }, error: null }));
+    expect(await resolveFolderLoad(bad, "f1")).toEqual({
       ok: false,
       error: FOLDER_DATA_ERROR,
     });

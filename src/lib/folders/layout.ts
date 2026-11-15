@@ -54,6 +54,8 @@ export function canvasSections(
  * section AND the Stages tab's own chart (`tabs/Stages.tsx`). Gating on the
  * section alone would leave a folder that kept its stages tab rendering a
  * permanently failed chart.
+ * A layout with KPI cards but no burn section and no stages tab deliberately
+ * skips the read, so its KPI cards show no trends.
  */
 export function layoutNeedsBurn(config: FolderLayoutConfig): boolean {
   return config.tabs.some(
@@ -62,5 +64,16 @@ export function layoutNeedsBurn(config: FolderLayoutConfig): boolean {
       (t.sections ?? []).some(
         (s) => s.type === "builtin" && s.panel === "burn",
       ),
+  );
+}
+
+/**
+ * Whether `folder_load` must run: only a canvas tab holding a builtin `load`
+ * section draws the heat map. The payload also skips the read for a folder
+ * with no dated items (see `hasDatedItems`).
+ */
+export function layoutNeedsLoad(config: FolderLayoutConfig): boolean {
+  return config.tabs.some((t) =>
+    (t.sections ?? []).some((s) => s.type === "builtin" && s.panel === "load"),
   );
 }

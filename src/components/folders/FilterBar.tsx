@@ -148,9 +148,10 @@ export function FilterBar({
 }) {
   const stageName = stages.find((s) => s.key === stage)?.name;
   const boardName = boards.find((b) => b.id === board)?.name ?? "All boards";
+  const boardCount = board ? 1 : boards.length;
   const hint = [
-    `${itemCount} items`,
-    `${board ? 1 : boards.length} boards`,
+    `${itemCount} ${itemCount === 1 ? "item" : "items"}`,
+    `${boardCount} ${boardCount === 1 ? "board" : "boards"}`,
     stageName,
   ]
     .filter(Boolean)

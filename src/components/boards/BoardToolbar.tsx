@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { memberLabel as baseMemberLabel } from "@/lib/ui/member-label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -73,7 +74,7 @@ function optionsOf(col: CacheColumn): ColumnOption[] {
 }
 
 function memberLabel(m: HeaderMember): string {
-  return m.fullName ?? m.email ?? "Unknown member";
+  return baseMemberLabel(m);
 }
 
 function toggle(list: string[], id: string): string[] {
