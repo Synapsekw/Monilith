@@ -28,7 +28,8 @@ related: []
   into a shared folder, an account-existence leak in the invite response, and guest reach into
   workspaces, report links, board agents and Monos.
 - Nameless org members now show their email on folder surfaces instead of "Unknown member".
-- `/updates`: nothing announced. Neither feature is on `main` yet; announce at promotion.
+- `/updates`: three entries announced for 2026-11-15 (`036ab407`): folder invites, the richer folder
+  overview, and the burn chart fix. They publish with the next promotion.
 
 ## Why
 
