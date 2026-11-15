@@ -30,6 +30,7 @@ import { EMPTY_BOARD_VIEW_PREFS } from "@/lib/validations/view-prefs";
 import { BoardIntelligenceProvider } from "@/lib/boards/intelligence/context";
 import { localTodayISO } from "@/lib/boards/overdue";
 import { NAME_FREEZE_RULE } from "@/components/boards/SummaryRow";
+import { useEditingCell } from "@/components/boards/table/editing-store";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -2161,5 +2162,163 @@ describe("BoardTable centered value columns", () => {
     renderBoardWithColumns();
     const header = screen.getByText("Created by").parentElement as HTMLElement;
     expect(header.className.split(/\s+/)).toContain("justify-center");
+  });
+});
+
+describe("BoardTable view-only access: nothing on the table edits", () => {
+  // A viewer's writes are refused by RLS, so every edit affordance the table
+  // offers them ends in an optimistic change, a rollback and an error toast.
+  // The board's one `canEdit = access !== "viewer"` must reach every surface.
+  function renderAs(
+    access: "owner" | "viewer",
+    payload: unknown = payloadWithColumns(),
+  ) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <BoardTable
+          payload={payload as never}
+          selectedViewId="v1"
+          access={access}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("renders a viewer's value cell without the edit affordance", () => {
+    renderAs("viewer");
+    const cell = screen.getByLabelText("Item 1 Status");
+    expect(cell).not.toHaveAttribute("role", "button");
+    expect(cell.className).not.toContain("cursor-pointer");
+    // No hover edit chrome (the inset hover frame is the "click to edit" cue).
+    expect(cell.className).not.toContain("hover:after:");
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: "Enter" });
+    fireEvent.keyDown(cell, { key: " " });
+    expect(useEditingCell.getState().editing).toBeNull();
+  });
+
+  it("keeps a viewer's value cell in the tab order", () => {
+    renderAs("viewer");
+    expect(screen.getByLabelText("Item 1 Status")).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+  });
+
+  it("never mounts an editor for a viewer, even if edit mode is set", () => {
+    renderAs("viewer");
+    act(() => {
+      useEditingCell
+        .getState()
+        .setEditing({ itemId: "i1", columnId: "c_status" });
+    });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByLabelText("Item 1 Status")).toBeInTheDocument();
+  });
+
+  it("does not let a viewer rename an item, but still opens its panel", () => {
+    window.history.pushState({}, "", "/");
+    renderAs("viewer");
+    fireEvent.click(screen.getByText("Item 1"));
+    expect(screen.queryByLabelText("Rename Item 1")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Item 1 name" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Item 1" }));
+    expect(new URL(window.location.href).searchParams.get("item")).toBe("i1");
+    window.history.pushState({}, "", "/");
+  });
+
+  it("offers a viewer no row drag handle, row menu or add-subitem button", () => {
+    renderAs("viewer");
+    expect(screen.queryByRole("button", { name: "Reorder Item 1" })).toBeNull();
+    expect(screen.queryByLabelText("Item 1 menu")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add subitem to Item 1" }),
+    ).toBeNull();
+  });
+
+  it("offers a viewer no group drag handle, group menu or group rename", () => {
+    renderAs("viewer");
+    expect(
+      screen.queryByRole("button", { name: "Reorder Group 1" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Group 1 group menu")).toBeNull();
+    fireEvent.click(screen.getByText("Group 1"));
+    expect(screen.queryByLabelText("Rename Group 1")).toBeNull();
+    // Collapsing is the viewer's own arrangement, not a board write.
+    expect(
+      screen.getByRole("button", { name: "Collapse Group 1" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers a viewer no column drag handle, column menu or add-column menu", () => {
+    renderAs("viewer");
+    expect(
+      screen.queryByRole("button", { name: "Reorder Status column" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Status column menu")).toBeNull();
+    expect(screen.queryByLabelText("Add column")).toBeNull();
+  });
+
+  it("resizes a column for a viewer's session without saving the width", () => {
+    renderAs("viewer");
+    const handle = screen.getByRole("separator", { name: "Resize Status" });
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerMove(window, { clientX: 160 });
+    fireEvent.pointerUp(window);
+    fireEvent.doubleClick(handle);
+    expect(resizeColumn).not.toHaveBeenCalled();
+  });
+
+  it("offers a viewer no subitem drag handle, menu or add-subitem row", () => {
+    renderAs("viewer", nestedPayload());
+    fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
+    expect(screen.getByText("Design")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reorder Design" })).toBeNull();
+    expect(screen.queryByLabelText("Design menu")).toBeNull();
+    expect(screen.queryByLabelText("Add subitem")).toBeNull();
+    fireEvent.click(screen.getByText("Design"));
+    expect(screen.queryByLabelText("Rename Design")).toBeNull();
+  });
+
+  it("still gives an editor every one of those affordances", async () => {
+    resizeColumn.mockResolvedValue({ ok: true, data: undefined });
+    renderAs("owner");
+    const cell = screen.getByRole("button", { name: "Item 1 Status" });
+    expect(cell.className).toContain("cursor-pointer");
+    expect(
+      screen.getByRole("button", { name: "Reorder Item 1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Item 1 menu")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add subitem to Item 1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reorder Group 1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Group 1 group menu")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reorder Status column" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Status column menu")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add column")).toBeInTheDocument();
+
+    const handle = screen.getByRole("separator", { name: "Resize Status" });
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerMove(window, { clientX: 160 });
+    fireEvent.pointerUp(window);
+    await waitFor(() => expect(resizeColumn).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Item 1 name" }));
+    expect(screen.getByLabelText("Rename Item 1")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText("Rename Item 1"), {
+      key: "Escape",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Item 1 Status" }));
+    expect(useEditingCell.getState().editing).toEqual({
+      itemId: "i1",
+      columnId: "c_status",
+    });
   });
 });

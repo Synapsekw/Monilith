@@ -25,6 +25,7 @@ export function FilesTab({
   uploadError,
   onUpload,
   onDelete,
+  canEdit = true,
 }: {
   cache: AttachmentsCache | undefined;
   previewUrls: Record<string, string>;
@@ -36,6 +37,10 @@ export function FilesTab({
   uploadError: string | null;
   onUpload: (file: File) => void;
   onDelete: (attachmentId: string) => void;
+  /** False for view-only access (RLS: an attachment insert needs edit on the
+   *  board): no upload button, picker or drop target. Preview, download and
+   *  deleting one's own upload are unchanged. */
+  canEdit?: boolean;
 }) {
   const [mode, setMode] = useState<ViewMode>("gallery");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -46,7 +51,7 @@ export function FilesTab({
   const totalBytes = attachments.reduce((n, a) => n + a.size_bytes, 0);
 
   function pick(files: FileList | null) {
-    if (!files) return;
+    if (!files || !canEdit) return;
     for (const f of Array.from(files)) onUpload(f);
   }
 
@@ -59,11 +64,13 @@ export function FilesTab({
     <div
       className={`flex flex-col gap-4 rounded-md ring-2 transition-shadow ${dragOver ? "ring-ring" : "ring-transparent"}`}
       onDragOver={(e) => {
+        if (!canEdit) return;
         e.preventDefault();
         setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
+        if (!canEdit) return;
         e.preventDefault();
         setDragOver(false);
         pick(e.dataTransfer.files);
@@ -101,21 +108,25 @@ export function FilesTab({
               <List className="size-4" />
             </Button>
           </div>
-          <Button
-            size="sm"
-            onClick={() => inputRef.current?.click()}
-            disabled={isUploading}
-          >
-            <Plus className="mr-1 size-4" /> Add files
-          </Button>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            className="hidden"
-            aria-label="Add files"
-            onChange={(e) => pick(e.target.files)}
-          />
+          {canEdit && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => inputRef.current?.click()}
+                disabled={isUploading}
+              >
+                <Plus className="mr-1 size-4" /> Add files
+              </Button>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                className="hidden"
+                aria-label="Add files"
+                onChange={(e) => pick(e.target.files)}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -127,7 +138,9 @@ export function FilesTab({
 
       {attachments.length === 0 ? (
         <EmptyState variant="inline">
-          No files yet. Drop files here or use “Add files”.
+          {canEdit
+            ? "No files yet. Drop files here or use “Add files”."
+            : "No files yet."}
         </EmptyState>
       ) : mode === "gallery" ? (
         <div className="grid grid-cols-2 gap-3">

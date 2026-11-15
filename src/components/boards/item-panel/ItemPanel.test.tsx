@@ -215,3 +215,46 @@ describe("ItemPanel updates tab count (Keystone)", () => {
     expect(count).toHaveTextContent("01");
   });
 });
+
+describe("ItemPanel view-only access", () => {
+  function renderAs(canEdit: boolean) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel {...baseProps} canEdit={canEdit} itemId="item-1" />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("gives a viewer no update composer and no file upload", async () => {
+    const user = userEvent.setup();
+    renderAs(false);
+    expect(
+      screen.queryByRole("button", { name: "Write an update" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("tab", { name: /files/i }));
+    expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
+    // Item assist only ever ends in a board write.
+    await user.click(screen.getByRole("tab", { name: /^fields$/i }));
+    // The panel is a lazy chunk, so give it time to (not) arrive.
+    await expect(
+      screen.findByText("Item assist", {}, { timeout: 400 }),
+    ).rejects.toThrow();
+  });
+
+  it("keeps the composer and the upload for an editor", async () => {
+    const user = userEvent.setup();
+    renderAs(true);
+    expect(
+      screen.getByRole("button", { name: "Write an update" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /files/i }));
+    expect(
+      screen.getByRole("button", { name: /Add files/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /^fields$/i }));
+    expect(await screen.findByText("Item assist")).toBeInTheDocument();
+  });
+});

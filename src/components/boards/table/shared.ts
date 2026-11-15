@@ -26,6 +26,14 @@ export type EditingCell = { itemId: string; columnId: string };
  * `useIsCellEditing` in ./editing-store.
  */
 export type CellControls = {
+  /**
+   * The board's one edit bit (`access !== "viewer"`, computed in
+   * {@link BoardTable} from a direct board grant or a folder grant). False =
+   * view only: every cell, name, row, subitem and menu under this bundle
+   * renders its value without anything that writes. RLS refuses the write
+   * either way; this is what keeps a viewer from being offered it.
+   */
+  canEdit: boolean;
   setEditing: (cell: EditingCell | null) => void;
   setCell: (vars: { itemId: string; columnId: string; value: unknown }) => void;
   clearCellValue: (vars: { itemId: string; columnId: string }) => void;
@@ -370,6 +378,9 @@ export type GroupSummaryControls = {
 };
 
 export type ColumnHeaderControls = {
+  /** Same bit as {@link CellControls.canEdit}. False = no column menu, drag
+   *  reorder or add-column, and a resize lasts for the session only. */
+  canEdit: boolean;
   nameWidth: number;
   liveWidths: Record<string, number>;
   autoFitWidths: Record<string, number>;

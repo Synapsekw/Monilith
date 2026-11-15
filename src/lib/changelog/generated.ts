@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-15",
+    kind: "fixed",
+    title: "View-only boards are read-only",
+    description:
+      "People with view-only access no longer see edit controls that would fail when used.",
+  },
+  {
+    date: "2026-11-15",
     kind: "new",
     title: "Invite people to a folder",
     description:

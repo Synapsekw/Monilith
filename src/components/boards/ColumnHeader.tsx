@@ -62,6 +62,7 @@ export function ColumnHeader({
   onSmartFill,
   onAutoFit,
   reorder,
+  canEdit = true,
 }: {
   column: CacheColumn;
   width: number;
@@ -74,6 +75,10 @@ export function ColumnHeader({
   onSmartFill?: () => void; // open the Smart Fill dialog (text columns only)
   onAutoFit?: () => void; // double-click the resize handle: clear the saved width
   reorder?: ColumnReorder; // drag + move-left/right affordances (optional)
+  /** False for view-only access: no drag handle and no column menu (rename,
+   *  move, labels, currency, smart fill, delete). The resize handle stays —
+   *  the caller decides whether a resize is saved. */
+  canEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -134,7 +139,7 @@ export function ColumnHeader({
         reorder?.isDragging && "bg-surface shadow-drag z-auto",
       )}
     >
-      {editing ? (
+      {editing && canEdit ? (
         <Input
           autoFocus
           value={draft}
@@ -149,7 +154,7 @@ export function ColumnHeader({
         />
       ) : (
         <>
-          {reorder && (
+          {reorder && canEdit && (
             <button
               type="button"
               aria-label={`Reorder ${column.name} column`}
@@ -166,64 +171,66 @@ export function ColumnHeader({
           >
             {column.name}
           </Kicker>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label={`${column.name} column menu`}
-                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 grid -translate-y-1/2 place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {reorder && (
-                <>
-                  <DropdownMenuItem
-                    disabled={!reorder.onMoveLeft}
-                    onSelect={() => reorder.onMoveLeft?.()}
-                  >
-                    Move left
+          {canEdit && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={`${column.name} column menu`}
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 grid -translate-y-1/2 place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:size-11 pointer-coarse:translate-y-0 pointer-coarse:opacity-100"
+                >
+                  <MoreHorizontal className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {reorder && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={!reorder.onMoveLeft}
+                      onSelect={() => reorder.onMoveLeft?.()}
+                    >
+                      Move left
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!reorder.onMoveRight}
+                      onSelect={() => reorder.onMoveRight?.()}
+                    >
+                      Move right
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
+                  <DropdownMenuItem onSelect={() => onEditOptions()}>
+                    Edit labels
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!reorder.onMoveRight}
-                    onSelect={() => reorder.onMoveRight?.()}
-                  >
-                    Move right
+                )}
+                {column.kind === "text" && onSmartFill && (
+                  <DropdownMenuItem onSelect={() => onSmartFill()}>
+                    Smart fill…
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
-                <DropdownMenuItem onSelect={() => onEditOptions()}>
-                  Edit labels
+                )}
+                {column.kind === "currency" && onEditCurrency && (
+                  <DropdownMenuItem onSelect={() => onEditCurrency()}>
+                    Change currency
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setDraft(column.name);
+                    setEditing(true);
+                  }}
+                >
+                  Rename
                 </DropdownMenuItem>
-              )}
-              {column.kind === "text" && onSmartFill && (
-                <DropdownMenuItem onSelect={() => onSmartFill()}>
-                  Smart fill…
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onSelect={() => setConfirming(true)}
+                >
+                  Delete
                 </DropdownMenuItem>
-              )}
-              {column.kind === "currency" && onEditCurrency && (
-                <DropdownMenuItem onSelect={() => onEditCurrency()}>
-                  Change currency
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={() => {
-                  setDraft(column.name);
-                  setEditing(true);
-                }}
-              >
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive"
-                onSelect={() => setConfirming(true)}
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </>
       )}
 

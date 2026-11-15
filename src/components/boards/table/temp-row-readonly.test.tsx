@@ -46,6 +46,7 @@ const column = {
 
 function controls(over: Partial<CellControls> = {}): CellControls {
   return {
+    canEdit: true,
     setEditing: vi.fn(),
     setCell: vi.fn(),
     clearCellValue: vi.fn(),

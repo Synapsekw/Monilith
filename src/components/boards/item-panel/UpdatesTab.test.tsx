@@ -263,3 +263,46 @@ describe("UpdatesTab", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("UpdatesTab view-only access", () => {
+  // RLS: posting an update needs can_edit_board; deleting needs the author or
+  // an editor. A viewer therefore reads the thread, and may still delete an
+  // update they wrote back when they could edit.
+  function renderTab(canEdit: boolean, currentUserId: string) {
+    return render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          itemId="item-1"
+          cache={cache}
+          members={members}
+          canEdit={canEdit}
+          currentUserId={currentUserId}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+  }
+
+  it("gives a viewer the thread but no composer", () => {
+    renderTab(false, "someone-else");
+    expect(screen.getByText("Shipped it")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Write an update" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Delete update")).toBeNull();
+  });
+
+  it("lets a viewer delete an update they authored", () => {
+    renderTab(false, "user-1");
+    expect(screen.getByLabelText("Delete update")).toBeInTheDocument();
+  });
+
+  it("keeps the composer and delete for an editor", () => {
+    renderTab(true, "someone-else");
+    expect(
+      screen.getByRole("button", { name: "Write an update" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Delete update")).toBeInTheDocument();
+  });
+});

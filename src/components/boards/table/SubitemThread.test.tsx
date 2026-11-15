@@ -18,6 +18,7 @@ const sub = {
 } as Item;
 
 const controls = {
+  canEdit: true,
   members: [],
   deleteItem: vi.fn(),
   renameItemInCache: vi.fn(),

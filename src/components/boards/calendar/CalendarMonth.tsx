@@ -41,7 +41,9 @@ export function CalendarMonth({
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
-  onDayClick: (dayISO: string) => void;
+  /** Click/Enter on a day adds an item there. Absent for view-only access:
+   * the day is then a plain cell and the event chips are not draggable. */
+  onDayClick?: (dayISO: string) => void;
   /** Tap on a chip/overflow row — carries the tapped element's rect so the
    * board can anchor the quick-edit peek. */
   onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
@@ -95,18 +97,23 @@ export function CalendarMonth({
                 return (
                   <div
                     key={day.dateISO}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Add item on ${day.dateISO}`}
-                    onClick={() => onDayClick(day.dateISO)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onDayClick(day.dateISO);
-                      }
-                    }}
+                    {...(onDayClick
+                      ? {
+                          role: "button",
+                          tabIndex: 0,
+                          "aria-label": `Add item on ${day.dateISO}`,
+                          onClick: () => onDayClick(day.dateISO),
+                          onKeyDown: (e: React.KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onDayClick(day.dateISO);
+                            }
+                          },
+                        }
+                      : null)}
                     className={cn(
-                      "bg-surface hover:bg-surface-muted flex min-h-[6.5rem] cursor-pointer flex-col p-1.5",
+                      "bg-surface flex min-h-[6.5rem] flex-col p-1.5",
+                      onDayClick && "hover:bg-surface-muted cursor-pointer",
                       !day.inMonth && "bg-surface-muted opacity-50",
                       day.inMonth && isWeekend && "bg-surface-muted/40",
                       day.dateISO === today &&
@@ -158,6 +165,7 @@ export function CalendarMonth({
                       statusColumn={statusColumn}
                       cellMap={cellMap}
                       onItemTap={onItemTap}
+                      draggable={!!onDayClick}
                     />
                   </div>
                 ))}
@@ -202,6 +210,7 @@ function BarForDay({
   statusColumn,
   cellMap,
   onItemTap,
+  draggable,
 }: {
   interval: PlacedInterval;
   weekStartISO: string;
@@ -210,6 +219,7 @@ function BarForDay({
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
   onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
+  draggable: boolean;
 }) {
   const range = itemDateRange(interval.itemId, cellValues, dateColumnId);
   const fromDayISO = range?.start ?? weekStartISO;
@@ -222,6 +232,7 @@ function BarForDay({
       statusColumn={statusColumn}
       cellMap={cellMap}
       onOpen={onItemTap}
+      draggable={draggable}
     />
   );
 }

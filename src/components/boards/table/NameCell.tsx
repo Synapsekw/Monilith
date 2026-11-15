@@ -70,6 +70,10 @@ const SEAM_CLASSES =
  *
  * Coarse pointers: no overlay and no peek. The same container is in flow and
  * always visible, with 44px controls.
+ *
+ * View only (`controls.canEdit === false`): the name is text, not a rename
+ * button — no click/Enter/Space rename and no rename input. The peek and the
+ * open-panel button are reads and stay.
  */
 export const NameCell = memo(function NameCell({
   item,
@@ -97,7 +101,8 @@ export const NameCell = memo(function NameCell({
   /** The row is being dragged: never unroll the name. */
   peekDisabled?: boolean;
 }) {
-  const [editing, setEditing] = useState(autoFocusRename);
+  const canEdit = controls.canEdit;
+  const [editing, setEditing] = useState(autoFocusRename && canEdit);
   const [name, setName] = useState(item.name);
   const [isPending, startTransition] = useTransition();
   // Temp-row rule (see @/lib/boards/optimistic-id): while the row's id is
@@ -155,7 +160,7 @@ export const NameCell = memo(function NameCell({
   }
 
   function open() {
-    if (pending) return;
+    if (pending || !canEdit) return;
     cancelPeek();
     setName(item.name);
     setEditing(true);
@@ -171,7 +176,7 @@ export const NameCell = memo(function NameCell({
     });
   }
 
-  if (editing) {
+  if (editing && canEdit) {
     return (
       <div
         className={cn(
@@ -283,13 +288,15 @@ export const NameCell = memo(function NameCell({
       )}
       {leading}
       <div
-        role="button"
+        // View only: plain text. No button role, no rename on click or key; it
+        // stays focusable so a truncated name can still be peeked by keyboard.
+        role={canEdit ? "button" : undefined}
         // Temp-row rule: `open()` is a no-op while pending, so keeping this in
         // the tab order would be a dead stop announcing itself as a button.
         tabIndex={pending ? -1 : 0}
-        aria-label={`${item.name} name`}
+        aria-label={canEdit ? `${item.name} name` : undefined}
         title={item.name}
-        onClick={open}
+        onClick={canEdit ? open : undefined}
         onFocus={(e) => {
           if (coarse || peekDisabled || !isTruncated()) return;
           // Keyboard focus only: a mouse click also focuses this div and
@@ -302,20 +309,28 @@ export const NameCell = memo(function NameCell({
           }
           if (visible) openPeek("focus");
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            open();
-          }
-        }}
-        aria-disabled={pending || undefined}
+        onKeyDown={
+          canEdit
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  open();
+                }
+              }
+            : undefined
+        }
+        aria-disabled={(canEdit && pending) || undefined}
         className={cn(
           "focus-visible:ring-ring flex h-full min-w-0 flex-1 items-center focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
           // Subitem names sit at the cell scale; item names one step up.
           indented
             ? "text-cell font-normal"
             : "text-item font-medium tracking-[-0.011em]",
-          pending ? "cursor-default opacity-60" : "cursor-pointer",
+          pending
+            ? "cursor-default opacity-60"
+            : canEdit
+              ? "cursor-pointer"
+              : "cursor-default",
           indented ? "pr-2 pl-10" : "pr-2 pl-1",
         )}
       >

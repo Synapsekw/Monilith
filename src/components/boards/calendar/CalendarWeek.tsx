@@ -29,7 +29,9 @@ export function CalendarWeek({
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
-  onDayClick: (dayISO: string) => void;
+  /** Click/Enter on a day adds an item there. Absent for view-only access:
+   * the day is then a plain cell and the event chips are not draggable. */
+  onDayClick?: (dayISO: string) => void;
   /** Tap on a chip — carries the tapped element's rect so the board can
    * anchor the quick-edit peek. */
   onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
@@ -78,18 +80,24 @@ export function CalendarWeek({
         {days.map((iso) => (
           <div
             key={iso}
-            role="button"
-            tabIndex={0}
-            aria-label={`Add item on ${iso}`}
-            onClick={() => onDayClick(iso)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onDayClick(iso);
-              }
-            }}
+            {...(onDayClick
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-label": `Add item on ${iso}`,
+                  onClick: () => onDayClick(iso),
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onDayClick(iso);
+                    }
+                  },
+                }
+              : null)}
             className={cn(
-              "hover:bg-surface-muted border-border hover:border-border-hover cursor-pointer border-r last:border-r-0",
+              "border-border border-r last:border-r-0",
+              onDayClick &&
+                "hover:bg-surface-muted hover:border-border-hover cursor-pointer",
               iso === today && "bg-primary/8",
             )}
           />
@@ -117,6 +125,7 @@ export function CalendarWeek({
                   statusColumn={statusColumn}
                   cellMap={cellMap}
                   onOpen={onItemTap}
+                  draggable={!!onDayClick}
                 />
               </div>
             );

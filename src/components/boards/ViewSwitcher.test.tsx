@@ -163,3 +163,34 @@ describe("ViewSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("ViewSwitcher view-only access", () => {
+  it("lets a viewer switch views but not add, rename or delete one", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    render(
+      <ViewSwitcher
+        boardId="b1"
+        views={views}
+        selectedViewId="v1"
+        canEdit={false}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Add view" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^View options for / }),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: /Kanban/ }));
+    expect(pushState).toHaveBeenCalledWith(null, "", "/boards/b1?view=v2");
+    pushState.mockRestore();
+  });
+
+  it("keeps the view menus for an editor", () => {
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    expect(
+      screen.getByRole("button", { name: "Add view" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /^View options for / }),
+    ).toHaveLength(2);
+  });
+});

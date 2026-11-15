@@ -27,15 +27,20 @@ export function SortableColumnHeader({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: column.id });
+    // View only: not sortable — no mouse, touch or keyboard sensor picks it up.
+  } = useSortable({ id: column.id, disabled: !col.canEdit });
   return (
     <ColumnHeader
       column={column}
+      canEdit={col.canEdit}
       width={resolveColumnWidth(column, col.liveWidths, col.autoFitWidths)}
       onRename={(n) => col.renameColumn(column.id, n)}
       onDelete={() => col.deleteColumn(column.id)}
       onResize={(w) => col.setLiveWidths((m) => ({ ...m, [column.id]: w }))}
-      onResizeEnd={(w) => col.resizeColumn(column.id, w)}
+      // View only: the live width above holds for the session; nothing saves.
+      onResizeEnd={(w) => {
+        if (col.canEdit) col.resizeColumn(column.id, w);
+      }}
       onAutoFit={() => {
         // Drop the live width too. It is set during a drag and never cleared
         // afterwards, so it would keep masking the (now null) saved width.
@@ -45,7 +50,7 @@ export function SortableColumnHeader({
           delete next[column.id];
           return next;
         });
-        col.resizeColumn(column.id, null);
+        if (col.canEdit) col.resizeColumn(column.id, null);
       }}
       onEditOptions={() => col.onEditOptions(column)}
       onEditCurrency={() => col.onEditCurrency(column)}

@@ -53,6 +53,11 @@ function statusOptionChanged(prev: unknown, next: unknown): boolean {
  * swaps to the kind's `CellEditor`. Commits write through `setCell`
  * (optimistically); an explicit clear (Status "Clear", emptied number/date,
  * empty multi-select) routes through `clearCellValue`, which deletes the row.
+ *
+ * View only (`controls.canEdit === false`): the cell renders its value and
+ * nothing that writes — no edit activation, no editor, no upload, timer or
+ * relation picker. It is not inert: links, linked-item chips and file previews
+ * still open, the cell stays in the tab order and its text can be selected.
  */
 export const EditableCell = memo(function EditableCell({
   item,
@@ -72,9 +77,11 @@ export const EditableCell = memo(function EditableCell({
   dependents?: number;
 }) {
   const { setEditing, setCell, clearCellValue, members } = controls;
+  const readOnly = !controls.canEdit;
   // Per-cell subscription (see ./editing-store): the ~300 cells that are NOT
   // being edited select a stable `false` and never re-render on a click.
-  const isEditing = useIsCellEditing(item.id, column.id);
+  // A viewer's cell is never in edit mode, whatever the store says.
+  const isEditing = useIsCellEditing(item.id, column.id) && !readOnly;
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
   const target = presenceTarget.cell(item.id, column.id);
@@ -124,7 +131,12 @@ export const EditableCell = memo(function EditableCell({
           previewUrls={controls.filesPreviewUrls ?? {}}
           thumbUrls={controls.filesThumbUrls}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
-          onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
+          // View only: previews open, nothing uploads.
+          onUpload={
+            readOnly
+              ? undefined
+              : (f) => controls.uploadColumnFile(item.id, column.id, f)
+          }
         />
       </div>
     );
@@ -142,6 +154,7 @@ export const EditableCell = memo(function EditableCell({
           entries={entries}
           estimateSeconds={estimate}
           currentUserId={controls.currentUserId}
+          readOnly={readOnly}
           onStart={() => controls.startTimer(item.id, column.id)}
           onStop={(id) => controls.stopTimer(id)}
           onAddManual={(date, secs) =>
@@ -172,6 +185,8 @@ export const EditableCell = memo(function EditableCell({
           links={links}
           allowMultiple={relSettings.allow_multiple ?? true}
           targetBoardId={targetBoardId || undefined}
+          // View only: the chips stay links to the linked item; no picker.
+          readOnly={readOnly}
           loadCandidates={(search) =>
             targetBoardId
               ? listRelationCandidates(targetBoardId, search)
@@ -264,6 +279,32 @@ export const EditableCell = memo(function EditableCell({
             setEditing(null);
           }}
           onCancel={() => setEditing(null)}
+        />
+        <PresenceRing target={target} />
+        <FlashHighlight target={target} />
+      </div>
+    );
+  }
+
+  // View only: the value, with no edit activation (click, Enter or Space), no
+  // pointer cursor and no hover frame. `role="group"` keeps the accessible
+  // name valid on a non-interactive box; it stays focusable so the keyboard
+  // can still walk the row, and the text is selectable for copy.
+  if (readOnly) {
+    return (
+      <div
+        role="group"
+        tabIndex={0}
+        aria-label={accessibleName}
+        className={`focus-visible:ring-ring relative flex h-full items-center truncate px-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${CELL_CENTER}`}
+      >
+        <CellRenderer
+          kind={column.kind}
+          value={value}
+          settings={settings}
+          members={members}
+          overdue={overdue}
+          dependents={dependents}
         />
         <PresenceRing target={target} />
         <FlashHighlight target={target} />

@@ -41,10 +41,17 @@ export type TimeTrackingCellProps = {
   onEdit: (entryId: string, date: string, durationSecs: number) => void;
   onDelete: (entryId: string) => void;
   onSetEstimate: (estimateSeconds: number | null) => void;
+  /**
+   * View-only access: the total and the entry log stay readable; the timer,
+   * the estimate field, manual entry and entry edit/delete are not rendered
+   * (RLS: every time-entry write needs can_edit_board).
+   */
+  readOnly?: boolean;
 };
 
 export function TimeTrackingCell(props: TimeTrackingCellProps) {
   const { entries, estimateSeconds, currentUserId, onStart, onStop } = props;
+  const readOnly = props.readOnly ?? false;
 
   const running = entries.find(
     (e) => e.ended_at == null && e.user_id === currentUserId,
@@ -108,7 +115,7 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
         </PopoverTrigger>
 
         {/* Start / Stop quick-action button (always visible, outside popover) */}
-        {running ? (
+        {readOnly ? null : running ? (
           <button
             type="button"
             aria-label="Stop timer"
@@ -174,6 +181,7 @@ function TimeTrackingPopover({
   onEdit,
   onDelete,
   onSetEstimate,
+  readOnly = false,
 }: PopoverProps) {
   const [estimateInput, setEstimateInput] = useState(
     estimateSeconds != null ? formatDuration(estimateSeconds) : "",
@@ -263,52 +271,60 @@ function TimeTrackingPopover({
           </span>
           <span className="text-muted-foreground text-xs">tracked</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="flex flex-col">
-            <Input
-              aria-label="Estimate"
-              placeholder="Estimate"
-              value={estimateInput}
-              onChange={(e) => {
-                setEstimateInput(e.target.value);
-                setEstimateError(false);
-              }}
-              onBlur={commitEstimate}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitEstimate();
-              }}
-              className={cn(
-                "h-6 w-24 px-1.5 text-xs tabular-nums",
-                estimateError && "border-destructive",
+        {readOnly ? (
+          estimateSeconds != null ? (
+            <span className="text-muted-foreground text-xs tabular-nums">
+              Estimate {formatDuration(estimateSeconds)}
+            </span>
+          ) : null
+        ) : (
+          <div className="flex items-center gap-1">
+            <div className="flex flex-col">
+              <Input
+                aria-label="Estimate"
+                placeholder="Estimate"
+                value={estimateInput}
+                onChange={(e) => {
+                  setEstimateInput(e.target.value);
+                  setEstimateError(false);
+                }}
+                onBlur={commitEstimate}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEstimate();
+                }}
+                className={cn(
+                  "h-6 w-24 px-1.5 text-xs tabular-nums",
+                  estimateError && "border-destructive",
+                )}
+                {...estimateStatus.controlProps}
+              />
+              {estimateStatus.message && (
+                <span
+                  {...estimateStatus.messageProps}
+                  className="text-destructive mt-0.5 text-xs"
+                >
+                  {estimateStatus.message}
+                </span>
               )}
-              {...estimateStatus.controlProps}
-            />
-            {estimateStatus.message && (
-              <span
-                {...estimateStatus.messageProps}
-                className="text-destructive mt-0.5 text-xs"
+            </div>
+            {running ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => onStop(running.id)}
+                className="h-6 px-2 text-xs"
               >
-                {estimateStatus.message}
-              </span>
+                <Square className="mr-1 size-3 fill-current" />
+                Stop
+              </Button>
+            ) : (
+              <Button size="sm" onClick={onStart} className="h-6 px-2 text-xs">
+                <Play className="mr-1 size-3 fill-current" />
+                Start
+              </Button>
             )}
           </div>
-          {running ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => onStop(running.id)}
-              className="h-6 px-2 text-xs"
-            >
-              <Square className="mr-1 size-3 fill-current" />
-              Stop
-            </Button>
-          ) : (
-            <Button size="sm" onClick={onStart} className="h-6 px-2 text-xs">
-              <Play className="mr-1 size-3 fill-current" />
-              Start
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Entry list */}
@@ -388,7 +404,7 @@ function TimeTrackingPopover({
                 <span className="text-muted-foreground truncate text-xs">
                   {e.user_id === currentUserId ? "You" : e.user_id.slice(0, 8)}
                 </span>
-                {isMine && (
+                {isMine && !readOnly && (
                   <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
                     <button
                       type="button"
@@ -415,51 +431,53 @@ function TimeTrackingPopover({
       )}
 
       {/* + Add time row */}
-      <div className="border-border border-t px-3 py-2">
-        <div className="flex items-center gap-1">
-          <Plus className="text-muted-foreground size-3.5 shrink-0" />
-          <Input
-            aria-label="Duration to add"
-            placeholder="e.g. 1h 30m"
-            value={addDuration}
-            onChange={(e) => {
-              setAddDuration(e.target.value);
-              setAddError(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitAdd();
-            }}
-            className={cn(
-              "h-6 flex-1 px-1.5 text-xs tabular-nums",
-              addError && "border-destructive",
-            )}
-            {...addStatus.controlProps}
-          />
-          <DatePickerButton
-            ariaLabel="Date for manual entry"
-            value={addDate}
-            onChange={setAddDate}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label="Add time"
-            onClick={commitAdd}
-            className="h-6 px-2 text-xs"
-          >
-            Add
-          </Button>
+      {!readOnly && (
+        <div className="border-border border-t px-3 py-2">
+          <div className="flex items-center gap-1">
+            <Plus className="text-muted-foreground size-3.5 shrink-0" />
+            <Input
+              aria-label="Duration to add"
+              placeholder="e.g. 1h 30m"
+              value={addDuration}
+              onChange={(e) => {
+                setAddDuration(e.target.value);
+                setAddError(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitAdd();
+              }}
+              className={cn(
+                "h-6 flex-1 px-1.5 text-xs tabular-nums",
+                addError && "border-destructive",
+              )}
+              {...addStatus.controlProps}
+            />
+            <DatePickerButton
+              ariaLabel="Date for manual entry"
+              value={addDate}
+              onChange={setAddDate}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-label="Add time"
+              onClick={commitAdd}
+              className="h-6 px-2 text-xs"
+            >
+              Add
+            </Button>
+          </div>
+          {addStatus.message && (
+            <span
+              {...addStatus.messageProps}
+              className="text-destructive mt-1 block text-xs"
+            >
+              {addStatus.message}
+            </span>
+          )}
         </div>
-        {addStatus.message && (
-          <span
-            {...addStatus.messageProps}
-            className="text-destructive mt-1 block text-xs"
-          >
-            {addStatus.message}
-          </span>
-        )}
-      </div>
+      )}
     </div>
   );
 }

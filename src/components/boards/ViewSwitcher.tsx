@@ -47,10 +47,14 @@ export function ViewSwitcher({
   boardId,
   views,
   selectedViewId,
+  canEdit = true,
 }: {
   boardId: string;
   views: ViewTabData[];
   selectedViewId: string;
+  /** False for view-only access: views can be switched, but not added,
+   *  renamed or deleted (each is a board write). */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [adding, startAdding] = React.useTransition();
@@ -74,38 +78,41 @@ export function ViewSwitcher({
           boardId={boardId}
           view={view}
           selected={view.id === selectedViewId}
+          canEdit={canEdit}
           canDelete={views.length > 1}
           firstOtherViewId={views.find((v) => v.id !== view.id)?.id}
         />
       ))}
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Add view"
-            disabled={adding}
-          >
-            <Plus aria-hidden />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-36">
-          <DropdownMenuItem onSelect={() => handleAddView("kanban")}>
-            <Kanban aria-hidden className="size-3.5" />
-            Kanban
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => handleAddView("calendar")}>
-            <CalendarDays aria-hidden className="size-3.5" />
-            Calendar
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => handleAddView("timeline")}>
-            <GanttChartSquare aria-hidden className="size-3.5" />
-            Timeline
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {canEdit && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Add view"
+              disabled={adding}
+            >
+              <Plus aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuItem onSelect={() => handleAddView("kanban")}>
+              <Kanban aria-hidden className="size-3.5" />
+              Kanban
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleAddView("calendar")}>
+              <CalendarDays aria-hidden className="size-3.5" />
+              Calendar
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleAddView("timeline")}>
+              <GanttChartSquare aria-hidden className="size-3.5" />
+              Timeline
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -114,12 +121,14 @@ function ViewTab({
   boardId,
   view,
   selected,
+  canEdit,
   canDelete,
   firstOtherViewId,
 }: {
   boardId: string;
   view: ViewTabData;
   selected: boolean;
+  canEdit: boolean;
   canDelete: boolean;
   firstOtherViewId: string | undefined;
 }) {
@@ -166,7 +175,7 @@ function ViewTab({
     });
   }
 
-  if (renaming) {
+  if (renaming && canEdit) {
     return (
       <Input
         aria-label="View name"
@@ -209,40 +218,44 @@ function ViewTab({
             ? "text-foreground"
             : "text-muted-foreground hover:text-foreground",
           pending && "opacity-60",
+          // No options button after the label: even out the pill's padding.
+          !canEdit && "pr-3",
         )}
       >
         <KindIcon kind={view.kind} />
         <span className="truncate">{view.name}</span>
       </button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`View options for ${view.name}`}
-            disabled={pending}
-            className={cn(
-              "mr-0.5 size-6",
-              selected && "text-foreground hover:bg-foreground/10",
+      {canEdit && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`View options for ${view.name}`}
+              disabled={pending}
+              className={cn(
+                "mr-0.5 size-6",
+                selected && "text-foreground hover:bg-foreground/10",
+              )}
+            >
+              <MoreHorizontal aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32">
+            <DropdownMenuItem onSelect={startRenaming}>Rename</DropdownMenuItem>
+            {canDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
+                  Delete
+                </DropdownMenuItem>
+              </>
             )}
-          >
-            <MoreHorizontal aria-hidden />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem onSelect={startRenaming}>Rename</DropdownMenuItem>
-          {canDelete && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
-                Delete
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
