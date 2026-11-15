@@ -3,7 +3,10 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { lookupTokenByAccessToken } from "@/lib/mcp/oauth/token-store";
-import { getBridgedClient } from "@/lib/mcp/oauth/session-bridge";
+import {
+  getBridgedClient,
+  mintBridgeSecret,
+} from "@/lib/mcp/oauth/session-bridge";
 import { updateBridgeSecretId } from "@/lib/mcp/oauth/token-store";
 import { checkMcpRateLimit } from "@/lib/rate-limit/mcp-rate-limit";
 
@@ -65,7 +68,21 @@ export async function getRequestClient(
   if (!bridgeSecretId || !tokenRowId)
     throw new Error("Malformed auth context.");
 
-  const { client, newBridgeSecretId } = await getBridgedClient(bridgeSecretId);
-  await updateBridgeSecretId(tokenRowId, newBridgeSecretId);
-  return client;
+  const bridged = await getBridgedClient(bridgeSecretId).catch(async () => {
+    // The stored Supabase session is gone — revoked, expired, or its Vault
+    // secret missing. The MCP token itself is still valid (it was verified to
+    // get here), so the user's grant stands: mint a fresh session for the same
+    // user rather than failing every call until they reconnect by hand. A
+    // user who can no longer be bridged (deleted, no email) fails the mint and
+    // that error surfaces. Disconnecting an app deletes its oauth_tokens row,
+    // so a revoked connection never reaches this point.
+    const freshSecretId = await mintBridgeSecret(
+      mcpActorId(auth),
+      bridgeSecretId,
+    );
+    return getBridgedClient(freshSecretId);
+  });
+  if (bridged.newBridgeSecretId !== bridgeSecretId)
+    await updateBridgeSecretId(tokenRowId, bridged.newBridgeSecretId);
+  return bridged.client;
 }

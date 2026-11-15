@@ -108,6 +108,12 @@ describe("mintBridgeSecret — Vault secret naming", () => {
     expect(typeof payload.accessExpiresAt).toBe("number");
   });
 
+  it("drops the dead secret it replaces when re-minting a bridge", async () => {
+    await mintBridgeSecret(USER_ID, "dead-secret-id");
+    const args = typedRpc.mock.calls[0][2] as { p_old_secret_id: string };
+    expect(args.p_old_secret_id).toBe("dead-secret-id");
+  });
+
   it("keeps the user id in the name so secrets stay greppable per user", async () => {
     await mintBridgeSecret(USER_ID);
     expect(nameOnCall(0)).toContain(USER_ID);
