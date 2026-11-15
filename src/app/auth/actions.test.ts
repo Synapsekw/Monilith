@@ -14,7 +14,9 @@ const {
   authSignOut,
   cookieDelete,
   readAccountApproval,
+  oauthTokensDeleteEq,
 } = vi.hoisted(() => ({
+  oauthTokensDeleteEq: vi.fn().mockResolvedValue({ error: null }),
   readAccountApproval: vi.fn(),
   authSignOut: vi.fn(),
   cookieDelete: vi.fn(),
@@ -46,7 +48,14 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => ({ auth: { admin: { updateUserById } } }),
+  createServiceClient: () => ({
+    auth: { admin: { updateUserById } },
+    from: (table: string) => ({
+      delete: () => ({
+        eq: (col: string, val: string) => oauthTokensDeleteEq(table, col, val),
+      }),
+    }),
+  }),
 }));
 vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => serverEnv.value,
@@ -502,8 +511,26 @@ describe("sign out — forgets the last-visited board", () => {
   // browser at a board they may not be able to read.
   it("signOut clears the last-board cookie before redirecting to /login", async () => {
     await expect(signOutAction()).rejects.toThrow("REDIRECT:/login");
-    expect(authSignOut).toHaveBeenCalledWith();
     expect(cookieDelete).toHaveBeenCalledWith("pulse_last_board");
+  });
+
+  // supabase-js defaults signOut() to scope "global", which revokes EVERY
+  // session of the user — including the ones bridging their MCP connectors.
+  it("signOut ends only this browser's session", async () => {
+    await expect(signOutAction()).rejects.toThrow("REDIRECT:/login");
+    expect(authSignOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(oauthTokensDeleteEq).not.toHaveBeenCalled();
+  });
+
+  it("signOutEverywhere also disconnects the user's MCP apps", async () => {
+    getUser.mockResolvedValueOnce({ data: { user: { id: "user-9" } } });
+    await expect(signOutEverywhere()).rejects.toThrow("REDIRECT:/login");
+    expect(oauthTokensDeleteEq).toHaveBeenCalledWith(
+      "oauth_tokens",
+      "user_id",
+      "user-9",
+    );
+    expect(authSignOut).toHaveBeenCalledWith({ scope: "global" });
   });
 
   it("signOutEverywhere clears it too", async () => {
