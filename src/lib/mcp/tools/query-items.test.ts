@@ -767,6 +767,47 @@ describe("queryItemsHandler assignee by name (review I4)", () => {
     );
   });
 
+  it("treats `Me` and `UNASSIGNED` as keywords even when a member's name starts that way", async () => {
+    const tables = {
+      org_members: [
+        { org_id: "o1", user_id: "u1", deactivated_at: null, role: "member" },
+        { org_id: "o1", user_id: "u9", deactivated_at: null, role: "member" },
+      ],
+      profiles: [
+        { id: "u1", timezone: null, full_name: "Dana Ilic", avatar_url: null },
+        {
+          id: "u9",
+          timezone: null,
+          full_name: "Melissa Meyer",
+          avatar_url: null,
+        },
+      ],
+    };
+    const me = fixture({ tables });
+    await queryItemsHandler(
+      me.getClient,
+      "u1",
+      { orgId: "o1", assignee: "Me" },
+      NOW,
+    );
+    expect(me.rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_assignee: "u1", p_unassigned: false }),
+    );
+
+    const none = fixture({ tables });
+    await queryItemsHandler(
+      none.getClient,
+      "u1",
+      { orgId: "o1", assignee: "UNASSIGNED" },
+      NOW,
+    );
+    expect(none.rpc).toHaveBeenCalledWith(
+      "query_items",
+      expect.objectContaining({ p_assignee: null, p_unassigned: true }),
+    );
+  });
+
   it("resolves an exact full name, ignoring case and spaces", async () => {
     const { rpc, getClient } = fixture();
     const result = await queryItemsHandler(

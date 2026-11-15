@@ -147,7 +147,14 @@ export async function queryItemsHandler(
 
     // Names label people in listings and assignee counts, and resolve an
     // assignee given as a name. Loaded once.
-    const assignee = args.assignee?.trim();
+    // Keywords are case-insensitive: "Me" must never fall through to the name
+    // match, where it would hit any member whose name starts with "me".
+    const rawAssignee = args.assignee?.trim();
+    const assigneeKeyword = rawAssignee?.toLowerCase();
+    const assignee =
+      assigneeKeyword === "me" || assigneeKeyword === "unassigned"
+        ? assigneeKeyword
+        : rawAssignee;
     const byName =
       !!assignee &&
       assignee !== "me" &&
