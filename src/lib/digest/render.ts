@@ -13,7 +13,7 @@ export type DigestEmailInput = {
   narrative?: string;
 };
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

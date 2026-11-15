@@ -2,7 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Kicker } from "@/components/ui/kicker";
-import type { PendingInvitation } from "@/lib/collaboration/invitations";
+import {
+  invitationSummary,
+  type PendingInvitation,
+} from "@/lib/collaboration/invitations";
 
 export function InvitationsSection({
   invites,
@@ -25,16 +28,11 @@ export function InvitationsSection({
       <ul>
         {invites.map((i) => (
           <li key={i.id} className="space-y-2 px-3 py-2 text-sm">
-            <p>
-              You&apos;ve been invited to{" "}
-              <span className="font-medium">{i.org_name}</span>{" "}
-              <span className="text-muted-foreground capitalize">
-                as {i.role}
-              </span>
-            </p>
+            <p>{invitationSummary(i)}</p>
             <p className="text-muted-foreground text-xs">
-              Accepting also lets the person who invited you collaborate on
-              boards you share from your own workspace.
+              {i.folder_name
+                ? "Accepting opens the folder. It also lets the person who invited you collaborate on boards you share from your own workspace."
+                : "Accepting also lets the person who invited you collaborate on boards you share from your own workspace."}
             </p>
             <div className="flex gap-2">
               <Button

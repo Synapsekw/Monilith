@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Bell } from "lucide-react";
 import {
   Popover,
@@ -10,25 +11,97 @@ import {
 import { useNotifications } from "@/lib/collaboration/use-notifications";
 import { useNotificationMutations } from "@/lib/collaboration/use-notification-mutations";
 import { useInvitations } from "@/lib/collaboration/use-invitations";
-import { useInvitationMutations } from "@/lib/collaboration/use-invitation-mutations";
+import {
+  takeInviteFlash,
+  useInvitationResponses,
+} from "@/lib/collaboration/use-invitation-responses";
+import {
+  invitationSummary,
+  type PendingInvitation,
+} from "@/lib/collaboration/invitations";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
 import { getDesktopBridge } from "@/lib/desktop/bridge";
 import { NotificationsList } from "./NotificationsList";
 import { InvitationsSection } from "./InvitationsSection";
 
+/** Per-user list of invitation ids this browser has already announced. */
+const announcedKey = (userId: string) => `monolith:invites-announced:${userId}`;
+const ANNOUNCED_CAP = 100;
+
+function readAnnounced(userId: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(announcedKey(userId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function unannouncedInvitations(
+  userId: string,
+  invites: readonly PendingInvitation[],
+): PendingInvitation[] {
+  if (!userId || invites.length === 0) return [];
+  const seen = new Set(readAnnounced(userId));
+  return invites.filter((i) => !seen.has(i.id));
+}
+
+function markAnnounced(
+  userId: string,
+  invites: readonly PendingInvitation[],
+): void {
+  try {
+    const ids = [
+      ...new Set([...invites.map((i) => i.id), ...readAnnounced(userId)]),
+    ].slice(0, ANNOUNCED_CAP);
+    window.localStorage.setItem(announcedKey(userId), JSON.stringify(ids));
+  } catch {
+    // Storage unavailable: the badge is still the cue.
+  }
+}
+
 export function NotificationsBell({ userId }: { userId: string }) {
   const { query, unread } = useNotifications(userId);
   const { markRead, markAllRead } = useNotificationMutations(userId);
   const { invites, count: inviteCount } = useInvitations(userId);
-  const { accept, decline } = useInvitationMutations(userId);
+  const {
+    onAccept,
+    onDecline,
+    pendingId,
+    error: inviteError,
+  } = useInvitationResponses(userId, invites);
+  const [bellOpen, setBellOpen] = useState(false);
 
   const badge = unread + inviteCount;
-  const pendingId = accept.isPending
-    ? ((accept.variables as string | undefined) ?? null)
-    : decline.isPending
-      ? ((decline.variables as string | undefined) ?? null)
-      : null;
-  const inviteError = (accept.error ?? decline.error)?.message ?? null;
+
+  // After an accept the page was reloaded onto the folder; say what happened.
+  useEffect(() => {
+    const message = takeInviteFlash();
+    if (message) toast.success(message);
+  }, []);
+
+  // A pending invitation must not depend on someone noticing a badge: the
+  // first time this browser sees one (an invite that arrived while they were
+  // away, found on their next sign-in, or pushed live), say so once and offer
+  // to open it. Uses the invitations the bell already loaded: no extra read.
+  useEffect(() => {
+    const fresh = unannouncedInvitations(userId, invites);
+    if (fresh.length === 0) return;
+    markAnnounced(userId, invites);
+    toast(
+      fresh.length === 1
+        ? invitationSummary(fresh[0])
+        : `You have ${fresh.length} pending invitations`,
+      {
+        description: "Open your notifications to accept or decline.",
+        action: { label: "View", onClick: () => setBellOpen(true) },
+        duration: 12000,
+      },
+    );
+  }, [userId, invites]);
 
   useEffect(() => {
     // The desktop shell exposes `window.monolith` via its preload bridge; in a
@@ -63,15 +136,8 @@ export function NotificationsBell({ userId }: { userId: string }) {
     }
   }
 
-  function onAccept(id: string) {
-    // Membership is server data → reload to pull the new org context + boards.
-    accept.mutate(id, {
-      onSuccess: () => window.location.assign("/"),
-    });
-  }
-
   return (
-    <Popover>
+    <Popover open={bellOpen} onOpenChange={setBellOpen}>
       <PopoverTrigger
         aria-label="Notifications"
         className="hover:bg-state-hover focus-visible:ring-ring relative grid size-9 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
@@ -98,7 +164,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
         <InvitationsSection
           invites={invites}
           onAccept={onAccept}
-          onDecline={(id) => decline.mutate(id)}
+          onDecline={onDecline}
           pendingId={pendingId}
           error={inviteError}
         />

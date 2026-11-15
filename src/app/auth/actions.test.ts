@@ -144,6 +144,20 @@ describe("changeOwnPassword", () => {
       app_metadata: { y: 2, must_change_password: false },
     });
   });
+  it("sends an account that is not approved yet (an invitee) to the waiting screen", async () => {
+    readAccountApproval.mockResolvedValue("pending");
+    await expect(changeOwnPassword({}, fd("longenough1"))).rejects.toThrow(
+      "REDIRECT:/pending-approval",
+    );
+    expect(readAccountApproval).toHaveBeenCalledWith("u1");
+    expect(updateUser).toHaveBeenCalledWith({ password: "longenough1" });
+  });
+  it("still goes home when the approval read fails (the gate there decides)", async () => {
+    readAccountApproval.mockRejectedValue(new Error("db down"));
+    await expect(changeOwnPassword({}, fd("longenough1"))).rejects.toThrow(
+      "REDIRECT:/",
+    );
+  });
 });
 
 describe("signUp — email enumeration hardening", () => {

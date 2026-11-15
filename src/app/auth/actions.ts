@@ -1,11 +1,11 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getServerEnv } from "@/lib/env.server";
 import { safeNextPath } from "@/lib/auth/next-path";
+import { getAppOrigin } from "@/lib/auth/origin";
 import {
   PENDING_APPROVAL_PATH,
   readAccountApproval,
@@ -26,32 +26,6 @@ export type AuthState = {
   error?: string;
   success?: string;
 };
-
-/**
- * Resolve the canonical origin used to build `emailRedirectTo` for confirmation
- * / recovery links.
- *
- * Security: the `Origin`/`Host` request headers are client-controllable, so a
- * poisoned host could make a confirmation link point at an attacker origin. We
- * therefore PREFER the operator-set `APP_BASE_URL` env, which is not
- * attacker-controllable. We fall back to the request headers ONLY when
- * `APP_BASE_URL` is unset — this keeps local dev and Vercel preview deployments
- * working, where the per-deployment URL isn't known ahead of time (and those
- * origins are trusted). In production, set `APP_BASE_URL` to the canonical app
- * URL so the header path is never taken.
- */
-async function getOrigin(): Promise<string> {
-  const configured = getServerEnv().APP_BASE_URL;
-  if (configured) return configured.replace(/\/+$/, "");
-
-  const headerStore = await headers();
-  const origin = headerStore.get("origin");
-  if (origin) return origin;
-
-  const host = headerStore.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  return `${protocol}://${host}`;
-}
 
 /**
  * Read the post-sign-in destination off the submitted form.
@@ -140,7 +114,7 @@ export async function signUp(
   });
   if (!gate.allowed) return throttleResult("signUp", gate.retryAfterSeconds);
 
-  const origin = await getOrigin();
+  const origin = await getAppOrigin();
   const next = nextFrom(formData);
   // Sanitize BEFORE embedding: an unvalidated value here would mint an off-site
   // redirect inside an email we send. Same shape as requestPasswordReset below.
@@ -209,7 +183,7 @@ export async function requestPasswordReset(
   if (!gate.allowed)
     return throttleResult("requestPasswordReset", gate.retryAfterSeconds);
 
-  const origin = await getOrigin();
+  const origin = await getAppOrigin();
   const supabase = await createClient();
   // `recovery=1` makes /change-password show self-serve copy (not the
   // admin-forced wording). Encoded because it rides as the `next` param value.
@@ -259,8 +233,11 @@ export async function changeOwnPassword(
     app_metadata: { ...user.app_metadata, must_change_password: false },
   });
 
+  // An account still waiting for a platform admin (every invited outsider who
+  // has just set their first password) goes straight to the waiting screen
+  // rather than through /home's gate; everyone else goes home as before.
   // redirect() throws — outside any try/catch.
-  redirect("/");
+  redirect(await postAuthDestination(user.id, "/"));
 }
 
 /**

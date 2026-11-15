@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { PendingInvitation } from "@/lib/collaboration/invitations";
 
 const markRead = vi.fn();
@@ -26,6 +26,11 @@ vi.mock("@/lib/collaboration/use-invitations", () => ({
     count: mockInvites.length,
   }),
 }));
+const { toast } = vi.hoisted(() => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn() }),
+}));
+vi.mock("sonner", () => ({ toast }));
+vi.mock("@/lib/org/active-actions", () => ({ setActiveOrg: vi.fn() }));
 vi.mock("@/lib/collaboration/use-invitation-mutations", () => ({
   useInvitationMutations: () => ({
     accept: {
@@ -59,6 +64,10 @@ beforeEach(() => {
   mockInvites = [];
   acceptMutate.mockReset();
   declineMutate.mockReset();
+  toast.mockReset();
+  toast.success.mockReset();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 describe("NotificationsBell", () => {
@@ -102,5 +111,57 @@ describe("NotificationsBell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(acceptMutate).toHaveBeenCalled();
     expect(acceptMutate.mock.calls[0][0]).toBe("inv-1");
+  });
+
+  it("announces a pending invitation once, naming the folder, and opens the bell from it", () => {
+    mockInvites = [
+      {
+        ...invite,
+        role: "guest",
+        inviter_name: "Ann",
+        folder_id: "f-1",
+        folder_name: "Launch",
+        folder_count: 1,
+      },
+    ];
+    const first = render(<NotificationsBell userId="u1" />);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][0]).toBe(
+      "Ann invited you to the folder Launch in Acme Inc",
+    );
+    // The toast's action opens the bell on the invitation.
+    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+    act(() => toast.mock.calls[0][1].action.onClick());
+    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+    first.unmount();
+
+    // Next page load in the same browser: already announced, not repeated.
+    render(<NotificationsBell userId="u1" />);
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces nothing when there is no invitation", () => {
+    render(<NotificationsBell userId="u1" />);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("announces again for a different user on the same browser", () => {
+    mockInvites = [invite];
+    render(<NotificationsBell userId="u1" />).unmount();
+    render(<NotificationsBell userId="u2" />);
+    expect(toast).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the message left by an accept, once", () => {
+    window.sessionStorage.setItem(
+      "monolith:invite-flash",
+      "You now have access to the folder Launch in Acme Inc",
+    );
+    render(<NotificationsBell userId="u1" />).unmount();
+    expect(toast.success).toHaveBeenCalledWith(
+      "You now have access to the folder Launch in Acme Inc",
+    );
+    render(<NotificationsBell userId="u1" />);
+    expect(toast.success).toHaveBeenCalledTimes(1);
   });
 });

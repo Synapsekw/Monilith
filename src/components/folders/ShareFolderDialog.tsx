@@ -19,6 +19,7 @@ import {
   unshareFolder,
 } from "@/lib/folders/sharing-actions";
 import type {
+  InviteDeliveryKind,
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
@@ -89,6 +90,19 @@ function LevelSelect({
  * change. Reads carry their own sequence number so an older answer never
  * replaces a newer one.
  */
+/** What actually happened to the invitation, said plainly (never "sent" when
+ *  nothing was sent). */
+const INVITE_NOTICE: Record<InviteDeliveryKind, string> = {
+  invite_email:
+    "Invitation emailed. They get access after they set a password and an administrator approves their account.",
+  notice_email:
+    "They already have a Monolith account, so we emailed them and added the invitation to their notifications. They get access when they accept it.",
+  in_app:
+    "They already have a Monolith account. No email was sent: the invitation is waiting in their notifications, and they get access when they accept it.",
+  failed:
+    "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+};
+
 export function ShareFolderDialog({
   folderId,
   folderName,
@@ -258,9 +272,7 @@ export function ShareFolderDialog({
         setNotice(
           r.data.kind === "shared"
             ? "Added. They can open every board in this folder now."
-            : r.data.emailSent
-              ? "Invitation sent. They get access after they sign up and are approved."
-              : "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+            : INVITE_NOTICE[r.data.delivery],
         );
         await reload(e);
       },

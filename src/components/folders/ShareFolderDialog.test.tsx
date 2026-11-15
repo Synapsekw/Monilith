@@ -121,7 +121,7 @@ describe("ShareFolderDialog", () => {
   it("invites an email address at the chosen level", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: true },
+      data: { kind: "invited", delivery: "invite_email" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -142,15 +142,43 @@ describe("ShareFolderDialog", () => {
     );
     expect(
       await screen.findByText(
-        "Invitation sent. They get access after they sign up and are approved.",
+        "Invitation emailed. They get access after they set a password and an administrator approves their account.",
       ),
     ).toBeInTheDocument();
   });
 
+  it.each([
+    [
+      "notice_email",
+      "They already have a Monolith account, so we emailed them and added the invitation to their notifications. They get access when they accept it.",
+    ],
+    [
+      "in_app",
+      "They already have a Monolith account. No email was sent: the invitation is waiting in their notifications, and they get access when they accept it.",
+    ],
+  ])(
+    "never says 'sent' for an existing account (%s)",
+    async (delivery, copy) => {
+      inviteToFolder.mockResolvedValue({
+        ok: true,
+        data: { kind: "invited", delivery },
+      });
+      open();
+      await screen.findByText("Dana Lee");
+      await settled();
+      fireEvent.change(screen.getByLabelText("Name or email"), {
+        target: { value: "old@x.com" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+      expect(await screen.findByText(copy)).toBeInTheDocument();
+      expect(screen.queryByText(/invitation sent/i)).not.toBeInTheDocument();
+    },
+  );
+
   it("says what is true when the invitation email could not be delivered", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: false },
+      data: { kind: "invited", delivery: "failed" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -407,7 +435,10 @@ describe("ShareFolderDialog concurrency", () => {
     fireEvent.submit(form());
     expect(inviteToFolder).toHaveBeenCalledTimes(1);
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "invite_email" },
+      });
     });
   });
 
@@ -497,7 +528,10 @@ describe("ShareFolderDialog concurrency", () => {
 
     loadFolderAccess.mockClear();
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "invite_email" },
+      });
     });
     // No reload for a dialog that is gone, and nothing counted as a change.
     expect(loadFolderAccess).not.toHaveBeenCalled();

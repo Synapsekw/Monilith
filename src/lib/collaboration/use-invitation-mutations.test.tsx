@@ -41,6 +41,28 @@ describe("useInvitationMutations accept", () => {
     );
   });
 
+  it("runs the caller's onSuccess only after the cache refresh has finished", async () => {
+    acceptInvitation.mockResolvedValue("org-7");
+    let release: () => void = () => {};
+    refreshAccessAfterInvitation.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useInvitationMutations("u1"), {
+      wrapper,
+    });
+    result.current.accept.mutate("inv-1", { onSuccess });
+    await waitFor(() =>
+      expect(refreshAccessAfterInvitation).toHaveBeenCalledWith("org-7"),
+    );
+    expect(onSuccess).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(onSuccess.mock.calls[0][0]).toBe("org-7");
+  });
+
   it("does not refresh when the accept failed", async () => {
     acceptInvitation.mockRejectedValue(new Error("nope"));
     const { result } = renderHook(() => useInvitationMutations("u1"), {

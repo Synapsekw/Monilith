@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import PortfoliosIndex from "./page";
 
 const listPortfolios = vi.fn();
+const isActiveOrgGuest = vi.fn();
+vi.mock("@/lib/org/guest", () => ({
+  isActiveOrgGuest: (userId: string) => isActiveOrgGuest(userId),
+}));
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "user-1" })),
 }));
@@ -16,7 +20,22 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("PortfoliosIndex", () => {
-  beforeEach(() => listPortfolios.mockReset());
+  beforeEach(() => {
+    listPortfolios.mockReset();
+    isActiveOrgGuest.mockReset().mockResolvedValue(false);
+  });
+
+  it("tells a guest the page is not available, with no create control and no read", async () => {
+    isActiveOrgGuest.mockResolvedValue(true);
+    render(await PortfoliosIndex());
+
+    expect(isActiveOrgGuest).toHaveBeenCalledWith("user-1");
+    expect(
+      screen.getByText("Portfolios is not available to guests"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New portfolio" })).toBeNull();
+    expect(listPortfolios).not.toHaveBeenCalled();
+  });
 
   it("with no portfolios, shows Mono, what will appear, and the existing New portfolio trigger", async () => {
     listPortfolios.mockResolvedValue([]);

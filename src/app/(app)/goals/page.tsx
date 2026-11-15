@@ -1,4 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
+import { isActiveOrgGuest } from "@/lib/org/guest";
+import { GuestUnavailable } from "@/components/shell/guest-unavailable";
 import {
   getGoalLinks,
   getGoalOwners,
@@ -13,6 +15,11 @@ export default async function GoalsIndex() {
   // Identity read OUTSIDE the cache scope (9.3 rule) — the user id keys the
   // cached readable-boards entry.
   const user = await requireUser();
+  // Org-wide planning is not offered to guests (the sidebar hides the link);
+  // reached by URL, say so instead of rendering an empty page whose create
+  // buttons the database refuses. Same cached role read as the shell.
+  if (await isActiveOrgGuest(user.id))
+    return <GuestUnavailable title="Goals" />;
   const [tree, ownerMap, boards, linkMap] = await Promise.all([
     getGoalsTree(),
     getGoalOwners(),

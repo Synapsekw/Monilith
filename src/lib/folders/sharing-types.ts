@@ -31,8 +31,17 @@ export type FolderAccessData = {
   invitations: FolderInvitationEntry[];
   candidates: FolderCandidate[];
 };
+/**
+ * How an invited person was told (mirrors `InviteDelivery` in
+ * `src/lib/auth/invite-delivery.ts`, which is server-only): the Supabase
+ * invite email to a new address, our notice email to an address that already
+ * has an account, the notifications bell only, or nothing (the invite email to
+ * a new address failed).
+ */
+export type InviteDeliveryKind =
+  "invite_email" | "notice_email" | "in_app" | "failed";
 export type InviteOutcome =
-  { kind: "shared" } | { kind: "invited"; emailSent: boolean };
+  { kind: "shared" } | { kind: "invited"; delivery: InviteDeliveryKind };
 
 /**
  * Returned by moveBoardToFolder when the target folder has members and the move

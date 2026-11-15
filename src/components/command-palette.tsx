@@ -45,7 +45,12 @@ export function CommandPalette({
   boards,
   folders,
   workspaces,
+  isGuest = false,
 }: {
+  /** A guest of the active org: creating boards and dashboards is refused by
+   *  the database and org-wide Reports is empty for them, so neither is
+   *  offered. Optional so every existing call site stays valid. */
+  isGuest?: boolean;
   boards: BoardListEntry[];
   folders: { id: string; name: string }[];
   workspaces: { id: string; name: string }[];
@@ -206,9 +211,13 @@ export function CommandPalette({
               >
                 <LayoutDashboard className="size-4" /> Folders
               </CommandItem>
-              <CommandItem onSelect={() => run(() => router.push("/reports"))}>
-                <FileText className="size-4" /> Reports
-              </CommandItem>
+              {isGuest ? null : (
+                <CommandItem
+                  onSelect={() => run(() => router.push("/reports"))}
+                >
+                  <FileText className="size-4" /> Reports
+                </CommandItem>
+              )}
               {boards.map((b) => (
                 <CommandItem
                   key={b.id}
@@ -228,25 +237,27 @@ export function CommandPalette({
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandGroup heading={<Kicker>Create</Kicker>}>
-              <CommandItem
-                disabled={!canCreate}
-                onSelect={() => run(() => setNewBoardOpen(true))}
-              >
-                <Plus className="size-4" /> New board
-              </CommandItem>
-              <CommandItem
-                disabled={!canCreate}
-                onSelect={() =>
-                  run(() => {
-                    router.push("/dashboards");
-                    setNewDashboardOpen(true);
-                  })
-                }
-              >
-                <Plus className="size-4" /> New dashboard
-              </CommandItem>
-            </CommandGroup>
+            {isGuest ? null : (
+              <CommandGroup heading={<Kicker>Create</Kicker>}>
+                <CommandItem
+                  disabled={!canCreate}
+                  onSelect={() => run(() => setNewBoardOpen(true))}
+                >
+                  <Plus className="size-4" /> New board
+                </CommandItem>
+                <CommandItem
+                  disabled={!canCreate}
+                  onSelect={() =>
+                    run(() => {
+                      router.push("/dashboards");
+                      setNewDashboardOpen(true);
+                    })
+                  }
+                >
+                  <Plus className="size-4" /> New dashboard
+                </CommandItem>
+              </CommandGroup>
+            )}
             <CommandSeparator />
             <CommandGroup heading={<Kicker>Theme</Kicker>}>
               <CommandItem onSelect={() => run(() => setTheme("light"))}>

@@ -101,6 +101,32 @@ describe("CommandPalette", () => {
     expect(useUIStore.getState().commandOpen).toBe(false);
   });
 
+  it("offers a guest no create actions and no Reports link, but keeps their boards and folders", () => {
+    useUIStore.setState({ commandOpen: true });
+    render(
+      <CommandPalette
+        boards={boards}
+        folders={folders}
+        workspaces={workspaces}
+        isGuest
+      />,
+    );
+    expect(screen.queryByText("New board")).toBeNull();
+    expect(screen.queryByText("New dashboard")).toBeNull();
+    expect(screen.queryByText("Create")).toBeNull();
+    expect(screen.queryByText("Reports")).toBeNull();
+    expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
+    expect(screen.getByText(/Q4 Launch — command center/)).toBeInTheDocument();
+    expect(screen.getByText("Folders")).toBeInTheDocument();
+  });
+
+  it("offers a full member Reports and both create actions", () => {
+    renderOpen();
+    expect(screen.getByText("Reports")).toBeInTheDocument();
+    expect(screen.getByText("New board")).toBeInTheDocument();
+    expect(screen.getByText("New dashboard")).toBeInTheDocument();
+  });
+
   it("New dashboard navigates to the gallery and sets the newDashboardOpen flag", () => {
     renderOpen();
     fireEvent.click(screen.getByText("New dashboard"));
