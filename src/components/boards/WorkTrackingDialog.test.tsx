@@ -87,6 +87,73 @@ describe("WorkTrackingDialog", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
+  it("previews the due column the view will guess, not the first by position", () => {
+    setup({
+      columns: [
+        ...columns,
+        { id: "d0", name: "Start", kind: "date", position: 0, settings: {} },
+        { id: "d1", name: "Calendar", kind: "date", position: 1, settings: {} },
+      ],
+    });
+    expect(screen.getByLabelText("Due date column")).toHaveDisplayValue(
+      "Automatic (Due)",
+    );
+  });
+
+  it("previews cancelled as done and negated labels as open", () => {
+    setup({
+      columns: columns.map((c) =>
+        c.id === STATUS_ID
+          ? {
+              ...c,
+              settings: {
+                options: [
+                  { id: "o1", label: "Incomplete", color: "#fdab3d" },
+                  { id: "o2", label: "Cancelled", color: "#c4c4c4" },
+                  { id: "o3", label: "Not done", color: "#e2445c" },
+                  { id: "o4", label: "Done", color: "#00c875" },
+                ],
+              },
+            }
+          : c,
+      ),
+    });
+    expect(screen.getByText(/currently treated as done/i)).toHaveTextContent(
+      /^Currently treated as done: Cancelled, Done$/,
+    );
+  });
+
+  it("explains the label guess under a chosen status column", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.selectOptions(screen.getByLabelText("Status column"), STATUS_ID);
+    expect(
+      screen.getByText(
+        "Leave all unticked to treat options named like Done, Complete or Cancelled as done.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("previews the label guess for an explicitly chosen column while nothing is ticked", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.selectOptions(screen.getByLabelText("Status column"), STATUS_ID);
+    expect(screen.getByText(/currently treated as done/i)).toHaveTextContent(
+      /^Currently treated as done: Done, Completed$/,
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Working" }));
+    expect(screen.queryByText(/currently treated as done/i)).toBeNull();
+    await user.selectOptions(
+      screen.getByLabelText("Status column"),
+      OTHER_STATUS_ID,
+    );
+    expect(
+      screen.getByText(
+        "No option looks like done yet, so every item counts as open.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("offers only status columns as status and only date columns as due", () => {
     setup();
     const status = screen.getByLabelText("Status column");
