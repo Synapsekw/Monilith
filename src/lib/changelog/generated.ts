@@ -6,6 +6,13 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-15",
     kind: "fixed",
+    title: "Guests see only who they work with",
+    description:
+      "A guest now sees only the people, workspaces and Monos on the folders and boards shared with them, and is marked as a guest where they appear.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
     title: "Folder sharing can no longer raise your own access",
     description:
       "Sharing or inviting to a folder now needs you to own every board in it, or be an admin.",

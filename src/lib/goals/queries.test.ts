@@ -20,8 +20,8 @@ vi.mock("@/lib/supabase/server", () => ({
     rpc: vi.fn(async () => ({ data: [], error: null })),
   })),
 }));
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: vi.fn(async () => []),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: vi.fn(async () => []),
 }));
 vi.mock("@/lib/org/active", () => ({ getActiveOrgId: vi.fn(async () => "") }));
 
@@ -33,7 +33,7 @@ import {
   GOAL_LINKS_LIMIT,
 } from "./queries";
 import { createClient } from "@/lib/supabase/server";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers as listOrgMembersCached } from "@/lib/org/visible-roster";
 import { getActiveOrgId } from "@/lib/org/active";
 import type { RowOwner } from "@/lib/goals/types";
 

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getPortfolioRows } from "@/lib/portfolios/queries";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { PortfolioGrid } from "@/components/portfolios/PortfolioGrid";
 import { PageHeader } from "@/components/ui/page-header";
 
@@ -23,7 +23,7 @@ export default async function PortfolioPage({
 
   // Stage 2: same use-cache key getPortfolioRows just resolved → warm hit,
   // not a second Supabase round-trip (this used to be a duplicate fresh fetch).
-  const members = await listOrgMembersCached(result.portfolio.org_id);
+  const members = await listVisibleOrgMembers(result.portfolio.org_id);
 
   return (
     <div className="flex h-full flex-col">

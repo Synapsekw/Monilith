@@ -15,7 +15,12 @@ import { getModel } from "@/lib/ai/models/catalog-db";
 import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
-import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
+import {
+  DEFAULT_ORG_AI_SETTINGS,
+  readOrgAiSettings,
+  type AiMode,
+} from "@/lib/ai/org-settings";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
@@ -63,13 +68,36 @@ export async function getOrgAiSettings(): Promise<
     assistantName: string;
   }>
 > {
-  await requireUser();
+  const user = await requireUser();
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
 
   const supabase = await createClient();
-  const settings = await readOrgAiSettings(supabase, org.id);
-  const entitlement = await getAiEntitlement(org.id);
+  const [settings, entitlement, access] = await Promise.all([
+    readOrgAiSettings(supabase, org.id),
+    getAiEntitlement(org.id),
+    getFolderAccessForUserCached(user.id, org.id),
+  ]);
+
+  // A guest reads nothing of org_ai_settings (RLS returns no row, so
+  // `settings` is the defaults). The one thing their page needs is the mode:
+  // it decides whether they add a personal key. Tier, credits, the org key
+  // preview, the default model and the assistant name stay out.
+  if (access.isGuest)
+    return {
+      ok: true,
+      data: {
+        mode: entitlement.mode,
+        tier: DEFAULT_ORG_AI_SETTINGS.tier,
+        creditsLimit: 0,
+        creditsUsed: 0,
+        byoProvider: null,
+        byoKeyLast4: null,
+        defaultProvider: null,
+        defaultModelId: null,
+        assistantName: DEFAULT_ORG_AI_SETTINGS.assistantName,
+      },
+    };
 
   return {
     ok: true,

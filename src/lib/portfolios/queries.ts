@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { optionSchema, type ColumnOption } from "@/lib/validations/boards";
 import { mergeRows, serverToday } from "@/lib/portfolios/rollup";
 import type {
@@ -150,7 +150,7 @@ export async function getPortfolioRowsCore(
 /** Cookie-bound wrapper — the RSC entry point. Signature unchanged.
  *
  * The owner map needs the portfolio's org, so this chains `getPortfolio` →
- * `listOrgMembersCached` into a single promise and hands it to the core as
+ * `listVisibleOrgMembers` into a single promise and hands it to the core as
  * the 4th `Promise.all` slot — it resolves CONCURRENTLY with the
  * portfolio/placements/rollup reads (preserving the `c2be916f` waterfall
  * collapse) rather than gating them behind a sequential head read. */
@@ -162,7 +162,7 @@ export async function getPortfolioRows(
 
   const owners = getPortfolio(portfolioId).then(async (head) => {
     if (!head) return new Map<string, RowOwner>();
-    const members = await listOrgMembersCached(head.org_id);
+    const members = await listVisibleOrgMembers(head.org_id);
     return new Map<string, RowOwner>(
       members.map((m) => [
         m.userId,

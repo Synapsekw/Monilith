@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const workspaceId = await getActiveWorkspaceId(
-    await listWorkspacesCached(org.id),
+    await listVisibleWorkspaces(org.id),
   );
   if (!workspaceId)
     return NextResponse.json({ error: "No workspace." }, { status: 400 });

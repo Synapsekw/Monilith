@@ -47,8 +47,8 @@ vi.mock("@/lib/boards/queries", () => ({
 }));
 
 const listOrgMembersCached = vi.fn();
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: (...args: unknown[]) => listOrgMembersCached(...args),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: (...args: unknown[]) => listOrgMembersCached(...args),
 }));
 
 const buildTranscript = vi.fn();

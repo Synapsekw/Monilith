@@ -109,6 +109,8 @@ export type HeaderMember = {
   email: string | null;
   /** Set when this row is a Mono (Personal Monos). */
   mono?: MonoMemberMeta;
+  /** An org guest (share dialog badge). */
+  isGuest?: boolean;
 };
 
 export type HeaderGrant = { userId: string; access: "viewer" | "editor" };

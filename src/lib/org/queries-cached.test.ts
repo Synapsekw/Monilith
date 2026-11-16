@@ -62,6 +62,25 @@ describe("listOrgMembersCached", () => {
     ]);
   });
 
+  it("flags a guest, and only a guest", async () => {
+    memberLimit.mockResolvedValue({
+      data: [
+        { user_id: "u1", role: "member" },
+        { user_id: "u2", role: "guest" },
+        { user_id: "u3", role: "owner" },
+      ],
+      error: null,
+    });
+    profilesIn.mockResolvedValue({ data: [], error: null });
+    const members = await listOrgMembersCached("org-A");
+    expect(memberSelect).toHaveBeenCalledWith("user_id, role");
+    expect(members.map((m) => [m.userId, m.isGuest])).toEqual([
+      ["u1", undefined],
+      ["u2", true],
+      ["u3", undefined],
+    ]);
+  });
+
   it("returns [] when the org has no members or on error", async () => {
     memberLimit.mockResolvedValue({ data: [], error: null });
     expect(await listOrgMembersCached("org-A")).toEqual([]);

@@ -161,3 +161,45 @@ describe("MembersTable actions", () => {
     expect(setMemberRole).not.toHaveBeenCalled();
   });
 });
+
+describe("MembersTable guest badge", () => {
+  const guestRow: Member = {
+    user_id: "u-guest",
+    email: "guest@x.com",
+    full_name: "Gil Guest",
+    role: "guest",
+    deactivated_at: null,
+  };
+
+  it("marks a guest next to their name and nobody else", () => {
+    render(
+      <MembersTable
+        orgId={ORG}
+        members={[ownerRow, memberRow, guestRow]}
+        currentUserId="u-owner"
+        currentUserRole="owner"
+      />,
+    );
+    // The role <select> options read "guest" in lower case; the badge is "Guest".
+    expect(screen.getAllByText("Guest")).toHaveLength(1);
+    const row = screen.getByText("Gil Guest").closest("tr")!;
+    expect(within(row).getByText("Guest")).toBeInTheDocument();
+    // No behaviour change: the row keeps its role control and actions.
+    expect(within(row).getByLabelText("Role for guest@x.com")).toHaveValue(
+      "guest",
+    );
+    expect(within(row).getByRole("button", { name: "Remove" })).toBeEnabled();
+  });
+
+  it("shows no badge without a guest", () => {
+    render(
+      <MembersTable
+        orgId={ORG}
+        members={[ownerRow, memberRow]}
+        currentUserId="u-owner"
+        currentUserRole="owner"
+      />,
+    );
+    expect(screen.queryByText("Guest")).toBeNull();
+  });
+});

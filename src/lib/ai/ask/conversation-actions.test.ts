@@ -11,8 +11,8 @@ vi.mock("@/lib/org/active", () => ({
     timezone: "UTC",
   })),
 }));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleWorkspaces: vi.fn(async () => [{ id: "ws1" }]),
 }));
 vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "ws1"),

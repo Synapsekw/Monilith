@@ -162,7 +162,11 @@ vi.mock("@/lib/monos/turn", () => ({
   monoSystemLines: () => "MONO LINES",
 }));
 vi.mock("@/lib/mono/session", () => ({ getMonoClient }));
-vi.mock("@/lib/org/queries-cached", () => ({ listOrgMembersCached }));
+// The route narrows the roster to the viewer; the narrowing itself is covered
+// in src/lib/org/visible-roster.test.ts.
+vi.mock("@/lib/org/visible-roster", () => ({
+  visibleOrgMembersFor: listOrgMembersCached,
+}));
 vi.mock("@/lib/profile/queries-cached", () => ({
   getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
 }));

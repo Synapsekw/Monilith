@@ -12,7 +12,7 @@ import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 // Same caps as useItemCollab's item_updates/item_activities reads — bounded,
@@ -56,7 +56,7 @@ export async function summarizeThread(input: {
 
     const payload = await getBoardPayload(item.board_id);
     if (!payload) return fail("Item not found.");
-    const members = await listOrgMembersCached(payload.board.org_id);
+    const members = await listVisibleOrgMembers(payload.board.org_id);
 
     const [updatesRes, activitiesRes] = await Promise.all([
       supabase

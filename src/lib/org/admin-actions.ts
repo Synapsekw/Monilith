@@ -47,6 +47,8 @@ export async function setMemberRole(input: unknown): Promise<ActionResult> {
   });
   if (error) return fail(friendlyMemberError(error.message));
   updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
+  // The cached roster carries `isGuest`, derived from the role.
+  updateTag(orgMembersTag(parsed.data.orgId));
   revalidatePath("/settings");
   return ok();
 }

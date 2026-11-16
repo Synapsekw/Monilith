@@ -631,6 +631,8 @@ export type OrgMember = {
   fullName: string | null;
   email: string | null;
   avatarUrl: string | null;
+  /** Set (true) only for an org guest, so the share dialogs can mark them. */
+  isGuest?: boolean;
 };
 
 export async function listAutomations(boardId: string): Promise<Automation[]> {

@@ -18,12 +18,14 @@ import {
   shareFolder,
   unshareFolder,
 } from "@/lib/folders/sharing-actions";
+import { loadFolderGuestIds } from "@/lib/folders/guest-actions";
 import type {
   InviteDeliveryKind,
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
 import { memberLabel, memberLabelInitials } from "@/lib/ui/member-label";
+import { GuestBadge } from "@/components/ui/guest-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -118,6 +120,9 @@ export function ShareFolderDialog({
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const [data, setData] = useState<FolderAccessData | null>(null);
+  // Which members are org guests (badge only). Loaded with the list; a failed
+  // read shows no badges and never an error.
+  const [guestIds, setGuestIds] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [newLevel, setNewLevel] = useState<FolderLevel>("viewer");
   const [error, setError] = useState<string | null>(null);
@@ -156,10 +161,15 @@ export function ShareFolderDialog({
 
   async function reload(e: number) {
     const seq = ++loadSeq.current;
-    const r = await loadFolderAccess({ folderId });
+    const [r, guests] = await Promise.all([
+      loadFolderAccess({ folderId }),
+      loadFolderGuestIds({ folderId }).catch(() => null),
+    ]);
     if (e !== epoch.current || seq !== loadSeq.current) return;
-    if (r.ok) setData(r.data);
-    else setError(r.error);
+    if (r.ok) {
+      setData(r.data);
+      setGuestIds(new Set(guests?.ok ? guests.data : []));
+    } else setError(r.error);
   }
 
   useEffect(() => {
@@ -422,17 +432,20 @@ export function ShareFolderDialog({
                       {memberLabelInitials(m) || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <span
-                    title={name}
-                    className="text-foreground min-w-0 flex-1 truncate text-sm font-medium"
-                  >
-                    {name}
-                    {m.userId === data.myUserId ? (
-                      <span className="text-muted-foreground font-normal">
-                        {" "}
-                        (you)
-                      </span>
-                    ) : null}
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      title={name}
+                      className="text-foreground min-w-0 truncate text-sm font-medium"
+                    >
+                      {name}
+                      {m.userId === data.myUserId ? (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          (you)
+                        </span>
+                      ) : null}
+                    </span>
+                    {guestIds.has(m.userId) ? <GuestBadge /> : null}
                   </span>
                   {canManage ? (
                     <>

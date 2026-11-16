@@ -73,7 +73,7 @@ export default async function BoardPage({
     // carries the org's Monos (cached, same tag) and the viewer's own Mono (a
     // point read), all in parallel inside this same wave — no new wave.
     resolveActiveOrg()
-      .then((org) => (org ? loadBoardRoster(supabase, org.id) : null))
+      .then((org) => (org ? loadBoardRoster(supabase, org.id, user.id) : null))
       .catch(() => null),
     // The caller's level through the board's folder. One more read in the
     // wave that already exists; primary-key lookups on folder_boards and
@@ -108,7 +108,7 @@ export default async function BoardPage({
   const roster =
     activeRoster?.orgId === payload.board.org_id
       ? activeRoster
-      : await loadBoardRoster(supabase, payload.board.org_id);
+      : await loadBoardRoster(supabase, payload.board.org_id, user.id);
   const members = roster.members;
   // People plus the org's Monos, so cells, pickers and authors resolve a Mono
   // id from the payload already in hand.

@@ -195,6 +195,28 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
   });
 
+  it("PeopleCell prints a neutral Member for an assignee outside the roster", () => {
+    // A guest's roster holds only the people they share access with, and an
+    // item can be assigned to anyone: no name, no email, no avatar image.
+    const { container } = render(
+      <PeopleCell
+        value={{ userIds: ["hidden"] }}
+        settings={{}}
+        members={[
+          {
+            userId: "u1",
+            fullName: "Ada Lovelace",
+            email: "ada@x.com",
+            avatarUrl: "https://x.test/ada.png",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Member")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Ada|ada@x\.com|Unknown/);
+    expect(container.querySelector("img")).toBeNull();
+  });
+
   it("PeopleCell stacks avatars without names for two assignees", () => {
     const { container } = render(
       <PeopleCell

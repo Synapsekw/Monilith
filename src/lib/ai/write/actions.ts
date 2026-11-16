@@ -24,7 +24,7 @@ import {
   AiNotConfiguredError,
   ProviderNotCapableError,
 } from "@/lib/ai/errors";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
@@ -85,7 +85,7 @@ export async function proposeActions(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "conversational_action");
     const workspaceId = await getActiveWorkspaceId(
-      await listWorkspacesCached(org.id),
+      await listVisibleWorkspaces(org.id),
     );
     if (!workspaceId) return fail("No workspace.");
 

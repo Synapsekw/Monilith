@@ -147,7 +147,7 @@ describe("membership invalidation", () => {
     },
   );
 
-  it("setMemberRole does NOT invalidate the member list (payload carries no role)", async () => {
+  it("setMemberRole invalidates the member list (the roster carries the guest flag)", async () => {
     rpc.mockResolvedValue({ error: null });
     const r = await setMemberRole({
       orgId: orgUuid,
@@ -155,7 +155,7 @@ describe("membership invalidation", () => {
       role: "admin",
     });
     expect(r.ok).toBe(true);
-    expect(updateTag).not.toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
+    expect(updateTag).toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
   });
 });
 
