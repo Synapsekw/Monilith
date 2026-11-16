@@ -1,11 +1,12 @@
 import * as z from "zod";
 import { FOCUS_LIMIT, getFocusTodayCore } from "@/lib/focus/queries";
-import type { FocusTier } from "@/lib/focus/reason";
+import { FOCUS_TIERS, type FocusTier } from "@/lib/focus/reason";
 import { resolveOrgForScope } from "@/lib/mcp/org-scope";
 import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 const TIER_NAME: Record<FocusTier, string> = {
+  0: "dueToday",
   1: "overdue",
   2: "blocking",
   3: "dueSoon",
@@ -40,8 +41,11 @@ export async function getFocusTodayHandler(
   if (!res.ok)
     return { content: [{ type: "text", text: res.error }], isError: true };
 
-  const { today, timezoneAssumed, items, totals } = res.data;
-  const unknown = ([1, 2, 3, 4, 5] as const)
+  const { today, timezoneAssumed, items, totals, ordering } = res.data;
+  // The older database function has no "due today" tier (those items are in
+  // dueSoon), so that total is left out there instead of reported as unknown.
+  const hasDueToday = ordering === "current";
+  const unknown = FOCUS_TIERS.filter((t) => t !== 0 || hasDueToday)
     .filter((t) => totals[t] === null)
     .map((t) => TIER_NAME[t]);
   const body = {
@@ -59,6 +63,7 @@ export async function getFocusTodayHandler(
       reason: i.reason,
     })),
     totals: {
+      ...(hasDueToday ? { dueToday: totals[0] } : {}),
       overdue: totals[1],
       blocking: totals[2],
       dueSoon: totals[3],
@@ -72,7 +77,7 @@ export async function getFocusTodayHandler(
       : {}),
     ...(items.length === 0
       ? {
-          note: "Nothing urgent: no open item of theirs is overdue, blocking someone, due within two days, waiting on a reply or stalled. Use get_my_work for the full list.",
+          note: "Nothing urgent: no open item of theirs is due today, overdue, blocking someone, due within two days, waiting on a reply or stalled. Use get_my_work for the full list.",
         }
       : {}),
   };
@@ -82,7 +87,7 @@ export async function getFocusTodayHandler(
 export const getFocusTodayDescriptor: ToolDescriptor = {
   name: "get_focus_today",
   title: "Get focus for today",
-  description: `What the connected user should work on first, already ranked: overdue, then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports null, meaning unknown, never 0). Both parameters are optional: call it with no arguments (or null) for everything the member can see. Pass folderId only to limit it to one project whose id you were given; never invent an id. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
+  description: `What the connected user should work on first, already ranked: due today, then overdue (most recently overdue first), then items blocking someone else, then due within two days, then unread replies, then stalled work. Returns at most ${FOCUS_LIMIT} items in order, each with the reason it is there, plus how many items each tier holds in total (a tier cut off by the limit reports null, meaning unknown, never 0). Both parameters are optional: call it with no arguments (or null) for everything the member can see. Pass folderId only to limit it to one project whose id you were given; never invent an id. Present the items in the order given and explain them with the reasons given; do not re-rank.`,
   inputSchema: {
     orgId: z.string().uuid().nullish(),
     folderId: z.string().uuid().nullish(),

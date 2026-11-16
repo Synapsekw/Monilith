@@ -30,7 +30,8 @@ describe("getFocusTodayHandler", () => {
         today: "2026-11-14",
         timezoneAssumed: false,
         items: [],
-        totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        totals: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        ordering: "current",
       },
     });
     await getFocusTodayHandler(getClient, "u1", {
@@ -60,7 +61,8 @@ describe("getFocusTodayHandler", () => {
         today: "2026-11-14",
         timezoneAssumed: false,
         items: [],
-        totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        totals: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        ordering: "current",
       },
     });
     await getFocusTodayHandler(getClient, "u1", { folderId: "f2" });
@@ -112,9 +114,13 @@ describe("getFocusTodayHandler", () => {
             dueDate: "2026-11-10",
             tier: 1,
             reason: "4 days overdue",
+            canEdit: true,
+            canMarkDone: true,
+            canSetDue: true,
           },
         ],
-        totals: { 1: 6, 2: 0, 3: 0, 4: 0, 5: 0 },
+        totals: { 0: 2, 1: 6, 2: 0, 3: 0, 4: 0, 5: 0 },
+        ordering: "current",
       },
     });
     const result = await getFocusTodayHandler(getClient, "u1", {});
@@ -135,6 +141,7 @@ describe("getFocusTodayHandler", () => {
         },
       ],
       totals: {
+        dueToday: 2,
         overdue: 6,
         blocking: 0,
         dueSoon: 0,
@@ -151,7 +158,8 @@ describe("getFocusTodayHandler", () => {
         today: "2026-11-14",
         timezoneAssumed: false,
         items: [],
-        totals: { 1: 6, 2: 0, 3: 14, 4: null, 5: null },
+        totals: { 0: null, 1: 6, 2: 0, 3: 14, 4: null, 5: null },
+        ordering: "legacy",
       },
     });
     const body = JSON.parse(
@@ -164,7 +172,10 @@ describe("getFocusTodayHandler", () => {
       waitingOnReply: null,
       stalled: null,
     });
-    expect(body.totalsNote).toMatch(/waitingOnReply and stalled/);
+    // The older function has no "due today" tier: it is left out, not
+    // reported as unknown.
+    expect(body.totalsNote).toMatch(/for waitingOnReply and stalled are/);
+    expect(body.totalsNote).not.toMatch(/dueToday/);
     expect(body.totalsNote).toMatch(/unknown/);
   });
 
@@ -175,7 +186,8 @@ describe("getFocusTodayHandler", () => {
         today: "2026-11-14",
         timezoneAssumed: false,
         items: [],
-        totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        totals: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        ordering: "current",
       },
     });
     const result = await getFocusTodayHandler(getClient, "u1", {});
