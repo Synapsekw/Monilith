@@ -408,8 +408,8 @@ describe("listItemsHandler", () => {
       return { fake, items };
     }
 
-    it("is one PostgREST response", () => {
-      expect(LIST_ITEMS_CELLS_CAP).toBe(1000);
+    it("holds a full page of a 100-column board", () => {
+      expect(LIST_ITEMS_CELLS_CAP).toBe(LIST_ITEMS_MAX_LIMIT * 100);
     });
 
     it("reports truncated false, with no next, when every cell fits", async () => {
@@ -437,34 +437,48 @@ describe("listItemsHandler", () => {
       expect(Object.keys(body.items[49].cells)).toHaveLength(20);
     });
 
-    it("flags a wide page, marks the incomplete items and says how to get them", async () => {
-      // 100 items x 25 columns = 2,500 cells; 1,000 load = the first 40 items.
-      const { fake, items } = wideBoard(100, 25);
+    it("returns every cell of a wide page by paging the cell read", async () => {
+      // 100 items x 25 columns = 2,500 cells: three PostgREST responses. This
+      // page used to come back with only its first 40 items filled.
+      const { fake } = wideBoard(100, 25);
       const body = parse(
         await listItemsHandler(fake.getClient, { boardId: "b1" }),
       );
+      expect(body.truncated).toBe(false);
+      expect(body.next).toBeUndefined();
+      expect(body.items).toHaveLength(100);
+      for (const i of body.items) expect(Object.keys(i.cells)).toHaveLength(25);
+    });
+
+    it("flags a page past the cap, marks the incomplete items and says how to get them", async () => {
+      // 200 items x 101 columns = 20,200 cells; 20,000 load = 198 whole items
+      // and 2 cells of the 199th.
+      const { fake, items } = wideBoard(200, 101);
+      const body = parse(
+        await listItemsHandler(fake.getClient, { boardId: "b1", limit: 200 }),
+      );
 
       expect(body.truncated).toBe(true);
-      expect(body.items).toHaveLength(100);
+      expect(body.items).toHaveLength(200);
       const complete = body.items.filter(
         (i: { cellsTruncated?: boolean }) => !i.cellsTruncated,
       );
-      // The item holding the last loaded row is reported too: it cannot be
-      // told apart from one cut mid-way.
-      expect(complete).toHaveLength(39);
-      for (const i of complete) expect(Object.keys(i.cells)).toHaveLength(25);
-      expect(body.next.incompleteItemIds).toEqual(
-        items.slice(39).map((i) => i.id),
-      );
+      expect(complete).toHaveLength(198);
+      for (const i of complete) expect(Object.keys(i.cells)).toHaveLength(101);
+      // Reported in page order; which items are cut follows the id order of
+      // the cell read, so compare as sets.
+      expect(new Set(body.next.incompleteItemIds).size).toBe(2);
+      for (const id of body.next.incompleteItemIds)
+        expect(items.map((i) => i.id)).toContain(id);
       expect(body.next.tool).toBe("list_items");
-      // 25 columns: 40 items always fit under 1,000 cells.
-      expect(body.next.args).toEqual({ boardId: "b1", limit: 40 });
-      expect(body.next.hint).toContain("1000");
+      // 101 columns: 198 items always fit under 20,000 cells.
+      expect(body.next.args).toEqual({ boardId: "b1", limit: 198 });
+      expect(body.next.hint).toContain("20000");
       expect(body.next.hint).toContain("get_item");
     });
 
     it("keeps the caller's cursor and group in the next arguments", async () => {
-      const { fake } = wideBoard(100, 25);
+      const { fake } = wideBoard(200, 101);
       const first = parse(
         await listItemsHandler(fake.getClient, { boardId: "b1", limit: 1 }),
       );
@@ -474,30 +488,36 @@ describe("listItemsHandler", () => {
           boardId: "b1",
           groupId: "g1",
           cursor,
+          limit: 200,
         }),
       );
       expect(body.next.args).toEqual({
         boardId: "b1",
         groupId: "g1",
         cursor,
-        limit: 40,
+        limit: 198,
       });
     });
 
-    it("reads one row past the cap and no further, ordered by the primary key", async () => {
+    it("pages the cell read in small waves, ordered by the primary key", async () => {
       const { fake } = wideBoard(100, 25);
       await listItemsHandler(fake.getClient, { boardId: "b1" });
       const calls = fake.calls.cell_values ?? [];
       const ranges = calls
         .filter((c) => c.method === "range")
         .map((c) => c.args);
+      // First page alone, then one wave of three; the short third page ends it.
       expect(ranges).toEqual([
         [0, 999],
-        [1000, 1000],
+        [1000, 1999],
+        [2000, 2999],
+        [3000, 3999],
       ]);
       expect(
-        calls.filter((c) => c.method === "order").map((c) => c.args[0]),
-      ).toEqual(["item_id", "column_id", "item_id", "column_id"]);
+        new Set(
+          calls.filter((c) => c.method === "order").map((c) => c.args[0]),
+        ),
+      ).toEqual(new Set(["item_id", "column_id"]));
     });
   });
 

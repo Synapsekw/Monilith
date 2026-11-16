@@ -1,7 +1,7 @@
 import * as z from "zod";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
-import { fetchCappedRows, POSTGREST_MAX_ROWS } from "@/lib/supabase/paginate";
+import { fetchCappedRows } from "@/lib/supabase/paginate";
 
 /** Page size when the caller does not ask for one. Most boards fit in one page. */
 export const LIST_ITEMS_DEFAULT_LIMIT = 100;
@@ -9,11 +9,14 @@ export const LIST_ITEMS_DEFAULT_LIMIT = 100;
 export const LIST_ITEMS_MAX_LIMIT = 200;
 
 /**
- * Most cell values one call returns. One PostgREST response: the cell read was
- * always cut here (200 items at 6 or more filled columns overflow it), it just
- * never said so. Not raised in this change; the response now reports it.
+ * Most cell values one call returns: a full page ({@link LIST_ITEMS_MAX_LIMIT}
+ * items) of a 100-column board. The cell read pages through PostgREST's
+ * 1,000-row responses up to this bound, so an ordinary page always comes back
+ * complete; it used to stop at the first response, which cut the default page
+ * on any board wider than 10 filled columns without saying so. A read that
+ * still exceeds this is reported (`truncated`), never silent.
  */
-export const LIST_ITEMS_CELLS_CAP = POSTGREST_MAX_ROWS;
+export const LIST_ITEMS_CELLS_CAP = LIST_ITEMS_MAX_LIMIT * 100;
 
 export const listItemsInput = {
   boardId: z.string().uuid(),
@@ -172,7 +175,9 @@ export async function listItemsHandler(
           .order("item_id", { ascending: true })
           .order("column_id", { ascending: true })
           .range(from, to),
-      { cap: LIST_ITEMS_CELLS_CAP },
+      // A typical wide page is 2 to 3 responses; a small wave keeps the
+      // follow-up requests from fanning out past what the page can hold.
+      { cap: LIST_ITEMS_CELLS_CAP, wave: 3 },
     );
     if (cellErr) {
       return toolError(`Failed to fetch cell values: ${cellErr.message}`);
@@ -262,7 +267,7 @@ export const listItemsDescriptor: ToolDescriptor = {
     `Returns up to ${LIST_ITEMS_DEFAULT_LIMIT} items by default (max ${LIST_ITEMS_MAX_LIMIT}); ` +
     `when "hasMore" is true, call again passing "nextCursor" as "cursor" to get the next page. ` +
     `Optionally filter to one group with "groupId". ` +
-    `One call carries at most ${LIST_ITEMS_CELLS_CAP} cell values: on a wide board, when "truncated" is true, ` +
+    `One call carries at most ${LIST_ITEMS_CELLS_CAP} cell values: on an extremely wide board, when "truncated" is true, ` +
     `the items marked "cellsTruncated" are incomplete and "next" gives the arguments (a smaller "limit") that return them in full.`,
   inputSchema: listItemsInput,
   capability: null,
