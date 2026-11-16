@@ -6,7 +6,14 @@ import { getUser } from "@/lib/auth/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/types/database.types";
 import type { RelationLink } from "@/lib/boards/relations";
-import { fetchAllRows } from "@/lib/supabase/paginate";
+import { fetchAllRows, fetchCappedRows } from "@/lib/supabase/paginate";
+import {
+  BOARD_CELLS_CAP,
+  BOARD_ITEMS_CAP,
+  BOARD_LINKED_NAMES_CAP,
+  BOARD_RELATION_LINKS_CAP,
+  type BoardTruncation,
+} from "@/lib/boards/caps";
 import {
   resolveLinkedStatuses,
   type LinkedItemStatus,
@@ -21,13 +28,8 @@ import {
 
 const UUID = z.string().uuid();
 
-/** Most live items (and dependencies) one board read returns. */
-export const BOARD_ITEMS_CAP = 5000;
-/**
- * Most cell values one board read returns: 5000 items at a dozen filled cells.
- * Raised from 20000 when imported plans (1,770 items × ~17 columns) overflowed.
- */
-export const BOARD_CELLS_CAP = 60000;
+// The caps live in `caps.ts` (client-safe); re-exported for existing importers.
+export { BOARD_CELLS_CAP, BOARD_ITEMS_CAP };
 
 export type Board = Tables<"boards">;
 export type Group = Tables<"groups">;
@@ -71,6 +73,13 @@ export type BoardPayload = {
   mirrorTargetCells: BoardCellValue[];
   /** Render metadata for the columns referenced by mirror columns. */
   mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[];
+  /**
+   * Which capped reads stopped at their cap and left rows behind. The board
+   * shows a notice for each (`BoardCapNotice`). Optional only so hand-built
+   * payloads (tests, offline snapshots written before this existed) stay valid;
+   * `getBoardPayload` always sets it.
+   */
+  truncation?: BoardTruncation;
 };
 
 export type BoardListEntry = Pick<
@@ -356,8 +365,9 @@ export const getBoardPayload = cache(
       // Bounded over the board_id index and capped at BOARD_CELLS_CAP. Select
       // narrowed to the four columns any consumer reads (see `BoardCellValue`).
       // Ordered by the `(item_id, column_id)` PRIMARY KEY — a total order, so
-      // paging is stable and truncation at the cap is deterministic.
-      fetchAllRows(
+      // paging is stable and truncation at the cap is deterministic. Reads one
+      // row past the cap (`fetchCappedRows`) so a cut-off read says so.
+      fetchCappedRows(
         (from, to) =>
           supabase
             .from("cell_values")
@@ -415,7 +425,8 @@ export const getBoardPayload = cache(
         .limit(1000),
       // Bounded by relation_links_board_idx. Linked-item NAMES are resolved in a
       // second RLS-scoped query below (the targets live on another board).
-      fetchAllRows(
+      // One row past the cap tells a cut-off read from a full one.
+      fetchCappedRows(
         (from, to) =>
           supabase
             .from("relation_links")
@@ -424,7 +435,7 @@ export const getBoardPayload = cache(
             .order("position", { ascending: true })
             .order("id", { ascending: true })
             .range(from, to),
-        { cap: 2000 },
+        { cap: BOARD_RELATION_LINKS_CAP },
       ),
     ]);
 
@@ -458,6 +469,7 @@ export const getBoardPayload = cache(
     const linkedIds = [...new Set(rawLinks.map((l) => l.linked_item_id))];
     const namesById = new Map<string, string>();
     let statusById = new Map<string, LinkedItemStatus>();
+    let linkedNamesTruncated = false;
     if (linkedIds.length > 0) {
       // Boards the relation columns point at — their status columns colour the
       // chips. Read in the same round-trip as the names: both follow-ups key on
@@ -475,11 +487,20 @@ export const getBoardPayload = cache(
         ),
       ];
       const [namesRes, statusColsRes, statusCellsRes] = await Promise.all([
-        supabase
-          .from("items")
-          .select("id, name")
-          .in("id", linkedIds)
-          .is("archived_at", null),
+        // A single response holds at most 1000 rows whatever is asked, so
+        // this read was always capped; it now says when names were left out.
+        // Ordered by the primary key so the cut is deterministic.
+        fetchCappedRows(
+          (from, to) =>
+            supabase
+              .from("items")
+              .select("id, name")
+              .in("id", linkedIds)
+              .is("archived_at", null)
+              .order("id", { ascending: true })
+              .range(from, to),
+          { cap: BOARD_LINKED_NAMES_CAP },
+        ),
         targetBoardIds.length > 0
           ? supabase
               .from("columns")
@@ -510,6 +531,7 @@ export const getBoardPayload = cache(
           `Failed to load board linked items: ${namesRes.error.message}`,
         );
       for (const it of namesRes.data ?? []) namesById.set(it.id, it.name);
+      linkedNamesTruncated = namesRes.truncated;
       // Chip colour is decoration: a failed status read leaves the chips
       // neutral instead of failing the whole board.
       if (
@@ -619,6 +641,11 @@ export const getBoardPayload = cache(
       relationLinks,
       mirrorTargetCells,
       mirrorTargetColumns,
+      truncation: {
+        cells: cellsRes.truncated,
+        relationLinks: relationLinksRes.truncated,
+        linkedItemNames: linkedNamesTruncated,
+      },
     };
   },
 );

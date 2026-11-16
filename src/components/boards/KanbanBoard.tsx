@@ -262,6 +262,7 @@ function KanbanBoardInner({
           boardId={cache.board.id}
           boardName={cache.board.name}
           board={cache.board}
+          truncation={cache.truncation}
           views={payload.views}
           selectedViewId={selectedViewId}
           columns={cache.columns}
@@ -328,6 +329,7 @@ function KanbanBoardInner({
         boardId={cache.board.id}
         boardName={cache.board.name}
         board={cache.board}
+        truncation={cache.truncation}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={cache.columns}
