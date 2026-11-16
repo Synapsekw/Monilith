@@ -1,12 +1,12 @@
 "use client";
 
 import { type EditorMember } from "@/components/boards/cells/editors";
+import type { BoardWorkRule } from "@/lib/boards/overdue";
 import {
   cellKey,
   type BoardCache,
   type CacheAttachment,
   type CacheCellValue,
-  type CacheColumn,
 } from "@/lib/boards/cache";
 import { COLUMN_FIT_DEFAULT } from "@/lib/boards/fit-column-width";
 import type { Column } from "@/lib/boards/queries";
@@ -67,12 +67,13 @@ export type CellControls = {
    */
   dependentsByItem: Map<string, number>;
   /**
-   * The board's first status column (by position), resolved ONCE per table
-   * render. Date cells derive their overdue tint from the item's value in this
-   * column (see @/lib/boards/overdue) — resolving it per cell was a filter +
-   * sort over every column on every render.
+   * The board's Work tracking rule (status column, done options, the ONE due
+   * column), resolved ONCE per table render from the columns and the board's
+   * settings. Date cells derive their overdue tint from it (see
+   * @/lib/boards/overdue): resolving it per cell was a filter + sort over
+   * every column on every render.
    */
-  statusColumn: CacheColumn | null;
+  workRule: BoardWorkRule;
   /** Upload a file into a Files-column cell. */
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
@@ -122,7 +123,7 @@ export type CellControls = {
  * The invariant this rests on: nothing under a memoized row may read
  * `controls.cache.cellValues`. If it does, the row keeps a stale cache when a
  * foreign cell changes. (That was `isItemComplete`'s old call site; it now
- * reads `controls.statusColumn` + its own `cellMap` entry instead.)
+ * reads `controls.workRule` + its own `cellMap` entry instead.)
  */
 export const CACHE_SLICES = [
   "board",

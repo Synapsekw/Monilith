@@ -199,6 +199,86 @@ describe("computeSignals — overdue", () => {
     expect(ofKind(computeSignals(input, opts()), "overdue")).toEqual([]);
   });
 
+  it("a past date in a column that is not the due column is not overdue", () => {
+    const input = board({
+      columns: [
+        column(STATUS, "status", "Status", 0, {
+          options: [{ id: OPEN, label: "Working on it" }],
+        }),
+        column("c-start", "date", "Start", 1),
+        column(DATE, "date", "Due", 2),
+      ],
+      items: [item("started"), item("late")],
+      cellValues: [
+        cell("started", "c-start", { date: dateISO(9) }),
+        cell("started", DATE, { date: dateISO(-9) }),
+        cell("late", "c-start", { date: dateISO(9) }),
+        cell("late", DATE, { date: dateISO(1) }),
+      ],
+    });
+    expect(ofKind(computeSignals(input, opts()), "overdue")[0].itemIds).toEqual(
+      ["late"],
+    );
+  });
+
+  it("reads 'Cancelled' as done and 'Incomplete' as open (the shared guess)", () => {
+    const input = board({
+      columns: [
+        column(STATUS, "status", "Status", 0, {
+          options: [
+            { id: "c", label: "Cancelled" },
+            { id: "i", label: "Incomplete" },
+          ],
+        }),
+        column(DATE, "date", "Due", 1),
+      ],
+      items: [item("cancelled"), item("incomplete")],
+      cellValues: [
+        cell("cancelled", STATUS, { optionId: "c" }),
+        cell("cancelled", DATE, { date: dateISO(1) }),
+        cell("incomplete", STATUS, { optionId: "i" }),
+        cell("incomplete", DATE, { date: dateISO(1) }),
+      ],
+    });
+    expect(ofKind(computeSignals(input, opts()), "overdue")[0].itemIds).toEqual(
+      ["incomplete"],
+    );
+  });
+
+  it("follows the board's Work tracking settings when they are set", () => {
+    const input = {
+      ...board({
+        columns: [
+          column(STATUS, "status", "Status", 0, {
+            options: [
+              { id: OPEN, label: "Working on it" },
+              { id: DONE, label: "Done" },
+            ],
+          }),
+          column(DATE, "date", "Due", 1),
+          column("c-review", "date", "Review", 2),
+        ],
+        items: [item("a"), item("b")],
+        cellValues: [
+          // a: "Done" by label, but only OPEN is configured as done.
+          cell("a", STATUS, { optionId: DONE }),
+          cell("a", "c-review", { date: dateISO(1) }),
+          // b: configured done.
+          cell("b", STATUS, { optionId: OPEN }),
+          cell("b", "c-review", { date: dateISO(1) }),
+        ],
+      }),
+      board: {
+        work_status_column_id: STATUS,
+        work_done_option_ids: [OPEN],
+        work_due_column_id: "c-review",
+      },
+    };
+    expect(ofKind(computeSignals(input, opts()), "overdue")[0].itemIds).toEqual(
+      ["a"],
+    );
+  });
+
   it("treats every item as open when the board has no status column", () => {
     const input = board({
       columns: [column(DATE, "date", "Due", 0)],

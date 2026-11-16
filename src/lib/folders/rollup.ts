@@ -6,7 +6,11 @@ export type Kpis = {
   total: number;
   done: number;
   donePct: number | null;
+  /** Done items that have a due date (the done side of `gap`). */
+  doneDated: number;
   plannedByToday: number;
+  /** doneDated − plannedByToday: both sides count DATED items only. Null
+   *  when nothing in scope has a due date. */
   gap: number | null;
   overdue: number;
   oldestOverdueDays: number | null;
@@ -69,6 +73,7 @@ export function filterRows(
 export function computeKpis(rows: RollupRow[], todayISO: string): Kpis {
   let total = 0,
     done = 0,
+    doneDated = 0,
     plannedByToday = 0,
     overdue = 0,
     dueThisWeek = 0;
@@ -80,6 +85,7 @@ export function computeKpis(rows: RollupRow[], todayISO: string): Kpis {
   for (const r of rows) {
     total += r.total;
     done += r.done;
+    doneDated += r.doneDated;
     plannedByToday += r.plannedByToday;
     overdue += r.overdue;
     dueThisWeek += r.dueThisWeek;
@@ -97,8 +103,11 @@ export function computeKpis(rows: RollupRow[], todayISO: string): Kpis {
     total,
     done,
     donePct: total > 0 ? Math.round((done / total) * 100) : null,
+    doneDated,
     plannedByToday,
-    gap: anyDue ? done - plannedByToday : null,
+    // Like with like: an undated done item is on neither side. (Before, every
+    // done item counted against a plan that only dated items are part of.)
+    gap: anyDue ? doneDated - plannedByToday : null,
     overdue,
     oldestOverdueDays: oldest === null ? null : daysBetween(oldest, todayISO),
     dueThisWeek,

@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "One rule for done and overdue",
+    description:
+      "Folders, board health, the weekly digest, reports and the board itself now agree on what counts as done and overdue, using the Work tracking settings of each board.",
+  },
+  {
     date: "2026-11-16",
     kind: "fixed",
     title: "Connected apps expire when unused",

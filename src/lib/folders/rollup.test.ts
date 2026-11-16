@@ -27,7 +27,8 @@ describe("computeKpis", () => {
     expect(k.total).toBe(rows.reduce((s, r) => s + r.total, 0));
     expect(k.done).toBe(rows.reduce((s, r) => s + r.done, 0));
     expect(k.donePct).toBe(Math.round((k.done / k.total) * 100));
-    expect(k.gap).toBe(k.done - k.plannedByToday);
+    expect(k.doneDated).toBe(rows.reduce((s, r) => s + r.doneDated, 0));
+    expect(k.gap).toBe(k.doneDated - k.plannedByToday);
     expect(k.oldestOverdueDays).toBe(daysBetween("2026-09-01", FIXTURE_TODAY)); // fixture's oldest
   });
 
@@ -48,10 +49,18 @@ describe("computeKpis", () => {
   });
 
   it("gap sign: negative when behind plan, positive when ahead", () => {
-    const behind = [{ ...rows[0], done: 1, plannedByToday: 4 }];
-    const ahead = [{ ...rows[0], done: 4, plannedByToday: 1 }];
+    const behind = [{ ...rows[0], done: 1, doneDated: 1, plannedByToday: 4 }];
+    const ahead = [{ ...rows[0], done: 4, doneDated: 4, plannedByToday: 1 }];
     expect(computeKpis(behind, FIXTURE_TODAY).gap).toBe(-3);
     expect(computeKpis(ahead, FIXTURE_TODAY).gap).toBe(3);
+  });
+
+  it("gap counts dated items on BOTH sides: a done item with no due date is on neither", () => {
+    // 9 done, but only 2 of them have a due date; 4 dated items planned by today.
+    const mixed = [{ ...rows[0], done: 9, doneDated: 2, plannedByToday: 4 }];
+    const k = computeKpis(mixed, FIXTURE_TODAY);
+    expect(k.gap).toBe(-2); // not 9 − 4 = +5
+    expect(k.done).toBe(9); // the Complete card still counts every done item
   });
 });
 

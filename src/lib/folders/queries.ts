@@ -22,6 +22,23 @@ const UNFILED_DASHBOARDS_LIMIT = 100;
  */
 const BRIEF_BOARDS_LIMIT = 25;
 
+/**
+ * The organisation's IANA time zone, or null when it cannot be read. The
+ * folder page's "today" falls back to it when the viewer has no zone of their
+ * own: the same order the folder RPCs use (`_work_time_zone`).
+ */
+export async function getOrgTimeZone(
+  supabase: DB,
+  orgId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("organizations")
+    .select("timezone")
+    .eq("id", orgId)
+    .maybeSingle();
+  return data?.timezone ?? null;
+}
+
 /** Folder + its live boards. Two reads in one Promise.all; null when RLS hides the folder. */
 export async function getFolderHead(
   supabase: DB,

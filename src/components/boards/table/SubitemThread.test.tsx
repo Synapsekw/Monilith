@@ -23,7 +23,7 @@ const controls = {
   deleteItem: vi.fn(),
   renameItemInCache: vi.fn(),
   dependentsByItem: new Map(),
-  statusColumn: null,
+  workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
   cache: { cellValues: [], attachments: [], columns: [] },
 } as unknown as CellControls;
 

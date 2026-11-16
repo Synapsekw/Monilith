@@ -1,10 +1,12 @@
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import {
-  firstStatusColumn,
+  boardWorkRule,
   isOverdue,
   isStatusValueComplete,
   localTodayISO,
+  type BoardWorkRule,
+  type BoardWorkSettings,
 } from "@/lib/boards/overdue";
 import { parseColumnOptions } from "@/lib/boards/column-options";
 import {
@@ -27,7 +29,10 @@ import type { IntelSelection, Signal, SignalKind } from "./types";
 export type SignalsInput = Pick<
   BoardCache,
   "items" | "columns" | "cellValues" | "groups" | "dependencies"
->;
+> & {
+  /** The board's Work tracking settings (`cache.board`). Omitted = guess. */
+  board?: Partial<BoardWorkSettings> | null;
+};
 
 export type SignalsOptions = {
   now: Date;
@@ -48,6 +53,9 @@ type Ctx = {
   input: SignalsInput;
   opts: SignalsOptions;
   cellMap: Map<string, unknown>;
+  /** The board's Work tracking rule: status column, done options, due column. */
+  rule: BoardWorkRule;
+  /** `rule.statusColumn`: the column done and blocked are read from. */
   statusColumn: CacheColumn | null;
   todayISO: string;
   /** itemId → ms of its latest activity (item.updated_at or any cell's updated_at). */
@@ -78,18 +86,20 @@ function buildLastActivity(input: SignalsInput): Map<string, number> {
 
 function buildContext(input: SignalsInput, opts: SignalsOptions): Ctx {
   const cellMap = buildCellMap(input.cellValues);
-  const statusColumn = firstStatusColumn(input.columns);
+  const rule = boardWorkRule(input.columns, input.board);
+  const statusColumn = rule.statusColumn;
   const isOpen = (itemId: string) =>
     !isStatusValueComplete(
       statusColumn
         ? (cellMap.get(cellKey(itemId, statusColumn.id)) ?? null)
         : null,
-      statusColumn,
+      rule,
     );
   return {
     input,
     opts,
     cellMap,
+    rule,
     statusColumn,
     todayISO: localTodayISO(opts.now),
     lastActivity: buildLastActivity(input),
@@ -108,26 +118,25 @@ function signal(kind: SignalKind, itemIds: string[], label: string): Signal {
 }
 
 /**
- * overdue — open items with any date cell before today (viewer-local), the
- * same rule the date cell's tint uses (`isOverdue` + first-status-column
- * completeness; `ItemRow.tsx`).
+ * overdue — open items whose due date (the Work tracking rule's ONE due
+ * column) is before today (viewer-local): the same rule the date cell's tint
+ * uses (`ItemRow.tsx`), and the same done / due choice as Today and the
+ * folder pages. A board with no due column has no overdue chip.
  */
 function overdueSignals(ctx: Ctx): Signal[] {
-  const dateColumns = ctx.input.columns.filter((c) => c.kind === "date");
-  if (dateColumns.length === 0) return [];
+  const dueColumn = ctx.rule.dueColumn;
+  if (!dueColumn) return [];
   const itemIds: string[] = [];
   for (const it of ctx.input.items) {
     if (!ctx.isOpen(it.id)) continue;
-    const late = dateColumns.some((col) =>
-      isOverdue(ctx.cellMap.get(cellKey(it.id, col.id)), ctx.todayISO),
-    );
-    if (late) itemIds.push(it.id);
+    if (isOverdue(ctx.cellMap.get(cellKey(it.id, dueColumn.id)), ctx.todayISO))
+      itemIds.push(it.id);
   }
   return [signal("overdue", itemIds, "overdue")];
 }
 
 /**
- * blocked — items whose FIRST-status-column option label matches
+ * blocked — items whose option label in the rule's status column matches
  * BLOCKED_LABEL and that have at least one successor in `dependencies`.
  * `itemIds` = each blocker plus everything downstream of it (transitive
  * successors), so the chip shows the whole chain. count = blockers.

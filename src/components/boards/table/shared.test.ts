@@ -37,6 +37,10 @@ const noop = () => {};
 const members: CellControls["members"] = [];
 const dependentsByItem: CellControls["dependentsByItem"] = new Map();
 
+// One stable object, as BoardTableInner's memo provides: the rule keeps its
+// identity across cell edits.
+const NO_RULE = { statusColumn: null, doneOptionIds: null, dueColumn: null };
+
 function makeControls(cache: BoardCache): CellControls {
   return {
     canEdit: true,
@@ -54,7 +58,7 @@ function makeControls(cache: BoardCache): CellControls {
     moveItemToGroup: noop,
     cache,
     dependentsByItem,
-    statusColumn: null,
+    workRule: NO_RULE,
     uploadColumnFile: noop,
     openFilesLightbox: noop,
     filesPreviewUrls: undefined,

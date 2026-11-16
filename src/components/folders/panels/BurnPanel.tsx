@@ -48,7 +48,9 @@ export function burnSummary(
     forecast === null
       ? ""
       : ` ${forecast.insufficientHistory ? NOT_ENOUGH_HISTORY : forecastReading(forecast, todayISO)}`;
-  return `Planned vs completed: ${planned} planned in total, ${completed} completed.${gapText}${reading}`;
+  // Both lines count items that have a due date; an undated item is on
+  // neither (folder_burn).
+  return `Planned vs completed, items with a due date: ${planned} planned in total, ${completed} completed.${gapText}${reading}`;
 }
 
 /**
@@ -78,7 +80,7 @@ export function BurnPanel({
   onRetry: () => void;
   forecast?: Forecast | null;
   /**
-   * The gap the reading states: the rollup's done − planned-by-today for the
+   * The gap the reading states: the rollup's dated-done − planned-by-today for the
    * chart's own scope (folder-wide, current stage), which with no board
    * filter IS the Gap card's value. Never `forecast.gapNow`: that is the
    * series' end-of-week figure and once disagreed with the card (DAAS: "54

@@ -2,10 +2,17 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { visibleOrgMembersFor } from "@/lib/org/visible-roster";
 import { labelEmail } from "@/lib/ui/member-label";
-import { localTodayISO } from "@/lib/boards/overdue";
+import { effectiveTimeZone } from "@/lib/datetime/timezone";
+import { todayInTimeZone } from "@/lib/focus/today";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import type { Database } from "@/types/database.types";
 import { layoutNeedsBurn, layoutNeedsLoad, resolveLayout } from "./layout";
-import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
+import {
+  getFolderHead,
+  getFolderLayoutRow,
+  getOrgTimeZone,
+  listLatestBriefs,
+} from "./queries";
 import {
   resolveFolderAttention,
   resolveFolderBurn,
@@ -38,8 +45,13 @@ export const ATTENTION_LIMIT = 100;
  *     section or stages tab; a load section), so each starts the moment the
  *     layout row resolves, alongside the rollup. A load result is discarded
  *     when the rollup shows no dated items (or failed): nothing to plot;
- *   - briefs and members need the head (board ids, org id) and start when it
- *     resolves.
+ *   - briefs, members and the organisation's time zone need the head (board
+ *     ids, org id) and start when it resolves; the viewer's own zone starts
+ *     at once.
+ * `todayISO` is the calendar date in the viewer's zone, then the
+ * organisation's, then UTC: the SAME order the folder RPCs resolve "today"
+ * in (`_work_time_zone`), so the page and its numbers agree on the date. A
+ * failed zone read falls back to the next one, never fails the page.
  * Critical path: max(head then briefs/members, layout then burn/load, rollup,
  * attention, access), instead of the slowest first read PLUS the slowest
  * second one. An RPC failure degrades that panel (inline retry, spec §8)
@@ -65,19 +77,36 @@ export async function buildFolderPayload(
     // Narrowed to the viewer: a guest gets the folder's people, not the org.
     h ? visibleOrgMembersFor(supabase, userId, h.folder.orgId) : [],
   );
+  const userTzP = getUserTimeZoneCached(userId).catch(() => null);
+  const orgTzP = headP
+    .then((h) => (h ? getOrgTimeZone(supabase, h.folder.orgId) : null))
+    .catch(() => null);
   // ONE Promise.all over every read, so a rejection anywhere is handled.
-  const [head, layout, rollup, attention, access, burn, load, briefs, members] =
-    await Promise.all([
-      headP,
-      layoutP,
-      resolveFolderRollup(supabase, folderId),
-      resolveFolderAttention(supabase, folderId, ATTENTION_LIMIT),
-      getFolderAccessHead(supabase, folderId),
-      burnP,
-      loadP,
-      briefsP,
-      membersP,
-    ]);
+  const [
+    head,
+    layout,
+    rollup,
+    attention,
+    access,
+    burn,
+    load,
+    briefs,
+    members,
+    userTz,
+    orgTz,
+  ] = await Promise.all([
+    headP,
+    layoutP,
+    resolveFolderRollup(supabase, folderId),
+    resolveFolderAttention(supabase, folderId, ATTENTION_LIMIT),
+    getFolderAccessHead(supabase, folderId),
+    burnP,
+    loadP,
+    briefsP,
+    membersP,
+    userTzP,
+    orgTzP,
+  ]);
   if (!head) return null;
   const dated = rollup.ok && hasDatedItems(rollup.rows);
   const folderLoad: FolderLoad =
@@ -103,6 +132,7 @@ export async function buildFolderPayload(
     access,
     layout,
     generatedAt: new Date().toISOString(),
-    todayISO: localTodayISO(),
+    todayISO: todayInTimeZone(effectiveTimeZone(userTz, orgTz), Date.now())
+      .today,
   };
 }

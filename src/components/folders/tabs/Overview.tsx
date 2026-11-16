@@ -148,7 +148,14 @@ export function OverviewTab({
   const forecast =
     burn === null
       ? null
-      : burnForecast(burn, burnScope.total, { importedKnown });
+      : // The burn's completed line counts done items that have a due date.
+        // Done items WITHOUT one are taken out of the target too, so what
+        // remains is exactly the open items in scope.
+        burnForecast(
+          burn,
+          burnScope.total - (burnScope.done - burnScope.doneDated),
+          { importedKnown },
+        );
   const milestones = nextMilestones(
     stages.filter((s) => stage === null || s.key === stage),
     payload.todayISO,

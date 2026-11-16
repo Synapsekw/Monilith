@@ -233,12 +233,12 @@ export const GroupSection = memo(function GroupSection({
   );
 
   // Done-rule progress over this group's visible top-level rows, for the group
-  // row's meter. `controls.statusColumn` is the board's first status column,
+  // row's meter. `controls.workRule` is the board's Work tracking rule,
   // resolved once in BoardTableInner. This component already re-renders on
   // every `cellMap` change (it is a prop), so the memo adds no renders.
   const progress = useMemo(
-    () => groupProgress(itemIds, controls.statusColumn, cellMap),
-    [itemIds, controls.statusColumn, cellMap],
+    () => groupProgress(itemIds, controls.workRule, cellMap),
+    [itemIds, controls.workRule, cellMap],
   );
 
   function openRename() {

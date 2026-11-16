@@ -63,7 +63,11 @@ function controls(over: Partial<CellControls> = {}): CellControls {
     setCell: vi.fn(),
     clearCellValue: vi.fn(),
     members: [],
-    statusColumn: FIRST as unknown as CacheColumn,
+    workRule: {
+      statusColumn: FIRST as unknown as CacheColumn,
+      doneOptionIds: null,
+      dueColumn: null,
+    },
     ...over,
   } as unknown as CellControls;
 }
@@ -144,8 +148,48 @@ describe("status cell celebration", () => {
     expect(becameDone()).toBe(false);
   });
 
+  it("bursts for a CONFIGURED done option whose label does not look done", async () => {
+    mount(
+      FIRST,
+      { optionId: "done" },
+      {
+        workRule: {
+          statusColumn: FIRST as unknown as CacheColumn,
+          doneOptionIds: ["wip"],
+          dueColumn: null,
+        },
+      },
+    );
+    open("c1");
+    await pick(/working on it/i);
+    expect(becameDone()).toBe(true);
+  });
+
+  it("only pops for a done-looking label that is not a configured done option", async () => {
+    mount(
+      FIRST,
+      { optionId: "todo" },
+      {
+        workRule: {
+          statusColumn: FIRST as unknown as CacheColumn,
+          doneOptionIds: ["wip"],
+          dueColumn: null,
+        },
+      },
+    );
+    open("c1");
+    await pick(/^done$/i);
+    expect(becameDone()).toBe(false);
+  });
+
   it("only pops when the board's status column is unknown", async () => {
-    mount(FIRST, { optionId: "wip" }, { statusColumn: null });
+    mount(
+      FIRST,
+      { optionId: "wip" },
+      {
+        workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
+      },
+    );
     open("c1");
     await pick(/^done$/i);
     expect(becameDone()).toBe(false);

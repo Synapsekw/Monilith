@@ -53,6 +53,10 @@ const rollupRowSchema = z.object({
   oldest_overdue: z.string().nullable(),
   min_due: z.string().nullable(),
   max_due: z.string().nullable(),
+  // Added by 20261115173751_one_overdue_rule. Optional so a database that has
+  // not had that migration yet still parses; the mapper then falls back to
+  // `done` (the old, mixed-population gap).
+  done_dated: z.number().optional(),
 });
 
 /** Replaces the old hand-rolled reason guard — an unrecognized `reason`
@@ -166,6 +170,7 @@ export async function resolveFolderRollup(
       oldestOverdue: r.oldest_overdue,
       minDue: r.min_due,
       maxDue: r.max_due,
+      doneDated: r.done_dated ?? r.done,
     })),
   };
 }

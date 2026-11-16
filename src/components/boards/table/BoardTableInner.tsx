@@ -57,7 +57,7 @@ import type { CacheAttachment, CacheColumn } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
 import { relationFitValues, withRelationText } from "@/lib/boards/relations";
 import { buildDependentsCountMap } from "@/lib/boards/priority";
-import { firstStatusColumn } from "@/lib/boards/overdue";
+import { boardWorkRule } from "@/lib/boards/overdue";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
@@ -307,10 +307,25 @@ export function BoardTableInner({
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
 
-  // The board's first status column, resolved ONCE per render and threaded via
-  // `controls`. Date cells derive their overdue tint from it; deriving it inside
-  // each cell was a filter + sort of every column per cell, per render.
-  const statusColumn = useMemo(() => firstStatusColumn(columns), [columns]);
+  // The board's Work tracking rule (status column, done options, due column),
+  // resolved ONCE per render and threaded via `controls`. Date cells derive
+  // their overdue tint from it; deriving it inside each cell was a filter +
+  // sort of every column per cell, per render. Keyed on the three settings,
+  // not the board object, so an unrelated board edit keeps `controls` stable.
+  const {
+    work_status_column_id: workStatusColumnId,
+    work_done_option_ids: workDoneOptionIds,
+    work_due_column_id: workDueColumnId,
+  } = board;
+  const workRule = useMemo(
+    () =>
+      boardWorkRule(columns, {
+        work_status_column_id: workStatusColumnId,
+        work_done_option_ids: workDoneOptionIds,
+        work_due_column_id: workDueColumnId,
+      }),
+    [columns, workStatusColumnId, workDoneOptionIds, workDueColumnId],
+  );
 
   // Direct-dependent counts for priority cells: one O(edges) pass for the whole
   // board, threaded down via `controls` (same pattern as cellMap) instead of
@@ -682,7 +697,7 @@ export function BoardTableInner({
       moveItemToGroup: m.moveItemToGroup,
       cache,
       dependentsByItem,
-      statusColumn,
+      workRule,
       uploadColumnFile: m.uploadColumnFile,
       openFilesLightbox,
       filesPreviewUrls,
@@ -705,7 +720,7 @@ export function BoardTableInner({
       addSubitemControl,
       cache,
       dependentsByItem,
-      statusColumn,
+      workRule,
       openFilesLightbox,
       filesPreviewUrls,
       filesThumbUrls,
