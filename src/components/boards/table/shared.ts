@@ -14,8 +14,20 @@ import { buildMeasureFont } from "@/lib/text-measure";
 import { type RelationLink } from "@/lib/boards/relations";
 import type { AggregationId, ColumnKind } from "@/lib/validations/boards";
 
-/** The cell currently in edit mode, keyed by row + column. */
-export type EditingCell = { itemId: string; columnId: string };
+/**
+ * Where an editable cell is rendered. The board table is the default (absent);
+ * the item panel's Fields section is `"panel"`. Part of the edit-mode key: the
+ * panel opens OVER the table, so the same (item, column) cell is mounted twice
+ * and only the one that was activated may open its editor.
+ */
+export type CellSurface = "panel";
+
+/** The cell currently in edit mode, keyed by row + column (+ surface). */
+export type EditingCell = {
+  itemId: string;
+  columnId: string;
+  surface?: CellSurface;
+};
 
 /**
  * Props threaded down to each editable cell.
@@ -109,6 +121,35 @@ export type CellControls = {
     links: RelationLink[];
   }) => void;
 };
+
+/**
+ * The slice of {@link CellControls} one {@link EditableCell} reads: its edit
+ * bit, the cell writes, and the side-table (files, time, relation) callbacks.
+ * No row or group actions. The table passes its whole bundle; the item
+ * panel's Fields section builds exactly this from the same board mutations.
+ */
+export type EditableCellControls = Pick<
+  CellControls,
+  | "canEdit"
+  | "setEditing"
+  | "setCell"
+  | "clearCellValue"
+  | "members"
+  | "currentUserId"
+  | "cache"
+  | "workRule"
+  | "uploadColumnFile"
+  | "openFilesLightbox"
+  | "filesPreviewUrls"
+  | "filesThumbUrls"
+  | "startTimer"
+  | "stopTimer"
+  | "addManualEntry"
+  | "editEntry"
+  | "deleteEntry"
+  | "setEstimate"
+  | "setRelationLinks"
+>;
 
 /**
  * Every {@link BoardCache} slice EXCEPT `cellValues`.
@@ -255,6 +296,13 @@ export const ROW_HAIRLINE =
  */
 export const CELL_CENTER =
   "justify-center-safe text-center *:justify-center-safe";
+
+/**
+ * Start alignment for a value cell outside the table grid (the item panel's
+ * Fields list, where values line up on one left edge next to their label).
+ * Same three parts as {@link CELL_CENTER}; a literal for the same reason.
+ */
+export const CELL_START = "justify-start text-left *:justify-start";
 
 /**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what
