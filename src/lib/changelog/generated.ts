@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Folder invitations reach the person invited",
+    description:
+      "An invited person can now set a password from the email, sees who invited them and to which folder, and lands in that folder after accepting.",
+  },
+  {
     date: "2026-11-15",
     kind: "fixed",
     title: "View-only boards are read-only",
