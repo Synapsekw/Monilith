@@ -4,7 +4,7 @@ import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import type { GoalNode, RowOwner } from "@/lib/goals/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 export type FlatGoal = {
@@ -93,9 +93,9 @@ export const listGoalsDescriptor: ToolDescriptor = {
   name: "list_goals",
   title: "List goals",
   description: `Every goal visible to the connected user, flattened depth-first with a \`depth\` field preserving the hierarchy. Returns at most ${GOALS_LIMIT} goals.`,
-  inputSchema: { orgId: z.string().uuid().optional() },
+  inputSchema: { orgId: z.string().uuid().nullish() },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
-    listGoalsHandler(ctx.getClient, input as { orgId?: string }),
+    listGoalsHandler(ctx.getClient, withoutNulls(input) as { orgId?: string }),
 };

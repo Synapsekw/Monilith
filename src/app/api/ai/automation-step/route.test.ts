@@ -73,13 +73,11 @@ type Decision = {
   warnings: string[];
   usage: { inputTokens: number; outputTokens: number };
 };
-const decideAction = vi.fn(
-  async (): Promise<Decision> => ({
-    action: { type: "set_option", columnId: COL, optionId: "opt-done" },
-    warnings: [],
-    usage: { inputTokens: 1, outputTokens: 1 },
-  }),
-);
+const decideAction = vi.fn(async (): Promise<Decision> => ({
+  action: { type: "set_option", columnId: COL, optionId: "opt-done" },
+  warnings: [],
+  usage: { inputTokens: 1, outputTokens: 1 },
+}));
 vi.mock("@/lib/ai/agentic/decide", () => ({
   decideAction: (...a: unknown[]) => decideAction(...(a as [])),
 }));
@@ -191,6 +189,11 @@ describe("POST /api/ai/automation-step", () => {
     const res = await POST(req(body, signBody(body, SECRET)));
     expect(res.status).toBe(200);
     expect(decideAction).toHaveBeenCalledOnce();
+    // No session here: the rule's AUTHOR decides which members the model sees.
+    expect(buildJobContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ viewer: { kind: "author", userId: OWNER } }),
+    );
     // The one and only write is the confined definer, with the chosen action.
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]!.fn).toBe("automation_ai_apply");

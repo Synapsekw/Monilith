@@ -159,6 +159,27 @@ export async function visibleWorkspacesFor(
   return narrowForViewer(workspaces, visibility, (w) => w.id);
 }
 
+/**
+ * The org's people for a run that has NO session: a background job acting for
+ * `userId` (an automation's author), where there is no viewer client whose RLS
+ * could answer. The database rule is keyed on `auth.uid()`, so it cannot be
+ * asked on someone's behalf, and this module does not restate it.
+ *
+ * So it decides only what it can know: a full member gets the org roster; a
+ * guest, an unknown author (`null`) or anyone whose role cannot be read gets
+ * themselves alone, the same answer `loadRosterVisibility` gives a guest whose
+ * visibility read failed. Never more than the session path would show.
+ */
+export async function orgMembersForAbsentViewer(
+  userId: string | null,
+  orgId: string,
+): Promise<OrgMember[]> {
+  if (!orgId) return [];
+  const members = await listOrgMembersCached(orgId);
+  if (userId && !(await isConfined(userId, orgId))) return members;
+  return members.filter((m) => m.userId === userId);
+}
+
 // ── Cookie-bound entry points (RSC, Server Actions, route handlers) ──────────
 // The viewer is the signed-in user. `cache()` shares one visibility read per
 // org across a request, however many consumers ask.

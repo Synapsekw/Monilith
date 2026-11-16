@@ -5,6 +5,14 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-16",
+    kind: "new",
+    title:
+      "The assistant can find projects and people, follow linked items and comment",
+    description:
+      "Ask the assistant about a project or a person by name, see what an item is linked to on other boards, and have it post a comment for you after you confirm it.",
+  },
+  {
+    date: "2026-11-16",
     kind: "fixed",
     title: "Connected apps see complete board rows",
     description:

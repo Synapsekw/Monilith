@@ -4,7 +4,7 @@ import {
   DASHBOARD_LIST_LIMIT,
 } from "@/lib/dashboards/queries";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 export async function listDashboardsHandler(
@@ -31,9 +31,12 @@ export const listDashboardsDescriptor: ToolDescriptor = {
   name: "list_dashboards",
   title: "List dashboards",
   description: `Dashboards visible to the connected user in one organization. Returns at most ${DASHBOARD_LIST_LIMIT}.`,
-  inputSchema: { orgId: z.string().uuid().optional() },
+  inputSchema: { orgId: z.string().uuid().nullish() },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
-    listDashboardsHandler(ctx.getClient, input as { orgId?: string }),
+    listDashboardsHandler(
+      ctx.getClient,
+      withoutNulls(input) as { orgId?: string },
+    ),
 };

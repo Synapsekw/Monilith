@@ -288,6 +288,8 @@ describe("previewAiStep — happy path", () => {
       orgId: ORG_ID,
       boardId: BOARD_ID,
       itemId: ITEM_ID,
+      // The signed-in user is the viewer, so a guest never gets the org roster.
+      viewer: { kind: "session" },
     });
     expect(decideAction).toHaveBeenCalledWith({
       apiKey: "test-key",

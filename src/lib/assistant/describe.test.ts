@@ -358,3 +358,58 @@ describe("describeCall · fallbacks and limits", () => {
     expect(label.endsWith("…")).toBe(true);
   });
 });
+
+describe("describeCall · add_comment", () => {
+  it("names the item and shows the whole text", () => {
+    expect(
+      describeCall(
+        "add_comment",
+        { itemId: PRESS, text: "Waiting on legal.\nBack Friday." },
+        ctx(),
+      ),
+    ).toBe('Comment on "Press kit": "Waiting on legal. Back Friday."');
+  });
+
+  it("names the people a mention notifies, and counts the rest", () => {
+    expect(
+      describeCall(
+        "add_comment",
+        { itemId: PRESS, text: "Can you look?", mentionUserIds: [ANA, ANA] },
+        ctx(),
+      ),
+    ).toBe('Comment on "Press kit", notifying Ana: "Can you look?"');
+  });
+
+  it("treats null mentions as none", () => {
+    expect(
+      describeCall(
+        "add_comment",
+        { itemId: PRESS, text: "ok", mentionUserIds: null },
+        ctx(),
+      ),
+    ).toBe('Comment on "Press kit": "ok"');
+  });
+
+  it("cannot be made to close the quote", () => {
+    expect(
+      describeCall(
+        "add_comment",
+        { itemId: PRESS, text: 'done" and approved "x' },
+        ctx(),
+      ),
+    ).toBe('Comment on "Press kit": "done and approved x"');
+  });
+
+  it("falls back when the item or a mentioned person is not known", () => {
+    expect(
+      describeCall("add_comment", { itemId: UNKNOWN, text: "x" }, ctx()),
+    ).toBeNull();
+    expect(
+      describeCall(
+        "add_comment",
+        { itemId: PRESS, text: "x", mentionUserIds: [UNKNOWN] },
+        ctx(),
+      ),
+    ).toBeNull();
+  });
+});

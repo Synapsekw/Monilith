@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { listPortfoliosCore, PORTFOLIO_LIMIT } from "@/lib/portfolios/queries";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 export async function listPortfoliosHandler(
@@ -62,9 +62,12 @@ export const listPortfoliosDescriptor: ToolDescriptor = {
   name: "list_portfolios",
   title: "List portfolios",
   description: `Portfolios visible to the connected user in one organization, with how many boards each contains. Returns at most ${PORTFOLIO_LIMIT}.`,
-  inputSchema: { orgId: z.string().uuid().optional() },
+  inputSchema: { orgId: z.string().uuid().nullish() },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
-    listPortfoliosHandler(ctx.getClient, input as { orgId?: string }),
+    listPortfoliosHandler(
+      ctx.getClient,
+      withoutNulls(input) as { orgId?: string },
+    ),
 };

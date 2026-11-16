@@ -4,7 +4,7 @@ import { bucketMyWork } from "@/lib/my-work/bucket";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import { todayInTimeZone } from "@/lib/focus/today";
 import { effectiveTimeZone } from "@/lib/datetime/timezone";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 /** Tool-side cap — well under MY_WORK_ITEM_LIMIT (500), which sizes a scrollable
@@ -79,9 +79,13 @@ export const getMyWorkDescriptor: ToolDescriptor = {
   name: "get_my_work",
   title: "Get my work",
   description: `Every open item assigned to the connected user in one organization, earliest due first, grouped by due date (overdue, today, this week, later, no date). Done items are left out. Returns at most ${MY_WORK_TOOL_LIMIT} items. For "what should I do first", use get_focus_today instead.`,
-  inputSchema: { orgId: z.string().uuid().optional() },
+  inputSchema: { orgId: z.string().uuid().nullish() },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
-    getMyWorkHandler(ctx.getClient, ctx.actorId, input as { orgId?: string }),
+    getMyWorkHandler(
+      ctx.getClient,
+      ctx.actorId,
+      withoutNulls(input) as { orgId?: string },
+    ),
 };

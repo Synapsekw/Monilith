@@ -93,6 +93,9 @@ export async function previewAiStep(input: {
       orgId: org.id,
       boardId,
       itemId: sample.id,
+      // The signed-in user is the viewer: a guest editor previews against the
+      // people they may see, not the org.
+      viewer: { kind: "session" },
     });
 
     const user = await requireUser();

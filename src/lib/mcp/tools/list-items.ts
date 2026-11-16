@@ -1,5 +1,5 @@
 import * as z from "zod";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 import { fetchCappedRows } from "@/lib/supabase/paginate";
 
@@ -20,9 +20,9 @@ export const LIST_ITEMS_CELLS_CAP = LIST_ITEMS_MAX_LIMIT * 100;
 
 export const listItemsInput = {
   boardId: z.string().uuid(),
-  groupId: z.string().uuid().optional(),
-  limit: z.number().int().min(1).max(LIST_ITEMS_MAX_LIMIT).optional(),
-  cursor: z.string().min(1).optional(),
+  groupId: z.string().uuid().nullish(),
+  limit: z.number().int().min(1).max(LIST_ITEMS_MAX_LIMIT).nullish(),
+  cursor: z.string().min(1).nullish(),
 };
 
 type ListItemsArgs = {
@@ -273,5 +273,5 @@ export const listItemsDescriptor: ToolDescriptor = {
   capability: null,
   scope: "boardId",
   invoke: (ctx, input) =>
-    listItemsHandler(ctx.getClient, input as ListItemsArgs),
+    listItemsHandler(ctx.getClient, withoutNulls(input) as ListItemsArgs),
 };
