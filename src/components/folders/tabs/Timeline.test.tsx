@@ -360,6 +360,10 @@ describe("TimelineInner", () => {
     const row = canvas().rows.find((r) => r.itemId === I3)!;
     expect(canvas().canEditItem(I3)).toBe(false);
     expect(canvas().linkCandidates(row)).toEqual([]);
+    // Without this the row's ⋯ button rendered and opened an empty menu: the
+    // canvas treats an absent `canLinkItem` as "every row may link".
+    expect(canvas().canLinkItem?.(I3)).toBe(false);
+    expect(canvas().canLinkItem?.(I1)).toBe(true);
     // A link is removable with edit on EITHER end's board — never with neither.
     const dep = (pred: string, succ: string) => ({
       id: "d",

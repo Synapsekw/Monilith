@@ -41,14 +41,17 @@ vi.mock("@/components/boards/automations/AutomationsDialog", () => ({
   AutomationsDialog: ({
     open,
     onOpenChange,
+    canEdit,
   }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    canEdit?: boolean;
   }) => (
     <button
       type="button"
       data-testid="automations-dialog"
       data-open={String(open)}
+      data-can-edit={String(canEdit)}
       onClick={() => onOpenChange(false)}
     />
   ),
@@ -508,6 +511,35 @@ describe("BoardHeader — Fit all columns", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Fit all columns" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens Automations read-only for a viewer and editable for an editor", async () => {
+    for (const [access, canEdit] of [
+      ["viewer", "false"],
+      ["editor", "true"],
+    ] as const) {
+      const { unmount } = renderHeader(
+        <BoardHeader
+          boardId="b1"
+          boardName="Sprint backlog"
+          board={BOARD}
+          views={views}
+          selectedViewId="v1"
+          access={access}
+        />,
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "More board actions" }),
+      );
+      await userEvent.click(
+        await screen.findByRole("menuitem", { name: "Automations" }),
+      );
+      expect(await screen.findByTestId("automations-dialog")).toHaveAttribute(
+        "data-can-edit",
+        canEdit,
+      );
+      unmount();
+    }
   });
 
   it("hides Work tracking from viewers and offers it to editors", async () => {

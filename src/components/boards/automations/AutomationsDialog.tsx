@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Sparkles, Trash2, Zap } from "lucide-react";
+import { Eye, Plus, Sparkles, Trash2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import {
   Dialog,
   DialogContent,
@@ -184,6 +185,7 @@ export function AutomationsDialog({
   open,
   onOpenChange,
   seedDraft,
+  canEdit = true,
 }: {
   boardId: string;
   columns: CacheColumn[];
@@ -194,6 +196,12 @@ export function AutomationsDialog({
   /** A prefilled draft (e.g. from a Board Intelligence suggestion) that opens
    *  the dialog straight into the builder, seeded, instead of the rule list. */
   seedDraft?: Draft;
+  /** False for view-only access: the rules and their run history still read,
+   *  but nothing that writes is offered — no builder, no AI draft, no
+   *  enable/disable switch, no delete. RLS (`can_edit_board`) refuses those
+   *  writes anyway; a control whose only outcome is failure is worse than
+   *  none. */
+  canEdit?: boolean;
 }) {
   const qc = useQueryClient();
   const [mode, setMode] = useState<"list" | "build">("list");
@@ -212,7 +220,8 @@ export function AutomationsDialog({
 
   const { data: isAdmin = false } = useQuery({
     queryKey: ["board-admin", boardId] as const,
-    enabled: open,
+    // Only the builder's webhook option reads this, and a viewer has no builder.
+    enabled: open && canEdit,
     staleTime: 60_000,
     queryFn: () => getBoardAdminStatus(boardId),
   });
@@ -271,6 +280,9 @@ export function AutomationsDialog({
         "Couldn't update the automation — your change was undone.",
         err,
       );
+      // The server refused, so the cached list may be what is wrong (the rule
+      // was deleted elsewhere, or edit access was lost) — re-read the truth.
+      qc.invalidateQueries({ queryKey: automationsKey(boardId) });
     },
   });
 
@@ -294,6 +306,7 @@ export function AutomationsDialog({
         "Couldn't delete the automation — it was restored.",
         err,
       );
+      qc.invalidateQueries({ queryKey: automationsKey(boardId) });
     },
   });
 
@@ -352,10 +365,11 @@ export function AutomationsDialog({
   // wipe edits the user had already made to the seeded draft.
   const seeded = useRef<Draft | undefined>(undefined);
   useEffect(() => {
-    if (!open || !seedDraft || seeded.current === seedDraft) return;
+    // A viewer never reaches the builder, whoever asked for it.
+    if (!open || !canEdit || !seedDraft || seeded.current === seedDraft) return;
     seeded.current = seedDraft;
     startBuild(seedDraft);
-  }, [open, seedDraft]);
+  }, [open, canEdit, seedDraft]);
 
   function closeAll(next: boolean) {
     if (!next) {
@@ -382,7 +396,18 @@ export function AutomationsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {mode === "build" ? (
+        {!canEdit ? (
+          <p className="bg-surface-muted text-muted-foreground flex items-start gap-2 rounded-md border px-3 py-2 text-xs">
+            <Eye className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>
+              <span className="text-foreground font-medium">View only.</span>{" "}
+              You can see this board&apos;s automations and what they ran. Only
+              editors can add or change them.
+            </span>
+          </p>
+        ) : null}
+
+        {mode === "build" && canEdit ? (
           <div className="flex flex-col gap-4">
             {/* Describe an automation (NL → draft; seeds the builder for review) */}
             {!initialDraft ? (
@@ -631,7 +656,9 @@ export function AutomationsDialog({
                 <p className="text-muted-foreground text-sm">Loading…</p>
               ) : rules.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  No automations yet. Create one to react to status changes.
+                  {canEdit
+                    ? "No automations yet. Create one to react to status changes."
+                    : "This board has no automations."}
                 </p>
               ) : (
                 rules.map((rule) => (
@@ -640,30 +667,49 @@ export function AutomationsDialog({
                     className="bg-surface flex flex-col gap-2 rounded-md border p-3"
                   >
                     <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={rule.enabled}
-                        aria-label={
-                          rule.enabled
-                            ? "Disable automation"
-                            : "Enable automation"
-                        }
-                        onClick={() =>
-                          toggle.mutate({ id: rule.id, enabled: !rule.enabled })
-                        }
-                        className={cn(
-                          "focus-visible:ring-ring relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                          rule.enabled ? "bg-primary" : "bg-muted",
-                        )}
-                      >
-                        <span
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={rule.enabled}
+                          aria-label={
+                            rule.enabled
+                              ? "Disable automation"
+                              : "Enable automation"
+                          }
+                          onClick={() =>
+                            toggle.mutate({
+                              id: rule.id,
+                              enabled: !rule.enabled,
+                            })
+                          }
                           className={cn(
-                            "bg-background inline-block size-4 rounded-full shadow transition-transform",
-                            rule.enabled ? "translate-x-4" : "translate-x-0.5",
+                            "focus-visible:ring-ring relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                            rule.enabled ? "bg-primary" : "bg-muted",
                           )}
-                        />
-                      </button>
+                        >
+                          <span
+                            className={cn(
+                              "bg-background inline-block size-4 rounded-full shadow transition-transform",
+                              rule.enabled
+                                ? "translate-x-4"
+                                : "translate-x-0.5",
+                            )}
+                          />
+                        </button>
+                      ) : (
+                        // The same fact the switch states, as text: a viewer
+                        // reads whether the rule is running, and cannot flip it.
+                        <Kicker
+                          size="xs"
+                          className={cn(
+                            "w-9 shrink-0 rounded-sm border px-1 py-0.5 text-center",
+                            rule.enabled && "border-border-bright",
+                          )}
+                        >
+                          {rule.enabled ? "On" : "Off"}
+                        </Kicker>
+                      )}
                       <p
                         className={cn(
                           "flex-1 text-sm",
@@ -675,15 +721,17 @@ export function AutomationsDialog({
                         ) : null}
                         {summarize(rule, columns, members, groups)}
                       </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Delete automation"
-                        onClick={() => remove.mutate(rule.id)}
-                      >
-                        <Trash2 className="text-destructive size-3.5" />
-                      </Button>
+                      {canEdit ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Delete automation"
+                          onClick={() => remove.mutate(rule.id)}
+                        >
+                          <Trash2 className="text-destructive size-3.5" />
+                        </Button>
+                      ) : null}
                     </div>
                     <RecentRuns automationId={rule.id} />
                   </div>
@@ -691,11 +739,13 @@ export function AutomationsDialog({
               )}
             </div>
 
-            <div>
-              <Button onClick={() => startBuild()}>
-                <Plus className="size-4" /> New automation
-              </Button>
-            </div>
+            {canEdit ? (
+              <div>
+                <Button onClick={() => startBuild()}>
+                  <Plus className="size-4" /> New automation
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </DialogContent>
