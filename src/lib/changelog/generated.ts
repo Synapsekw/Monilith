@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-16",
+    kind: "new",
+    title: "See the items behind a folder number",
+    description:
+      "Click Complete, Overdue, Due this week, Blocked or Stale on a folder page to list the items behind it, and Needs attention now shows every matching item for a board instead of only those among the folder's first 100.",
+  },
+  {
+    date: "2026-11-16",
     kind: "improved",
     title: "Act on your Today list",
     description:

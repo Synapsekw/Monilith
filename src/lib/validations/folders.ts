@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { KPI_ITEM_KINDS } from "@/lib/folders/types";
 
 // 60 chars matches the DB CHECK on folders.name — keep the two in step.
 const name = z.string().trim().min(1).max(60);
@@ -21,6 +22,20 @@ export const moveBoardToFolderSchema = z.object({
 export const attachDashboardSchema = z.object({
   dashboardId: uuid,
   folderId: uuid.nullable(),
+});
+/** The board / stage scope and page of an on-demand folder read. A stage key
+ *  is `trim(lower(group name))`; group names are short, 200 is generous. */
+const folderPage = {
+  folderId: uuid,
+  boardId: uuid.nullable().optional(),
+  stageKey: z.string().max(200).nullable().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  offset: z.number().int().min(0).max(1_000_000).optional(),
+};
+export const folderAttentionPageSchema = z.object(folderPage);
+export const folderKpiItemsSchema = z.object({
+  ...folderPage,
+  kpi: z.enum(KPI_ITEM_KINDS),
 });
 /** A tab id from a folder's layout config. The four preset ids (overview,
  *  stages, boards, people) are the legacy enum values, so old deep links and

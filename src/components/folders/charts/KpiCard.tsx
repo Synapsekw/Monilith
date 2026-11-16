@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "@/components/folders/charts/Sparkline";
 import { Kicker } from "@/components/ui/kicker";
@@ -7,7 +8,16 @@ import {
   type StatusColor,
 } from "@/components/ui/status-pill";
 
-/** One dense KPI card: value, badge, one sub-fact, then either a trend row (change pill + sparkline) or a thin progress bar. */
+/**
+ * One dense KPI card: value, badge, one sub-fact, then either a trend row
+ * (change pill + sparkline) or a thin progress bar.
+ *
+ * With `action` the whole card is one control that opens the list of items
+ * behind its number, in place: a real <button> stretched over the card (the
+ * card's content stays ordinary markup, so nothing invalid nests inside a
+ * button), a chevron that turns when open, and the bright hairline while it
+ * is.
+ */
 export function KpiCard({
   label,
   value,
@@ -16,6 +26,7 @@ export function KpiCard({
   progress = null,
   barColor = "blue",
   trend,
+  action,
   className,
 }: {
   label: string;
@@ -31,6 +42,14 @@ export function KpiCard({
     label: string;
     change: { text: string; color: StatusColor };
   };
+  action?: {
+    /** What the control does, in words: "Show the 402 overdue items". */
+    label: string;
+    expanded: boolean;
+    /** id of the region the card opens. */
+    controls: string;
+    onToggle: () => void;
+  };
   className?: string;
 }) {
   const pct = progress === null ? null : Math.max(0, Math.min(100, progress));
@@ -38,11 +57,34 @@ export function KpiCard({
     <div
       data-testid="kpi-card"
       className={cn(
-        "bg-surface hover:border-border-hover flex min-w-0 flex-col gap-2 rounded-lg border p-4",
+        "bg-surface hover:border-border-hover relative flex min-w-0 flex-col gap-2 rounded-lg border p-4",
+        action?.expanded && "border-border-bright hover:border-border-bright",
         className,
       )}
     >
-      <Kicker data-testid="kpi-label">{label}</Kicker>
+      {action ? (
+        <button
+          type="button"
+          data-testid="kpi-open"
+          aria-label={action.label}
+          aria-expanded={action.expanded}
+          aria-controls={action.controls}
+          onClick={action.onToggle}
+          className="focus-visible:ring-ring absolute inset-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2"
+        />
+      ) : null}
+      <div className="flex items-center justify-between gap-2">
+        <Kicker data-testid="kpi-label">{label}</Kicker>
+        {action ? (
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "text-muted-foreground size-3.5 shrink-0 transition-transform",
+              action.expanded && "rotate-180",
+            )}
+          />
+        ) : null}
+      </div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-heading text-2xl font-semibold tracking-tight tabular-nums">
           {value}

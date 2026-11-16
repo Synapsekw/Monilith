@@ -44,4 +44,25 @@ describe("FolderGallery", () => {
     render(<FolderGallery workspaceId="w1" rows={[]} />);
     expect(screen.getByText(/No folders yet/)).toBeInTheDocument();
   });
+
+  it("says so when the read came back at the row cap, and not otherwise", () => {
+    const row = {
+      folderId: "f1",
+      name: "Q4 Launch",
+      position: 0,
+      boards: 1,
+      items: 2,
+      done: 1,
+      overdue: 0,
+      attention: 0,
+    };
+    const { rerender } = render(
+      <FolderGallery workspaceId="w1" rows={[row]} capped />,
+    );
+    expect(screen.getByTestId("gallery-capped")).toHaveTextContent(
+      "Showing the first 1 folders. This workspace has more",
+    );
+    rerender(<FolderGallery workspaceId="w1" rows={[row]} />);
+    expect(screen.queryByTestId("gallery-capped")).toBeNull();
+  });
 });

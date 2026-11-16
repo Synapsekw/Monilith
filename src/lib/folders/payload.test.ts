@@ -87,7 +87,7 @@ vi.mock("./resolve", () => ({
     order.push("start:attention");
     await tick();
     order.push("end:attention");
-    return { ok: true, rows: [] };
+    return { ok: true, rows: [], total: 0 };
   }),
 }));
 vi.mock("@/lib/org/visible-roster", () => ({
@@ -222,6 +222,33 @@ describe("buildFolderPayload", () => {
       const p = await buildFolderPayload(supabase, "f1", "u1");
       expect(p!.todayISO).toBe("2026-11-15");
     });
+  });
+
+  it("carries the attention total and the rollup's cap flag to the page", async () => {
+    vi.mocked(resolveFolderAttention).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: 240,
+    });
+    vi.mocked(resolveFolderRollup).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      capped: true,
+    });
+    const p = await buildFolderPayload(supabase, "f1", "u1");
+    expect(p!.attentionTotal).toBe(240);
+    expect(p!.rollupCapped).toBe(true);
+  });
+
+  it("an unknown attention total stays null, and an uncapped rollup is false", async () => {
+    vi.mocked(resolveFolderAttention).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: null,
+    });
+    const p = await buildFolderPayload(supabase, "f1", "u1");
+    expect(p!.attentionTotal).toBeNull();
+    expect(p!.rollupCapped).toBe(false);
   });
 
   it("carries the folder's access head from wave A", async () => {

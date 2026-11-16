@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getFolderWorkload } from "@/lib/folders/actions";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +10,8 @@ import {
   type WorkloadPerson,
 } from "@/components/folders/charts/WorkloadBars";
 import {
+  WorkloadCapNotice,
+  fetchWorkload,
   inWorkloadScope,
   peopleFromWorkload,
   workloadKey,
@@ -71,11 +72,7 @@ export function PeoplePanel({
   const { ref, near } = useNearViewport<HTMLDivElement>();
   const q = useQuery({
     queryKey: workloadKey(folderId),
-    queryFn: async () => {
-      const res = await getFolderWorkload({ folderId });
-      if (!res.ok) throw new Error(res.error);
-      return res.data;
-    },
+    queryFn: () => fetchWorkload(folderId),
     staleTime: 60_000,
     enabled: near,
   });
@@ -100,8 +97,8 @@ export function PeoplePanel({
   else if (!q.data)
     body = <Skeleton data-testid="people-skeleton" className="h-40 w-full" />;
   else {
-    const people = peopleFromWorkload(q.data, stage, members, board);
-    const loose = q.data.filter(
+    const people = peopleFromWorkload(q.data.rows, stage, members, board);
+    const loose = q.data.rows.filter(
       (r) => r.userId === null && inWorkloadScope(r, stage, board),
     );
     const looseOpen = loose.reduce((s, r) => s + r.open, 0);
@@ -133,6 +130,7 @@ export function PeoplePanel({
             See all {people.length}
           </Button>
         ) : null}
+        {q.data.capped ? <WorkloadCapNotice rows={q.data.rows.length} /> : null}
       </>
     );
   }

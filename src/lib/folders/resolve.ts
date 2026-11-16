@@ -8,19 +8,81 @@ import {
   type FolderTimelineData,
 } from "@/lib/boards/timeline-context";
 import type {
+  AttentionPage,
   AttentionRow,
   BurnPacked,
   GalleryRow,
+  KpiItemKind,
+  KpiItemsPage,
   LoadRow,
   RollupRow,
   WorkloadRow,
 } from "./types";
-import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
+import {
+  FOLDER_DATA_ERROR,
+  FOLDER_GONE_ERROR,
+  KPI_ITEMS_UNAVAILABLE,
+} from "./types";
 import { parseBurnPacked, unpackLoadPacked } from "./packed";
+import { stageKey } from "./stages";
 
 type DB = SupabaseClient<Database>;
+/** `capped: true` means a row cap cut the read: the rows are incomplete. */
 export type Resolved<T> =
-  { ok: true; rows: T[] } | { ok: false; error: string };
+  { ok: true; rows: T[]; capped?: boolean } | { ok: false; error: string };
+
+/**
+ * PostgREST's `max_rows` (supabase/config.toml). A set-returning RPC that
+ * comes back with this many rows was almost certainly cut, silently.
+ */
+export const POSTGREST_MAX_ROWS = 1000;
+
+/** `folder_attention`'s own hard ceiling (`least(greatest(p_limit, 1), 100)`). */
+const ATTENTION_MAX = 100;
+
+/** `{ total, rows }`: the value the *_packed and *_page functions return. */
+const packedRowsSchema = z.object({
+  total: z.number(),
+  rows: z.array(z.unknown()),
+});
+
+type PackedRead =
+  | { kind: "missing" }
+  | { kind: "error"; error: string }
+  | { kind: "ok"; total: number; rows: unknown[] };
+
+/**
+ * True when PostgREST (PGRST202) or Postgres (42883) says the function does
+ * not exist: a database that has not had 20261116112338_folder_drilldown yet,
+ * so the caller falls back to the older function.
+ */
+function isMissingFunction(error: { code?: string | null } | null): boolean {
+  return error?.code === "PGRST202" || error?.code === "42883";
+}
+
+/**
+ * One execution of a `*_packed` function: a single jsonb value, which
+ * PostgREST's row cap cannot cut. `missing` = the database has not had
+ * 20261116112338_folder_drilldown yet; the caller falls back to the
+ * set-returning function.
+ */
+async function readPacked(
+  supabase: DB,
+  fn: "folder_rollup_packed" | "folder_workload_packed",
+  folderId: string,
+): Promise<PackedRead> {
+  const { data, error } = await typedRpc(supabase, fn, {
+    p_folder_id: folderId,
+  });
+  if (error) {
+    if (isMissingFunction(error)) return { kind: "missing" };
+    return { kind: "error", error: mapRpcError(error, fn) };
+  }
+  const parsed = packedRowsSchema.safeParse(data);
+  if (!parsed.success)
+    return { kind: "error", error: mapZodError(parsed.error, fn) };
+  return { kind: "ok", total: parsed.data.total, rows: parsed.data.rows };
+}
 
 /**
  * Row shapes, snake_case, matching each RPC's `returns table` list EXACTLY
@@ -138,15 +200,31 @@ export async function resolveFolderRollup(
   supabase: DB,
   folderId: string,
 ): Promise<Resolved<RollupRow>> {
-  const { data, error } = await typedRpc(supabase, "folder_rollup", {
-    p_folder_id: folderId,
-  });
-  if (error) return { ok: false, error: mapRpcError(error, "folder_rollup") };
-  const parsed = z.array(rollupRowSchema).safeParse(data ?? []);
+  // One row per board and group, so a large folder can pass PostgREST's
+  // 1,000-row cap. The packed function cannot be cut by it; the old one is
+  // the fallback for a database without the packed function, and a full
+  // 1,000 rows from it is reported as capped.
+  const packed = await readPacked(supabase, "folder_rollup_packed", folderId);
+  if (packed.kind === "error") return { ok: false, error: packed.error };
+  let raw: unknown;
+  let capped: boolean;
+  if (packed.kind === "ok") {
+    raw = packed.rows;
+    capped = packed.total > packed.rows.length;
+  } else {
+    const { data, error } = await typedRpc(supabase, "folder_rollup", {
+      p_folder_id: folderId,
+    });
+    if (error) return { ok: false, error: mapRpcError(error, "folder_rollup") };
+    raw = data ?? [];
+    capped = (data ?? []).length >= POSTGREST_MAX_ROWS;
+  }
+  const parsed = z.array(rollupRowSchema).safeParse(raw);
   if (!parsed.success)
     return { ok: false, error: mapZodError(parsed.error, "folder_rollup") };
   return {
     ok: true,
+    ...(capped ? { capped: true } : {}),
     rows: parsed.data.map((r) => ({
       boardId: r.board_id,
       boardName: r.board_name,
@@ -211,22 +289,161 @@ export async function resolveFolderLoad(
   return unpackLoadPacked(data);
 }
 
+function toAttentionRow(r: z.infer<typeof attentionRowSchema>): AttentionRow {
+  return {
+    itemId: r.item_id,
+    itemName: r.item_name,
+    boardId: r.board_id,
+    boardName: r.board_name,
+    groupId: r.group_id,
+    groupName: r.group_name,
+    reason: r.reason,
+    ageDays: r.age_days,
+    severity: r.severity,
+  };
+}
+
+export type AttentionFilter = {
+  boardId?: string | null;
+  stageKey?: string | null;
+  offset?: number;
+};
+
+/**
+ * One bounded page of the folder's attention rows, most urgent first, with
+ * the count of ALL rows that match the board / stage filter.
+ *
+ * `folder_attention_page` applies the filter INSIDE the query, so the limit
+ * applies to matching rows. A database without it (before
+ * 20261116112338_folder_drilldown) is read through the old `folder_attention`,
+ * which can only return the folder's top 100: the filter then runs here,
+ * over those rows, and `total` is null whenever that read hit its limit (rows
+ * past it may match and cannot be seen). Callers show that as "of the
+ * folder's most urgent", never as a complete list.
+ */
 export async function resolveFolderAttention(
   supabase: DB,
   folderId: string,
   limit = 20,
-): Promise<Resolved<AttentionRow>> {
+  filter: AttentionFilter = {},
+): Promise<({ ok: true } & AttentionPage) | { ok: false; error: string }> {
+  const boardId = filter.boardId ?? null;
+  const stage = filter.stageKey ?? null;
+  const offset = filter.offset ?? 0;
+  const page = await typedRpc(supabase, "folder_attention_page", {
+    p_folder_id: folderId,
+    p_board_id: boardId,
+    p_stage_key: stage,
+    p_reason: null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (page.error && !isMissingFunction(page.error))
+    return {
+      ok: false,
+      error: mapRpcError(page.error, "folder_attention_page"),
+    };
+  if (!page.error) {
+    const shape = packedRowsSchema.safeParse(page.data);
+    if (!shape.success)
+      return {
+        ok: false,
+        error: mapZodError(shape.error, "folder_attention_page"),
+      };
+    const parsed = z.array(attentionRowSchema).safeParse(shape.data.rows);
+    if (!parsed.success)
+      return {
+        ok: false,
+        error: mapZodError(parsed.error, "folder_attention_page"),
+      };
+    return {
+      ok: true,
+      rows: parsed.data.map(toAttentionRow),
+      total: shape.data.total,
+    };
+  }
+  // Fallback: the old function. With a filter or an offset it must be asked
+  // for everything it will give, because it cannot filter.
+  const filtered = boardId !== null || stage !== null || offset > 0;
+  const asked = filtered ? ATTENTION_MAX : Math.min(limit, ATTENTION_MAX);
   const { data, error } = await typedRpc(supabase, "folder_attention", {
     p_folder_id: folderId,
-    p_limit: limit,
+    p_limit: asked,
   });
   if (error)
     return { ok: false, error: mapRpcError(error, "folder_attention") };
   const parsed = z.array(attentionRowSchema).safeParse(data ?? []);
   if (!parsed.success)
     return { ok: false, error: mapZodError(parsed.error, "folder_attention") };
+  const matching = parsed.data
+    .map(toAttentionRow)
+    .filter(
+      (a) =>
+        (boardId === null || a.boardId === boardId) &&
+        (stage === null ||
+          (a.groupName !== null && stageKey(a.groupName) === stage)),
+    );
   return {
     ok: true,
+    rows: matching.slice(offset, offset + limit),
+    // Fewer rows than asked for: the read was not cut, so the count is exact.
+    total: parsed.data.length < asked ? matching.length : null,
+  };
+}
+
+const kpiItemRowSchema = z.object({
+  item_id: z.string(),
+  item_name: z.string(),
+  board_id: z.string(),
+  board_name: z.string(),
+  group_id: z.string().nullable(),
+  group_name: z.string().nullable(),
+  due_on: z.string().nullable(),
+  done_on: z.string().nullable(),
+  last_touched: z.string().nullable(),
+  is_done: z.boolean(),
+  is_overdue: z.boolean(),
+});
+
+/**
+ * The items behind one KPI number: one bounded page (the function clamps the
+ * limit to 100) plus the count of all matching items. There is no older
+ * function to fall back to, so a database without `folder_kpi_items` answers
+ * KPI_ITEMS_UNAVAILABLE.
+ */
+export async function resolveFolderKpiItems(
+  supabase: DB,
+  folderId: string,
+  q: {
+    kpi: KpiItemKind;
+    boardId?: string | null;
+    stageKey?: string | null;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<({ ok: true } & KpiItemsPage) | { ok: false; error: string }> {
+  const { data, error } = await typedRpc(supabase, "folder_kpi_items", {
+    p_folder_id: folderId,
+    p_kpi: q.kpi,
+    p_board_id: q.boardId ?? null,
+    p_stage_key: q.stageKey ?? null,
+    p_limit: q.limit ?? 50,
+    p_offset: q.offset ?? 0,
+  });
+  if (error) {
+    if (isMissingFunction(error))
+      return { ok: false, error: KPI_ITEMS_UNAVAILABLE };
+    return { ok: false, error: mapRpcError(error, "folder_kpi_items") };
+  }
+  const shape = packedRowsSchema.safeParse(data);
+  if (!shape.success)
+    return { ok: false, error: mapZodError(shape.error, "folder_kpi_items") };
+  const parsed = z.array(kpiItemRowSchema).safeParse(shape.data.rows);
+  if (!parsed.success)
+    return { ok: false, error: mapZodError(parsed.error, "folder_kpi_items") };
+  return {
+    ok: true,
+    total: shape.data.total,
     rows: parsed.data.map((r) => ({
       itemId: r.item_id,
       itemName: r.item_name,
@@ -234,9 +451,11 @@ export async function resolveFolderAttention(
       boardName: r.board_name,
       groupId: r.group_id,
       groupName: r.group_name,
-      reason: r.reason,
-      ageDays: r.age_days,
-      severity: r.severity,
+      dueOn: r.due_on,
+      doneOn: r.done_on,
+      lastTouched: r.last_touched,
+      isDone: r.is_done,
+      isOverdue: r.is_overdue,
     })),
   };
 }
@@ -245,15 +464,29 @@ export async function resolveFolderWorkload(
   supabase: DB,
   folderId: string,
 ): Promise<Resolved<WorkloadRow>> {
-  const { data, error } = await typedRpc(supabase, "folder_workload", {
-    p_folder_id: folderId,
-  });
-  if (error) return { ok: false, error: mapRpcError(error, "folder_workload") };
-  const parsed = z.array(workloadRowSchema).safeParse(data ?? []);
+  // One row per person, board and stage: see resolveFolderRollup for the cap.
+  const packed = await readPacked(supabase, "folder_workload_packed", folderId);
+  if (packed.kind === "error") return { ok: false, error: packed.error };
+  let raw: unknown;
+  let capped: boolean;
+  if (packed.kind === "ok") {
+    raw = packed.rows;
+    capped = packed.total > packed.rows.length;
+  } else {
+    const { data, error } = await typedRpc(supabase, "folder_workload", {
+      p_folder_id: folderId,
+    });
+    if (error)
+      return { ok: false, error: mapRpcError(error, "folder_workload") };
+    raw = data ?? [];
+    capped = (data ?? []).length >= POSTGREST_MAX_ROWS;
+  }
+  const parsed = z.array(workloadRowSchema).safeParse(raw);
   if (!parsed.success)
     return { ok: false, error: mapZodError(parsed.error, "folder_workload") };
   return {
     ok: true,
+    ...(capped ? { capped: true } : {}),
     rows: parsed.data.map((r) => ({
       userId: r.user_id,
       boardId: r.board_id,
@@ -279,6 +512,9 @@ export async function resolveFolderGallery(
     return { ok: false, error: mapZodError(parsed.error, "folder_gallery") };
   return {
     ok: true,
+    // One row per folder of the workspace: only a workspace with 1,000 or
+    // more folders can reach the cap. The gallery says so when it does.
+    ...(parsed.data.length >= POSTGREST_MAX_ROWS ? { capped: true } : {}),
     rows: parsed.data.map((r) => ({
       folderId: r.folder_id,
       name: r.folder_name,
