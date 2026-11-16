@@ -1,16 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// listOrgMembersCached hits the service client — stub it with a fixed roster.
+// The roster always comes through the visible-roster module (never the raw
+// per-org cache). Each entry point is stubbed with a distinct roster so the
+// tests can tell which one a viewer kind reached.
+const ROSTER = [
+  {
+    userId: "u1",
+    fullName: "Ada Lovelace",
+    email: "ada@x.com",
+    avatarUrl: null,
+  },
+  { userId: "u2", fullName: null, email: "grace@x.com", avatarUrl: null },
+];
+const listVisibleOrgMembers = vi.fn(async (_orgId: string) => ROSTER);
+const orgMembersForAbsentViewer = vi.fn(
+  async (_userId: string | null, _orgId: string) => [ROSTER[0]!],
+);
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: (o: string) => listVisibleOrgMembers(o),
+  orgMembersForAbsentViewer: (u: string | null, o: string) =>
+    orgMembersForAbsentViewer(u, o),
+}));
+// The raw cache must never be read from here.
 vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: vi.fn(async () => [
-    {
-      userId: "u1",
-      fullName: "Ada Lovelace",
-      email: "ada@x.com",
-      avatarUrl: null,
-    },
-    { userId: "u2", fullName: null, email: "grace@x.com", avatarUrl: null },
-  ]),
+  listOrgMembersCached: vi.fn(async () => {
+    throw new Error("buildJobContext must not read the raw org roster");
+  }),
 }));
 
 import { buildJobContext } from "./context";
@@ -62,6 +77,7 @@ describe("buildJobContext", () => {
       orgId: "org1",
       boardId: "b1",
       itemId: "i1",
+      viewer: { kind: "session" },
     });
 
     expect(ctx.columns).toEqual([
@@ -91,7 +107,45 @@ describe("buildJobContext", () => {
       orgId: "org1",
       boardId: "b1",
       itemId: null,
+      viewer: { kind: "session" },
     });
     expect(ctx.item).toBeNull();
+  });
+
+  it("a previewing user gets the people THEY may see (session roster)", async () => {
+    const svc = fakeClient({ columns: [], groups: [], items: [] });
+    const ctx = await buildJobContext(svc, {
+      orgId: "org1",
+      boardId: "b1",
+      itemId: null,
+      viewer: { kind: "session" },
+    });
+    expect(listVisibleOrgMembers).toHaveBeenCalledWith("org1");
+    expect(orgMembersForAbsentViewer).not.toHaveBeenCalled();
+    expect(ctx.members.map((m) => m.id)).toEqual(["u1", "u2"]);
+  });
+
+  it("a fired rule gets the people its AUTHOR may see, not the org roster", async () => {
+    const svc = fakeClient({ columns: [], groups: [], items: [] });
+    const ctx = await buildJobContext(svc, {
+      orgId: "org1",
+      boardId: "b1",
+      itemId: null,
+      viewer: { kind: "author", userId: "u1" },
+    });
+    expect(orgMembersForAbsentViewer).toHaveBeenCalledWith("u1", "org1");
+    expect(listVisibleOrgMembers).not.toHaveBeenCalled();
+    expect(ctx.members).toEqual([{ id: "u1", name: "Ada Lovelace" }]);
+  });
+
+  it("a fired rule with no author passes null through (nobody is shown)", async () => {
+    const svc = fakeClient({ columns: [], groups: [], items: [] });
+    await buildJobContext(svc, {
+      orgId: "org1",
+      boardId: "b1",
+      itemId: null,
+      viewer: { kind: "author", userId: null },
+    });
+    expect(orgMembersForAbsentViewer).toHaveBeenCalledWith(null, "org1");
   });
 });

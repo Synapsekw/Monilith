@@ -47,6 +47,7 @@ import {
   loadRosterVisibility,
   loadWorkspaceVisibility,
   narrowForViewer,
+  orgMembersForAbsentViewer,
   visibleOrgMembersFor,
   visibleOrgMonosFor,
   visibleRosterFor,
@@ -233,5 +234,29 @@ describe("a viewer with no session", () => {
     expect(await visibleWorkspacesFor(client, "", "o1")).toEqual([]);
     expect(calls).toEqual([]);
     expect(access).not.toHaveBeenCalled();
+  });
+});
+
+describe("orgMembersForAbsentViewer (a background job, no session)", () => {
+  it("gives a full member's job the org roster", async () => {
+    const out = await orgMembersForAbsentViewer("co", "o1");
+    expect(out).toBe(PEOPLE);
+    expect(access).toHaveBeenCalledWith("co", "o1");
+  });
+
+  it("gives a guest's job only the guest", async () => {
+    access.mockResolvedValue({ isGuest: true, folderIds: [] });
+    const out = await orgMembersForAbsentViewer("guest", "o1");
+    expect(out.map((p) => p.userId)).toEqual(["guest"]);
+  });
+
+  it("gives a job with no known author nobody, without reading a role", async () => {
+    expect(await orgMembersForAbsentViewer(null, "o1")).toEqual([]);
+    expect(access).not.toHaveBeenCalled();
+  });
+
+  it("returns nobody without an org", async () => {
+    expect(await orgMembersForAbsentViewer("co", "")).toEqual([]);
+    expect(listOrgMembersCached).not.toHaveBeenCalled();
   });
 });

@@ -199,11 +199,11 @@ const TOPIC_DATA: Record<Exclude<SchemaTopic, "all">, unknown> = {
 };
 
 const describeSchemaInput = {
-  topic: z.enum(SCHEMA_TOPICS).optional(),
+  topic: z.enum(SCHEMA_TOPICS).nullish(),
 };
 
 const describeSchemaArgs = z.object({
-  topic: z.enum(SCHEMA_TOPICS).optional(),
+  topic: z.enum(SCHEMA_TOPICS).nullish(),
 });
 
 export const describeSchemaDescriptor: ToolDescriptor = {

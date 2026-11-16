@@ -10,6 +10,7 @@ import {
   runAssistantLoop,
   type AssistantEvent,
 } from "./runtime";
+import { ASSISTANT_COMMENT_MAX_CHARS } from "./unsupported";
 
 const usage = {
   inputTokens: { total: 30, noCache: 10, cacheRead: 20, cacheWrite: 0 },
@@ -66,6 +67,19 @@ describe("ASSISTANT_PREAMBLE tool references", () => {
     expect(ASSISTANT_PREAMBLE).toContain("get_focus_today");
     expect(ASSISTANT_PREAMBLE).toContain("query_items");
     expect(ASSISTANT_PREAMBLE).toContain("get_item_thread");
+  });
+
+  it("says where folder ids and user ids come from, and how to comment", () => {
+    const names = new Set(ALL_TOOL_DESCRIPTORS.map((d) => d.name));
+    for (const tool of ["list_folders", "list_people", "add_comment"]) {
+      expect(names.has(tool), tool).toBe(true);
+      expect(ASSISTANT_PREAMBLE).toContain(tool);
+    }
+    expect(ASSISTANT_PREAMBLE).toMatch(/never guess a user id/);
+    // The preamble's comment length is the limit staging enforces.
+    expect(ASSISTANT_PREAMBLE).toContain(
+      `at most ${ASSISTANT_COMMENT_MAX_CHARS} characters`,
+    );
   });
 
   it("calls get_focus_today with no arguments unless a known folder is named (live-run defect A)", () => {

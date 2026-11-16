@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { listOrgMemberProfiles } from "@/lib/mcp/org-scope";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 import { describeCellValue, nameMap, personName } from "./names";
 
@@ -9,8 +9,8 @@ const COMMENT_MAX_CHARS = 1000;
 
 const input = {
   itemId: z.string().uuid(),
-  limit: z.number().int().min(1).max(THREAD_LIMIT).optional(),
-  before: z.string().datetime({ offset: true }).optional(),
+  limit: z.number().int().min(1).max(THREAD_LIMIT).nullish(),
+  before: z.string().datetime({ offset: true }).nullish(),
 };
 
 type Entry =
@@ -146,6 +146,6 @@ export const getItemThreadDescriptor: ToolDescriptor = {
   invoke: (ctx, raw) =>
     getItemThreadHandler(
       ctx.getClient,
-      raw as { itemId: string; limit?: number; before?: string },
+      withoutNulls(raw) as { itemId: string; limit?: number; before?: string },
     ),
 };

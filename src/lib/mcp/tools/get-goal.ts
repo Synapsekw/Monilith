@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { loadGoalTree } from "./list-goals";
 import type { GoalNode } from "@/lib/goals/types";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 function findGoal(nodes: GoalNode[], goalId: string): GoalNode | null {
@@ -67,10 +67,13 @@ export const getGoalDescriptor: ToolDescriptor = {
     "One goal's full detail — progress mode, current/target values, dates, owner — plus a summary of its direct children. Get ids from list_goals.",
   inputSchema: {
     goalId: z.string().uuid(),
-    orgId: z.string().uuid().optional(),
+    orgId: z.string().uuid().nullish(),
   },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
-    getGoalHandler(ctx.getClient, input as { goalId: string; orgId?: string }),
+    getGoalHandler(
+      ctx.getClient,
+      withoutNulls(input) as { goalId: string; orgId?: string },
+    ),
 };

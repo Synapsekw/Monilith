@@ -293,6 +293,37 @@ function describeManageBoard(
   }
 }
 
+/** At most this many mentioned people are named; the rest are counted. */
+const MAX_NAMED_MENTIONS = 3;
+
+/**
+ * `add_comment`: the item's name, who is notified, then the WHOLE text (the
+ * assistant refuses a comment longer than the card can show). Null when the
+ * item or a mentioned person is not known here, so the label never guesses.
+ */
+function describeAddComment(
+  input: Record<string, unknown>,
+  ctx: DescribeContext,
+): string | null {
+  const item = itemName(input.itemId, ctx);
+  if (!item || typeof input.text !== "string") return null;
+  const text = clean(input.text).replace(/"/g, "");
+  if (!text) return null;
+  const ids = input.mentionUserIds ?? [];
+  if (!Array.isArray(ids)) return null;
+  const names = [...new Set(ids)].map((id) =>
+    typeof id === "string" ? ctx.members.get(id) : undefined,
+  );
+  if (!names.every((n) => n !== undefined)) return null;
+  const shown = names.slice(0, MAX_NAMED_MENTIONS).map((n) => clean(n!));
+  const more = names.length - shown.length;
+  const notify =
+    names.length === 0
+      ? ""
+      : `, notifying ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
+  return `Comment on "${shorten(item)}"${notify}: "${text}"`;
+}
+
 /**
  * A card label for one staged call, or null to fall back to the generic
  * summary. Pure: no I/O, and only `ctx` is consulted for names.
@@ -316,6 +347,9 @@ export function describeCall(
       break;
     case "manage_board":
       label = describeManageBoard(input, ctx);
+      break;
+    case "add_comment":
+      label = describeAddComment(input, ctx);
       break;
     default:
       label = null;

@@ -5,7 +5,10 @@ import {
   buildAutomationContext,
   type AutomationContext,
 } from "@/lib/ai/automation-context";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import {
+  listVisibleOrgMembers,
+  orgMembersForAbsentViewer,
+} from "@/lib/org/visible-roster";
 
 /**
  * The labels+ids facts the F13 decision loop is allowed to see: the board's
@@ -25,10 +28,26 @@ export type AgenticContext = AutomationContext & {
  * `board_id`/`org_id` filters, not RLS. Mirrors the projection discipline of the
  * NL-automation generator (`automation-gen-actions`), so the same egress
  * guarantee holds: labels + ids only, never row data.
+ *
+ * MEMBERS are never the raw org roster. They are the people `viewer` may see
+ * (`@/lib/org/visible-roster`), because the model can name any member it is
+ * shown (the `notify` action) and a guest must not reach people they share
+ * nothing with:
+ *   - `session`: the signed-in user previewing a step (cookie-bound RLS).
+ *   - `author`: a fired rule, with no session. A full member's rule sees the
+ *     org; a guest's rule (or one whose author is gone) sees only its author.
  */
+export type JobViewer =
+  { kind: "session" } | { kind: "author"; userId: string | null };
+
 export async function buildJobContext(
   svc: SupabaseClient<Database>,
-  args: { orgId: string; boardId: string; itemId: string | null },
+  args: {
+    orgId: string;
+    boardId: string;
+    itemId: string | null;
+    viewer: JobViewer;
+  },
 ): Promise<AgenticContext> {
   const [columnsRes, groupsRes, members] = await Promise.all([
     svc
@@ -41,7 +60,9 @@ export async function buildJobContext(
       .select("id, name")
       .eq("board_id", args.boardId)
       .order("position", { ascending: true }),
-    listOrgMembersCached(args.orgId),
+    args.viewer.kind === "session"
+      ? listVisibleOrgMembers(args.orgId)
+      : orgMembersForAbsentViewer(args.viewer.userId, args.orgId),
   ]);
 
   const base = buildAutomationContext({

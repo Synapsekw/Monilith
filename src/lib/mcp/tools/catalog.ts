@@ -37,6 +37,9 @@ import { manageWidgetDescriptor } from "./manage-widget";
 import { manageGoalDescriptor } from "./manage-goal";
 import { managePortfolioDescriptor } from "./manage-portfolio";
 import { manageReportDescriptor } from "./manage-report";
+import { listFoldersDescriptor } from "./list-folders";
+import { listPeopleDescriptor } from "./list-people";
+import { addCommentDescriptor } from "./add-comment";
 
 /**
  * Every MCP tool's descriptor, deliberately kept OUT of `register.ts`:
@@ -91,4 +94,9 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   getItemThreadDescriptor,
   queryItemsDescriptor,
   getFocusTodayDescriptor,
+  // Reach tools: the ids the tools above take (folders, people) and the one
+  // thread write. Appended, again, so nothing above moves.
+  listFoldersDescriptor,
+  listPeopleDescriptor,
+  addCommentDescriptor,
 ];

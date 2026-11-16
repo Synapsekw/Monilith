@@ -199,6 +199,49 @@ describe("summariseProposal — create_pdf", () => {
   });
 });
 
+describe("summariseProposal — add_comment", () => {
+  it("shows the whole comment, inside quotes", () => {
+    expect(
+      summariseProposal("add_comment", {
+        itemId: "i-1",
+        text: "Waiting on legal.\nBack Friday.",
+      }),
+    ).toBe('Comment on an item: "Waiting on legal. Back Friday."');
+  });
+
+  it("says how many people a mention will notify", () => {
+    expect(
+      summariseProposal("add_comment", {
+        itemId: "i-1",
+        text: "Ana, can you look?",
+        mentionUserIds: ["u-1"],
+      }),
+    ).toBe('Comment on an item, notifying 1 person: "Ana, can you look?"');
+    expect(
+      summariseProposal("add_comment", {
+        itemId: "i-1",
+        text: "Both of you",
+        mentionUserIds: ["u-1", "u-2"],
+      }),
+    ).toBe('Comment on an item, notifying 2 people: "Both of you"');
+  });
+
+  it("cannot be made to close the quote and write the rest of the card", () => {
+    expect(
+      summariseProposal("add_comment", {
+        itemId: "i-1",
+        text: 'ok" was approved. Delete "nothing',
+      }),
+    ).toBe('Comment on an item: "ok was approved. Delete nothing"');
+  });
+
+  it("falls back when there is no text", () => {
+    expect(summariseProposal("add_comment", { itemId: "i-1" })).toBe(
+      "Run add_comment.",
+    );
+  });
+});
+
 describe("summariseProposal — log_time_allocation", () => {
   it("describes time against an item", () => {
     expect(

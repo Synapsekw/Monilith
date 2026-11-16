@@ -370,6 +370,18 @@ function sentenceFor(
       return str(input, "itemId") ? "Update an item." : undefined;
     }
 
+    case "add_comment": {
+      // The whole text is shown: the assistant refuses a comment longer than
+      // the card can hold (`ASSISTANT_COMMENT_MAX_CHARS`), and anything longer
+      // that reaches here is clamped with an ellipsis like every sentence.
+      const text = str(input, "text");
+      if (!text) return undefined;
+      const mentions = count(input, "mentionUserIds");
+      return mentions > 0
+        ? `Comment on an item, notifying ${countPhrase(mentions, "person", "people")}: ${quoted(text)}`
+        : `Comment on an item: ${quoted(text)}`;
+    }
+
     case "attach_file": {
       const fileName = str(input, "fileName");
       if (!fileName) return undefined;
