@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { revokeConnectionAction } from "@/lib/mcp/oauth/connections-actions";
+import { timeAgo } from "@/lib/boards/automation-runs";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -19,7 +20,17 @@ export type Connection = {
   id: string;
   clientName: string;
   createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
 };
+
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 /**
  * Apps holding a live MCP token.
@@ -72,13 +83,21 @@ export function ConnectedAppsList({
               <p className="text-foreground truncate text-sm font-medium">
                 {c.clientName}
               </p>
+              {/* The relative label is computed from the clock, so the server
+                  and the browser can legitimately disagree by a tick. */}
+              <p
+                className="text-muted-foreground text-xs"
+                suppressHydrationWarning
+              >
+                Last used{" "}
+                <time dateTime={c.lastUsedAt} suppressHydrationWarning>
+                  {timeAgo(c.lastUsedAt)}
+                </time>
+                {" · "}Connected {formatDay(c.createdAt)}
+              </p>
               <p className="text-muted-foreground text-xs">
-                Connected{" "}
-                {new Date(c.createdAt).toLocaleDateString(undefined, {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                Expires if unused by{" "}
+                <time dateTime={c.expiresAt}>{formatDay(c.expiresAt)}</time>
               </p>
             </div>
             <Button

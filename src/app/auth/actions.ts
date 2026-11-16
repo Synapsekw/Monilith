@@ -11,6 +11,8 @@ import {
   readAccountApproval,
 } from "@/lib/auth/approval";
 import { LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
+import { fail, type ActionResult } from "@/lib/actions/result";
+import { deleteTokensForUser } from "@/lib/mcp/oauth/token-store";
 import {
   signInSchema,
   signUpSchema,
@@ -233,11 +235,44 @@ export async function changeOwnPassword(
     app_metadata: { ...user.app_metadata, must_change_password: false },
   });
 
+  // A connected MCP app holds its own long-lived credential and re-mints its
+  // Supabase session when that dies, so a new password alone does not lock it
+  // out — and "someone else may have my password" is exactly when it must.
+  // After the flag is cleared, so a failure here leaves the user able to reach
+  // Settings; and reported, never swallowed, because the password IS changed
+  // and resubmitting this form would only be refused as the same password.
+  if (!(await disconnectConnectedApps(user.id, "changeOwnPassword"))) {
+    return {
+      error:
+        "Your password was changed, but your connected apps could not be disconnected. Open Settings, then Security, and use Sign out everywhere to cut them off.",
+    };
+  }
+
   // An account still waiting for a platform admin (every invited outsider who
   // has just set their first password) goes straight to the waiting screen
   // rather than through /home's gate; everyone else goes home as before.
   // redirect() throws — outside any try/catch.
   redirect(await postAuthDestination(user.id, "/"));
+}
+
+/**
+ * Deletes every MCP connection of `userId` (which also frees their Vault
+ * secrets). Returns false instead of throwing so each caller can word its own
+ * failure; the cause is logged here and never shown to the user.
+ */
+async function disconnectConnectedApps(
+  userId: string,
+  caller: string,
+): Promise<boolean> {
+  try {
+    await deleteTokensForUser(userId);
+    return true;
+  } catch (e) {
+    console.error(`[${caller}] MCP disconnect failed:`, {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  }
 }
 
 /**
@@ -270,23 +305,40 @@ export async function signOut(): Promise<void> {
  * that connected them, and a connection can re-establish its own Supabase
  * session (`getRequestClient`), so revoking sessions alone would not cut them
  * off. Deleting the rows also frees their Vault secrets (before-delete trigger).
+ *
+ * FAILS CLOSED, in this order:
+ *   1. Disconnect the apps. If that fails, stop: nothing has been signed out,
+ *      the user is still on the page, and they are told to try again. Carrying
+ *      on would end in a redirect to /login that reads as "everything is signed
+ *      out" while the apps re-mint their sessions.
+ *   2. Revoke the sessions. If that fails the apps are already cut off, and the
+ *      user is told the other devices were not.
+ * Only when both succeeded does it redirect. A returned result is therefore
+ * always a failure; success never returns.
  */
-export async function signOutEverywhere(): Promise<void> {
+export async function signOutEverywhere(): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) {
-    const { error } = await createServiceClient()
-      .from("oauth_tokens")
-      .delete()
-      .eq("user_id", user.id);
-    if (error)
-      console.error("[signOutEverywhere] MCP disconnect failed:", {
-        error: error.message,
-      });
+  if (!user) redirect("/login");
+
+  if (!(await disconnectConnectedApps(user.id, "signOutEverywhere"))) {
+    return fail(
+      "Your connected apps could not be disconnected, so nothing was signed out. Please try again.",
+    );
   }
-  await supabase.auth.signOut({ scope: "global" });
+
+  const { error } = await supabase.auth.signOut({ scope: "global" });
+  if (error) {
+    console.error("[signOutEverywhere] global sign-out failed:", {
+      error: error.message,
+    });
+    return fail(
+      "Your connected apps were disconnected, but signing out your other devices failed. Please try again.",
+    );
+  }
+
   await forgetLastBoard();
   redirect("/login");
 }

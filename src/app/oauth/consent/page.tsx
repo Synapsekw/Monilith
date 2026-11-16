@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeRequestSchema } from "@/lib/validations/mcp-oauth";
 import { getOauthClient } from "@/lib/mcp/oauth/client-store";
+import { REFRESH_TOKEN_IDLE_DAYS } from "@/lib/mcp/oauth/lifetimes";
 import { approveConsent } from "./actions";
 
 // Both dynamic reads resolve inside the Suspense boundary (Cache Components) —
@@ -31,6 +32,11 @@ export async function ConsentGate({
       <p className="text-muted-foreground text-sm">
         Signed in as {user.email}. This grants read and write access to your
         boards and items — exactly what you can see and do when logged in.
+      </p>
+      <p className="text-muted-foreground text-sm">
+        It stays connected while you use it. Access ends if it goes unused for{" "}
+        {REFRESH_TOKEN_IDLE_DAYS} days, if you change your password or sign out
+        everywhere, or when you revoke it in Settings.
       </p>
       <form action={approveConsent} className="flex gap-3">
         {Object.entries(parsed.data).map(([key, value]) =>

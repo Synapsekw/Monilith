@@ -2,9 +2,19 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { Tables } from "@/types/database.types";
 import { generateOpaqueToken, hashToken } from "./crypto";
+import { REFRESH_TOKEN_IDLE_TTL_SECONDS } from "./lifetimes";
 
 const ACCESS_TOKEN_TTL_SECONDS = 3600;
-const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+export { REFRESH_TOKEN_IDLE_TTL_SECONDS };
+
+/** `last_used_at` is written at most this often per token, not per tool call. */
+const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+
+/** At most one bridge self-heal per token in this window (see claimBridgeHeal). */
+const BRIDGE_HEAL_COOLDOWN_SECONDS = 60;
+
+export type OauthTokenRow = Tables<"oauth_tokens">;
 
 export async function issueTokenPair(input: {
   clientId: string;
@@ -25,7 +35,7 @@ export async function issueTokenPair(input: {
       now + ACCESS_TOKEN_TTL_SECONDS * 1000,
     ).toISOString(),
     refresh_token_expires_at: new Date(
-      now + REFRESH_TOKEN_TTL_SECONDS * 1000,
+      now + REFRESH_TOKEN_IDLE_TTL_SECONDS * 1000,
     ).toISOString(),
   });
   if (error) throw new Error(error.message);
@@ -34,7 +44,7 @@ export async function issueTokenPair(input: {
 
 export async function lookupTokenByAccessToken(
   accessToken: string,
-): Promise<Tables<"oauth_tokens"> | null> {
+): Promise<OauthTokenRow | null> {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
@@ -43,9 +53,30 @@ export async function lookupTokenByAccessToken(
     .is("revoked_at", null)
     .maybeSingle();
   if (!data) return null;
-  if (new Date(data.access_token_expires_at).getTime() < Date.now())
-    return null;
-  return data;
+  const row = data as OauthTokenRow;
+  const now = Date.now();
+  if (new Date(row.access_token_expires_at).getTime() < now) return null;
+
+  // Every MCP request passes through here, so this is the one place a "last
+  // used" stamp costs no extra read. Throttled twice: the local check skips the
+  // write on the hot path, and the predicate makes concurrent requests that all
+  // saw a stale stamp collapse into one row change.
+  const staleBefore = now - LAST_USED_WRITE_INTERVAL_MS;
+  if (new Date(row.last_used_at).getTime() < staleBefore) {
+    const nowIso = new Date(now).toISOString();
+    const { error } = await supabase
+      .from("oauth_tokens")
+      .update({ last_used_at: nowIso })
+      .eq("id", row.id)
+      .lt("last_used_at", new Date(staleBefore).toISOString());
+    // Display-only bookkeeping: never fail a tool call over it.
+    if (error)
+      console.error("[mcp] last_used_at write failed:", {
+        error: error.message,
+      });
+    else row.last_used_at = nowIso;
+  }
+  return row;
 }
 
 /**
@@ -56,21 +87,37 @@ export async function lookupTokenByAccessToken(
 const REFRESH_GRACE_SECONDS = 60;
 
 /**
- * Atomically validates and rotates a refresh token in a single round trip.
+ * Validates and rotates a refresh token.
  *
- * The lookup (matching refresh_token_hash + client_id + revoked_at is null) and the
- * rotation (writing new hashes) happen as one conditional UPDATE, so two concurrent
- * requests presenting the same refresh token cannot both match the CURRENT hash:
- * only the first caller's UPDATE does (its WHERE clause is keyed on the pre-rotation
- * hash). This mirrors `consumeAuthorizationCode` in `code-store.ts`, which closes the
- * same TOCTOU race for authorization codes.
+ * The validation (matching refresh_token_hash + client_id, not revoked, NOT
+ * EXPIRED) and the rotation (writing new hashes and a fresh idle window) are
+ * one conditional UPDATE. Its WHERE clause is evaluated against the row as it
+ * was before the update, so:
+ *   - the expiry compared is the PRESENTED token's — never the new pair's. (It
+ *     used to be read back from the row after the update had overwritten it,
+ *     which made the check unfailable and refresh tokens immortal.)
+ *   - two concurrent requests presenting the same token cannot both match the
+ *     current hash; only the first one's UPDATE does. This mirrors
+ *     `consumeAuthorizationCode` in `code-store.ts`.
  *
- * A caller that misses the current hash gets one more chance: the token it holds may
- * be the one rotated away moments ago (see REFRESH_GRACE_SECONDS). That second UPDATE
- * is keyed on prev_refresh_token_hash and bounded by prev_refresh_rotated_at, and it
- * leaves both columns untouched — so the window is measured from the original
- * rotation and a replayed token cannot extend it. Whichever pair is issued last is
- * the live one; the pair from the lost response stops working.
+ * The read before it exists only to carry the presented token's expiry into
+ * prev_refresh_expires_at (PostgREST cannot copy a column in an UPDATE). It is
+ * not a check: a token's hash and expiry are always written together, so the
+ * value read belongs to exactly the hash the UPDATE is keyed on.
+ *
+ * A caller that misses the current hash gets one more chance: the token it
+ * holds may be the one rotated away moments ago (see REFRESH_GRACE_SECONDS).
+ * That second UPDATE is keyed on prev_refresh_token_hash, bounded by
+ * prev_refresh_rotated_at and by the expiry that applied to that previous
+ * token, and it leaves all three columns untouched — so the window is measured
+ * from the original rotation and a replayed token cannot extend it. Whichever
+ * pair is issued last is the live one; the pair from the lost response stops
+ * working.
+ *
+ * Returns null when the token is unknown, revoked, expired or for another
+ * client (the caller answers `invalid_grant`). THROWS on a database error: that
+ * is not a verdict on the token, and reporting it as one would make the client
+ * discard a healthy connection.
  */
 export async function rotateTokenPair(
   refreshToken: string,
@@ -82,6 +129,7 @@ export async function rotateTokenPair(
 } | null> {
   const supabase = createServiceClient();
   const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const presentedHash = hashToken(refreshToken);
   const newAccessToken = generateOpaqueToken();
   const newRefreshToken = generateOpaqueToken();
@@ -92,8 +140,9 @@ export async function rotateTokenPair(
       now + ACCESS_TOKEN_TTL_SECONDS * 1000,
     ).toISOString(),
     refresh_token_expires_at: new Date(
-      now + REFRESH_TOKEN_TTL_SECONDS * 1000,
+      now + REFRESH_TOKEN_IDLE_TTL_SECONDS * 1000,
     ).toISOString(),
+    last_used_at: nowIso,
   };
   const issued = {
     accessToken: newAccessToken,
@@ -101,23 +150,35 @@ export async function rotateTokenPair(
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   };
 
-  const { data, error } = await supabase
+  const { data: current, error: readError } = await supabase
     .from("oauth_tokens")
-    .update({
-      ...nextPair,
-      prev_refresh_token_hash: presentedHash,
-      prev_refresh_rotated_at: new Date(now).toISOString(),
-    })
+    .select("refresh_token_expires_at")
     .eq("refresh_token_hash", presentedHash)
     .eq("client_id", clientId)
     .is("revoked_at", null)
-    .select("id, refresh_token_expires_at")
     .maybeSingle();
-  if (error) return null;
-  if (data) {
-    if (new Date(data.refresh_token_expires_at).getTime() < Date.now())
-      return null;
-    return issued;
+  if (readError) throw new Error(readError.message);
+
+  if (current) {
+    const { data, error } = await supabase
+      .from("oauth_tokens")
+      .update({
+        ...nextPair,
+        prev_refresh_token_hash: presentedHash,
+        prev_refresh_rotated_at: nowIso,
+        prev_refresh_expires_at: current.refresh_token_expires_at,
+      })
+      .eq("refresh_token_hash", presentedHash)
+      .eq("client_id", clientId)
+      .is("revoked_at", null)
+      .gt("refresh_token_expires_at", nowIso)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) return issued;
+    // Missed: the token expired, or a concurrent request rotated it between
+    // the read and the update — in which case it is now the previous token and
+    // the grace path below is the right place to decide.
   }
 
   const { data: graced, error: graceError } = await supabase
@@ -130,20 +191,76 @@ export async function rotateTokenPair(
       "prev_refresh_rotated_at",
       new Date(now - REFRESH_GRACE_SECONDS * 1000).toISOString(),
     )
+    .gt("prev_refresh_expires_at", nowIso)
     .select("id")
     .maybeSingle();
-  if (graceError || !graced) return null;
-  return issued;
+  if (graceError) throw new Error(graceError.message);
+  return graced ? issued : null;
 }
 
-/** Persists a rotated bridge_secret_id after getBridgedClient() rotates the underlying Vault secret. */
-export async function updateBridgeSecretId(
-  tokenId: string,
-  newBridgeSecretId: string,
-): Promise<void> {
-  const supabase = createServiceClient();
-  await supabase
+/**
+ * Disconnects every MCP app of a user: sign out everywhere, password change.
+ *
+ * Hard-delete, like `revokeConnectionAction`: the before-delete trigger frees
+ * each row's Vault secret, which a soft `revoked_at` would leave behind.
+ *
+ * THROWS when the delete fails. A connection can re-mint its own Supabase
+ * session, so a caller that carried on after a failed delete would tell the
+ * user their apps were cut off when they were not.
+ */
+export async function deleteTokensForUser(userId: string): Promise<void> {
+  const { error } = await createServiceClient()
     .from("oauth_tokens")
-    .update({ bridge_secret_id: newBridgeSecretId })
-    .eq("id", tokenId);
+    .delete()
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * The Vault secret a live token row points at right now. `found: false` means
+ * the connection no longer exists (revoked or deleted). Throws on a read error.
+ */
+export async function readBridgeSecretId(
+  tokenId: string,
+): Promise<{ found: false } | { found: true; bridgeSecretId: string | null }> {
+  const { data, error } = await createServiceClient()
+    .from("oauth_tokens")
+    .select("bridge_secret_id")
+    .eq("id", tokenId)
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return { found: false };
+  return { found: true, bridgeSecretId: data.bridge_secret_id };
+}
+
+/**
+ * Claims the right to re-mint the bridge session of one token. True for at
+ * most one caller per token per BRIDGE_HEAL_COOLDOWN_SECONDS, and only while
+ * the row still points at the secret the caller found dead.
+ *
+ * It is a single conditional UPDATE, so it holds across server instances: of
+ * several tool calls that hit a dead session at once, one mints and the rest
+ * wait for its result — and a wrong "this session is dead" verdict can cost at
+ * most one mint a minute instead of one per call. Throws on a database error.
+ */
+export async function claimBridgeHeal(
+  tokenId: string,
+  deadSecretId: string,
+): Promise<boolean> {
+  const now = Date.now();
+  const cooldownStart = new Date(
+    now - BRIDGE_HEAL_COOLDOWN_SECONDS * 1000,
+  ).toISOString();
+  const { data, error } = await createServiceClient()
+    .from("oauth_tokens")
+    .update({ bridge_healed_at: new Date(now).toISOString() })
+    .eq("id", tokenId)
+    .eq("bridge_secret_id", deadSecretId)
+    .is("revoked_at", null)
+    .or(`bridge_healed_at.is.null,bridge_healed_at.lt.${cooldownStart}`)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data !== null;
 }

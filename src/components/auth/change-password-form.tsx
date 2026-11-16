@@ -131,6 +131,11 @@ export function ChangePasswordForm({
               ? "Enter a new password for your account to finish resetting it."
               : "Your administrator set a temporary password. Pick a new one to continue."}
         </CardDescription>
+        {invite ? null : (
+          <CardDescription>
+            Connected apps will need to reconnect after you change it.
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         <form
