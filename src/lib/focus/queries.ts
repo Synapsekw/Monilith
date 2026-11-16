@@ -72,30 +72,6 @@ type V2Row = z.infer<typeof v2RowSchema>;
 type LegacyRow = z.infer<typeof legacyRowSchema>;
 
 /**
- * TYPE SHIM, to delete once migration 20261116112326_focus_today_v2 is applied
- * and `src/types/database.types.ts` is regenerated: `get_focus_today_v2` is
- * not in the generated types yet, so `typedRpc` cannot name it. This is the
- * narrowest possible stand-in (one function, its five arguments); the rows are
- * `unknown` and validated by `v2RowSchema` like any other boundary. After the
- * regeneration, call `typedRpc(supabase, "get_focus_today_v2", args)` instead.
- */
-type FocusV2Rpc = {
-  rpc(
-    fn: "get_focus_today_v2",
-    args: {
-      p_org_id: string;
-      p_today: string;
-      p_folder_id: string | null;
-      p_stall_days: number;
-      p_limit: number;
-    },
-  ): PromiseLike<{
-    data: unknown;
-    error: { message: string; code?: string } | null;
-  }>;
-};
-
-/**
  * "This function does not exist (yet)": PostgREST has no such function in its
  * schema cache (PGRST202), or Postgres itself does not (42883). The only two
  * errors that mean "the migration is not applied here", and so the only ones
@@ -196,10 +172,7 @@ export async function getFocusTodayCore(
 
   let v2Rows: V2Row[] | null = null;
   let legacyRows: LegacyRow[] = [];
-  const v2 = await (supabase as unknown as FocusV2Rpc).rpc(
-    "get_focus_today_v2",
-    rpcArgs,
-  );
+  const v2 = await typedRpc(supabase, "get_focus_today_v2", rpcArgs);
   if (v2.error && !isMissingFunction(v2.error)) return fail(v2.error.message);
   if (!v2.error) {
     const parsed = v2RowSchema.array().safeParse(v2.data ?? []);
