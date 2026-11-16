@@ -56,6 +56,12 @@ vi.mock("@/lib/boards/queries", () => ({
 vi.mock("@/lib/org/queries-cached", () => ({
   listOrgMembersCached: (orgId: string) => listOrgMembersCached(orgId),
 }));
+// The viewer is a full member here: the roster is not narrowed. Narrowing for
+// a guest is covered in src/lib/org/visible-roster.test.ts and
+// src/lib/monos/board-roster.test.ts.
+vi.mock("@/lib/folders/access-cached", () => ({
+  getFolderAccessForUserCached: async () => ({ isGuest: false, folderIds: [] }),
+}));
 vi.mock("@/lib/org/active", () => ({
   resolveActiveOrg: () => resolveActiveOrg(),
 }));

@@ -5,6 +5,7 @@ import { parseToolTrace } from "@/lib/ai/ask/tool-trace";
 import { findDescriptor } from "./catalog";
 import type { StagedCall } from "./staged";
 import { buildAssistantTools } from "./tools";
+import { ASSISTANT_COMMENT_MAX_CHARS } from "./unsupported";
 
 // Cross-task contract: what the tool set stages (Task 3) must survive the
 // JSON round-trip through `ai_messages.tool_trace` (route), parse back through
@@ -37,6 +38,10 @@ describe("staged call contract: stage → store → reload → apply-validate", 
     {
       tool: "manage_board",
       input: { action: "rename", boardId: BOARD, name: "Roadmap 2027" },
+    },
+    {
+      tool: "add_comment",
+      input: { itemId: ITEM, text: "Waiting on legal.", mentionUserIds: null },
     },
   ];
 
@@ -76,5 +81,40 @@ describe("staged call contract: stage → store → reload → apply-validate", 
       z.object(findDescriptor("manage_goal")!.inputSchema).safeParse(call.input)
         .success,
     ).toBe(true);
+  });
+
+  it("stages a comment for confirmation and never posts it during the turn", async () => {
+    const d = findDescriptor("add_comment")!;
+    const invoke = vi
+      .spyOn(d as { invoke: (typeof d)["invoke"] }, "invoke")
+      .mockResolvedValue({ content: [{ type: "text", text: "x" }] });
+    const { staged, tools } = stageAll();
+    expect(
+      await executeAgentTool(tools, "add_comment", {
+        itemId: ITEM,
+        text: "Waiting on legal.",
+        mentionUserIds: ["33333333-3333-4333-8333-333333333333"],
+      }),
+    ).toMatchObject({ staged: true });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(staged).toHaveLength(1);
+    expect(staged[0]).toMatchObject({
+      tool: "add_comment",
+      destructive: false,
+      // The card shows the whole text and that someone is notified.
+      summary: 'Comment on an item, notifying 1 person: "Waiting on legal."',
+    });
+    invoke.mockRestore();
+  });
+
+  it("refuses a comment too long for the card, staging nothing", async () => {
+    const { staged, tools } = stageAll();
+    expect(
+      await executeAgentTool(tools, "add_comment", {
+        itemId: ITEM,
+        text: "x".repeat(ASSISTANT_COMMENT_MAX_CHARS + 1),
+      }),
+    ).toEqual({ error: expect.stringContaining("characters or fewer") });
+    expect(staged).toHaveLength(0);
   });
 });

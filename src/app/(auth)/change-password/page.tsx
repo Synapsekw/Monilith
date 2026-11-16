@@ -11,20 +11,29 @@ export const metadata = { title: "Change your password" };
 async function ChangePasswordGate({
   searchParams,
 }: {
-  searchParams: Promise<{ recovery?: string }>;
+  searchParams: Promise<{ recovery?: string; invite?: string }>;
 }) {
   // Both dynamic reads resolve inside the Suspense boundary (Cache Components).
-  const [{ recovery }, user] = await Promise.all([searchParams, getUser()]);
+  const [{ recovery, invite }, user] = await Promise.all([
+    searchParams,
+    getUser(),
+  ]);
   if (!user) redirect(await loginRedirectPath());
+  // `invite=1` is set by /auth/confirm for an invited person's first password;
+  // it only selects wording, the action behind the form is the same.
   return (
-    <ChangePasswordForm variant={recovery === "1" ? "recovery" : "forced"} />
+    <ChangePasswordForm
+      variant={
+        invite === "1" ? "invite" : recovery === "1" ? "recovery" : "forced"
+      }
+    />
   );
 }
 
 export default function ChangePasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ recovery?: string }>;
+  searchParams: Promise<{ recovery?: string; invite?: string }>;
 }) {
   // The cookie-bound user read + searchParams stream behind a Suspense boundary
   // so the route satisfies Cache Components (no uncached data outside <Suspense>).

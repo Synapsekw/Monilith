@@ -12,7 +12,20 @@ import { presenceTarget } from "@/lib/boards/presence-target";
 import { itemUpdatesKey } from "@/lib/collaboration/use-item-collab";
 import type { ItemUpdate } from "@/lib/collaboration/cache";
 
-afterEach(() => usePresenceFocusStore.getState().reset());
+// The relation-backlink read is a Server Action; fake it so the fields tab
+// can mount "Linked from" in jsdom and the test can count the calls.
+const backlinks = vi.hoisted(() => ({
+  listItemBacklinks: vi.fn(async () => ({
+    ok: true as const,
+    data: { links: [], hasMore: false },
+  })),
+}));
+vi.mock("@/lib/boards/item-backlinks", () => backlinks);
+
+afterEach(() => {
+  usePresenceFocusStore.getState().reset();
+  backlinks.listItemBacklinks.mockClear();
+});
 
 function ctx(
   setFocus: BoardPresenceContextValue["setFocus"],
@@ -213,5 +226,68 @@ describe("ItemPanel updates tab count (Keystone)", () => {
     const count = updatesTab.querySelector(".text-primary");
     expect(count).toBeTruthy();
     expect(count).toHaveTextContent("01");
+  });
+});
+
+describe("ItemPanel view-only access", () => {
+  function renderAs(canEdit: boolean) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel {...baseProps} canEdit={canEdit} itemId="item-1" />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("gives a viewer no update composer and no file upload", async () => {
+    const user = userEvent.setup();
+    renderAs(false);
+    expect(
+      screen.queryByRole("button", { name: "Write an update" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("tab", { name: /files/i }));
+    expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
+    // Item assist only ever ends in a board write.
+    await user.click(screen.getByRole("tab", { name: /^fields$/i }));
+    // The panel is a lazy chunk, so give it time to (not) arrive.
+    await expect(
+      screen.findByText("Item assist", {}, { timeout: 400 }),
+    ).rejects.toThrow();
+  });
+
+  it("keeps the composer and the upload for an editor", async () => {
+    const user = userEvent.setup();
+    renderAs(true);
+    expect(
+      screen.getByRole("button", { name: "Write an update" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /files/i }));
+    expect(
+      screen.getByRole("button", { name: /Add files/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /^fields$/i }));
+    expect(await screen.findByText("Item assist")).toBeInTheDocument();
+  });
+});
+
+describe("ItemPanel relation backlinks (data budget)", () => {
+  const ITEM = "11111111-1111-4111-8111-111111111111";
+
+  it("does not read backlinks when the panel opens on the default tab", () => {
+    renderPanel(vi.fn(), ITEM);
+    expect(backlinks.listItemBacklinks).not.toHaveBeenCalled();
+  });
+
+  it("reads them once when the fields tab opens, and shows the section", async () => {
+    const user = userEvent.setup();
+    renderPanel(vi.fn(), ITEM);
+    await user.click(screen.getByRole("tab", { name: /^fields$/i }));
+    expect(
+      await screen.findByText("No items link to this one yet."),
+    ).toBeInTheDocument();
+    expect(backlinks.listItemBacklinks).toHaveBeenCalledTimes(1);
+    expect(backlinks.listItemBacklinks).toHaveBeenCalledWith(ITEM);
   });
 });

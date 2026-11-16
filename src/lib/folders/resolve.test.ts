@@ -12,8 +12,30 @@ import {
 } from "./resolve";
 import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
 
+/**
+ * The four functions of 20261116112338_folder_drilldown. In THIS file the
+ * database does not have them yet (PostgREST answers PGRST202), so every
+ * test here exercises the path that keeps the app working before the
+ * migration is applied. The path with them present is covered in
+ * resolve.drilldown.test.ts.
+ */
+const NOT_YET = new Set([
+  "folder_rollup_packed",
+  "folder_workload_packed",
+  "folder_attention_page",
+  "folder_kpi_items",
+]);
 function clientWith(rpc: (fn: string, args: unknown) => unknown) {
-  return { rpc: vi.fn(rpc) } as unknown as SupabaseClient<Database>;
+  return {
+    rpc: vi.fn((fn: string, args: unknown) =>
+      NOT_YET.has(fn)
+        ? Promise.resolve({
+            data: null,
+            error: { code: "PGRST202", message: "function not found" },
+          })
+        : rpc(fn, args),
+    ),
+  } as unknown as SupabaseClient<Database>;
 }
 
 describe("resolveFolderRollup", () => {
@@ -77,9 +99,47 @@ describe("resolveFolderRollup", () => {
           oldestOverdue: "2026-09-01",
           minDue: "2026-08-24",
           maxDue: "2026-09-25",
+          // No done_dated column (database before 20261115173751): falls
+          // back to `done`.
+          doneDated: 3,
         },
       ],
     });
+  });
+
+  it("reads done_dated when folder_rollup returns it", async () => {
+    const client = clientWith(async () => ({
+      data: [
+        {
+          board_id: "b1",
+          board_name: "Backend",
+          board_position: 0,
+          group_id: "g1",
+          group_name: "Build",
+          group_color: "#111",
+          group_position: 1,
+          total: 6,
+          done: 3,
+          in_progress: 2,
+          overdue: 1,
+          not_started: 0,
+          blocked: 1,
+          stale: 0,
+          unassigned: 0,
+          incomplete: 1,
+          planned_by_today: 4,
+          due_this_week: 2,
+          due_this_week_not_started: 1,
+          oldest_overdue: "2026-09-01",
+          min_due: "2026-08-24",
+          max_due: "2026-09-25",
+          done_dated: 1,
+        },
+      ],
+      error: null,
+    }));
+    const res = await resolveFolderRollup(client, "f1");
+    expect(res.ok && res.rows[0]).toMatchObject({ done: 3, doneDated: 1 });
   });
 
   it("maps a P0002 (not-found / not-a-member) RPC error to FOLDER_GONE_ERROR", async () => {

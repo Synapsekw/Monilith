@@ -75,6 +75,92 @@ describe("shapeReport", () => {
     expect(kpis.percentComplete).toBe(50); // 1 of 2 is "Done"
   });
 
+  describe("computeKpis follows the board's Work tracking rule", () => {
+    function dated(): BoardPayload {
+      const f = fixture();
+      f.columns = [
+        {
+          id: "c1",
+          board_id: "b1",
+          kind: "status",
+          name: "Status",
+          settings: {
+            options: [
+              { id: "s1", label: "Done" },
+              { id: "s2", label: "Working" },
+              { id: "s3", label: "Cancelled" },
+              { id: "s4", label: "Closed" },
+            ],
+          },
+          position: 1,
+        },
+        { id: "d0", board_id: "b1", kind: "date", name: "Start", position: 2 },
+        { id: "d1", board_id: "b1", kind: "date", name: "Due", position: 3 },
+      ] as unknown as BoardPayload["columns"];
+      const it = (id: string) =>
+        ({
+          id,
+          board_id: "b1",
+          group_id: "g1",
+          parent_id: null,
+          name: id,
+          position: 1,
+        }) as BoardPayload["items"][number];
+      f.items = ["late", "started", "done-late", "cancelled", "closed"].map(it);
+      const cv = (item_id: string, column_id: string, value: unknown) =>
+        ({ item_id, column_id, value }) as BoardPayload["cellValues"][number];
+      f.cellValues = [
+        cv("late", "c1", { optionId: "s2" }),
+        cv("late", "d1", { date: "2026-01-10" }),
+        // Started in the past, due in the future: not overdue.
+        cv("started", "c1", { optionId: "s2" }),
+        cv("started", "d0", { date: "2026-01-01" }),
+        cv("started", "d1", { date: "2026-12-31" }),
+        cv("done-late", "c1", { optionId: "s1" }),
+        cv("done-late", "d1", { date: "2026-01-10" }),
+        cv("cancelled", "c1", { optionId: "s3" }),
+        cv("cancelled", "d1", { date: "2026-01-10" }),
+        // "Closed" is not a done label under the shared guess.
+        cv("closed", "c1", { optionId: "s4" }),
+        cv("closed", "d1", { date: "2026-01-10" }),
+      ];
+      return f;
+    }
+
+    it("counts overdue from date CELL OBJECTS in the due column (it used to be always 0)", () => {
+      const kpis = computeKpis(dated(), new Map(), "2026-06-01");
+      // late + closed; not started (future due), not done-late, not cancelled.
+      expect(kpis.overdueCount).toBe(2);
+    });
+
+    it("nothing is overdue before the due dates", () => {
+      expect(computeKpis(dated(), new Map(), "2026-01-10").overdueCount).toBe(
+        0,
+      );
+    });
+
+    it("done is the shared guess: Done and Cancelled, not Closed", () => {
+      expect(
+        computeKpis(dated(), new Map(), "2026-06-01").percentComplete,
+      ).toBe(40);
+    });
+
+    it("uses the configured status column, done options and due column", () => {
+      const f = dated();
+      f.board = {
+        ...f.board,
+        work_status_column_id: "c1",
+        work_done_option_ids: ["s4"],
+        work_due_column_id: "d0",
+      } as BoardPayload["board"];
+      const kpis = computeKpis(f, new Map(), "2026-06-01");
+      // Only "Closed" is done now: 1 of 5.
+      expect(kpis.percentComplete).toBe(20);
+      // Due column is Start: only "started" has a (past) date there.
+      expect(kpis.overdueCount).toBe(1);
+    });
+  });
+
   it("counts LEAF items — a status-less parent header doesn't dilute completion", () => {
     // Board shape like QCC: a header parent (no status) with two subitems that
     // carry the status. KPIs should count the 2 leaves, not the header.

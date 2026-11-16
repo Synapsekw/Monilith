@@ -167,8 +167,8 @@ vi.mock("@/lib/boards/queries", () => ({
 }));
 
 const listOrgMembersCached = vi.fn();
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: (...a: unknown[]) => listOrgMembersCached(...a),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: (...a: unknown[]) => listOrgMembersCached(...a),
 }));
 
 const notifyNewAssignees = vi.fn();

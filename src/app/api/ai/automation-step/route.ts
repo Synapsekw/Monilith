@@ -106,16 +106,19 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     // 4. Build the labels+ids context and decide ONE action (metered via runAi).
-    const context = await buildJobContext(svc, {
-      orgId: job.org_id,
-      boardId: job.board_id,
-      itemId: job.item_id,
-    });
+    //    The rule's author is read FIRST: there is no session here, so the
+    //    author decides which members the model may be shown.
     const { data: rule } = await svc
       .from("automations")
       .select("created_by")
       .eq("id", job.automation_id)
       .maybeSingle();
+    const context = await buildJobContext(svc, {
+      orgId: job.org_id,
+      boardId: job.board_id,
+      itemId: job.item_id,
+      viewer: { kind: "author", userId: rule?.created_by ?? null },
+    });
 
     const decision = await runAi(
       {

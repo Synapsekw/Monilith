@@ -49,6 +49,7 @@ export function EventBar({
   statusColumn,
   cellMap,
   onOpen,
+  draggable = true,
 }: {
   interval: PlacedInterval;
   fromDayISO: string;
@@ -59,14 +60,29 @@ export function EventBar({
   /** Tap/Enter on the chip — receives the chip's viewport rect so the parent
    * can anchor the quick-edit peek to it. */
   onOpen?: (itemId: string, anchorRect: DOMRect) => void;
+  /** False for view-only access: the chip opens its item but cannot be
+   * dragged to another day (mouse, touch long-press or keyboard). */
+  draggable?: boolean;
 }) {
   const dragData: ChipDragData = {
     itemId: interval.itemId,
     fromDayISO,
     dateColumnId,
   };
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `${interval.itemId}-${weekStartISO}`, data: dragData });
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `${interval.itemId}-${weekStartISO}`,
+    data: dragData,
+    disabled: !draggable,
+  });
+  // Not draggable → no sensor listeners and no draggable attributes at all.
+  const listeners = draggable ? dragListeners : undefined;
+  const attributes = draggable ? dragAttributes : undefined;
 
   const target = presenceTarget.event(interval.itemId);
   usePresenceFocus({ viewKind: "calendar", targetId: target }, isDragging);
@@ -92,7 +108,8 @@ export function EventBar({
   };
 
   const common = cn(
-    "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 text-2xs font-medium",
+    "relative flex h-[18px] min-w-0 items-center gap-1.5 text-2xs font-medium",
+    draggable ? "cursor-grab" : "cursor-pointer",
     "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
     isDragging && "opacity-50",
     intelRowClasses(intelMatch),
@@ -112,6 +129,7 @@ export function EventBar({
         style={style}
         {...listeners}
         {...attributes}
+        role="button"
         tabIndex={0}
         aria-label={interval.name}
         onClick={onChipClick}
@@ -140,6 +158,7 @@ export function EventBar({
         style={style}
         {...listeners}
         {...attributes}
+        role="button"
         tabIndex={0}
         aria-label={interval.name}
         onClick={onChipClick}
@@ -164,6 +183,7 @@ export function EventBar({
       style={style}
       {...listeners}
       {...attributes}
+      role="button"
       tabIndex={0}
       aria-label={interval.name}
       onClick={onChipClick}

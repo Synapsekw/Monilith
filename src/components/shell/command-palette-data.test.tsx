@@ -43,8 +43,8 @@ vi.mock("@/lib/folders/access-cached", () => ({
     folderIds: [],
   })),
 }));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleWorkspaces: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
 }));
 vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "w1"),

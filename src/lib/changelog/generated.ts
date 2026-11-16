@@ -4,6 +4,98 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-16",
+    kind: "new",
+    title: "See the items behind a folder number",
+    description:
+      "Click Complete, Overdue, Due this week, Blocked or Stale on a folder page to list the items behind it, and Needs attention now shows every matching item for a board instead of only those among the folder's first 100.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "improved",
+    title: "Act on your Today list",
+    description:
+      "Mark items done or change their due date right from Today on My Work, with what is due today shown first.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "new",
+    title:
+      "The assistant can find projects and people, follow linked items and comment",
+    description:
+      "Ask the assistant about a project or a person by name, see what an item is linked to on other boards, and have it post a comment for you after you confirm it.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Connected apps see complete board rows",
+    description:
+      "Listing a wide board from a connected app no longer returns items with missing values.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Folder layouts survive an unknown panel",
+    description:
+      "A folder layout that contains a panel this version does not recognise now keeps the rest of your arrangement instead of resetting.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Boards say when values are left out",
+    description:
+      "A very large board, and the list_items tool for AI clients, now tell you when they show only part of the data instead of leaving values blank.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Automations are read-only for viewers",
+    description:
+      "People with view-only access can see a board's automations and run history but no longer get controls to add, change or delete them.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "improved",
+    title: "One rule for done and overdue",
+    description:
+      "Folders, board health, the weekly digest, reports and the board itself now agree on what counts as done and overdue, using the Work tracking settings of each board.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Connected apps expire when unused",
+    description:
+      "A connected app that is not used for 90 days is disconnected, changing your password disconnects every app, and each app now shows when it was last used.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "Guests see only who they work with",
+    description:
+      "A guest now sees only the people, workspaces and Monos on the folders and boards shared with them, and is marked as a guest where they appear.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "Folder sharing can no longer raise your own access",
+    description:
+      "Sharing or inviting to a folder now needs you to own every board in it, or be an admin.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Folder invitations reach the person invited",
+    description:
+      "An invited person can now set a password from the email, sees who invited them and to which folder, and lands in that folder after accepting.",
+  },
+  {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "View-only boards are read-only",
+    description:
+      "People with view-only access no longer see edit controls that would fail when used.",
+  },
+  {
     date: "2026-11-15",
     kind: "new",
     title: "Invite people to a folder",

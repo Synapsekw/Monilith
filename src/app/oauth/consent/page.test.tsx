@@ -49,6 +49,17 @@ describe("OAuth consent screen", () => {
     expect(document.body.textContent).not.toMatch(/pulse/i);
   });
 
+  // Access is not a one-off: say how long it lasts and what ends it, at the
+  // moment the user grants it.
+  it("says how long access lasts and what ends it", async () => {
+    render(await ConsentGate({ searchParams: Promise.resolve(PARAMS) }));
+
+    const note = screen.getByText(/stays connected/i);
+    expect(note).toHaveTextContent(/unused for 90 days/i);
+    expect(note).toHaveTextContent(/change your password/i);
+    expect(note).toHaveTextContent(/sign out everywhere/i);
+  });
+
   it("still shows who is signed in and the grant button", async () => {
     render(await ConsentGate({ searchParams: Promise.resolve(PARAMS) }));
 

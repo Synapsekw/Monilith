@@ -1,11 +1,37 @@
-export type FocusTier = 1 | 2 | 3 | 4 | 5;
+/**
+ * Why an item is on the Today list, in list order: 0 due today, 1 overdue,
+ * 2 blocking someone, 3 due soon (tomorrow or the day after), 4 unread
+ * replies, 5 stalled. Tier 0 exists only with `get_focus_today_v2`; the older
+ * function reports an item due today as tier 3.
+ */
+export type FocusTier = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Every tier, in the order the list shows them. */
+export const FOCUS_TIERS: readonly FocusTier[] = [0, 1, 2, 3, 4, 5];
+
+/**
+ * Every item the list holds across tiers, or null when a tier is unknown.
+ * Lives here (a pure module) so the client block can import it: the read in
+ * `./queries` pulls in server-only code.
+ */
+export function focusTotal(
+  totals: Record<FocusTier, number | null>,
+): number | null {
+  let sum = 0;
+  for (const t of FOCUS_TIERS) {
+    const n = totals[t];
+    if (n === null) return null;
+    sum += n;
+  }
+  return sum;
+}
 
 export type FocusWaiting = { name: string; assignees: string[] };
 
 export type FocusFacts = {
   tier: FocusTier;
   daysOverdue: number | null;
-  /** Days from today to the due date; set for tier 3 only. */
+  /** Days from today to the due date; set for tiers 0 and 3. */
   dueInDays?: number;
   waitingCount: number;
   /** At most two, already resolved to names. */
@@ -32,6 +58,8 @@ function waitingPhrase(f: FocusFacts): string | null {
 export function focusReason(f: FocusFacts): string {
   const waiting = waitingPhrase(f);
   switch (f.tier) {
+    case 0:
+      return waiting ? `Due today · ${waiting}` : "Due today";
     case 1: {
       const head = plural(f.daysOverdue ?? 0, "day overdue", "days overdue");
       return waiting ? `${head} · ${waiting}` : head;

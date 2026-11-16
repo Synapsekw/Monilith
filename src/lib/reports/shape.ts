@@ -2,6 +2,12 @@ import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellToText } from "@/lib/boards/spreadsheet/cell-codec";
 import { previewMarkdown } from "@/lib/boards/markdown";
+import {
+  boardWorkRule,
+  isOverdue,
+  isStatusValueComplete,
+  type BoardWorkRule,
+} from "@/lib/boards/overdue";
 
 /** A shaped cell: `text` is the (possibly bounded) display value used by the
  *  table/spotlight blocks, `fullText` is always the complete, untruncated
@@ -27,8 +33,6 @@ export type Kpis = {
   overdueCount: number;
   statusTally: { label: string; count: number }[];
 };
-
-const DONE_LABELS = new Set(["done", "complete", "completed", "closed"]);
 
 // Text columns hold Markdown up to 20,000 characters (see
 // src/lib/boards/markdown.ts). `cellToText`'s own "text" case intentionally
@@ -65,8 +69,15 @@ function cellLookup(payload: BoardPayload): Map<string, unknown> {
   return map;
 }
 
-function firstStatusColumn(columns: Column[]): Column | undefined {
-  return columns.find((c) => c.kind === "status");
+/** The board's Work tracking rule: the report holds no rule of its own. */
+function reportRule(payload: BoardPayload): BoardWorkRule<Column> {
+  return boardWorkRule(payload.columns, payload.board);
+}
+
+/** `YYYY-MM-DD` in UTC: a report is rendered on the server, with no viewer
+ *  clock. Callers that know the organisation's date pass it instead. */
+function utcTodayISO(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 /** The selected option's hex for a colored-option cell (status/dropdown/
@@ -92,21 +103,15 @@ function optionColor(
 }
 
 function isDone(
-  payload: BoardPayload,
+  lookup: Map<string, unknown>,
   itemId: string,
-  statusCol: Column | undefined,
+  rule: BoardWorkRule<Column>,
 ): boolean {
-  if (!statusCol) return false;
-  const lookup = cellLookup(payload);
-  const raw = lookup.get(`${itemId}:${statusCol.id}`);
-  const label = cellToText(
-    statusCol.kind as ColumnKind,
-    raw,
-    statusCol.settings,
-  )
-    .trim()
-    .toLowerCase();
-  return DONE_LABELS.has(label);
+  if (!rule.statusColumn) return false;
+  return isStatusValueComplete(
+    lookup.get(`${itemId}:${rule.statusColumn.id}`) ?? null,
+    rule,
+  );
 }
 
 export function shapeReport(
@@ -166,19 +171,26 @@ export function leafItems(payload: BoardPayload): Item[] {
   return payload.items.filter((i) => !parents.has(i.id));
 }
 
+/**
+ * Report KPIs under the board's Work tracking rule: done = the rule's done
+ * options in its status column; overdue = open with a due date (the rule's
+ * ONE due column) before `todayISO`. Counted over LEAF items (see
+ * {@link leafItems}), unlike the folder and health counts, which are
+ * top-level only.
+ */
 export function computeKpis(
   payload: BoardPayload,
   peopleNames: Map<string, string>,
+  todayISO: string = utcTodayISO(),
 ): Kpis {
   const leaves = leafItems(payload);
-  const statusCol = firstStatusColumn(payload.columns);
-  const doneCount = leaves.filter((i) =>
-    isDone(payload, i.id, statusCol),
-  ).length;
+  const rule = reportRule(payload);
+  const statusCol = rule.statusColumn;
+  const lookup = cellLookup(payload);
+  const doneCount = leaves.filter((i) => isDone(lookup, i.id, rule)).length;
 
   const tally = new Map<string, number>();
   if (statusCol) {
-    const lookup = cellLookup(payload);
     for (const i of leaves) {
       const label =
         cellToText(
@@ -191,15 +203,18 @@ export function computeKpis(
     }
   }
 
-  const dateCol = payload.columns.find((c) => c.kind === "date");
+  // Date cells are objects ({ date, end }), read through the shared
+  // predicate. (The old check compared the cell as a string, so it was
+  // always 0.)
+  const dueCol = rule.dueColumn;
   let overdue = 0;
-  if (dateCol) {
-    const lookup = cellLookup(payload);
-    const today = new Date().toISOString().slice(0, 10);
+  if (dueCol) {
     for (const i of leaves) {
-      const v = lookup.get(`${i.id}:${dateCol.id}`);
-      const iso = typeof v === "string" ? v.slice(0, 10) : "";
-      if (iso && iso < today && !isDone(payload, i.id, statusCol)) overdue += 1;
+      if (
+        isOverdue(lookup.get(`${i.id}:${dueCol.id}`), todayISO) &&
+        !isDone(lookup, i.id, rule)
+      )
+        overdue += 1;
     }
   }
 
@@ -223,7 +238,8 @@ export type GroupSummary = {
 };
 
 export function computeGroupSummaries(payload: BoardPayload): GroupSummary[] {
-  const statusCol = firstStatusColumn(payload.columns);
+  const rule = reportRule(payload);
+  const lookup = cellLookup(payload);
   const parents = parentIdSet(payload);
   return [...payload.groups]
     .sort((a, b) => a.position - b.position)
@@ -233,9 +249,7 @@ export function computeGroupSummaries(payload: BoardPayload): GroupSummary[] {
       const leaves = payload.items.filter(
         (i) => i.group_id === group.id && !parents.has(i.id),
       );
-      const done = leaves.filter((i) =>
-        isDone(payload, i.id, statusCol),
-      ).length;
+      const done = leaves.filter((i) => isDone(lookup, i.id, rule)).length;
       return {
         group,
         count: leaves.length,

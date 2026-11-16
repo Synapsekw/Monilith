@@ -42,6 +42,7 @@ function column(kind: string, settings: Record<string, unknown> = {}): Column {
 
 function controls(over: Partial<CellControls> = {}): CellControls {
   return {
+    canEdit: true,
     setEditing: useEditingCell.getState().setEditing,
     setCell: vi.fn(),
     clearCellValue: vi.fn(),
@@ -50,6 +51,7 @@ function controls(over: Partial<CellControls> = {}): CellControls {
       { userId: "u2", fullName: "Grace", email: "g@x.io", avatarUrl: null },
     ],
     renameItemInCache: vi.fn(),
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     ...over,
   } as unknown as CellControls;
 }

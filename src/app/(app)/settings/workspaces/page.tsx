@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { isOrgAdminCached } from "@/lib/org/guard";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
@@ -14,7 +14,7 @@ export default async function WorkspacesSettingsPage() {
   const org = await resolveActiveOrg();
   if (!org) redirect("/onboarding");
   const [workspaces, isAdmin] = await Promise.all([
-    listWorkspacesCached(org.id),
+    listVisibleWorkspaces(org.id),
     isOrgAdminCached(user.id, org.id),
   ]);
 

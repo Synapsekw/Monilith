@@ -9,6 +9,10 @@ import { safeNextPath } from "@/lib/auth/next-path";
 const ERROR_COPY: Record<string, string> = {
   provisioning:
     "We couldn't finish setting up your account. Please sign in again to retry.",
+  // From /auth/confirm: the invite link was already used, has expired, or is
+  // incomplete. Someone who used it and set a password can simply sign in.
+  invite_link:
+    "This invitation link has expired or was already used. If you already set a password, sign in below. Otherwise ask the person who invited you to send it again.",
 };
 
 // The sign-up link must carry `next` too, or switching forms silently drops the

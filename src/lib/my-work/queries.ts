@@ -8,7 +8,11 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { todayInTimeZone } from "@/lib/focus/today";
 import { effectiveTimeZone } from "@/lib/datetime/timezone";
-import { getFocusTodayCore, type FocusResult } from "@/lib/focus/queries";
+import {
+  FOCUS_MAX_LIMIT,
+  getFocusTodayCore,
+  type FocusResult,
+} from "@/lib/focus/queries";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   bucketMyWork,
@@ -123,6 +127,9 @@ export async function getMyWorkPageData(): Promise<{
       orgId: org.id,
       userId: user.id,
       orgTimeZone,
+      // The most the function returns. The block shows 7 and reveals the
+      // rest from memory, so "Show more" never costs a round trip.
+      limit: FOCUS_MAX_LIMIT,
     }),
     aiAvailable(org.id),
   ]);

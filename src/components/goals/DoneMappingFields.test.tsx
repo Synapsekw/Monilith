@@ -35,6 +35,18 @@ describe("defaultDoneOptionIds", () => {
   it("returns [] for undefined", () => {
     expect(defaultDoneOptionIds(undefined)).toEqual([]);
   });
+  it("uses the shared Work tracking guess: Cancelled is done, Incomplete and Shipped are not", () => {
+    const column = {
+      ...columns[0],
+      options: [
+        { id: "o-done", label: "Done", color: "#000" },
+        { id: "o-cancelled", label: "Cancelled", color: "#000" },
+        { id: "o-incomplete", label: "Incomplete", color: "#000" },
+        { id: "o-shipped", label: "Shipped", color: "#000" },
+      ],
+    };
+    expect(defaultDoneOptionIds(column)).toEqual(["o-done", "o-cancelled"]);
+  });
 });
 
 describe("DoneMappingFields", () => {

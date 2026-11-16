@@ -110,7 +110,10 @@ export const GroupSection = memo(function GroupSection({
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   contentRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [renaming, setRenaming] = useState(autoFocusRename);
+  // `summary.canEdit` IS the board's `access !== "viewer"` bit (see the note
+  // at AddItemRow below). View only: no group rename, drag, colour or delete.
+  const canEdit = summary.canEdit;
+  const [renaming, setRenaming] = useState(autoFocusRename && canEdit);
   const [name, setName] = useState(group.name);
   const rowAreaRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -173,7 +176,11 @@ export const GroupSection = memo(function GroupSection({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: group.id, data: { type: "group" } });
+  } = useSortable({
+    id: group.id,
+    data: { type: "group" },
+    disabled: !canEdit,
+  });
 
   // Container droppable for the whole group's row area — the board-level
   // collision strategy falls back to this when an item is dragged into a gap or
@@ -226,15 +233,16 @@ export const GroupSection = memo(function GroupSection({
   );
 
   // Done-rule progress over this group's visible top-level rows, for the group
-  // row's meter. `controls.statusColumn` is the board's first status column,
+  // row's meter. `controls.workRule` is the board's Work tracking rule,
   // resolved once in BoardTableInner. This component already re-renders on
   // every `cellMap` change (it is a prop), so the memo adds no renders.
   const progress = useMemo(
-    () => groupProgress(itemIds, controls.statusColumn, cellMap),
-    [itemIds, controls.statusColumn, cellMap],
+    () => groupProgress(itemIds, controls.workRule, cellMap),
+    [itemIds, controls.workRule, cellMap],
   );
 
   function openRename() {
+    if (!canEdit) return;
     setName(group.name);
     setRenaming(true);
   }
@@ -258,6 +266,7 @@ export const GroupSection = memo(function GroupSection({
     >
       <GroupHeaderRow
         group={group}
+        canEdit={canEdit}
         selectAll={
           selectable && selectableIds.length > 0 ? (
             <GroupSelectAllCheckbox visibleIds={selectableIds} />
@@ -265,7 +274,7 @@ export const GroupSection = memo(function GroupSection({
         }
         collapsed={collapsed}
         onToggleCollapse={() => groupControls.toggleCollapsed(group.id)}
-        renaming={renaming}
+        renaming={renaming && canEdit}
         name={name}
         onNameChange={setName}
         onCommitRename={commitRename}

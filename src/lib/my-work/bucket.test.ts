@@ -59,7 +59,7 @@ describe("bucketMyWork", () => {
     // "This week" is omitted because nothing falls in it.
     expect(groups.map((g) => g.label)).toEqual([
       "Overdue",
-      "Today",
+      "Due today",
       "Later",
       "No date",
     ]);

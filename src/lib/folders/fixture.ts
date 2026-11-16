@@ -107,6 +107,8 @@ const base = (
   minDue: null,
   maxDue: null,
   ...o,
+  // Every done item in this fixture has a due date unless a row says otherwise.
+  doneDated: o.doneDated ?? o.done ?? 0,
 });
 
 /** 3 boards × stages Discovery / Build / QA (+ "Launch" only on Website). */

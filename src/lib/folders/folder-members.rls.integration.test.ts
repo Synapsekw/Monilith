@@ -24,7 +24,8 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 // Folder members: one folder_members row grants viewer/editor on every board
 // in the folder; guests (org role 'guest') see only what they were given.
-// Covers 20261114132219_folder_invites.sql and 20261114135114_guest_confinement.sql.
+// Covers 20261114132219_folder_invites.sql, 20261114135114_guest_confinement.sql
+// and 20261115173604_folder_share_guard.sql.
 describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
   let admin: Client;
   const createdUserIds: string[] = [];
@@ -932,6 +933,325 @@ describe.skipIf(!integrationTargetReady())("RLS: folder members", () => {
         const gone = await admin.from("folders").select("id").eq("id", f);
         expect(gone.data ?? []).toHaveLength(0);
       });
+    });
+  });
+
+  // ─────────────────────────────────────────────────────── the share guard
+  // 20261115173604_folder_share_guard.sql: a folder grant reaches every board
+  // in the folder, so making or raising one needs, for EVERY board in it, the
+  // board's creator or an org owner/admin. C is a plain member throughout.
+  describe("sharing a folder that holds someone else's boards", () => {
+    const BLOCKED = /cannot share this folder: 1 of its boards/i;
+
+    async function place(by: Client, folder: string, board: string) {
+      return by
+        .from("folder_boards")
+        .insert({ folder_id: folder, board_id: board, position: 0 });
+    }
+
+    async function placedIn(board: string) {
+      const { data, error } = await admin
+        .from("folder_boards")
+        .select("folder_id")
+        .eq("board_id", board);
+      expect(error).toBeNull();
+      return (data ?? []).map((r) => r.folder_id);
+    }
+
+    it("refuses the escalation: view a board, file it in your own folder, share the folder with yourself as editor", async () => {
+      const board = await newBoard(a.anon, ws, "esc");
+      await grantBoard(board, c.id, "viewer");
+      expect(await canRead(c.anon, board)).toBe(true);
+      expect(await canEdit(c.anon, board)).toBe(false);
+
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      // Filing a board you can only read into an unshared folder is allowed.
+      const { error: placeErr } = await place(c.anon, folder, board);
+      expect(placeErr).toBeNull();
+      expect(await placedIn(board)).toEqual([folder]);
+
+      const self = await c.anon.rpc("share_folder", {
+        p_folder_id: folder,
+        p_user_id: c.id,
+        p_level: "editor",
+      });
+      expect(self.error?.code).toBe("42501");
+      expect(self.error?.message).toMatch(BLOCKED);
+
+      const other = await c.anon.rpc("share_folder", {
+        p_folder_id: folder,
+        p_user_id: d.id,
+        p_level: "viewer",
+      });
+      expect(other.error?.code).toBe("42501");
+      expect(other.error?.message).toMatch(BLOCKED);
+
+      // The direct-share branch of invite_to_folder (an org member's email).
+      const viaEmail = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: d.email,
+        p_level: "editor",
+      });
+      expect(viaEmail.error?.code).toBe("42501");
+      expect(viaEmail.error?.message).toMatch(BLOCKED);
+
+      // The recorded-invitation branch (an outside address).
+      const email = `fm-esc-${randomUUID()}@example.com`;
+      const outside = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: email,
+        p_level: "editor",
+      });
+      expect(outside.error?.code).toBe("42501");
+      expect(outside.error?.message).toMatch(BLOCKED);
+
+      expect(await folderMemberRows(folder, c.id)).toHaveLength(0);
+      expect(await folderMemberRows(folder, d.id)).toHaveLength(0);
+      expect(await folderInvitationFor(folder, email)).toHaveLength(0);
+      expect(await orgInvitationFor(a.orgId, email)).toHaveLength(0);
+      expect(await canEdit(c.anon, board)).toBe(false);
+      expect(await canRead(d.anon, board)).toBe(false);
+    });
+
+    describe("a folder whose creator did not create the board in it", () => {
+      let folder: string;
+      let board: string;
+
+      beforeAll(async () => {
+        folder = await newFolder(c.anon, a.orgId, ws, c.id);
+        board = await newBoard(a.anon, ws, "not-mine");
+        // Filed by its creator; C cannot even open it.
+        const { error } = await place(a.anon, folder, board);
+        expect(error, "placement").toBeNull();
+      }, 60_000);
+
+      it("refuses the folder's creator", async () => {
+        expect(await canRead(c.anon, board)).toBe(false);
+        const { data: manages } = await c.anon.rpc("can_manage_folder", {
+          p_folder_id: folder,
+        });
+        expect(manages).toBe(true);
+        const { error } = await c.anon.rpc("share_folder", {
+          p_folder_id: folder,
+          p_user_id: d.id,
+          p_level: "viewer",
+        });
+        expect(error?.code).toBe("42501");
+        expect(error?.message).toMatch(BLOCKED);
+        expect(await folderMemberRows(folder, d.id)).toHaveLength(0);
+        expect(await canRead(d.anon, board)).toBe(false);
+      });
+
+      it("lets an org admin share it", async () => {
+        await share(folder, d.id, "viewer", adm.anon);
+        expect(await folderMemberRows(folder, d.id)).toEqual([
+          { access_level: "viewer" },
+        ]);
+        expect(await canRead(d.anon, board)).toBe(true);
+        expect(await canEdit(d.anon, board)).toBe(false);
+      });
+
+      it("refuses the folder's creator who raises a level, and keeps the level", async () => {
+        const { error } = await c.anon.rpc("share_folder", {
+          p_folder_id: folder,
+          p_user_id: d.id,
+          p_level: "editor",
+        });
+        expect(error?.code).toBe("42501");
+        expect(error?.message).toMatch(BLOCKED);
+        expect(await folderMemberRows(folder, d.id)).toEqual([
+          { access_level: "viewer" },
+        ]);
+        expect(await canEdit(d.anon, board)).toBe(false);
+      });
+
+      it("lets the folder's creator lower a level and remove a member", async () => {
+        await share(folder, d.id, "editor", adm.anon);
+        expect(await canEdit(d.anon, board)).toBe(true);
+
+        await share(folder, d.id, "viewer", c.anon);
+        expect(await folderMemberRows(folder, d.id)).toEqual([
+          { access_level: "viewer" },
+        ]);
+        expect(await canEdit(d.anon, board)).toBe(false);
+
+        const { error } = await c.anon.rpc("unshare_folder", {
+          p_folder_id: folder,
+          p_user_id: d.id,
+        });
+        expect(error).toBeNull();
+        expect(await folderMemberRows(folder, d.id)).toHaveLength(0);
+        expect(await canRead(d.anon, board)).toBe(false);
+      });
+    });
+
+    it("lets a plain member who created every board in their folder share and invite", async () => {
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      const board = await newBoard(c.anon, ws, "all-mine");
+      const { error: placeErr } = await place(c.anon, folder, board);
+      expect(placeErr).toBeNull();
+
+      await share(folder, d.id, "editor", c.anon);
+      expect(await canEdit(d.anon, board)).toBe(true);
+
+      const email = `fm-mine-${randomUUID()}@example.com`;
+      const { data, error } = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: email,
+        p_level: "viewer",
+      });
+      expect(error).toBeNull();
+      expect(data).toBeNull();
+      expect(
+        (await folderInvitationFor(folder, email)).map((r) => r.status),
+      ).toEqual(["pending"]);
+    });
+
+    it("guards board moves for a folder that has a pending invitation and no members", async () => {
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      const email = `fm-pendmove-${randomUUID()}@example.com`;
+      // An empty folder holds nobody else's board, so its creator may invite.
+      const { error: inviteErr } = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: email,
+        p_level: "viewer",
+      });
+      expect(inviteErr).toBeNull();
+      const { data: members } = await admin
+        .from("folder_members")
+        .select("user_id")
+        .eq("folder_id", folder);
+      expect(members ?? []).toHaveLength(0);
+
+      const board = await newBoard(a.anon, ws, "pend-move");
+      await grantBoard(board, c.id, "viewer");
+      expect(await canRead(c.anon, board)).toBe(true);
+      const { error } = await place(c.anon, folder, board);
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/only the board owner or an admin/i);
+      expect(await placedIn(board)).toEqual([]);
+
+      // The board's creator may file it there, knowing who is invited.
+      const { error: byCreator } = await place(a.anon, folder, board);
+      expect(byCreator).toBeNull();
+      expect(await placedIn(board)).toEqual([folder]);
+
+      // With that board in the folder its creator can no longer raise the
+      // pending invitation, only lower or revoke it.
+      const raise = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: email,
+        p_level: "editor",
+      });
+      expect(raise.error?.code).toBe("42501");
+      expect(raise.error?.message).toMatch(BLOCKED);
+      expect(
+        (await folderInvitationFor(folder, email)).map((r) => r.access_level),
+      ).toEqual(["viewer"]);
+    });
+
+    it("does not let a client choose when a board entered a folder", async () => {
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      const board = await newBoard(c.anon, ws, "stamp");
+      const before = Date.now();
+      const { error } = await c.anon.from("folder_boards").insert({
+        folder_id: folder,
+        board_id: board,
+        position: 0,
+        created_at: "2999-01-01T00:00:00Z",
+      });
+      expect(error).toBeNull();
+      const { error: upErr } = await c.anon
+        .from("folder_boards")
+        .update({ created_at: "2999-01-01T00:00:00Z", position: 3 })
+        .eq("board_id", board);
+      expect(upErr).toBeNull();
+      const { data } = await admin
+        .from("folder_boards")
+        .select("created_at, position")
+        .eq("board_id", board)
+        .single();
+      expect(data?.position).toBe(3);
+      const stamped = new Date(data!.created_at).getTime();
+      expect(stamped).toBeGreaterThan(before - 60_000);
+      expect(stamped).toBeLessThan(Date.now() + 60_000);
+    });
+
+    it("does not redeem an invitation its inviter could not make any more", async () => {
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      const mine = await newBoard(c.anon, ws, "redeem-mine");
+      const { error: placeErr } = await place(c.anon, folder, mine);
+      expect(placeErr).toBeNull();
+      const invitee = await newUser("guard-invitee");
+      const { error: inviteErr } = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: invitee.email,
+        p_level: "editor",
+      });
+      expect(inviteErr).toBeNull();
+
+      // A board C does not own, on record as in the folder before the
+      // invitation (what an invitation from before the guard looks like).
+      // Written with the service role, which no trigger second-guesses.
+      const theirs = await newBoard(a.anon, ws, "redeem-theirs");
+      const { error: seedErr } = await admin.from("folder_boards").insert({
+        folder_id: folder,
+        board_id: theirs,
+        position: 1,
+        created_at: new Date(Date.now() - 86_400_000).toISOString(),
+      });
+      expect(seedErr).toBeNull();
+
+      const { error: redeemErr } = await invitee.anon.rpc("redeem_invitations");
+      expect(redeemErr).toBeNull();
+      // They joined the org, but the folder grant did not land.
+      const { data: role } = await admin
+        .from("org_members")
+        .select("role")
+        .eq("org_id", a.orgId)
+        .eq("user_id", invitee.id);
+      expect(role).toEqual([{ role: "guest" }]);
+      expect(await folderMemberRows(folder, invitee.id)).toHaveLength(0);
+      expect(
+        (await folderInvitationFor(folder, invitee.email)).map((r) => r.status),
+      ).toEqual(["pending"]);
+      expect(await canRead(invitee.anon, mine)).toBe(false);
+      expect(await canRead(invitee.anon, theirs)).toBe(false);
+
+      // The pending invitation is for an address that is now an org member,
+      // so a manager who may share adds them directly; the stale invitation
+      // then has nothing left to grant.
+      await share(folder, invitee.id, "viewer", adm.anon);
+      expect(await canRead(invitee.anon, theirs)).toBe(true);
+      expect(await canEdit(invitee.anon, theirs)).toBe(false);
+      // Redeeming again must not lift them to the stale invitation's level.
+      const { error: againErr } = await invitee.anon.rpc("redeem_invitations");
+      expect(againErr).toBeNull();
+      expect(await folderMemberRows(folder, invitee.id)).toEqual([
+        { access_level: "viewer" },
+      ]);
+    });
+
+    it("redeems when a board was filed after the invitation by someone allowed to", async () => {
+      const folder = await newFolder(c.anon, a.orgId, ws, c.id);
+      const invitee = await newUser("guard-later");
+      const { error: inviteErr } = await c.anon.rpc("invite_to_folder", {
+        p_folder_id: folder,
+        p_email: invitee.email,
+        p_level: "viewer",
+      });
+      expect(inviteErr).toBeNull();
+      // Filed afterwards by the board's creator: the move guard vetted it.
+      const board = await newBoard(a.anon, ws, "filed-later");
+      const { error: placeErr } = await place(a.anon, folder, board);
+      expect(placeErr).toBeNull();
+
+      const { error: redeemErr } = await invitee.anon.rpc("redeem_invitations");
+      expect(redeemErr).toBeNull();
+      expect(await folderMemberRows(folder, invitee.id)).toEqual([
+        { access_level: "viewer" },
+      ]);
+      expect(await canRead(invitee.anon, board)).toBe(true);
     });
   });
 

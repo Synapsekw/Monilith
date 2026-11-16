@@ -1,12 +1,12 @@
 "use client";
 
 import { type EditorMember } from "@/components/boards/cells/editors";
+import type { BoardWorkRule } from "@/lib/boards/overdue";
 import {
   cellKey,
   type BoardCache,
   type CacheAttachment,
   type CacheCellValue,
-  type CacheColumn,
 } from "@/lib/boards/cache";
 import { COLUMN_FIT_DEFAULT } from "@/lib/boards/fit-column-width";
 import type { Column } from "@/lib/boards/queries";
@@ -14,8 +14,20 @@ import { buildMeasureFont } from "@/lib/text-measure";
 import { type RelationLink } from "@/lib/boards/relations";
 import type { AggregationId, ColumnKind } from "@/lib/validations/boards";
 
-/** The cell currently in edit mode, keyed by row + column. */
-export type EditingCell = { itemId: string; columnId: string };
+/**
+ * Where an editable cell is rendered. The board table is the default (absent);
+ * the item panel's Fields section is `"panel"`. Part of the edit-mode key: the
+ * panel opens OVER the table, so the same (item, column) cell is mounted twice
+ * and only the one that was activated may open its editor.
+ */
+export type CellSurface = "panel";
+
+/** The cell currently in edit mode, keyed by row + column (+ surface). */
+export type EditingCell = {
+  itemId: string;
+  columnId: string;
+  surface?: CellSurface;
+};
 
 /**
  * Props threaded down to each editable cell.
@@ -26,6 +38,14 @@ export type EditingCell = { itemId: string; columnId: string };
  * `useIsCellEditing` in ./editing-store.
  */
 export type CellControls = {
+  /**
+   * The board's one edit bit (`access !== "viewer"`, computed in
+   * {@link BoardTable} from a direct board grant or a folder grant). False =
+   * view only: every cell, name, row, subitem and menu under this bundle
+   * renders its value without anything that writes. RLS refuses the write
+   * either way; this is what keeps a viewer from being offered it.
+   */
+  canEdit: boolean;
   setEditing: (cell: EditingCell | null) => void;
   setCell: (vars: { itemId: string; columnId: string; value: unknown }) => void;
   clearCellValue: (vars: { itemId: string; columnId: string }) => void;
@@ -59,12 +79,13 @@ export type CellControls = {
    */
   dependentsByItem: Map<string, number>;
   /**
-   * The board's first status column (by position), resolved ONCE per table
-   * render. Date cells derive their overdue tint from the item's value in this
-   * column (see @/lib/boards/overdue) — resolving it per cell was a filter +
-   * sort over every column on every render.
+   * The board's Work tracking rule (status column, done options, the ONE due
+   * column), resolved ONCE per table render from the columns and the board's
+   * settings. Date cells derive their overdue tint from it (see
+   * @/lib/boards/overdue): resolving it per cell was a filter + sort over
+   * every column on every render.
    */
-  statusColumn: CacheColumn | null;
+  workRule: BoardWorkRule;
   /** Upload a file into a Files-column cell. */
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
@@ -102,6 +123,35 @@ export type CellControls = {
 };
 
 /**
+ * The slice of {@link CellControls} one {@link EditableCell} reads: its edit
+ * bit, the cell writes, and the side-table (files, time, relation) callbacks.
+ * No row or group actions. The table passes its whole bundle; the item
+ * panel's Fields section builds exactly this from the same board mutations.
+ */
+export type EditableCellControls = Pick<
+  CellControls,
+  | "canEdit"
+  | "setEditing"
+  | "setCell"
+  | "clearCellValue"
+  | "members"
+  | "currentUserId"
+  | "cache"
+  | "workRule"
+  | "uploadColumnFile"
+  | "openFilesLightbox"
+  | "filesPreviewUrls"
+  | "filesThumbUrls"
+  | "startTimer"
+  | "stopTimer"
+  | "addManualEntry"
+  | "editEntry"
+  | "deleteEntry"
+  | "setEstimate"
+  | "setRelationLinks"
+>;
+
+/**
  * Every {@link BoardCache} slice EXCEPT `cellValues`.
  *
  * A cell edit (local or realtime) replaces `cache.cellValues` and therefore the
@@ -114,7 +164,7 @@ export type CellControls = {
  * The invariant this rests on: nothing under a memoized row may read
  * `controls.cache.cellValues`. If it does, the row keeps a stale cache when a
  * foreign cell changes. (That was `isItemComplete`'s old call site; it now
- * reads `controls.statusColumn` + its own `cellMap` entry instead.)
+ * reads `controls.workRule` + its own `cellMap` entry instead.)
  */
 export const CACHE_SLICES = [
   "board",
@@ -248,6 +298,13 @@ export const CELL_CENTER =
   "justify-center-safe text-center *:justify-center-safe";
 
 /**
+ * Start alignment for a value cell outside the table grid (the item panel's
+ * Fields list, where values line up on one left edge next to their label).
+ * Same three parts as {@link CELL_CENTER}; a literal for the same reason.
+ */
+export const CELL_START = "justify-start text-left *:justify-start";
+
+/**
  * Name-cell type scale, as canvas-font tokens. MUST stay in sync with what
  * NameCell actually renders (`text-item font-medium`) — a drift here mis-sizes
  * the frozen column's auto-fit width, and nothing in typecheck or jsdom
@@ -370,6 +427,9 @@ export type GroupSummaryControls = {
 };
 
 export type ColumnHeaderControls = {
+  /** Same bit as {@link CellControls.canEdit}. False = no column menu, drag
+   *  reorder or add-column, and a resize lasts for the session only. */
+  canEdit: boolean;
   nameWidth: number;
   liveWidths: Record<string, number>;
   autoFitWidths: Record<string, number>;

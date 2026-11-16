@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { FilterBuilder } from "@/components/dashboards/FilterBuilder";
+import { looksDoneLabel } from "@/lib/boards/work-guess";
 import {
   MULTI_SERIES_TYPES,
   DATE_PRIMARY_TYPES,
@@ -581,9 +582,10 @@ function CompletionFields({
                 const colId = e.target.value;
                 const opts =
                   board?.allColumns.find((c) => c.id === colId)?.options ?? [];
-                // Pre-check done-like options; the user can edit the set.
+                // Pre-check done-like options (the shared Work tracking
+                // guess); the user can edit the set.
                 const preset = opts
-                  .filter((o) => /done|complete|finished/i.test(o.label))
+                  .filter((o) => looksDoneLabel(o.label))
                   .map((o) => o.id);
                 patchConfig({ statusColumnId: colId, doneOptionIds: preset });
               }}

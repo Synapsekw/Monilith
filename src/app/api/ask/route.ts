@@ -22,7 +22,7 @@ import {
 import { languageModelFor } from "@/lib/ai/providers/language-model";
 import { anthropicReasoningOptions } from "@/lib/ai/providers/anthropic-options";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { visibleOrgMembersFor } from "@/lib/org/visible-roster";
 import type { Member } from "@/lib/collaboration/activity";
 import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import {
@@ -259,10 +259,12 @@ export async function POST(req: Request) {
       // reaches a prompt. A failed read only costs the name in the prompt.
       let members: Member[] = [];
       try {
-        members = (await listOrgMembersCached(org.id)).map((m) => ({
-          userId: m.userId,
-          fullName: m.fullName,
-        }));
+        members = (await visibleOrgMembersFor(supabase, user.id, org.id)).map(
+          (m) => ({
+            userId: m.userId,
+            fullName: m.fullName,
+          }),
+        );
       } catch (e) {
         console.error("[ask] members read failed:", e);
         members = [];

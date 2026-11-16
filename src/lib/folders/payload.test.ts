@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
@@ -48,6 +48,10 @@ vi.mock("./queries", () => ({
     order.push("end:layout");
     return null;
   }),
+  getOrgTimeZone: vi.fn(async () => "Pacific/Kiritimati"),
+}));
+vi.mock("@/lib/profile/queries-cached", () => ({
+  getUserTimeZoneCached: vi.fn(async () => null),
 }));
 vi.mock("./resolve", () => ({
   resolveFolderRollup: vi.fn(async () => {
@@ -83,11 +87,11 @@ vi.mock("./resolve", () => ({
     order.push("start:attention");
     await tick();
     order.push("end:attention");
-    return { ok: true, rows: [] };
+    return { ok: true, rows: [], total: 0 };
   }),
 }));
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: vi.fn(async () => {
+vi.mock("@/lib/org/visible-roster", () => ({
+  visibleOrgMembersFor: vi.fn(async () => {
     order.push("start:members");
     return [{ userId: "u1", fullName: "Ada", email: null, avatarUrl: null }];
   }),
@@ -102,7 +106,13 @@ vi.mock("./sharing-queries", () => ({
   }),
 }));
 
-import { getFolderHead, getFolderLayoutRow, listLatestBriefs } from "./queries";
+import {
+  getFolderHead,
+  getFolderLayoutRow,
+  getOrgTimeZone,
+  listLatestBriefs,
+} from "./queries";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import {
   resolveFolderAttention,
   resolveFolderBurn,
@@ -179,6 +189,66 @@ describe("buildFolderPayload", () => {
     // must only start once the head read has ended.
     expect(order.indexOf("start:briefs")).toBeGreaterThan(endIdx.head);
     expect(order.indexOf("start:members")).toBeGreaterThan(endIdx.head);
+  });
+
+  describe("todayISO: viewer zone, then organisation zone, then UTC (as the folder RPCs)", () => {
+    // 2026-11-15 22:30 UTC: already the 16th in Kiritimati (+14), still the
+    // 15th in Honolulu (−10) and in UTC.
+    const at = new Date("2026-11-15T22:30:00Z");
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(at);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("uses the organisation's zone when the viewer has none", async () => {
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(getOrgTimeZone).toHaveBeenCalledWith(supabase, "o1");
+      expect(getUserTimeZoneCached).toHaveBeenCalledWith("u1");
+      expect(p!.todayISO).toBe("2026-11-16");
+    });
+
+    it("prefers the viewer's own zone", async () => {
+      vi.mocked(getUserTimeZoneCached).mockResolvedValueOnce(
+        "Pacific/Honolulu",
+      );
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(p!.todayISO).toBe("2026-11-15");
+    });
+
+    it("falls back to UTC when neither zone can be read, without failing the page", async () => {
+      vi.mocked(getUserTimeZoneCached).mockRejectedValueOnce(new Error("x"));
+      vi.mocked(getOrgTimeZone).mockRejectedValueOnce(new Error("x"));
+      const p = await buildFolderPayload(supabase, "f1", "u1");
+      expect(p!.todayISO).toBe("2026-11-15");
+    });
+  });
+
+  it("carries the attention total and the rollup's cap flag to the page", async () => {
+    vi.mocked(resolveFolderAttention).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: 240,
+    });
+    vi.mocked(resolveFolderRollup).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      capped: true,
+    });
+    const p = await buildFolderPayload(supabase, "f1", "u1");
+    expect(p!.attentionTotal).toBe(240);
+    expect(p!.rollupCapped).toBe(true);
+  });
+
+  it("an unknown attention total stays null, and an uncapped rollup is false", async () => {
+    vi.mocked(resolveFolderAttention).mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: null,
+    });
+    const p = await buildFolderPayload(supabase, "f1", "u1");
+    expect(p!.attentionTotal).toBeNull();
+    expect(p!.rollupCapped).toBe(false);
   });
 
   it("carries the folder's access head from wave A", async () => {

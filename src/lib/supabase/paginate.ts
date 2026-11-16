@@ -54,3 +54,30 @@ export async function fetchAllRows<T>(
   }
   return { data: rows, error: null };
 }
+
+/**
+ * `fetchAllRows` that also says whether rows exist past `cap`.
+ *
+ * Asks for `cap + 1` rows and returns at most `cap`. The extra row costs one
+ * more request, for a single row on the same index, and only when the read
+ * filled every page up to the cap. It is the cheap, exact signal: a `count`
+ * would scan the whole match a second time, and "length equals cap" cannot
+ * tell a full read from a cut one.
+ */
+export async function fetchCappedRows<T>(
+  page: (from: number, to: number) => PageResult<T>,
+  opts: { cap: number; pageSize?: number; wave?: number },
+): Promise<{
+  data: T[] | null;
+  error: { message: string } | null;
+  truncated: boolean;
+}> {
+  const res = await fetchAllRows(page, { ...opts, cap: opts.cap + 1 });
+  if (res.error || !res.data) return { ...res, truncated: false };
+  const truncated = res.data.length > opts.cap;
+  return {
+    data: truncated ? res.data.slice(0, opts.cap) : res.data,
+    error: null,
+    truncated,
+  };
+}

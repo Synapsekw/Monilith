@@ -19,6 +19,31 @@ import type { FolderMember, WorkloadRow } from "@/lib/folders/types";
 export const workloadKey = (folderId: string) =>
   ["folder-workload", folderId] as const;
 
+/** What both workload readers (this tab, the Overview panel) keep in the
+ *  shared query: the rows, and whether a row cap cut them. */
+export type WorkloadData = { rows: WorkloadRow[]; capped: boolean };
+
+export async function fetchWorkload(folderId: string): Promise<WorkloadData> {
+  const res = await getFolderWorkload({ folderId });
+  if (!res.ok) throw new Error(res.error);
+  return { rows: res.data, capped: res.capped === true };
+}
+
+/** Said wherever workload is shown and the read was cut by a row cap. */
+export function WorkloadCapNotice({ rows }: { rows: number }) {
+  return (
+    <p
+      role="status"
+      data-testid="workload-capped"
+      className="text-muted-foreground text-xs"
+    >
+      This folder has more people, boards and stages than one read returns. Only
+      the first {rows.toLocaleString("en-US")} rows are counted here, so these
+      totals are incomplete.
+    </p>
+  );
+}
+
 /** True when a workload row is inside the stage and board filters. */
 export function inWorkloadScope(
   r: WorkloadRow,
@@ -82,15 +107,11 @@ export function PeopleTab({
 }) {
   const q = useQuery({
     queryKey: workloadKey(folderId),
-    queryFn: async () => {
-      const res = await getFolderWorkload({ folderId });
-      if (!res.ok) throw new Error(res.error);
-      return res.data;
-    },
+    queryFn: () => fetchWorkload(folderId),
     staleTime: 60_000,
   });
   useEffect(() => {
-    if (q.data) onWorkload(q.data);
+    if (q.data) onWorkload(q.data.rows);
   }, [q.data, onWorkload]);
 
   if (q.isPending) return <Skeleton className="h-40 w-full" />;
@@ -101,7 +122,7 @@ export function PeopleTab({
       </EmptyState>
     );
 
-  const rows = q.data;
+  const rows = q.data.rows;
   const people = peopleFromWorkload(rows, stage, members, board);
   const byId = new Map(members.map((m) => [m.userId, m]));
   const owns = new Map<
@@ -140,6 +161,7 @@ export function PeopleTab({
           </p>
         </div>
         <WorkloadBars people={people} stage={stage} />
+        {q.data.capped ? <WorkloadCapNotice rows={rows.length} /> : null}
       </section>
       <section
         data-testid="owners-section"

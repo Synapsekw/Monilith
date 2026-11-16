@@ -12,9 +12,9 @@ vi.mock("@/lib/boards/queries", () => ({
     cellValues: [],
   })),
 }));
-vi.mock("@/lib/org/queries-cached", () => ({
+vi.mock("@/lib/org/visible-roster", () => ({
   // OrgMember shape: { userId, fullName, email, avatarUrl }.
-  listOrgMembersCached: vi.fn(async () => [
+  listVisibleOrgMembers: vi.fn(async () => [
     { userId: "u1", fullName: "Dana Ruiz", email: null, avatarUrl: null },
   ]),
 }));

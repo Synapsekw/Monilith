@@ -9,7 +9,13 @@ import type { OrgMember } from "@/lib/boards/queries";
 export const ORG_MEMBERS_LIMIT = 500;
 
 /**
- * Cached org member list (people pickers, owner maps, workload rows). `orgId`
+ * Cached org member list (people pickers, owner maps, workload rows).
+ *
+ * WHOLE ORG, SHARED BY EVERY VIEWER. Do not hand this to a page, picker or
+ * prompt: a guest may see only the people they share access with. Read it
+ * through `@/lib/org/visible-roster`, which narrows it per viewer.
+ *
+ * `orgId`
  * is part of the cache key AND the tag; the explicit `org_id = orgId` filter is
  * the tenant boundary (the service client bypasses RLS). CALLER CONTRACT: pass
  * an orgId the current user is entitled to (their getUserOrgs() org, or the
@@ -24,8 +30,8 @@ export const ORG_MEMBERS_LIMIT = 500;
  * Invite redemption (`redeem_invitations` returns only a count) and future
  * profile display edits are TTL-covered by cacheLife("nav") (≤60 s stale) —
  * any future full_name/avatar edit action MUST updateTag(orgMembersTag(orgId))
- * for each of the user's orgs. If OrgMember ever grows a `role` field,
- * setMemberRole must be added to the invalidation set.
+ * for each of the user's orgs. `isGuest` is derived from the role, so
+ * setMemberRole is in the invalidation set too.
  */
 export async function listOrgMembersCached(
   orgId: string,
@@ -37,7 +43,7 @@ export async function listOrgMembersCached(
   const supabase = createServiceClient();
   const { data: members, error: membersErr } = await supabase
     .from("org_members")
-    .select("user_id")
+    .select("user_id, role")
     .eq("org_id", orgId)
     // A Mono is an org member with role `agent`, never a person in a roster.
     .neq("role", "agent")
@@ -45,6 +51,9 @@ export async function listOrgMembersCached(
   if (membersErr || !members || members.length === 0) return [];
 
   const userIds = members.map((m) => m.user_id);
+  const guestIds = new Set(
+    members.filter((m) => m.role === "guest").map((m) => m.user_id),
+  );
   // Two-query JS join: org_members → profiles has no declared FK (user_id
   // references auth.users), so the nested PostgREST embed does not typecheck.
   const { data: profiles, error: profilesErr } = await supabase
@@ -61,6 +70,7 @@ export async function listOrgMembersCached(
       fullName: profile?.full_name ?? null,
       email: profile?.email ?? null,
       avatarUrl: profile?.avatar_url ?? null,
+      ...(guestIds.has(userId) ? { isGuest: true } : {}),
     };
   });
 }

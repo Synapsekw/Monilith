@@ -18,11 +18,14 @@ import {
   shareFolder,
   unshareFolder,
 } from "@/lib/folders/sharing-actions";
+import { loadFolderGuestIds } from "@/lib/folders/guest-actions";
 import type {
+  InviteDeliveryKind,
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
 import { memberLabel, memberLabelInitials } from "@/lib/ui/member-label";
+import { GuestBadge } from "@/components/ui/guest-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -89,6 +92,15 @@ function LevelSelect({
  * change. Reads carry their own sequence number so an older answer never
  * replaces a newer one.
  */
+/** What the inviter is told. One sentence for every delivered invitation, on
+ *  purpose: different copy for "has an account" would let anyone who can share
+ *  a folder test whether an address is registered. */
+const INVITE_NOTICE: Record<InviteDeliveryKind, string> = {
+  sent: "Invitation saved. They are told by email, or in their Monolith notifications if they already use it. Access starts when they accept; a new account also needs an administrator's approval.",
+  failed:
+    "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+};
+
 export function ShareFolderDialog({
   folderId,
   folderName,
@@ -108,6 +120,9 @@ export function ShareFolderDialog({
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const [data, setData] = useState<FolderAccessData | null>(null);
+  // Which members are org guests (badge only). Loaded with the list; a failed
+  // read shows no badges and never an error.
+  const [guestIds, setGuestIds] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [newLevel, setNewLevel] = useState<FolderLevel>("viewer");
   const [error, setError] = useState<string | null>(null);
@@ -146,10 +161,15 @@ export function ShareFolderDialog({
 
   async function reload(e: number) {
     const seq = ++loadSeq.current;
-    const r = await loadFolderAccess({ folderId });
+    const [r, guests] = await Promise.all([
+      loadFolderAccess({ folderId }),
+      loadFolderGuestIds({ folderId }).catch(() => null),
+    ]);
     if (e !== epoch.current || seq !== loadSeq.current) return;
-    if (r.ok) setData(r.data);
-    else setError(r.error);
+    if (r.ok) {
+      setData(r.data);
+      setGuestIds(new Set(guests?.ok ? guests.data : []));
+    } else setError(r.error);
   }
 
   useEffect(() => {
@@ -258,9 +278,7 @@ export function ShareFolderDialog({
         setNotice(
           r.data.kind === "shared"
             ? "Added. They can open every board in this folder now."
-            : r.data.emailSent
-              ? "Invitation sent. They get access after they sign up and are approved."
-              : "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+            : INVITE_NOTICE[r.data.delivery],
         );
         await reload(e);
       },
@@ -414,17 +432,20 @@ export function ShareFolderDialog({
                       {memberLabelInitials(m) || "?"}
                     </AvatarFallback>
                   </Avatar>
-                  <span
-                    title={name}
-                    className="text-foreground min-w-0 flex-1 truncate text-sm font-medium"
-                  >
-                    {name}
-                    {m.userId === data.myUserId ? (
-                      <span className="text-muted-foreground font-normal">
-                        {" "}
-                        (you)
-                      </span>
-                    ) : null}
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      title={name}
+                      className="text-foreground min-w-0 truncate text-sm font-medium"
+                    >
+                      {name}
+                      {m.userId === data.myUserId ? (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          (you)
+                        </span>
+                      ) : null}
+                    </span>
+                    {guestIds.has(m.userId) ? <GuestBadge /> : null}
                   </span>
                   {canManage ? (
                     <>

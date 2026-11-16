@@ -236,6 +236,48 @@ describe("ShareBoardDialog", () => {
   });
 });
 
+describe("ShareBoardDialog guest badge", () => {
+  it("marks a guest next to their name and nobody else", async () => {
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={[
+          ...members,
+          {
+            userId: "u3",
+            fullName: "Gil Guest",
+            email: "gil@x.com",
+            isGuest: true,
+          },
+        ]}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(loadBoardFolderGrants).toHaveBeenCalled());
+    expect(screen.getAllByText("Guest")).toHaveLength(1);
+    const row = screen.getByText("Gil Guest").parentElement!;
+    expect(row).toHaveTextContent("Guest");
+    // The badge changes nothing else: the access control is still there.
+    expect(screen.getByLabelText("Access for Gil Guest")).toHaveValue("none");
+  });
+
+  it("shows no badge when no member is a guest", async () => {
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(loadBoardFolderGrants).toHaveBeenCalled());
+    expect(screen.queryByText("Guest")).toBeNull();
+  });
+});
+
 describe("ShareBoardDialog nameless folder grantees", () => {
   it("shows the email of a rostered nameless grantee and Unknown member for one outside the roster", async () => {
     loadBoardFolderGrants.mockResolvedValue({

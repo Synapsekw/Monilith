@@ -514,3 +514,63 @@ describe("CalendarBoard (no date column)", () => {
     expect(screen.getByText(/add a date column/i)).toBeInTheDocument();
   });
 });
+
+describe("CalendarBoard view-only access", () => {
+  function renderAs(access: "owner" | "viewer") {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <CalendarBoard
+          payload={editablePayload()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+          access={access}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    setCell.mockReset();
+    addItem.mockReset();
+    updateBoardView.mockReset();
+  });
+
+  it("opens the item panel for a viewer instead of the quick-edit peek", () => {
+    renderAs("viewer");
+    fireEvent.click(screen.getByLabelText("Dated Item"));
+    expect(screen.queryByRole("dialog", { name: /^edit /i })).toBeNull();
+    expect(openItemParam()).toBe("i1");
+  });
+
+  it("gives a viewer no click-a-day-to-add target", () => {
+    renderAs("viewer");
+    expect(screen.queryByLabelText(/^Add item on /)).toBeNull();
+    expect(addItem).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: /week/i }));
+    expect(screen.queryByLabelText(/^Add item on /)).toBeNull();
+  });
+
+  it("does not make a viewer's event chips draggable", () => {
+    renderAs("viewer");
+    const chip = screen.getByLabelText("Dated Item");
+    expect(chip).not.toHaveAttribute("aria-roledescription");
+    expect(chip.className).not.toContain("cursor-grab");
+    // Still reachable from the keyboard: Enter opens the item.
+    expect(chip).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(chip, { key: "Enter" });
+    expect(openItemParam()).toBe("i1");
+  });
+
+  it("keeps an editor's chips draggable, the peek and the day targets", () => {
+    renderAs("owner");
+    const chip = screen.getByLabelText("Dated Item");
+    expect(chip).toHaveAttribute("aria-roledescription", "draggable");
+    expect(screen.getAllByLabelText(/^Add item on /).length).toBeGreaterThan(0);
+    fireEvent.click(chip);
+    expect(
+      screen.getByRole("dialog", { name: "Edit Dated Item" }),
+    ).toBeInTheDocument();
+  });
+});

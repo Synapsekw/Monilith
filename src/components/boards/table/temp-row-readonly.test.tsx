@@ -46,6 +46,7 @@ const column = {
 
 function controls(over: Partial<CellControls> = {}): CellControls {
   return {
+    canEdit: true,
     setEditing: vi.fn(),
     setCell: vi.fn(),
     clearCellValue: vi.fn(),
@@ -147,7 +148,7 @@ describe("temp-row read-only rule", () => {
 function rowControls(over: Partial<CellControls> = {}): CellControls {
   return controls({
     dependentsByItem: new Map<string, number>(),
-    statusColumn: null,
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     cache: { items: [], cellValues: [], attachments: [], timeEntries: [] },
     ...over,
   } as Partial<CellControls>);

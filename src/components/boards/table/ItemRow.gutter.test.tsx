@@ -27,6 +27,7 @@ function item(id: string, parentId: string | null, name: string): Item {
 function renderRow(boardItems: Item[], selectable = true) {
   const controls = {
     setEditing: vi.fn(),
+    canEdit: true,
     setCell: vi.fn(),
     clearCellValue: vi.fn(),
     members: [],
@@ -34,7 +35,7 @@ function renderRow(boardItems: Item[], selectable = true) {
     addSubitem: vi.fn(),
     deleteItem: vi.fn(),
     dependentsByItem: new Map<string, number>(),
-    statusColumn: null,
+    workRule: { statusColumn: null, doneOptionIds: null, dueColumn: null },
     cache: {
       items: boardItems,
       cellValues: [],

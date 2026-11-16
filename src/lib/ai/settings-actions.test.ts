@@ -261,6 +261,15 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "user-1" })),
 }));
+// The caller's org role, as getOrgAiSettings reads it.
+const viewerIsGuest = { value: false };
+const folderAccess = vi.fn(async (_userId: string, _orgId: string) => ({
+  isGuest: viewerIsGuest.value,
+  folderIds: [] as string[],
+}));
+vi.mock("@/lib/folders/access-cached", () => ({
+  getFolderAccessForUserCached: (u: string, o: string) => folderAccess(u, o),
+}));
 vi.mock("@/lib/org/active", () => ({
   resolveActiveOrg: vi.fn(async () => ({
     id: "org-1",
@@ -1101,6 +1110,91 @@ describe("getOrgAiSettings", () => {
     const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
     const res = await getOrgAiSettings();
     expect(res.ok && res.data.assistantName).toBe("Monolith Autopilot");
+  });
+});
+
+describe("getOrgAiSettings for a guest", () => {
+  // The service read (entitlement) sees the real row; the guest's own read
+  // returns nothing, exactly as RLS does.
+  const orgRow = {
+    ai_mode: "per_user",
+    tier: "pulse",
+    monthly_credit_limit: 5000,
+    byo_provider: "anthropic",
+    byo_key_last4: "9f3a",
+    default_provider: "anthropic",
+    default_model_id: "sonnet",
+    max_agents_per_user: 3,
+    max_agent_runs_per_user_per_day: 3,
+    assistant_name: "Ada",
+  };
+
+  it("returns the mode and nothing else of the org's AI settings", async () => {
+    viewerIsGuest.value = true;
+    try {
+      rlsMaybeSingle.mockResolvedValue({ data: null, error: null } as never);
+      svcMaybeSingle.mockResolvedValueOnce({
+        data: orgRow,
+        error: null,
+      } as never);
+      const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
+      const res = await getOrgAiSettings();
+      expect(folderAccess).toHaveBeenCalledWith("user-1", "org-1");
+      expect(res).toEqual({
+        ok: true,
+        data: {
+          mode: "per_user",
+          tier: "none",
+          creditsLimit: 0,
+          creditsUsed: 0,
+          byoProvider: null,
+          byoKeyLast4: null,
+          defaultProvider: null,
+          defaultModelId: null,
+          assistantName: "Monolith Autopilot",
+        },
+      });
+    } finally {
+      viewerIsGuest.value = false;
+    }
+  });
+
+  it("withholds the rest even if the guest's own read returned the row", async () => {
+    // Before the migration is applied RLS still hands a guest the row; the
+    // action must not pass it on.
+    viewerIsGuest.value = true;
+    try {
+      rlsMaybeSingle.mockResolvedValue({ data: orgRow, error: null } as never);
+      svcMaybeSingle.mockResolvedValueOnce({
+        data: orgRow,
+        error: null,
+      } as never);
+      const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
+      const res = await getOrgAiSettings();
+      expect(JSON.stringify(res)).not.toMatch(/9f3a|Ada|sonnet|5000|pulse/);
+      expect(res.ok && res.data.mode).toBe("per_user");
+    } finally {
+      viewerIsGuest.value = false;
+    }
+  });
+
+  it("gives a full member the whole row, as before", async () => {
+    rlsMaybeSingle.mockResolvedValue({ data: orgRow, error: null } as never);
+    svcMaybeSingle.mockResolvedValueOnce({
+      data: orgRow,
+      error: null,
+    } as never);
+    const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
+    const res = await getOrgAiSettings();
+    expect(res.ok && res.data).toMatchObject({
+      mode: "per_user",
+      tier: "pulse",
+      creditsLimit: 5000,
+      byoProvider: "anthropic",
+      byoKeyLast4: "9f3a",
+      defaultModelId: "sonnet",
+      assistantName: "Ada",
+    });
   });
 });
 

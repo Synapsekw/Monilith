@@ -7,8 +7,8 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/org/active", () => ({
   resolveActiveOrg: vi.fn(async () => ({ id: "org1" })),
 }));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleWorkspaces: vi.fn(async () => [{ id: "ws1" }]),
 }));
 vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "ws1"),

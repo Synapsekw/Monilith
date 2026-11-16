@@ -1,13 +1,42 @@
-import { Fragment, type ReactNode } from "react";
+"use client";
+
+import { Fragment, useState, type ReactNode } from "react";
 import { KpiCard } from "@/components/folders/charts/KpiCard";
 import type { StatusColor } from "@/components/ui/status-pill";
 import { computeKpis, type Kpis } from "@/lib/folders/rollup";
 import { kpiTrends, trendChange, type Trend } from "@/lib/folders/tower";
 import type { KpiKey } from "@/lib/validations/folder-layout";
-import type { BurnRow, RollupRow } from "@/lib/folders/types";
+import type { BurnRow, KpiItemKind, RollupRow } from "@/lib/folders/types";
+import { KpiDrilldown } from "./KpiDrilldown";
 import { Failed } from "./Panel";
 
 type TrendProp = Parameters<typeof KpiCard>[0]["trend"];
+type ActionProp = Parameters<typeof KpiCard>[0]["action"];
+
+/**
+ * The item list behind each card: which `folder_kpi_items` list it opens,
+ * the number on the card that list's total must equal, and what the items
+ * are called. "Gap to plan" has no entry: it is a difference of two counts,
+ * not a set of items.
+ */
+export const DRILL: Partial<
+  Record<
+    KpiKey,
+    { kind: KpiItemKind; count: (k: Kpis) => number; noun: string }
+  >
+> = {
+  complete: { kind: "done", count: (k) => k.done, noun: "done" },
+  overdue: { kind: "overdue", count: (k) => k.overdue, noun: "overdue" },
+  dueThisWeek: {
+    kind: "due_this_week",
+    count: (k) => k.dueThisWeek,
+    noun: "due this week",
+  },
+  blocked: { kind: "blocked", count: (k) => k.blocked, noun: "blocked" },
+  stale: { kind: "stale", count: (k) => k.stale, noun: "stale" },
+};
+
+const DRILL_ID = "kpi-items";
 
 const LABEL: Record<KpiKey, string> = {
   complete: "Complete",
@@ -73,8 +102,11 @@ const CHIP_VALUE: Record<KpiKey, (k: Kpis) => string> = {
   stale: (k) => String(k.stale),
 };
 
-const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
-  complete: (k, trend) => (
+const CARD: Record<
+  KpiKey,
+  (k: Kpis, trend: TrendProp, action?: ActionProp) => ReactNode
+> = {
+  complete: (k, trend, action) => (
     <KpiCard
       label={LABEL.complete}
       value={k.donePct === null ? "—" : `${k.donePct}%`}
@@ -83,9 +115,10 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
       progress={k.donePct}
       barColor="green"
       trend={trend}
+      action={action}
     />
   ),
-  gap: (k, trend) => (
+  gap: (k, trend, action) => (
     <KpiCard
       label={LABEL.gap}
       value={k.gap === null ? "—" : `${k.gap > 0 ? "+" : ""}${k.gap}`}
@@ -97,7 +130,7 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
               color: k.gap < 0 ? "red" : "green",
             }
       }
-      subFact="done − planned"
+      subFact="dated items: done − planned"
       progress={
         k.gap === null || k.total === 0
           ? null
@@ -105,9 +138,10 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
       }
       barColor={k.gap !== null && k.gap < 0 ? "red" : "green"}
       trend={trend}
+      action={action}
     />
   ),
-  overdue: (k, trend) => (
+  overdue: (k, trend, action) => (
     <KpiCard
       label={LABEL.overdue}
       value={String(k.overdue)}
@@ -120,9 +154,10 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
       progress={k.total === 0 ? null : (k.overdue / k.total) * 100}
       barColor="red"
       trend={trend}
+      action={action}
     />
   ),
-  dueThisWeek: (k, trend) => (
+  dueThisWeek: (k, trend, action) => (
     <KpiCard
       label={LABEL.dueThisWeek}
       value={String(k.dueThisWeek)}
@@ -134,24 +169,27 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
       }
       barColor="blue"
       trend={trend}
+      action={action}
     />
   ),
-  blocked: (k) => (
+  blocked: (k, _trend, action) => (
     <KpiCard
       label={LABEL.blocked}
       value={String(k.blocked)}
       subFact="status blocked or stuck"
       progress={k.total === 0 ? null : (k.blocked / k.total) * 100}
       barColor="red"
+      action={action}
     />
   ),
-  stale: (k) => (
+  stale: (k, _trend, action) => (
     <KpiCard
       label={LABEL.stale}
       value={String(k.stale)}
       subFact="untouched > 14 days"
       progress={k.total === 0 ? null : (k.stale / k.total) * 100}
       barColor="yellow"
+      action={action}
     />
   ),
 };
@@ -161,6 +199,11 @@ const CARD: Record<KpiKey, (k: Kpis, trend: TrendProp) => ReactNode> = {
  * Cards with a value get a trend when the burn rows are on the page and no
  * board filter is set (the burn RPC has no board dimension); cards at zero
  * collapse into one row of chips so they stop competing for attention.
+ *
+ * With `folderId`, a card that counts items opens the list of those items
+ * under the row, in place: no navigation, and nothing is read until the
+ * click (then one bounded page per request, `getFolderKpiItems`). The list
+ * is scoped to the same stage and board as the card.
  */
 export function KpisPanel({
   cards,
@@ -171,6 +214,7 @@ export function KpisPanel({
   burn = null,
   stage = null,
   board = null,
+  folderId,
 }: {
   cards: KpiKey[];
   rows: RollupRow[];
@@ -180,7 +224,10 @@ export function KpisPanel({
   burn?: BurnRow[] | null;
   stage?: string | null;
   board?: string | null;
+  /** Enables the item lists. Omitted (Customize mode, tests): plain cards. */
+  folderId?: string;
 }) {
+  const [opened, setOpened] = useState<KpiKey | null>(null);
   const k = computeKpis(rows, todayISO);
   if (failed) return <Failed onRetry={onRetry} />;
   // Each trend ENDS on the value its card shows (kpiTrends' agreement rule),
@@ -188,12 +235,21 @@ export function KpisPanel({
   const trends =
     burn === null || board !== null
       ? {}
-      : kpiTrends(burn, stage, todayISO, k.total, {
-          complete: k.donePct,
-          gap: k.gap,
-          overdue: k.overdue,
-          dueThisWeek: k.dueThisWeek,
-        });
+      : kpiTrends(
+          burn,
+          stage,
+          todayISO,
+          k.total,
+          {
+            complete: k.donePct,
+            gap: k.gap,
+            overdue: k.overdue,
+            dueThisWeek: k.dueThisWeek,
+          },
+          // The burn's completed line counts dated items only; the Complete
+          // card counts every done item.
+          k.done - k.doneDated,
+        );
   const anyDue = rows.some((r) => r.minDue !== null || r.maxDue !== null);
   const live = cards.filter((key) => !IS_ZERO[key](k));
   // With no dated items the gap is undefined, and the "No due dates set" chip
@@ -201,6 +257,24 @@ export function KpisPanel({
   const quiet = cards.filter(
     (key) => IS_ZERO[key](k) && !(key === "gap" && !anyDue),
   );
+  // A card that dropped to zero (a filter change) is a chip now: its list
+  // closes with it.
+  const open =
+    folderId !== undefined && opened !== null && live.includes(opened)
+      ? opened
+      : null;
+  const openDrill = open === null ? undefined : DRILL[open];
+  const actionFor = (key: KpiKey): ActionProp => {
+    const d = DRILL[key];
+    if (folderId === undefined || d === undefined) return undefined;
+    const n = d.count(k);
+    return {
+      label: `${open === key ? "Hide" : "Show"} the ${n} ${d.noun} ${n === 1 ? "item" : "items"}`,
+      expanded: open === key,
+      controls: DRILL_ID,
+      onToggle: () => setOpened(open === key ? null : key),
+    };
+  };
   return (
     <div className="flex flex-col gap-3">
       {live.length > 0 ? (
@@ -214,10 +288,29 @@ export function KpisPanel({
         >
           {live.map((key) => (
             <Fragment key={key}>
-              {CARD[key](k, trendProp(key, trends[key], trendColor(key, k)))}
+              {CARD[key](
+                k,
+                trendProp(key, trends[key], trendColor(key, k)),
+                actionFor(key),
+              )}
             </Fragment>
           ))}
         </div>
+      ) : null}
+      {folderId !== undefined && open !== null && openDrill !== undefined ? (
+        <KpiDrilldown
+          // A new list per card and scope: paging restarts from the top.
+          key={`${open}:${board ?? ""}:${stage ?? ""}`}
+          id={DRILL_ID}
+          folderId={folderId}
+          kind={openDrill.kind}
+          title={LABEL[open]}
+          expected={openDrill.count(k)}
+          stage={stage}
+          board={board}
+          todayISO={todayISO}
+          onClose={() => setOpened(null)}
+        />
       ) : null}
       {quiet.length > 0 || (!anyDue && k.total > 0) ? (
         <ul

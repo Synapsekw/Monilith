@@ -28,6 +28,18 @@ vi.mock("@/lib/supabase/service", () => ({
     from: () => ({ insert: svcInsert }),
   }),
 }));
+const sendEmail = vi.fn();
+vi.mock("@/lib/email/send", () => ({
+  sendEmail: (m: unknown) => sendEmail(m),
+}));
+vi.mock("@/lib/auth/origin", () => ({
+  getAppOrigin: async () => "https://app.example.com",
+}));
+vi.mock("@/lib/auth/session", () => ({
+  getUserOrgs: async () => [
+    { id: "22222222-2222-4222-8222-222222222222", name: "Acme" },
+  ],
+}));
 const updateTag = vi.fn();
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
@@ -49,6 +61,7 @@ beforeEach(() => {
   rpc.mockReset();
   getUser.mockReset();
   adminInvite.mockReset();
+  sendEmail.mockReset().mockResolvedValue("disabled");
   getUserById.mockReset();
   svcInsert.mockReset();
   resetPasswordForEmail.mockReset();
@@ -134,7 +147,7 @@ describe("membership invalidation", () => {
     },
   );
 
-  it("setMemberRole does NOT invalidate the member list (payload carries no role)", async () => {
+  it("setMemberRole invalidates the member list (the roster carries the guest flag)", async () => {
     rpc.mockResolvedValue({ error: null });
     const r = await setMemberRole({
       orgId: orgUuid,
@@ -142,7 +155,7 @@ describe("membership invalidation", () => {
       role: "admin",
     });
     expect(r.ok).toBe(true);
-    expect(updateTag).not.toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
+    expect(updateTag).toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
   });
 });
 
@@ -168,6 +181,11 @@ describe("inviteMember", () => {
       role: "member",
     });
     expect(r).toEqual({ ok: true, data: { emailSent: true } });
+    // The link in the invite email must land on the server-side confirm route.
+    expect(adminInvite).toHaveBeenCalledWith("a@b.com", {
+      redirectTo: "https://app.example.com/auth/confirm",
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("returns emailSent:false (still ok) when email delivery fails", async () => {
@@ -198,6 +216,28 @@ describe("inviteMember", () => {
       role: "member",
     });
     expect(r).toEqual({ ok: true, data: { emailSent: true } });
+  });
+
+  it("emails an existing account a notice naming the inviter and the org", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: uuid, email: "ann@x.com", user_metadata: {} } },
+    });
+    insert.mockResolvedValue({ error: null });
+    adminInvite.mockResolvedValue({
+      error: { message: "x", code: "email_exists" },
+    });
+    sendEmail.mockResolvedValue("sent");
+    svcInsert.mockResolvedValue({ error: null });
+    const r = await inviteMember({
+      orgId: orgUuid,
+      email: "a@b.com",
+      role: "member",
+    });
+    expect(r).toEqual({ ok: true, data: { emailSent: true } });
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({
+      to: "a@b.com",
+      subject: "ann@x.com invited you to Acme",
+    });
   });
 });
 

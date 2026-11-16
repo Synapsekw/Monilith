@@ -707,3 +707,72 @@ describe("KanbanCard priority pill", () => {
     expect(screen.getAllByText("Critical")).toHaveLength(1);
   });
 });
+
+describe("KanbanBoard view-only access", () => {
+  function renderAs(access: "owner" | "viewer", payload = payloadFixture()) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard
+          payload={payload}
+          selectedViewId="v2"
+          members={[]}
+          access={access}
+        />
+      </QueryClientProvider>,
+    );
+  }
+  function card(name: string): HTMLElement {
+    return screen.getByText(name).closest("article") as HTMLElement;
+  }
+
+  beforeEach(() => {
+    updateBoardView.mockReset();
+  });
+
+  it("gives a viewer no inline add-card input", () => {
+    renderAs("viewer");
+    expect(screen.queryByLabelText("Add item to Working")).toBeNull();
+    expect(screen.queryByLabelText("Add item to No status")).toBeNull();
+    expect(addItem).not.toHaveBeenCalled();
+  });
+
+  it("does not make a viewer's cards draggable (mouse, touch or keyboard)", () => {
+    renderAs("viewer");
+    const a = card("Card A");
+    // dnd-kit marks a draggable with these; a viewer's card carries neither
+    // the listeners nor the attributes, so no sensor can pick it up.
+    expect(a).not.toHaveAttribute("aria-roledescription");
+    expect(a).not.toHaveAttribute("tabindex");
+    expect(a.className).not.toContain("cursor-grab");
+  });
+
+  it("regroups for a viewer locally without saving the view config", () => {
+    const base = payloadFixture() as unknown as {
+      columns: Array<Record<string, unknown>>;
+    };
+    base.columns.push({
+      id: "stage",
+      board_id: "b1",
+      org_id: "o1",
+      kind: "status",
+      name: "Stage",
+      position: 2,
+      settings: { options: [{ id: "s1", label: "Alpha", color: "#579bfc" }] },
+    });
+    renderAs("viewer", base as never);
+    fireEvent.change(screen.getByLabelText("Group by"), {
+      target: { value: "stage" },
+    });
+    expect(screen.getByRole("region", { name: "Alpha" })).toBeInTheDocument();
+    expect(updateBoardView).not.toHaveBeenCalled();
+  });
+
+  it("keeps an editor's cards draggable and the add-card input", () => {
+    renderAs("owner");
+    const a = card("Card A");
+    expect(a).toHaveAttribute("aria-roledescription", "draggable");
+    expect(a.className).toContain("cursor-grab");
+    expect(screen.getByLabelText("Add item to Working")).toBeInTheDocument();
+  });
+});

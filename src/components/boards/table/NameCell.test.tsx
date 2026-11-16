@@ -23,6 +23,7 @@ const item = {
 } as Item;
 
 const controls = {
+  canEdit: true,
   renameItemInCache: vi.fn(),
   members: [],
 } as unknown as CellControls;

@@ -1,7 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { unsupportedReason } from "./unsupported";
+import { ASSISTANT_COMMENT_MAX_CHARS, unsupportedReason } from "./unsupported";
 
 describe("unsupportedReason", () => {
+  it("refuses a comment too long for the confirm card to show whole", () => {
+    const ok = "x".repeat(ASSISTANT_COMMENT_MAX_CHARS);
+    expect(unsupportedReason("add_comment", { itemId: "i", text: ok })).toBe(
+      null,
+    );
+    // Surrounding space is trimmed by the tool, so it does not count.
+    expect(
+      unsupportedReason("add_comment", { itemId: "i", text: ` ${ok}  ` }),
+    ).toBe(null);
+    expect(
+      unsupportedReason("add_comment", { itemId: "i", text: `${ok}x` }),
+    ).toBe(
+      `Keep a comment to ${ASSISTANT_COMMENT_MAX_CHARS} characters or fewer, so the user can read all of it before confirming.`,
+    );
+  });
+
   it("refuses a board create without a workspace", () => {
     expect(
       unsupportedReason("manage_board", { action: "create", name: "X" }),

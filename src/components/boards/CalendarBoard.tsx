@@ -112,6 +112,10 @@ function CalendarBoardInner({
     currentUserId,
   );
   const [, startTransition] = useTransition();
+  // The board's one edit bit (direct board grant or folder grant). View only:
+  // chips do not drag, a day is not an add target, a tap opens the item
+  // panel (never the quick-edit peek), and the date-column pick is local.
+  const canEdit = access !== "viewer";
 
   // The view config carries the persisted date column. Hold a local override so
   // switching the date column re-lays the calendar instantly (memoized over the
@@ -183,6 +187,7 @@ function CalendarBoardInner({
           boardId={cache.board.id}
           boardName={cache.board.name}
           board={cache.board}
+          truncation={cache.truncation}
           views={payload.views}
           selectedViewId={selectedViewId}
           columns={cache.columns}
@@ -221,6 +226,8 @@ function CalendarBoardInner({
     const previous = dateColumnOverride;
     // Apply immediately so the memoized re-layout happens this render — no refetch.
     setDateColumnOverride(columnId);
+    // View only: the re-layout is local. The view config is a board write.
+    if (!canEdit) return;
     // Persist in the background; on failure revert the override + surface it.
     startTransition(async () => {
       const res = await updateBoardView({
@@ -241,7 +248,7 @@ function CalendarBoardInner({
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over) return;
+    if (!canEdit || !over) return;
     const data = active.data.current as ChipDragData | undefined;
     if (!data) return;
     const toDayISO = over.id as string;
@@ -263,7 +270,7 @@ function CalendarBoardInner({
   }
 
   function handleDayClick(dayISO: string) {
-    if (!firstGroupId) return;
+    if (!canEdit || !firstGroupId) return;
     addItem(
       { groupId: firstGroupId, name: "New item" },
       {
@@ -285,7 +292,10 @@ function CalendarBoardInner({
    * renders empty.
    */
   function handleItemTap(itemId: string, anchorRect: DOMRect) {
-    if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
+    // View only: the peek is an editor (status / % complete), so a viewer goes
+    // straight to the item panel.
+    if (canEdit && (statusColumn || percentColumn))
+      setQuickEdit({ itemId, anchorRect });
     else openItemPanel(itemId);
   }
 
@@ -305,6 +315,7 @@ function CalendarBoardInner({
         boardId={cache.board.id}
         boardName={cache.board.name}
         board={cache.board}
+        truncation={cache.truncation}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={cache.columns}
@@ -342,19 +353,19 @@ function CalendarBoardInner({
             <CalendarWeek
               {...shared}
               weekStartISO={weekStartISO}
-              onDayClick={handleDayClick}
+              onDayClick={canEdit ? handleDayClick : undefined}
             />
           ) : (
             <CalendarMonth
               {...shared}
               monthISO={monthISO}
-              onDayClick={handleDayClick}
+              onDayClick={canEdit ? handleDayClick : undefined}
             />
           )}
         </DndContext>
       )}
 
-      {quickEdit && (
+      {canEdit && quickEdit && (
         <ItemQuickEdit
           target={quickEdit}
           itemName={

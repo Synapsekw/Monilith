@@ -35,13 +35,19 @@ export const TOOL_PROSE: Record<ToolName, string> = {
   search_items:
     "Find items by name and by meaning across a board, a project folder or the whole organization.",
   get_item:
-    "Read one item's fields and cell values, plus what blocks it and what it blocks.",
+    "Read one item's fields and cell values, what blocks it and what it blocks, and the items linked to it through relation columns.",
   get_item_thread:
     "Read one item's comments and field changes as a single timeline.",
   query_items:
     "Filter items across a board, a project folder or the whole organization by assignee, state, due date and recent change, or count them.",
+  list_folders:
+    "List the project folders you can see, with the boards inside each.",
+  list_people:
+    "List the people you can see in your organization, by name. A guest sees only the people they share a folder or a board with.",
+  add_comment:
+    "Post a comment on an item as you, optionally mentioning people, who are then notified. Cannot edit or delete a comment.",
   get_focus_today:
-    "See what to work on first today: your overdue, blocking, due-soon, awaiting-reply and stalled items, ranked, with the reason for each.",
+    "See what to work on first today: what is due today, then your overdue, blocking, due-soon, awaiting-reply and stalled items, ranked, with the reason for each.",
   create_item: "Add a new item to a group, optionally setting field values.",
   update_item: "Rename an item and/or change its field values.",
   create_attachment_upload:

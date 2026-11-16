@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { requireUser } from "@/lib/auth/session";
 import { listMyConnections } from "@/lib/mcp/oauth/connections";
+import { REFRESH_TOKEN_IDLE_DAYS } from "@/lib/mcp/oauth/lifetimes";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { CopyField } from "@/components/settings/mcp/copy-field";
 import { McpClientGuide } from "@/components/settings/mcp/mcp-client-guide";
@@ -94,6 +95,11 @@ export default async function McpSettingsPage() {
             You can revoke any app below at any time, and it loses access
             immediately.
           </li>
+          <li>
+            A connection stays active for as long as you keep using it. One left
+            unused for {REFRESH_TOKEN_IDLE_DAYS} days expires, and changing your
+            password or signing out everywhere disconnects every app.
+          </li>
         </ul>
       </SettingsSection>
 
@@ -124,8 +130,10 @@ export default async function McpSettingsPage() {
               It connected, then stopped working
             </dt>
             <dd className="text-muted-foreground mt-1">
-              Access may have been revoked here, or the connection expired.
-              Remove the connector in your client and add it again.
+              Access may have been revoked here, the connection went unused for{" "}
+              {REFRESH_TOKEN_IDLE_DAYS} days, or you changed your password or
+              signed out everywhere. Remove the connector in your client and add
+              it again.
             </dd>
           </div>
           <div>

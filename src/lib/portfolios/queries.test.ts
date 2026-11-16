@@ -25,8 +25,8 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 // the cached-members import inside portfolios/queries.ts must not explode at import time
-vi.mock("@/lib/org/queries-cached", () => ({
-  listOrgMembersCached: vi.fn(async () => []),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleOrgMembers: vi.fn(async () => []),
 }));
 
 import {

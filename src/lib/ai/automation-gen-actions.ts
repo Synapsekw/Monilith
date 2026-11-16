@@ -4,8 +4,8 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { getBoardAccess, getBoardPayload } from "@/lib/boards/queries";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { buildAutomationContext } from "@/lib/ai/automation-context";
 import { validateAutomationDraft } from "@/lib/ai/automation-gen-schema";
 import { generateAutomationDraft as generateAutomationDraftLLM } from "@/lib/ai/automation-generate";
@@ -45,12 +45,20 @@ export async function generateAutomationDraft(input: {
   try {
     const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
+    // A draft exists only to be saved, and saving is `can_edit_board`. Refuse
+    // a viewer here, before the entitlement check and any token spend, rather
+    // than metering a draft they can never keep. No access at all reads the
+    // same as a missing board.
+    const access = await getBoardAccess(boardId);
+    if (!access) return fail("Board not found.");
+    if (access === "viewer")
+      return fail("Only editors can create automations on this board.");
     await requireAiEntitlement(org.id, "automation_gen");
 
     const payload = await getBoardPayload(boardId);
     if (!payload) return fail("Board not found.");
 
-    const members = await listOrgMembersCached(payload.board.org_id);
+    const members = await listVisibleOrgMembers(payload.board.org_id);
     const ctx = buildAutomationContext({
       columns: payload.columns,
       groups: payload.groups,

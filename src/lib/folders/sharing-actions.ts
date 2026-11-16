@@ -6,6 +6,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { folderMembersTag, sharedBoardsTag } from "@/lib/cache/tags";
+import { deliverInvite, inviterLabel } from "@/lib/auth/invite-delivery";
+import { getUserOrgs } from "@/lib/auth/session";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { labelEmail } from "@/lib/ui/member-label";
 import {
@@ -24,10 +26,25 @@ import type {
 
 const MEMBERS_LIMIT = 200;
 const GENERIC_ERROR = "Something went wrong. Please try again.";
+const SHARE_NEEDS_BOARD_OWNERSHIP =
+  "You can only share a folder when you own every board in it, or are an admin.";
 
 /** Maps a raised SQL exception to friendly, non-leaking copy. */
 function friendly(error: { message: string; code?: string }): string {
   const m = error.message.toLowerCase();
+  // share_folder / invite_to_folder: a grant on a folder reaches every board
+  // in it, so the caller must own each one (or be an org owner/admin). The
+  // message carries how many boards stand in the way.
+  if (m.includes("cannot share this folder")) {
+    const n = Number(/(\d+) of its boards/.exec(m)?.[1]);
+    const count =
+      n === 1
+        ? " 1 board in this folder belongs to someone else."
+        : n > 1
+          ? ` ${n} boards in this folder belong to someone else.`
+          : "";
+    return `${SHARE_NEEDS_BOARD_OWNERSHIP}${count}`;
+  }
   if (m.includes("not allowed to manage"))
     return "Only the folder's creator or an admin can invite people";
   if (m.includes("invalid email")) return "Enter a valid email address";
@@ -166,11 +183,13 @@ export async function unshareFolder(input: unknown): Promise<ActionResult> {
  * Invite by email. An address that already belongs to an active org member is
  * shared directly (`kind: "shared"`). Any other address gets a pending folder
  * invitation plus a guest org invitation (both recorded by the RPC, which does
- * its own permission check on the caller's RLS client), then the standard
- * invite email; `emailSent` is false only when delivery genuinely failed (an
- * already-registered address counts as sent, so account existence is not
- * revealed). Access starts when the
- * person signs in after a platform admin has approved the account.
+ * its own permission check on the caller's RLS client), then is told about it:
+ * `delivery` says how (see `InviteDelivery`). A new address gets the invite
+ * email and access starts once they have set a password and a platform admin
+ * has approved the account; an address that already has an account accepts
+ * from its notifications. The result is honest about which happened, so a
+ * person allowed to invite to this folder can tell that an address already has
+ * an account (they could not act on a "sent" that never sent anything).
  */
 export async function inviteToFolder(
   input: unknown,
@@ -195,39 +214,42 @@ export async function inviteToFolder(
 
   // The RPC succeeded, so the caller is allowed. Only now use the service role.
   const svc = createServiceClient();
-  const { error: inviteErr } = await svc.auth.admin.inviteUserByEmail(email);
-  // "Already registered" counts as sent (they redeem on their next sign-in), so
-  // the result never reveals whether an address has an account. Only a genuine
-  // delivery failure reports `emailSent: false`.
-  let emailSent = true;
-  if (inviteErr && !/already.*regist/i.test(inviteErr.message)) {
-    emailSent = false;
-    console.error("[inviteToFolder] invite email delivery failed", {
-      folderId,
-      error: inviteErr.message,
-    });
-  }
-
   const [
     { data: folder },
     {
       data: { user },
     },
+    orgs,
   ] = await Promise.all([
     supabase
       .from("folders")
-      .select("id, org_id")
+      .select("id, org_id, name")
       .eq("id", folderId)
       .maybeSingle(),
     supabase.auth.getUser(),
+    // Request-cached and RLS-scoped; only names the org in the notice email.
+    getUserOrgs().catch(() => []),
   ]);
+
+  // A new address gets the Supabase invite email (its link sets a password);
+  // an address that already has an account gets our own notice when email is
+  // configured, otherwise the invitation waits in their notifications only.
+  // Never fails the invite: the invitation is already recorded.
+  const delivery = await deliverInvite(svc, {
+    email,
+    inviterName: inviterLabel(user),
+    orgName: orgs.find((o) => o.id === folder?.org_id)?.name ?? null,
+    folderName: folder?.name ?? null,
+    scope: "inviteToFolder",
+  });
+
   const { error: auditErr } = await svc.from("admin_audit_log").insert({
     org_id: folder?.org_id ?? null,
     actor_id: user?.id ?? null,
     actor_kind: "org",
     action: "folder.invited",
     target_email: email,
-    metadata: { folderId, level },
+    metadata: { folderId, level, delivery },
   });
   if (auditErr)
     console.error("[inviteToFolder] audit-log insert failed (compliance)", {
@@ -235,7 +257,15 @@ export async function inviteToFolder(
       error: auditErr.message,
     });
 
-  return { ok: true, data: { kind: "invited", emailSent } };
+  // The caller learns only "sent" or "failed": which channel was used reveals
+  // whether the address already has an account (see `InviteDeliveryKind`).
+  return {
+    ok: true,
+    data: {
+      kind: "invited",
+      delivery: delivery === "failed" ? "failed" : "sent",
+    },
+  };
 }
 
 export async function revokeFolderInvitation(

@@ -69,7 +69,9 @@ const members = [
 // Render helper
 // ---------------------------------------------------------------------------
 
-function renderDialog() {
+function renderDialog(
+  props: Partial<Parameters<typeof AutomationsDialog>[0]> = {},
+) {
   const qc = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -87,6 +89,7 @@ function renderDialog() {
       columns={columns}
       members={members}
       onOpenChange={onOpenChange}
+      {...props}
     />,
     { wrapper: Wrapper },
   );
@@ -750,5 +753,95 @@ describe("describe-an-automation (AI)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /try rephrasing/i,
     );
+  });
+
+  // -----------------------------------------------------------------------
+  // View-only access: the rules and their history read; nothing writes.
+  // -----------------------------------------------------------------------
+  describe("view-only access (canEdit=false)", () => {
+    const rule = {
+      id: "auto-1",
+      board_id: "board-1",
+      org_id: "o1",
+      name: "Ping owner",
+      enabled: true,
+      trigger: {
+        type: "status_changed",
+        columnId: "c-status",
+        toOptionId: "opt-done",
+      },
+      actions: [
+        {
+          type: "notify",
+          recipient: { kind: "owner", peopleColumnId: "c-people" },
+        },
+      ],
+      condition: null,
+      position: 0,
+    };
+
+    it("lists the rules read-only: no switch, no delete, no New automation", async () => {
+      getAutomations.mockResolvedValue([
+        rule,
+        { ...rule, id: "auto-2", name: "Paused rule", enabled: false },
+      ]);
+      renderDialog({ canEdit: false });
+
+      // The rule itself still reads, and so does whether it is running.
+      expect(await screen.findByText(/Ping owner/)).toBeInTheDocument();
+      expect(screen.getByText("On")).toBeInTheDocument();
+      expect(screen.getByText("Off")).toBeInTheDocument();
+      // A plain reason, said once.
+      expect(screen.getByText(/only editors can add or change/i)).toBeVisible();
+
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /delete automation/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /new automation/i }),
+      ).not.toBeInTheDocument();
+      // Run history stays available.
+      expect(
+        screen.getAllByRole("button", { name: /recent runs/i }),
+      ).toHaveLength(2);
+
+      expect(updateAutomation).not.toHaveBeenCalled();
+      expect(deleteAutomation).not.toHaveBeenCalled();
+      // The admin probe only feeds the builder's webhook option.
+      expect(getBoardAdminStatus).not.toHaveBeenCalled();
+    });
+
+    it("says the board has no automations instead of inviting one", async () => {
+      renderDialog({ canEdit: false });
+      expect(
+        await screen.findByText("This board has no automations."),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/create one/i)).not.toBeInTheDocument();
+    });
+
+    it("never opens the builder or the AI prompt, even when handed a seeded draft", async () => {
+      renderDialog({
+        canEdit: false,
+        seedDraft: {
+          trigger: { type: "item_created" },
+          actions: [
+            {
+              type: "notify",
+              recipient: { kind: "owner", peopleColumnId: "c-people" },
+            },
+          ],
+        } as never,
+      });
+      expect(
+        await screen.findByText("This board has no automations."),
+      ).toBeInTheDocument();
+      expect(screen.queryByLabelText("Trigger type")).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Describe an automation"),
+      ).not.toBeInTheDocument();
+      expect(generateAutomationDraft).not.toHaveBeenCalled();
+      expect(createAutomation).not.toHaveBeenCalled();
+    });
   });
 });

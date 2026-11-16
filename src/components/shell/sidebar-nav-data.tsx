@@ -6,7 +6,7 @@ import {
 import { listFoldersCached } from "@/lib/folders/queries-cached";
 import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
 import { filterFolderNav } from "@/lib/folders/nav-filter";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
@@ -24,7 +24,7 @@ export async function getSidebarNavData(): Promise<
 
   // Workspaces first: the active-workspace cookie is validated against this list
   // (and self-heals if it points at a workspace in a different org).
-  const workspaces = await listWorkspacesCached(orgId);
+  const workspaces = await listVisibleWorkspaces(orgId);
   const activeWorkspaceId = await getActiveWorkspaceId(workspaces);
 
   // Folders join the EXISTING Promise.all — a sequential await here would add a

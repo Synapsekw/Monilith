@@ -132,3 +132,39 @@ describe("FilesTab", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("File exceeds 50 MB.");
   });
 });
+
+describe("FilesTab view-only access", () => {
+  // RLS: an attachment insert needs can_edit_board.
+  it("gives a viewer no upload button, picker or drop target", () => {
+    const onUpload = vi.fn();
+    const { container } = render(
+      <FilesTab
+        cache={{ attachments: [att("a")] }}
+        {...base}
+        canEdit={false}
+        onUpload={onUpload}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Add files/ })).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    const file = new File(["x"], "x.txt", { type: "text/plain" });
+    fireEvent.drop(screen.getByText("report.png").closest(".ring-2")!, {
+      dataTransfer: { files: [file] },
+    });
+    expect(onUpload).not.toHaveBeenCalled();
+    // Reading stays: the file is listed.
+    expect(screen.getByText("report.png")).toBeInTheDocument();
+  });
+
+  it("does not tell a viewer to drop files into an empty tab", () => {
+    render(<FilesTab cache={{ attachments: [] }} {...base} canEdit={false} />);
+    expect(screen.getByText("No files yet.")).toBeInTheDocument();
+  });
+
+  it("keeps the upload button for an editor", () => {
+    render(<FilesTab cache={{ attachments: [] }} {...base} />);
+    expect(
+      screen.getByRole("button", { name: /Add files/ }),
+    ).toBeInTheDocument();
+  });
+});

@@ -6,7 +6,13 @@ import { workspacesTag } from "@/lib/cache/tags";
 export type WorkspaceListEntry = { id: string; name: string };
 
 /**
- * Cached org workspaces list (extracted from the inline shell select). `orgId` is
+ * Cached org workspaces list (extracted from the inline shell select).
+ *
+ * WHOLE ORG, SHARED BY EVERY VIEWER. A guest may see only the workspaces that
+ * hold something shared with them: read it through `listVisibleWorkspaces` in
+ * `@/lib/org/visible-roster`, which narrows it per viewer.
+ *
+ * `orgId` is
  * passed in (cache key + tag); the explicit `org_id = orgId` filter is the tenant
  * boundary (the service client bypasses RLS).
  */

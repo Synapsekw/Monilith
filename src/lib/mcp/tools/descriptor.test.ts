@@ -13,7 +13,7 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
     const names = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.length).toBe(38);
+    expect(names.length).toBe(41);
   });
 
   it("classifies every tool with a legal capability and scope", () => {
@@ -39,6 +39,7 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   // The classification the consent screen and the grant gate both depend on.
   it("classifies exactly the write tools as writes", () => {
     const writeTools = [
+      "add_comment",
       "attach_file",
       "create_attachment_upload",
       "create_item",
@@ -67,6 +68,24 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
       .sort();
 
     expect(actualWrites).toEqual(writeTools);
+  });
+
+  // Strict function-calling callers (OpenAI strict mode makes every property
+  // required) send `null` for a field they mean to leave out. A read tool must
+  // treat that exactly like an omitted field, at the schema AND in the handler
+  // (`withoutNulls`). Write tools are deliberately not covered: there `null`
+  // can mean "clear this value" (manage_goal, manage_portfolio).
+  it("lets every optional parameter of an always-read tool be null", () => {
+    const rejectsNull: string[] = [];
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      if (d.capability !== null) continue;
+      for (const [key, schema] of Object.entries(d.inputSchema)) {
+        const optional = schema.safeParse(undefined).success;
+        if (optional && !schema.safeParse(null).success)
+          rejectsNull.push(`${d.name}.${key}`);
+      }
+    }
+    expect(rejectsNull).toEqual([]);
   });
 
   it("classifies describe_schema as a read", () => {

@@ -28,9 +28,14 @@ import { GroupMenu } from "./GroupMenu";
  * The title is the group's name as the user typed it, in Inter at the
  * `text-group` size. No mono kicker, no index number, same tone for every
  * group.
+ *
+ * View only (`canEdit === false`): no drag handle, no rename (the title is a
+ * plain heading-style label) and no group menu. Collapse stays — it is the
+ * viewer's own saved arrangement, not a board write.
  */
 export function GroupHeaderRow({
   group,
+  canEdit = true,
   selectAll,
   collapsed,
   onToggleCollapse,
@@ -48,6 +53,8 @@ export function GroupHeaderRow({
   onDelete,
 }: {
   group: Group;
+  /** False for view-only access: hides drag, rename and the group menu. */
+  canEdit?: boolean;
   /** Group "select all visible" checkbox, or null for viewers/empty groups. */
   selectAll: React.ReactNode;
   collapsed: boolean;
@@ -77,15 +84,17 @@ export function GroupHeaderRow({
     >
       <div className="sticky left-0 flex h-full w-[var(--board-viewport-w,100%)] min-w-0 items-center gap-1.5 px-2">
         {selectAll}
-        <button
-          type="button"
-          aria-label={`Reorder ${group.name}`}
-          {...dragAttributes}
-          {...dragListeners}
-          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
-        >
-          <GripVertical className="size-4" />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            aria-label={`Reorder ${group.name}`}
+            {...dragAttributes}
+            {...dragListeners}
+            className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleCollapse}
@@ -105,7 +114,15 @@ export function GroupHeaderRow({
           className="size-2 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
         />
-        {renaming ? (
+        {!canEdit ? (
+          <span
+            className={`text-group ${cn(
+              "text-foreground min-w-0 truncate font-semibold",
+            )}`}
+          >
+            {group.name}
+          </span>
+        ) : renaming ? (
           <Input
             autoFocus
             value={name}
@@ -163,12 +180,14 @@ export function GroupHeaderRow({
             </span>
           </span>
         ) : null}
-        <GroupMenu
-          group={group}
-          onRename={onOpenRename}
-          onSetColor={onSetColor}
-          onDelete={onDelete}
-        />
+        {canEdit && (
+          <GroupMenu
+            group={group}
+            onRename={onOpenRename}
+            onSetColor={onSetColor}
+            onDelete={onDelete}
+          />
+        )}
       </div>
     </div>
   );

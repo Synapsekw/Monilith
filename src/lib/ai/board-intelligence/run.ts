@@ -8,7 +8,7 @@ import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { getBoardLastSeenAt } from "@/lib/boards/intelligence/visits";
 import {
   computeSignals,
@@ -68,7 +68,7 @@ export async function runBoardIntelligence(input: {
     await requireAiEntitlement(org.id, "board_intelligence");
     const supabase = await createClient();
     const now = new Date();
-    const members = (await listOrgMembersCached(payload.board.org_id)).map(
+    const members = (await listVisibleOrgMembers(payload.board.org_id)).map(
       (m) => ({ userId: m.userId, fullName: m.fullName }),
     ); // email never reaches a prompt
     const memberNames = new Map(
@@ -81,6 +81,7 @@ export async function runBoardIntelligence(input: {
       cellValues: payload.cellValues,
       groups: payload.groups,
       dependencies: payload.dependencies,
+      board: payload.board,
     };
     const signals = computeSignals(signalsInput, {
       now,

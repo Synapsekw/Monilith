@@ -58,6 +58,9 @@ export type AutomationClientSpec = {
   /** Highest existing `position` on the board; `null` = no automations yet. */
   position?: number | null;
   insertError?: string;
+  /** The Postgres error code beside `insertError` — `42501` is what an RLS
+   *  WITH CHECK refusal (a caller without edit access) reports. */
+  insertErrorCode?: string;
 };
 
 /**
@@ -150,7 +153,15 @@ export function makeAutomationClient(
           select: () => ({
             single: async () =>
               spec.insertError
-                ? { data: null, error: { message: spec.insertError } }
+                ? {
+                    data: null,
+                    error: {
+                      message: spec.insertError,
+                      ...(spec.insertErrorCode
+                        ? { code: spec.insertErrorCode }
+                        : {}),
+                    },
+                  }
                 : { data: { id: "auto-1" }, error: null },
           }),
         };

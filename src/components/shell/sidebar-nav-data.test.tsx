@@ -60,8 +60,8 @@ vi.mock("@/lib/folders/access-cached", () => ({
     folderIds: [],
   })),
 }));
-vi.mock("@/lib/workspaces/queries-cached", () => ({
-  listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
+vi.mock("@/lib/org/visible-roster", () => ({
+  listVisibleWorkspaces: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
 }));
 // Active-workspace resolution reads a cookie (uncached, request-scoped); mocked
 // here since the RSC render in this test happens outside a request context.

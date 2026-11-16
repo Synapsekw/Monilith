@@ -95,10 +95,17 @@ export type KpiNow = Partial<Record<KpiKey, number | null>>;
  * LATEST point is the card's own value from the rollup:
  *   - complete / gap / overdue: the current week's point is replaced by the
  *     card value ("as of today"); earlier points stay folder_burn's
- *     end-of-week values, which count on the same basis as the rollup (done =
- *     every done item with a done date; planned = items whose latest date is
- *     in or before that week). When the burn rows stop before the current
- *     week, the card value is appended as the newest point instead.
+ *     end-of-week values, which count on the same basis as the rollup's gap
+ *     (completed = done items that HAVE a due date; planned = items whose due
+ *     date is in or before that week: the same dated population on both
+ *     sides). When the burn rows stop before the current week, the card value
+ *     is appended as the newest point instead.
+ *   - complete: the card is done / total over EVERY item, but folder_burn's
+ *     completed only counts dated items. `undatedDone` (done items with no
+ *     due date, from the rollup: done − doneDated) is added to every past
+ *     point so the line is on the card's basis. It is today's count applied
+ *     to earlier weeks, an approximation: the burn has no history for items
+ *     without a due date.
  *   - dueThisWeek: the first bar (this week) is the card value; later bars are
  *     folder_burn's planned counts for those weeks.
  *   - a card whose `now` value is null gets no trend.
@@ -125,6 +132,7 @@ export function kpiTrends(
   todayISO: string,
   total: number,
   now?: KpiNow,
+  undatedDone = 0,
 ): Partial<Record<KpiKey, Trend>> {
   const ws = weekly(rows, stage);
   let cur = -1;
@@ -183,7 +191,9 @@ export function kpiTrends(
   if (total > 0) {
     const complete = anchored(
       "complete",
-      past.map((w) => Math.round((w.completedCum / total) * 100)),
+      past.map((w) =>
+        Math.round(((w.completedCum + undatedDone) / total) * 100),
+      ),
       Math.round((importedNow / total) * 100),
     );
     if (complete) out.complete = complete;

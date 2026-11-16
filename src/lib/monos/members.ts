@@ -5,6 +5,8 @@ export type PersonRow = {
   fullName: string | null;
   email: string | null;
   avatarUrl: string | null;
+  /** An org guest (share dialog badge). Absent for everyone else. */
+  isGuest?: boolean;
 };
 export type RosterMember = PersonRow & { mono?: MonoMemberMeta };
 

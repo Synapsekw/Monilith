@@ -312,6 +312,13 @@ function FolderTimelineChart({
     return !!b?.can_edit && !boardScheduleOf(b).readOnly;
   }
 
+  /** Drawing a link needs edit on the successor's board — synthetic-date
+   * boards still take links, so `can_edit` only (same rule as
+   * `linkCandidates`). */
+  function canLinkItem(itemId: string): boolean {
+    return !!boards.get(view.boardOfItem.get(itemId) ?? "")?.can_edit;
+  }
+
   function handleMoveBar(itemId: string, deltaDays: number) {
     const s = scheduleOfItem(itemId);
     if (!s?.startSourceId || !canEditItem(itemId)) return;
@@ -398,8 +405,7 @@ function FolderTimelineChart({
   function linkCandidates(row: { itemId: string }) {
     // Drawing a link needs edit on the successor's board (the server checks
     // the same). Synthetic-date boards still take links, so can_edit only.
-    if (!boards.get(view.boardOfItem.get(row.itemId) ?? "")?.can_edit)
-      return [];
+    if (!canLinkItem(row.itemId)) return [];
     const already = new Set(
       data.dependencies
         .filter((d) => d.successor_id === row.itemId)
@@ -519,6 +525,11 @@ function FolderTimelineChart({
             onLabelWidthChange={handleLabelWidthChange}
             colorFor={(row) => groupColor.get(row.itemId) ?? null}
             canEditItem={canEditItem}
+            // A row on a board the viewer can only read draws no link, so its
+            // ⋯ menu appears only when there is a link they may remove (edit
+            // on the other end's board). Without this the button opened an
+            // empty menu.
+            canLinkItem={canLinkItem}
             isExpanded={isExpanded}
             onToggleExpand={toggle}
             onMoveBar={handleMoveBar}

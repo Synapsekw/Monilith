@@ -66,6 +66,8 @@ export const BoardColumnHeader = memo(function BoardColumnHeader({
 
   function handleColumnDragEnd(e: DragEndEvent) {
     const { active, over } = e;
+    // View only: headers are not sortable, so this cannot fire; guarded.
+    if (!col.canEdit) return;
     if (!over || active.id === over.id) return;
     const position = reorderPosition(
       columns.map((c) => ({ id: c.id, position: c.position })),
@@ -98,6 +100,12 @@ export const BoardColumnHeader = memo(function BoardColumnHeader({
           width={col.nameWidth}
           onResize={(w) => col.setLiveNameWidth(w)}
           onResizeEnd={(w) => {
+            // View only: the width holds for the session (the live width
+            // stays) and is never saved — the board is not theirs to write.
+            if (!col.canEdit) {
+              col.setLiveNameWidth(w);
+              return;
+            }
             col.setLiveNameWidth(null);
             col.resizeNameColumn(w);
           }}
@@ -106,7 +114,7 @@ export const BoardColumnHeader = memo(function BoardColumnHeader({
           onResizeCancel={() => col.setLiveNameWidth(null)}
           onAutoFit={() => {
             col.setLiveNameWidth(null);
-            col.resizeNameColumn(null);
+            if (col.canEdit) col.resizeNameColumn(null);
           }}
         />
       </div>
@@ -153,7 +161,12 @@ export const BoardColumnHeader = memo(function BoardColumnHeader({
       </DndContext>
       <CreatedHeaderCell icon={User} label="Created by" />
       <CreatedHeaderCell icon={Clock} label="Created at" />
-      <AddColumnMenu onAdd={col.onAddColumn} />
+      {col.canEdit ? (
+        <AddColumnMenu onAdd={col.onAddColumn} />
+      ) : (
+        // Keeps the add-column grid track occupied for view-only access.
+        <div aria-hidden />
+      )}
     </div>
   );
 });

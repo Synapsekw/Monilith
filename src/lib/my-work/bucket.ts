@@ -36,7 +36,9 @@ export type MyWorkGroup = {
 
 const BUCKET_LABEL: Record<DueBucket, string> = {
   overdue: "Overdue",
-  today: "Today",
+  // "Due today", not "Today": the block above the list is the one "Today" on
+  // this page (what to do first); this bucket is only the items due today.
+  today: "Due today",
   week: "This week",
   later: "Later",
   none: "No date",

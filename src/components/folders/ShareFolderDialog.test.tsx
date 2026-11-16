@@ -27,6 +27,11 @@ vi.mock("@/lib/folders/sharing-actions", () => ({
   leaveFolder: (...a: unknown[]) => leaveFolder(...a),
 }));
 
+const loadFolderGuestIds = vi.fn();
+vi.mock("@/lib/folders/guest-actions", () => ({
+  loadFolderGuestIds: (...a: unknown[]) => loadFolderGuestIds(...a),
+}));
+
 const managerData = {
   canManage: true,
   myUserId: "me",
@@ -84,6 +89,53 @@ beforeEach(() => {
   ])
     m.mockReset();
   loadFolderAccess.mockResolvedValue({ ok: true, data: managerData });
+  loadFolderGuestIds.mockReset();
+  loadFolderGuestIds.mockResolvedValue({ ok: true, data: [] });
+});
+
+describe("ShareFolderDialog guest badge", () => {
+  const twoMembers = {
+    ...managerData,
+    members: [
+      { userId: "u1", fullName: "Dana Lee", avatarUrl: null, level: "viewer" },
+      { userId: "u3", fullName: "Gil Guest", avatarUrl: null, level: "viewer" },
+    ],
+  };
+
+  it("marks the members who are guests, and only them", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    loadFolderGuestIds.mockResolvedValue({ ok: true, data: ["u3"] });
+    open();
+    const guestRow = (await screen.findByText("Gil Guest")).closest("li")!;
+    expect(guestRow).toHaveTextContent("Guest");
+    expect(loadFolderGuestIds).toHaveBeenCalledWith({ folderId: "f1" });
+    const memberRow = screen.getByText("Dana Lee").closest("li")!;
+    expect(memberRow.textContent).not.toMatch(/Guest/);
+    expect(screen.getAllByText("Guest")).toHaveLength(1);
+  });
+
+  it("shows no badge when nobody is a guest", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    open();
+    await screen.findByText("Gil Guest");
+    expect(screen.queryByText("Guest")).toBeNull();
+  });
+
+  it("still lists the people when the guest read fails or throws", async () => {
+    loadFolderAccess.mockResolvedValue({ ok: true, data: twoMembers });
+    loadFolderGuestIds.mockResolvedValue({ ok: false, error: "nope" });
+    const first = open();
+    expect(await screen.findByText("Dana Lee")).toBeInTheDocument();
+    expect(screen.queryByText("Guest")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    first.unmount();
+
+    loadFolderGuestIds.mockRejectedValue(new Error("network"));
+    open();
+    expect(await screen.findByText("Dana Lee")).toBeInTheDocument();
+    expect(screen.queryByText("Guest")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("ShareFolderDialog", () => {
@@ -121,7 +173,7 @@ describe("ShareFolderDialog", () => {
   it("invites an email address at the chosen level", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: true },
+      data: { kind: "invited", delivery: "sent" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -141,16 +193,55 @@ describe("ShareFolderDialog", () => {
       }),
     );
     expect(
-      await screen.findByText(
-        "Invitation sent. They get access after they sign up and are approved.",
-      ),
+      await screen.findByText(/^Invitation saved\. They are told by email/),
     ).toBeInTheDocument();
+  });
+
+  it("gives one answer for every delivered invitation and never reveals an existing account", async () => {
+    inviteToFolder.mockResolvedValue({
+      ok: true,
+      data: { kind: "invited", delivery: "sent" },
+    });
+    open();
+    await screen.findByText("Dana Lee");
+    await settled();
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value: "old@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    expect(
+      await screen.findByText(/^Invitation saved\. They are told by email/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already have a/i)).not.toBeInTheDocument();
+  });
+
+  it("shows why a folder holding someone else's boards cannot be shared, and adds nobody", async () => {
+    const reason =
+      "You can only share a folder when you own every board in it, or are an admin. 2 boards in this folder belong to someone else.";
+    inviteToFolder.mockResolvedValue({ ok: false, error: reason });
+    open();
+    await screen.findByText("Dana Lee");
+    await settled();
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value: "pat@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(reason);
+    // The reason is tied to the field that was submitted, and the address
+    // stays so the person can see what was refused.
+    const field = screen.getByLabelText("Name or email");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAttribute("aria-describedby", alert.id);
+    expect(field).toHaveValue("pat@x.com");
+    expect(screen.queryByText("pat@x.com")).not.toBeInTheDocument();
+    expect(loadFolderAccess).toHaveBeenCalledTimes(1);
   });
 
   it("says what is true when the invitation email could not be delivered", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: false },
+      data: { kind: "invited", delivery: "failed" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -407,7 +498,10 @@ describe("ShareFolderDialog concurrency", () => {
     fireEvent.submit(form());
     expect(inviteToFolder).toHaveBeenCalledTimes(1);
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "sent" },
+      });
     });
   });
 
@@ -497,7 +591,10 @@ describe("ShareFolderDialog concurrency", () => {
 
     loadFolderAccess.mockClear();
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "sent" },
+      });
     });
     // No reload for a dialog that is gone, and nothing counted as a change.
     expect(loadFolderAccess).not.toHaveBeenCalled();

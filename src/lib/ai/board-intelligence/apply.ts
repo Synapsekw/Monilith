@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
 import { getBoardAccess, getBoardPayload } from "@/lib/boards/queries";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { notifyNewAssignees } from "@/lib/boards/actions/assign-notify";
 import { cellValueSchema, type ColumnKind } from "@/lib/validations/boards";
 import { fail, type ActionResult } from "@/lib/actions/result";
@@ -112,7 +112,7 @@ export async function applySuggestion(input: {
   if (action.type === "filter") return fail("This action runs in the browser.");
   const payload = await getBoardPayload(run.boardId);
   if (!payload) return fail("Board not found.");
-  const members = (await listOrgMembersCached(payload.board.org_id)).map(
+  const members = (await listVisibleOrgMembers(payload.board.org_id)).map(
     (m) => ({ userId: m.userId, fullName: m.fullName }),
   );
   const ctx = buildBoardContext(payload, members);

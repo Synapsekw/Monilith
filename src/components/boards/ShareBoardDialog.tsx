@@ -18,9 +18,16 @@ import {
 import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { memberLabel } from "@/lib/ui/member-label";
+import { GuestBadge } from "@/components/ui/guest-badge";
 import { cn } from "@/lib/utils";
 
-type Member = { userId: string; fullName: string | null; email: string | null };
+type Member = {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  /** An org guest: marked with a badge, nothing else changes. */
+  isGuest?: boolean;
+};
 type Grant = { userId: string; access: "viewer" | "editor" };
 type Access = "none" | "viewer" | "editor";
 
@@ -158,8 +165,11 @@ export function ShareBoardDialog({
                     {initials(name)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="text-foreground block truncate text-sm font-medium">
-                      {name}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-foreground block truncate text-sm font-medium">
+                        {name}
+                      </span>
+                      {m.isGuest ? <GuestBadge /> : null}
                     </span>
                     {secondary && (
                       <span className="text-muted-foreground block truncate text-xs">

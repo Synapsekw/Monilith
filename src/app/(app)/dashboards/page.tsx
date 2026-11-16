@@ -3,7 +3,7 @@ import { FolderGallery } from "@/components/folders/FolderGallery";
 import { UnfiledDashboards } from "@/components/folders/UnfiledDashboards";
 import { requireUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { createClient } from "@/lib/supabase/server";
 import { resolveFolderGallery } from "@/lib/folders/resolve";
@@ -18,7 +18,7 @@ export default async function DashboardsIndex() {
   const user = await requireUser();
   const orgId = await getActiveOrgId();
   const workspaceId = await getActiveWorkspaceId(
-    await listWorkspacesCached(orgId),
+    await listVisibleWorkspaces(orgId),
   );
   if (!workspaceId)
     return (
@@ -41,7 +41,11 @@ export default async function DashboardsIndex() {
         description="Every folder is a project with its own command center."
       />
       {gallery.ok ? (
-        <FolderGallery rows={gallery.rows} workspaceId={workspaceId} />
+        <FolderGallery
+          rows={gallery.rows}
+          workspaceId={workspaceId}
+          capped={gallery.capped === true}
+        />
       ) : (
         <EmptyState>Couldn&apos;t load folders. {gallery.error}</EmptyState>
       )}

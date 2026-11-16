@@ -2,7 +2,7 @@ import * as z from "zod";
 import { getWorkloadSummaryCore } from "@/lib/workload/queries";
 import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import { validateRange } from "./range";
-import type { GetClient, ToolResult } from "./shared";
+import { withoutNulls, type GetClient, type ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
@@ -81,15 +81,15 @@ export const getWorkloadDescriptor: ToolDescriptor = {
   title: "Get workload",
   description: `Planned load per team member over a date window: allocated seconds from item estimates, item count, and capacity seconds. Defaults to the next four weeks. Range must be at most ${WORKLOAD_RANGE_MAX_DAYS} days. Pass both \`from\` and \`to\` together, or neither.`,
   inputSchema: {
-    orgId: z.string().uuid().optional(),
-    from: isoDate.optional(),
-    to: isoDate.optional(),
+    orgId: z.string().uuid().nullish(),
+    from: isoDate.nullish(),
+    to: isoDate.nullish(),
   },
   capability: null,
   scope: "none",
   invoke: (ctx, input) =>
     getWorkloadHandler(
       ctx.getClient,
-      input as { orgId?: string; from?: string; to?: string },
+      withoutNulls(input) as { orgId?: string; from?: string; to?: string },
     ),
 };

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
 import { FirstBoardEmptyState } from "@/components/boards/FirstBoardEmptyState";
+import { GuestEmptyState } from "@/components/boards/GuestEmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getUser,
@@ -14,6 +15,7 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { boardIdFromPath, LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
+import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 
 /**
@@ -73,9 +75,26 @@ export async function HomeDispatch() {
   // under /boards/*). Mirrors the owned-board redirect above.
   if (sharedBoards.length > 0) redirect(`/boards/${sharedBoards[0].id}`);
 
-  // First-run: no boards at all. Guide the user to create their first board
-  // right here — the org's first workspace is the create target (a fresh org
-  // always has one from onboarding).
+  // No boards at all. A guest cannot create one (the database refuses it), so
+  // they get their own empty state rather than "create your first board". The
+  // role comes from the cached read the shell's sidebar and palette load for
+  // this same user and org, so this adds no query to the page.
+  const folderAccess = await getFolderAccessForUserCached(user.id, org.id);
+  if (folderAccess.isGuest) {
+    return (
+      <AuthenticatedShell>
+        <GuestEmptyState
+          orgName={org.name}
+          userId={user.id}
+          hasFolders={folderAccess.folderIds.length > 0}
+        />
+      </AuthenticatedShell>
+    );
+  }
+
+  // First-run: guide the user to create their first board right here — the
+  // org's first workspace is the create target (a fresh org always has one
+  // from onboarding).
   const workspaces = await listWorkspacesCached(org.id);
 
   return (

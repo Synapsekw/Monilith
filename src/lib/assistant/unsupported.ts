@@ -1,13 +1,27 @@
 /**
+ * The longest comment the assistant may stage. The confirm card shows one
+ * label of at most 500 characters, and a person must be able to read ALL of
+ * what will be posted under their name before approving it. The tool itself
+ * (and so an MCP client) allows more.
+ */
+export const ASSISTANT_COMMENT_MAX_CHARS = 300;
+
+/**
  * Calls the assistant refuses for now, with the message the model (and, at
- * Apply, the user) sees. Each entry exists because the underlying tool cannot
- * yet be kept inside the active organisation; see the acceptance notes in
- * docs/superpowers/plans/2026-11-13-unified-assistant-acceptance.md.
+ * Apply, the user) sees. Each `create` entry exists because the underlying
+ * tool cannot yet be kept inside the active organisation; see the acceptance
+ * notes in docs/superpowers/plans/2026-11-13-unified-assistant-acceptance.md.
  */
 export function unsupportedReason(
   tool: string,
   input: Record<string, unknown>,
 ): string | null {
+  if (
+    tool === "add_comment" &&
+    typeof input.text === "string" &&
+    input.text.trim().length > ASSISTANT_COMMENT_MAX_CHARS
+  )
+    return `Keep a comment to ${ASSISTANT_COMMENT_MAX_CHARS} characters or fewer, so the user can read all of it before confirming.`;
   if (input.action !== "create") return null;
   // The strict create schema needs a workspace, but the loose tool schema
   // the model sees cannot say so; refuse here so the card never offers a

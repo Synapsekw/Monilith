@@ -49,6 +49,8 @@ export const SubitemBlock = memo(function SubitemBlock({
 
   function handleSubitemDragEnd(e: DragEndEvent) {
     const { active, over } = e;
+    // View only: subitem rows are not sortable, so this cannot fire; guarded.
+    if (!controls.canEdit) return;
     if (!over || active.id === over.id) return;
     const position = reorderPosition(
       subitems.map((s) => ({ id: s.id, position: s.position })),
@@ -86,11 +88,13 @@ export const SubitemBlock = memo(function SubitemBlock({
           ))}
         </SortableContext>
       </DndContext>
-      <AddSubitemRow
-        parentId={parentId}
-        controls={controls}
-        nameWidth={nameWidth}
-      />
+      {controls.canEdit && (
+        <AddSubitemRow
+          parentId={parentId}
+          controls={controls}
+          nameWidth={nameWidth}
+        />
+      )}
     </div>
   );
 });

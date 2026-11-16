@@ -52,6 +52,23 @@ describe("kpiTrends", () => {
     wk("2026-09-28", 1, 0, 0),
   ];
 
+  it("puts the complete trend on the card's basis: done items without a due date are added back", () => {
+    // completed counts dated items only (1 a week); 4 more done items have no
+    // due date. The card says (4 dated + 4 undated) / 20 = 40%.
+    const t = kpiTrends(rows, null, "2026-09-15", 20, { complete: 40 }, 4);
+    expect(t.complete?.points).toEqual([25, 30, 35, 40]);
+    expect(t.complete?.delta).toBe(5);
+    // Without the offset the line would jump from 15 to the card's 40.
+    expect(
+      kpiTrends(rows, null, "2026-09-15", 20, { complete: 40 }).complete
+        ?.points,
+    ).toEqual([5, 10, 15, 40]);
+    // The gap trend is dated on both sides already: unchanged by the offset.
+    expect(
+      kpiTrends(rows, null, "2026-09-15", 20, undefined, 4).gap?.points,
+    ).toEqual([-1, -3, -4, -6]);
+  });
+
   it("builds past series up to the current week and a forward series for due", () => {
     const t = kpiTrends(rows, null, "2026-09-15", 20);
     expect(t.complete?.points).toEqual([5, 10, 15, 20]);

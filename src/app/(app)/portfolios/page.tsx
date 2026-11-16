@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
+import { isActiveOrgGuest } from "@/lib/org/guest";
+import { GuestUnavailable } from "@/components/shell/guest-unavailable";
 import { listPortfolios } from "@/lib/portfolios/queries";
 import { NewPortfolioDialog } from "@/components/portfolios/NewPortfolioDialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 
 export default async function PortfoliosIndex() {
-  await requireUser();
+  const user = await requireUser();
+  // Org-wide planning is not offered to guests (the sidebar hides the link);
+  // reached by URL, say so instead of rendering an empty page whose create
+  // buttons the database refuses. Same cached role read as the shell.
+  if (await isActiveOrgGuest(user.id))
+    return <GuestUnavailable title="Portfolios" />;
   const portfolios = await listPortfolios();
   return (
     <div className="mx-auto max-w-3xl p-8">

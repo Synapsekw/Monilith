@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { listOrgMembersCached } from "@/lib/org/queries-cached";
+import { listVisibleOrgMembers } from "@/lib/org/visible-roster";
 import { getActiveOrgId } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { buildGoalTree, serverToday } from "@/lib/goals/progress";
@@ -93,7 +93,7 @@ export async function getGoalLinks(): Promise<Map<string, GoalLink[]>> {
 export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   const orgId = await getActiveOrgId();
   if (!orgId) return new Map();
-  const members = await listOrgMembersCached(orgId);
+  const members = await listVisibleOrgMembers(orgId);
   return new Map(members.map((m) => [m.userId, m]));
 }
 
@@ -148,7 +148,7 @@ export async function getGoalsTreeCore(
 /** Cookie-bound wrapper — the RSC entry point. Signature unchanged.
  *
  * `getGoalOwners()` is handed over UNAWAITED so it resolves as the core's third
- * `Promise.all` slot: the owner lookup (a `listOrgMembersCached` miss is a real
+ * `Promise.all` slot: the owner lookup (a `listVisibleOrgMembers` miss is a real
  * round-trip) overlaps the goals + rollup reads instead of preceding them.
  * `createClient()` is awaited first because it is process-local, not I/O.
  *

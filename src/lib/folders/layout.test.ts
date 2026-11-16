@@ -105,6 +105,117 @@ describe("resolveLayout", () => {
   });
 });
 
+describe("resolveLayout with a panel this build does not know", () => {
+  const rect = { x: 0, y: 0, w: 12, h: 4 };
+  const known = (id: string, panel: string) => ({
+    id,
+    type: "builtin",
+    panel,
+    layout: rect,
+  });
+  const stored = (sections: unknown[]) => ({
+    v: 1,
+    tabs: [
+      { id: "overview", label: "My overview", kind: "canvas", sections },
+      { id: "people", label: "Team", kind: "people" },
+    ],
+  });
+
+  it("drops the unknown panel and keeps the rest of the layout", () => {
+    const resolved = resolveLayout({
+      preset: "crm",
+      config: stored([
+        known("burn", "burn"),
+        known("forecast", "forecastFromTheFuture"),
+        known("people", "people"),
+      ]),
+      version: 9,
+    });
+    // Not the crm preset: the person's own tabs, labels and order survive.
+    expect(resolved.config.tabs.map((t) => t.label)).toEqual([
+      "My overview",
+      "Team",
+    ]);
+    expect(resolved.config.tabs[0].sections?.map((s) => s.id)).toEqual([
+      "burn",
+      "people",
+    ]);
+    expect(resolved.preset).toBe("crm");
+    expect(resolved.version).toBe(9);
+  });
+
+  it("drops a section of a type this build does not know", () => {
+    const resolved = resolveLayout({
+      preset: "project",
+      config: stored([
+        known("burn", "burn"),
+        {
+          id: "embed",
+          type: "embed",
+          url: "https://example.com",
+          layout: rect,
+        },
+      ]),
+      version: 3,
+    });
+    expect(resolved.config.tabs[0].sections?.map((s) => s.id)).toEqual([
+      "burn",
+    ]);
+  });
+
+  it("keeps a tab whose only section was unknown, as an empty canvas", () => {
+    const resolved = resolveLayout({
+      preset: "project",
+      config: stored([known("forecast", "forecastFromTheFuture")]),
+      version: 3,
+    });
+    expect(resolved.config.tabs[0].label).toBe("My overview");
+    expect(resolved.config.tabs[0].sections).toEqual([]);
+  });
+
+  it("keeps widget sections and kpi props untouched", () => {
+    const widget = {
+      id: "w1",
+      type: "widget",
+      widgetId: "3f2c1a5e-8f0b-4c1d-9a7e-2b6d4c8e1f00",
+      layout: rect,
+    };
+    const kpis = {
+      id: "kpis",
+      type: "builtin",
+      panel: "kpis",
+      props: { cards: ["overdue", "blocked"] },
+      layout: rect,
+    };
+    const resolved = resolveLayout({
+      preset: "project",
+      config: stored([kpis, known("x", "notYet"), widget]),
+      version: 1,
+    });
+    expect(resolved.config.tabs[0].sections).toEqual([kpis, widget]);
+  });
+
+  it("still falls back to the preset when the config is broken another way", () => {
+    // A known panel with an impossible rect is corruption, not a newer build.
+    const resolved = resolveLayout({
+      preset: "crm",
+      config: stored([
+        known("x", "notYet"),
+        { ...known("burn", "burn"), layout: { x: 99, y: 0, w: 12, h: 4 } },
+      ]),
+      version: 5,
+    });
+    expect(resolved.config).toEqual(PRESETS.crm);
+  });
+
+  it("returns a valid stored config by the strict path, unchanged", () => {
+    const config = stored([known("burn", "burn")]);
+    expect(
+      resolveLayout({ preset: "blank", config, version: 2 }).config,
+    ).toEqual(config);
+  });
+});
+
 describe("layoutNeedsBurn", () => {
   const cfg = (tabs: unknown[]) =>
     folderLayoutConfigSchema.parse({ v: 1, tabs });

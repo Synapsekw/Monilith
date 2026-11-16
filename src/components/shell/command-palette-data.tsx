@@ -4,7 +4,7 @@ import { listMyBoardsCached } from "@/lib/boards/queries-cached";
 import { listFoldersCached } from "@/lib/folders/queries-cached";
 import { getFolderAccessForUserCached } from "@/lib/folders/access-cached";
 import { visibleFolders } from "@/lib/folders/nav-filter";
-import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
+import { listVisibleWorkspaces } from "@/lib/org/visible-roster";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { CommandPalette } from "@/components/command-palette";
 
@@ -17,7 +17,8 @@ import { CommandPalette } from "@/components/command-palette";
 export async function CommandPaletteData() {
   const [user, orgId] = await Promise.all([getUser(), getActiveOrgId()]);
   const userId = user?.id ?? "";
-  const workspaces = await listWorkspacesCached(orgId);
+  // Narrowed for a guest: only workspaces holding something shared with them.
+  const workspaces = await listVisibleWorkspaces(orgId);
   const workspaceId = await getActiveWorkspaceId(workspaces);
   const [boards, nav, folderAccess] = await Promise.all([
     listMyBoardsCached(userId),
@@ -33,6 +34,8 @@ export async function CommandPaletteData() {
         memberFolderIds: new Set(folderAccess.folderIds),
       }).map((f) => ({ id: f.id, name: f.name }))}
       workspaces={workspaces}
+      // From the folder-access read above: no extra query.
+      isGuest={folderAccess.isGuest}
     />
   );
 }

@@ -29,7 +29,7 @@ export default async function SecuritySettingsPage() {
         </SettingRow>
         <SettingRow
           label="Password"
-          description="Change the password used to sign in."
+          description="Change the password used to sign in. Connected apps will need to reconnect."
         >
           <Button asChild variant="outline" size="sm">
             <Link href="/change-password">Change password</Link>

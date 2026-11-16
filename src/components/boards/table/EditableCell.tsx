@@ -32,7 +32,12 @@ import {
 import { isStatusValueComplete } from "@/lib/boards/overdue";
 import { celebrateStatusEdit } from "@/components/ui/done-burst";
 import { useIsCellEditing } from "./editing-store";
-import { CELL_CENTER, type CellControls } from "./shared";
+import {
+  CELL_CENTER,
+  CELL_START,
+  type CellSurface,
+  type EditableCellControls,
+} from "./shared";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -53,6 +58,14 @@ function statusOptionChanged(prev: unknown, next: unknown): boolean {
  * swaps to the kind's `CellEditor`. Commits write through `setCell`
  * (optimistically); an explicit clear (Status "Clear", emptied number/date,
  * empty multi-select) routes through `clearCellValue`, which deletes the row.
+ *
+ * View only (`controls.canEdit === false`): the cell renders its value and
+ * nothing that writes — no edit activation, no editor, no upload, timer or
+ * relation picker. It is not inert: links, linked-item chips and file previews
+ * still open, the cell stays in the tab order and its text can be selected.
+ *
+ * Also rendered by the item panel's Fields section (`surface="panel"`,
+ * `align="start"`): same controls, same writes, its own edit-mode key.
  */
 export const EditableCell = memo(function EditableCell({
   item,
@@ -61,20 +74,31 @@ export const EditableCell = memo(function EditableCell({
   controls,
   overdue = false,
   dependents,
+  surface,
+  align = "center",
 }: {
   item: Item;
   column: Column;
   value: CacheCellValue["value"];
-  controls: CellControls;
+  controls: EditableCellControls;
   /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
   overdue?: boolean;
   /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
   dependents?: number;
+  /** Absent in the table. `"panel"` keys edit mode to the item panel's copy. */
+  surface?: CellSurface;
+  /** Value alignment: centered in the table grid, start in the panel list. */
+  align?: "center" | "start";
 }) {
   const { setEditing, setCell, clearCellValue, members } = controls;
+  const readOnly = !controls.canEdit;
   // Per-cell subscription (see ./editing-store): the ~300 cells that are NOT
   // being edited select a stable `false` and never re-render on a click.
-  const isEditing = useIsCellEditing(item.id, column.id);
+  // A viewer's cell is never in edit mode, whatever the store says.
+  const isEditing = useIsCellEditing(item.id, column.id, surface) && !readOnly;
+  const cellAlign = align === "start" ? CELL_START : CELL_CENTER;
+  const startEditing = () =>
+    setEditing({ itemId: item.id, columnId: column.id, surface });
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
   const target = presenceTarget.cell(item.id, column.id);
@@ -98,7 +122,7 @@ export const EditableCell = memo(function EditableCell({
       <div
         aria-label={accessibleName}
         aria-disabled
-        className={`flex h-full items-center truncate px-2 opacity-50 ${CELL_CENTER}`}
+        className={`flex h-full items-center truncate px-2 opacity-50 ${cellAlign}`}
       >
         <CellRenderer
           kind={column.kind}
@@ -118,13 +142,18 @@ export const EditableCell = memo(function EditableCell({
   if (column.kind === "files") {
     const files = filesForCell(controls.cache, item.id, column.id);
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         <FilesCell
           files={files}
           previewUrls={controls.filesPreviewUrls ?? {}}
           thumbUrls={controls.filesThumbUrls}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
-          onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
+          // View only: previews open, nothing uploads.
+          onUpload={
+            readOnly
+              ? undefined
+              : (f) => controls.uploadColumnFile(item.id, column.id, f)
+          }
         />
       </div>
     );
@@ -137,11 +166,12 @@ export const EditableCell = memo(function EditableCell({
     const estimate =
       (value as { estimateSeconds?: number } | null)?.estimateSeconds ?? null;
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         <TimeTrackingCell
           entries={entries}
           estimateSeconds={estimate}
           currentUserId={controls.currentUserId}
+          readOnly={readOnly}
           onStart={() => controls.startTimer(item.id, column.id)}
           onStop={(id) => controls.stopTimer(id)}
           onAddManual={(date, secs) =>
@@ -167,11 +197,13 @@ export const EditableCell = memo(function EditableCell({
     };
     const targetBoardId = relSettings.target_board_id ?? "";
     return (
-      <div className={`flex h-full items-center px-1 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-1 ${cellAlign}`}>
         <RelationCell
           links={links}
           allowMultiple={relSettings.allow_multiple ?? true}
           targetBoardId={targetBoardId || undefined}
+          // View only: the chips stay links to the linked item; no picker.
+          readOnly={readOnly}
           loadCandidates={(search) =>
             targetBoardId
               ? listRelationCandidates(targetBoardId, search)
@@ -211,7 +243,7 @@ export const EditableCell = memo(function EditableCell({
     const values = mirrorValuesForCell(controls.cache, item.id, column);
     const target = mirrorTargetColumnFor(controls.cache, column);
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         {target ? (
           <MirrorCell
             values={values}
@@ -229,7 +261,7 @@ export const EditableCell = memo(function EditableCell({
     return (
       <div
         ref={cellRef}
-        className={`relative flex items-center px-2 ${CELL_CENTER}`}
+        className={`relative flex items-center px-2 ${cellAlign}`}
       >
         <CellEditor
           kind={column.kind}
@@ -241,16 +273,16 @@ export const EditableCell = memo(function EditableCell({
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
             if (column.kind === "status" && statusOptionChanged(value, v)) {
-              // "Done" is the Command Center's rule, not a second one: the
-              // board's FIRST status column holding a done/complete option
-              // (@/lib/boards/overdue, mirroring _board_health_flags). A
-              // second status column never completes an item, so it pops
-              // without a burst.
-              const first = controls.statusColumn;
+              // "Done" is the board's Work tracking rule, not a second one:
+              // the rule's status column holding one of its done options
+              // (@/lib/boards/overdue, twin of public.item_facts). Any other
+              // status column never completes an item, so it pops without a
+              // burst.
+              const rule = controls.workRule;
               const becameDone =
-                first?.id === column.id &&
-                !isStatusValueComplete(value, first) &&
-                isStatusValueComplete(v, first);
+                rule.statusColumn?.id === column.id &&
+                !isStatusValueComplete(value, rule) &&
+                isStatusValueComplete(v, rule);
               celebrateStatusEdit(() => cellRef.current, becameDone);
             }
             // Multi-value kinds (people, multi-select dropdown) commit once
@@ -271,20 +303,46 @@ export const EditableCell = memo(function EditableCell({
     );
   }
 
+  // View only: the value, with no edit activation (click, Enter or Space), no
+  // pointer cursor and no hover frame. `role="group"` keeps the accessible
+  // name valid on a non-interactive box; it stays focusable so the keyboard
+  // can still walk the row, and the text is selectable for copy.
+  if (readOnly) {
+    return (
+      <div
+        role="group"
+        tabIndex={0}
+        aria-label={accessibleName}
+        className={`focus-visible:ring-ring relative flex h-full items-center truncate px-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${cellAlign}`}
+      >
+        <CellRenderer
+          kind={column.kind}
+          value={value}
+          settings={settings}
+          members={members}
+          overdue={overdue}
+          dependents={dependents}
+        />
+        <PresenceRing target={target} />
+        <FlashHighlight target={target} />
+      </div>
+    );
+  }
+
   return (
     <div
       ref={cellRef}
       role="button"
       tabIndex={0}
       aria-label={accessibleName}
-      onClick={() => setEditing({ itemId: item.id, columnId: column.id })}
+      onClick={startEditing}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          setEditing({ itemId: item.id, columnId: column.id });
+          startEditing();
         }
       }}
-      className={`focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-2 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${CELL_CENTER}`}
+      className={`focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-2 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${cellAlign}`}
     >
       <CellRenderer
         kind={column.kind}
