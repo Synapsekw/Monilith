@@ -3,17 +3,21 @@ import type { Database } from "@/types/database.types";
 type PendingInvitationRow =
   Database["public"]["Functions"]["my_pending_invitations"]["Returns"][number];
 
+type FolderContextKey =
+  "inviter_name" | "folder_id" | "folder_name" | "folder_count";
+
 /**
  * One pending invitation as returned by the my_pending_invitations RPC.
  *
- * The folder context (migration 20261115173702) is optional here on purpose:
- * the app must keep working against a database where that migration is not
- * applied yet, and every consumer falls back to the org-only wording when the
- * fields are absent. `folder_*` are set when the org invitation came with
- * pending folder invitations (a folder invite); `folder_id` / `folder_name`
- * are the first of them and `folder_count` is how many there are.
+ * The folder context (migration 20261115173702) is optional and nullable here
+ * on purpose. The generated types call these four columns non-null, because
+ * Postgres does not report nullability for a function's result columns, but
+ * they come from outer joins: a plain org invitation has no folder and an
+ * inviter whose account is gone has no name. Every consumer falls back to the
+ * org-only wording when they are absent. `folder_id` / `folder_name` are the
+ * first pending folder invitation and `folder_count` is how many there are.
  */
-export type PendingInvitation = PendingInvitationRow & {
+export type PendingInvitation = Omit<PendingInvitationRow, FolderContextKey> & {
   inviter_name?: string | null;
   folder_id?: string | null;
   folder_name?: string | null;

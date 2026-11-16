@@ -3121,10 +3121,13 @@ export type Database = {
         Row: {
           access_token_expires_at: string;
           access_token_hash: string;
+          bridge_healed_at: string | null;
           bridge_secret_id: string | null;
           client_id: string;
           created_at: string;
           id: string;
+          last_used_at: string;
+          prev_refresh_expires_at: string | null;
           prev_refresh_rotated_at: string | null;
           prev_refresh_token_hash: string | null;
           refresh_token_expires_at: string;
@@ -3135,10 +3138,13 @@ export type Database = {
         Insert: {
           access_token_expires_at: string;
           access_token_hash: string;
+          bridge_healed_at?: string | null;
           bridge_secret_id?: string | null;
           client_id: string;
           created_at?: string;
           id?: string;
+          last_used_at?: string;
+          prev_refresh_expires_at?: string | null;
           prev_refresh_rotated_at?: string | null;
           prev_refresh_token_hash?: string | null;
           refresh_token_expires_at: string;
@@ -3149,10 +3155,13 @@ export type Database = {
         Update: {
           access_token_expires_at?: string;
           access_token_hash?: string;
+          bridge_healed_at?: string | null;
           bridge_secret_id?: string | null;
           client_id?: string;
           created_at?: string;
           id?: string;
+          last_used_at?: string;
+          prev_refresh_expires_at?: string | null;
           prev_refresh_rotated_at?: string | null;
           prev_refresh_token_hash?: string | null;
           refresh_token_expires_at?: string;
@@ -4588,6 +4597,10 @@ export type Database = {
         Args: { p_folder_id: string };
         Returns: string[];
       };
+      _folder_share_blockers: {
+        Args: { p_filed_by?: string; p_folder_id: string; p_user_id: string };
+        Returns: number;
+      };
       _health_digest_ping: { Args: never; Returns: undefined };
       _mono_brain_for: { Args: { p_owner: string }; Returns: string };
       _org_health_digest: {
@@ -4629,6 +4642,29 @@ export type Database = {
         Returns: string;
       };
       _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
+      _work_item_flags: {
+        Args: { p_board_ids: string[]; p_today: string };
+        Returns: {
+          board_id: string;
+          due_date: string;
+          group_id: string;
+          has_owner: boolean;
+          has_people_col: boolean;
+          has_status: boolean;
+          is_done: boolean;
+          is_incomplete: boolean;
+          is_overdue: boolean;
+          item_created_at: string;
+          item_id: string;
+          item_name: string;
+          item_updated_at: string;
+          owner_ids: string[];
+          status_column_id: string;
+          status_label: string;
+        }[];
+      };
+      _work_time_zone: { Args: { p_org_id: string }; Returns: string };
+      _work_today: { Args: { p_org_id: string }; Returns: string };
       accept_invitation: { Args: { p_invite_id: string }; Returns: string };
       account_deletion_blocking_fks: {
         Args: never;
@@ -4748,6 +4784,7 @@ export type Database = {
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_full_orgs: { Args: never; Returns: string[] };
+      auth_user_guest_orgs: { Args: never; Returns: string[] };
       auth_user_orgs: { Args: never; Returns: string[] };
       automation_ai_apply: {
         Args: { p_action: Json; p_job: string };
@@ -5255,6 +5292,7 @@ export type Database = {
           board_name: string;
           board_position: number;
           done: number;
+          done_dated: number;
           due_this_week: number;
           due_this_week_not_started: number;
           group_color: string;
@@ -5404,6 +5442,14 @@ export type Database = {
         Args: { p_group_id: string; p_org_id: string };
         Returns: boolean;
       };
+      guest_visible_members: {
+        Args: never;
+        Returns: {
+          org_id: string;
+          user_id: string;
+        }[];
+      };
+      guest_visible_workspace_ids: { Args: never; Returns: string[] };
       has_org_role: {
         Args: {
           p_org_id: string;
@@ -5489,7 +5535,11 @@ export type Database = {
         Args: never;
         Returns: {
           created_at: string;
+          folder_count: number;
+          folder_id: string;
+          folder_name: string;
           id: string;
+          inviter_name: string;
           org_id: string;
           org_name: string;
           role: Database["public"]["Enums"]["org_role"];
@@ -5501,6 +5551,15 @@ export type Database = {
       };
       oauth_bridge_rotate_secret: {
         Args: { p_name: string; p_old_secret_id: string; p_secret: string };
+        Returns: string;
+      };
+      oauth_bridge_swap_secret: {
+        Args: {
+          p_expected_secret_id: string;
+          p_name: string;
+          p_secret: string;
+          p_token_id: string;
+        };
         Returns: string;
       };
       org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
@@ -5781,6 +5840,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      shares_full_org_with: { Args: { p_user: string }; Returns: boolean };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
       start_timer: {
         Args: { p_column_id: string; p_item_id: string };
