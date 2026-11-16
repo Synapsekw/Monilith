@@ -16,6 +16,7 @@ const {
   requireAiEntitlement: vi.fn(),
 }));
 vi.mock("@/lib/focus/queries", () => ({
+  FOCUS_MAX_LIMIT: 50,
   getFocusTodayCore: (...a: unknown[]) => getFocusTodayCore(...a),
 }));
 vi.mock("@/lib/ai/entitlement", () => ({
@@ -252,7 +253,8 @@ describe("getMyWorkPageData focus and ask", () => {
     today: "2026-11-14",
     timezoneAssumed: false,
     items: [],
-    totals: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    totals: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    ordering: "current",
   };
 
   function arrange() {
@@ -276,6 +278,8 @@ describe("getMyWorkPageData focus and ask", () => {
       orgId: "o1",
       userId: "u1",
       orgTimeZone: null,
+      // The function's own maximum: "Show more" reveals rows from memory.
+      limit: 50,
     });
   });
 

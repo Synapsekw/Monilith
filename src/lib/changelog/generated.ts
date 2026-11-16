@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-16",
+    kind: "improved",
+    title: "Act on your Today list",
+    description:
+      "Mark items done or change their due date right from Today on My Work, with what is due today shown first.",
+  },
+  {
+    date: "2026-11-16",
     kind: "new",
     title:
       "The assistant can find projects and people, follow linked items and comment",

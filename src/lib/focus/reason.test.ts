@@ -11,6 +11,19 @@ const base: FocusFacts = {
 };
 
 describe("focusReason", () => {
+  it("words an item due today, with who is waiting when someone is", () => {
+    expect(focusReason({ ...base, tier: 0, dueInDays: 0 })).toBe("Due today");
+    expect(
+      focusReason({
+        ...base,
+        tier: 0,
+        dueInDays: 0,
+        waitingCount: 1,
+        waiting: [{ name: "Vendor contract", assignees: ["Ana Kovac"] }],
+      }),
+    ).toBe('Due today · Ana Kovac\'s "Vendor contract" waits on this');
+  });
+
   it("words an overdue item, singular and plural", () => {
     expect(focusReason({ ...base, daysOverdue: 1 })).toBe("1 day overdue");
     expect(focusReason({ ...base, daysOverdue: 4 })).toBe("4 days overdue");

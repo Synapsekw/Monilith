@@ -5241,6 +5241,17 @@ export type Database = {
           severity: number;
         }[];
       };
+      folder_attention_page: {
+        Args: {
+          p_board_id?: string;
+          p_folder_id: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_reason?: string;
+          p_stage_key?: string;
+        };
+        Returns: Json;
+      };
       folder_burn: {
         Args: { p_folder_id: string };
         Returns: {
@@ -5275,6 +5286,17 @@ export type Database = {
           id: string;
           state: string;
         }[];
+      };
+      folder_kpi_items: {
+        Args: {
+          p_board_id?: string;
+          p_folder_id: string;
+          p_kpi: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_stage_key?: string;
+        };
+        Returns: Json;
       };
       folder_load: {
         Args: {
@@ -5312,6 +5334,7 @@ export type Database = {
           unassigned: number;
         }[];
       };
+      folder_rollup_packed: { Args: { p_folder_id: string }; Returns: Json };
       folder_timeline: {
         Args: { p_folder_id: string; p_limit?: number };
         Returns: Json;
@@ -5328,6 +5351,7 @@ export type Database = {
           user_id: string;
         }[];
       };
+      folder_workload_packed: { Args: { p_folder_id: string }; Returns: Json };
       get_focus_today: {
         Args: {
           p_folder_id?: string;
@@ -5348,6 +5372,34 @@ export type Database = {
           status_label: string;
           tier: number;
           tier_total: number;
+          unread_count: number;
+          waiting: Json;
+          waiting_count: number;
+        }[];
+      };
+      get_focus_today_v2: {
+        Args: {
+          p_folder_id?: string;
+          p_limit?: number;
+          p_org_id: string;
+          p_stall_days?: number;
+          p_today: string;
+        };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          can_edit: boolean;
+          days_overdue: number;
+          days_quiet: number;
+          due_date: string;
+          group_name: string;
+          has_due: boolean;
+          has_status: boolean;
+          item_id: string;
+          item_name: string;
+          status_label: string;
+          tier: number;
+          tier_totals: Json;
           unread_count: number;
           waiting: Json;
           waiting_count: number;

@@ -47,7 +47,7 @@ export const TOOL_PROSE: Record<ToolName, string> = {
   add_comment:
     "Post a comment on an item as you, optionally mentioning people, who are then notified. Cannot edit or delete a comment.",
   get_focus_today:
-    "See what to work on first today: your overdue, blocking, due-soon, awaiting-reply and stalled items, ranked, with the reason for each.",
+    "See what to work on first today: what is due today, then your overdue, blocking, due-soon, awaiting-reply and stalled items, ranked, with the reason for each.",
   create_item: "Add a new item to a group, optionally setting field values.",
   update_item: "Rename an item and/or change its field values.",
   create_attachment_upload:

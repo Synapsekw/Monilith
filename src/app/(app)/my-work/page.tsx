@@ -8,8 +8,10 @@ import { PageHeader } from "@/components/ui/page-header";
  * "My Work" — the primary persona's #1 job: what to do first today, then
  * everything assigned to me across every board, grouped by when it's due. Both
  * come from ONE server read (RSC) on first paint. The grouped list is a pure
- * server render; the Today block above it holds a single piece of client state
- * (its "Show all" toggle), which reveals rows already loaded — no refetch.
+ * server render; the Today block above it is a client component: "Show more"
+ * reveals rows already loaded (no refetch), and its row actions (mark done,
+ * change due date) are Server Actions that revalidate this page, so the fresh
+ * render of both the block and the list comes back with the action itself.
  * Each row deep-links to the item on its board via `?item=` (opens the
  * ItemPanel) — see MyWorkList and TodayFocus.
  */
