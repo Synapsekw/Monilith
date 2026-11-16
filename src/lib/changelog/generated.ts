@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Connected apps expire when unused",
+    description:
+      "A connected app that is not used for 90 days is disconnected, changing your password disconnects every app, and each app now shows when it was last used.",
+  },
+  {
     date: "2026-11-15",
     kind: "fixed",
     title: "Guests see only who they work with",
