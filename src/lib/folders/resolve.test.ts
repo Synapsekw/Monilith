@@ -12,8 +12,30 @@ import {
 } from "./resolve";
 import { FOLDER_DATA_ERROR, FOLDER_GONE_ERROR } from "./types";
 
+/**
+ * The four functions of 20261116112338_folder_drilldown. In THIS file the
+ * database does not have them yet (PostgREST answers PGRST202), so every
+ * test here exercises the path that keeps the app working before the
+ * migration is applied. The path with them present is covered in
+ * resolve.drilldown.test.ts.
+ */
+const NOT_YET = new Set([
+  "folder_rollup_packed",
+  "folder_workload_packed",
+  "folder_attention_page",
+  "folder_kpi_items",
+]);
 function clientWith(rpc: (fn: string, args: unknown) => unknown) {
-  return { rpc: vi.fn(rpc) } as unknown as SupabaseClient<Database>;
+  return {
+    rpc: vi.fn((fn: string, args: unknown) =>
+      NOT_YET.has(fn)
+        ? Promise.resolve({
+            data: null,
+            error: { code: "PGRST202", message: "function not found" },
+          })
+        : rpc(fn, args),
+    ),
+  } as unknown as SupabaseClient<Database>;
 }
 
 describe("resolveFolderRollup", () => {

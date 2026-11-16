@@ -30,9 +30,9 @@ import type { BurnRow, FolderPayload, RollupRow } from "@/lib/folders/types";
 import { SectionChrome } from "@/components/folders/edit/SectionChrome";
 
 /**
- * Rows shown per board in "Needs attention". `buildFolderPayload` asks the RPC
- * for `ATTENTION_LIMIT` (100) so the stage filter below classifies from a wide
- * enough pool; each board expands to at most this many of them.
+ * Rows shown per board in "Needs attention" when the first-paint sample is
+ * the folder's whole list (see `attentionComplete` below). Otherwise each
+ * board's rows are read on demand, a page at a time.
  */
 const ATTENTION_SHOWN = 20;
 
@@ -105,17 +105,29 @@ export function OverviewTab({
   const burn =
     burnRows === null ? null : burnSeries(burnRows, stage, payload.todayISO);
   const anyDue = hasDatedItems(rows);
-  // The RPC returns the folder's top ATTENTION_LIMIT (100) rows by severity;
-  // narrowing them to the selected board and stage happens here, on the client.
+  // The first paint carries the folder's top 100 attention rows and the count
+  // of ALL of them. Narrowing those rows to the selected board and stage HERE
+  // is exact only when they are the whole list. When the folder has more
+  // (or the count is unknown), filtering the sample would silently drop the
+  // matching rows past the first 100, so nothing is taken from it: each board
+  // reads its own rows, with the filter in the query, when it is expanded.
+  // An absent count (older payloads) means the sample is complete.
+  const attentionComplete =
+    payload.attention !== null &&
+    (payload.attentionTotal === undefined ||
+      (payload.attentionTotal !== null &&
+        payload.attentionTotal <= payload.attention.length));
   const attentionInScope =
     payload.attention === null
       ? null
-      : payload.attention.filter(
-          (a) =>
-            (board === null || a.boardId === board) &&
-            (stage === null ||
-              (a.groupName !== null && stageKey(a.groupName) === stage)),
-        );
+      : !attentionComplete
+        ? []
+        : payload.attention.filter(
+            (a) =>
+              (board === null || a.boardId === board) &&
+              (stage === null ||
+                (a.groupName !== null && stageKey(a.groupName) === stage)),
+          );
   // One row per board. Counts come from the (already filtered) rollup rows, so
   // they are totals; each board expands to at most ATTENTION_SHOWN of the
   // RPC's top-N sample.
@@ -177,6 +189,8 @@ export function OverviewTab({
             burn={burnRows}
             stage={stage}
             board={board}
+            // Item lists are off while customizing: a click there edits.
+            folderId={editing ? undefined : payload.folder.id}
           />
         );
       case "burn":
@@ -214,6 +228,11 @@ export function OverviewTab({
             attention={attentionInScope}
             caption={attentionCaption}
             groups={groups}
+            remote={
+              attentionComplete
+                ? undefined
+                : { folderId: payload.folder.id, stage }
+            }
             onRetry={onRetry}
           />
         );

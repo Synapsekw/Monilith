@@ -13,7 +13,11 @@ vi.mock("@/lib/org/active", () => ({
   })),
 }));
 const resolveFolderTimeline = vi.fn();
+const resolveFolderAttention = vi.fn();
+const resolveFolderKpiItems = vi.fn();
 vi.mock("./resolve", () => ({
+  resolveFolderAttention: (...a: unknown[]) => resolveFolderAttention(...a),
+  resolveFolderKpiItems: (...a: unknown[]) => resolveFolderKpiItems(...a),
   resolveFolderWorkload: vi.fn(async () => ({ ok: true, rows: [] })),
   resolveFolderTimeline: (...a: unknown[]) => resolveFolderTimeline(...a),
 }));
@@ -201,6 +205,8 @@ import {
   attachDashboardToFolder,
   createFolder,
   deleteFolder,
+  getFolderAttention,
+  getFolderKpiItems,
   getFolderTimeline,
   getFolderWorkload,
   moveBoardToFolder,
@@ -353,6 +359,74 @@ describe("folder actions", () => {
       ok: true,
       data: [],
     });
+  });
+
+  it("getFolderAttention validates its input and passes the filter to the query", async () => {
+    expect((await getFolderAttention({ folderId: "nope" })).ok).toBe(false);
+    expect(
+      (await getFolderAttention({ folderId: FOLDER, boardId: "not-a-uuid" }))
+        .ok,
+    ).toBe(false);
+    expect(
+      (await getFolderAttention({ folderId: FOLDER, limit: 101 })).ok,
+    ).toBe(false);
+    expect(resolveFolderAttention).not.toHaveBeenCalled();
+    resolveFolderAttention.mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: 240,
+    });
+    expect(
+      await getFolderAttention({
+        folderId: FOLDER,
+        boardId: BOARD,
+        stageKey: "build",
+        limit: 20,
+        offset: 40,
+      }),
+    ).toEqual({ ok: true, data: { rows: [], total: 240 } });
+    expect(resolveFolderAttention).toHaveBeenCalledWith(
+      expect.anything(),
+      FOLDER,
+      20,
+      { boardId: BOARD, stageKey: "build", offset: 40 },
+    );
+    resolveFolderAttention.mockResolvedValueOnce({ ok: false, error: "gone" });
+    expect(await getFolderAttention({ folderId: FOLDER })).toEqual({
+      ok: false,
+      error: "gone",
+    });
+  });
+
+  it("getFolderKpiItems accepts only a known list and a bounded page", async () => {
+    for (const bad of [
+      { folderId: "nope", kpi: "overdue" },
+      { folderId: FOLDER, kpi: "everything" },
+      { folderId: FOLDER, kpi: "overdue", limit: 500 },
+      { folderId: FOLDER, kpi: "overdue", offset: -1 },
+    ])
+      expect((await getFolderKpiItems(bad as never)).ok).toBe(false);
+    expect(resolveFolderKpiItems).not.toHaveBeenCalled();
+    resolveFolderKpiItems.mockResolvedValueOnce({
+      ok: true,
+      rows: [],
+      total: 402,
+    });
+    expect(
+      await getFolderKpiItems({
+        folderId: FOLDER,
+        kpi: "overdue",
+        boardId: BOARD,
+        stageKey: null,
+        limit: 50,
+        offset: 50,
+      }),
+    ).toEqual({ ok: true, data: { rows: [], total: 402 } });
+    expect(resolveFolderKpiItems).toHaveBeenCalledWith(
+      expect.anything(),
+      FOLDER,
+      { kpi: "overdue", boardId: BOARD, stageKey: null, limit: 50, offset: 50 },
+    );
   });
 
   it("getFolderTimeline rejects a bad id and returns parsed data", async () => {

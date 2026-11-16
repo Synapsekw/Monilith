@@ -129,6 +129,58 @@ export type AttentionRow = {
   severity: number;
 };
 
+/**
+ * The item lists `folder_kpi_items` can return: `total` plus every count
+ * column of `folder_rollup`, under the column's own name. The SQL predicate
+ * for each is folder_rollup's filter for that column, so a list's total
+ * equals the number the page shows for the same board and stage.
+ */
+export const KPI_ITEM_KINDS = [
+  "total",
+  "done",
+  "in_progress",
+  "overdue",
+  "not_started",
+  "blocked",
+  "stale",
+  "unassigned",
+  "incomplete",
+  "planned_by_today",
+  "due_this_week",
+  "due_this_week_not_started",
+  "done_dated",
+] as const;
+export type KpiItemKind = (typeof KPI_ITEM_KINDS)[number];
+
+/** One item behind a KPI number. */
+export type KpiItemRow = {
+  itemId: string;
+  itemName: string;
+  boardId: string;
+  boardName: string;
+  groupId: string | null;
+  groupName: string | null;
+  dueOn: string | null;
+  doneOn: string | null;
+  lastTouched: string | null;
+  isDone: boolean;
+  isOverdue: boolean;
+};
+
+/** One bounded page of a KPI's items, with the count of ALL matching items. */
+export type KpiItemsPage = { rows: KpiItemRow[]; total: number };
+
+/**
+ * One bounded page of attention rows. `total` is the count of ALL matching
+ * rows; null when it cannot be known (a database without
+ * `folder_attention_page`, where the old read stopped at its 100-row limit).
+ */
+export type AttentionPage = { rows: AttentionRow[]; total: number | null };
+
+/** Shown when the item list's function is not in the database yet. */
+export const KPI_ITEMS_UNAVAILABLE =
+  "This list is not available yet. Try again later.";
+
 export type WorkloadRow = {
   userId: string | null;
   boardId: string;
@@ -175,6 +227,14 @@ export type FolderPayload = {
   /** Board × week load grid: skipped, failed, or the server's weeks + rows. */
   load: FolderLoad;
   attention: AttentionRow[] | null;
+  /** Count of ALL attention rows in the folder. `attention` holds the first
+   *  ATTENTION_LIMIT of them; when this is larger (or null: unknown), the
+   *  page reads each board's rows on demand instead of filtering the sample.
+   *  Undefined (older payloads, fixtures) means the sample is complete. */
+  attentionTotal?: number | null;
+  /** True when the rollup read was cut by a row cap: the numbers on the page
+   *  are then incomplete and the page says so. */
+  rollupCapped?: boolean;
   briefs: IntelligenceBrief[];
   members: FolderMember[];
   /** Who the folder is shared with (avatar stack) and whether the caller may manage it. */

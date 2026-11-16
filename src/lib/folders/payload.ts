@@ -24,14 +24,15 @@ import { getFolderAccessHead } from "./sharing-queries";
 import type { FolderLoad, FolderPayload } from "./types";
 
 /**
- * Rows `folder_attention` returns for the first paint.
+ * Attention rows on the first paint: the folder's most urgent, unfiltered,
+ * with the count of all of them (`attentionTotal`).
  *
- * The Overview panel SHOWS 20, but it narrows the list to the selected stage
- * on the client — i.e. it classifies AFTER the SQL LIMIT. At 20 a folder whose
- * worst 20 items all sit in one stage left every other stage looking clean.
- * 100 is the RPC's own hard ceiling (`least(greatest(p_limit, 1), 100)`), so
- * this asks for the widest pool it will give; Overview slices to 20 and
- * captions the truncation.
+ * The Overview narrows this list to the selected board and stage on the
+ * client. That is exact only while the list is COMPLETE (total <= rows on
+ * the page). When the folder has more, the Overview does not filter this
+ * sample (matching rows past the limit would be lost): it reads each board's
+ * rows on demand with the filter in the query (`getFolderAttention`). 100 is
+ * the RPC's own hard ceiling.
  */
 export const ATTENTION_LIMIT = 100;
 
@@ -122,6 +123,8 @@ export async function buildFolderPayload(
     burnPacked: burn && burn.ok ? burn.packed : null,
     load: folderLoad,
     attention: attention.ok ? attention.rows : null,
+    attentionTotal: attention.ok ? attention.total : null,
+    rollupCapped: rollup.ok && rollup.capped === true,
     briefs,
     members: members.map((m) => ({
       userId: m.userId,

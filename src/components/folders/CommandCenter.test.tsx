@@ -103,6 +103,16 @@ describe("CommandCenter", () => {
     expect(routerRefresh).not.toHaveBeenCalled();
   });
 
+  it("says the numbers are incomplete when the rollup read was cut, and only then", () => {
+    const { unmount } = render(wrap({ payload: folderFixture() }));
+    expect(screen.queryByTestId("rollup-capped")).toBeNull();
+    unmount();
+    render(wrap({ payload: { ...folderFixture(), rollupCapped: true } }));
+    expect(screen.getByTestId("rollup-capped")).toHaveTextContent(
+      "the numbers on this page are incomplete",
+    );
+  });
+
   it("renders the header, snapshot chip, tab strip and filter bar from the payload", () => {
     render(wrap({ payload: folderFixture() }));
     expect(

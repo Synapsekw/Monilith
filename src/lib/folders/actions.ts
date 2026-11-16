@@ -15,16 +15,26 @@ import {
   attachDashboardSchema,
   createFolderSchema,
   deleteFolderSchema,
+  folderAttentionPageSchema,
   folderIdSchema,
+  folderKpiItemsSchema,
   moveBoardToFolderSchema,
   renameFolderSchema,
 } from "@/lib/validations/folders";
 import type { MoveConfirm } from "./sharing-types";
-import { resolveFolderTimeline, resolveFolderWorkload } from "./resolve";
+import {
+  resolveFolderAttention,
+  resolveFolderKpiItems,
+  resolveFolderTimeline,
+  resolveFolderWorkload,
+} from "./resolve";
 import type { FolderTimelineData } from "@/lib/boards/timeline-context";
 import {
   FOLDER_GONE_ERROR,
+  type AttentionPage,
   type FolderSummary,
+  type KpiItemKind,
+  type KpiItemsPage,
   type WorkloadRow,
 } from "./types";
 
@@ -319,16 +329,71 @@ export async function attachDashboardToFolder(input: {
   return { ok: true, data: undefined };
 }
 
-/** People tab data — fetched once on first open into TanStack Query (spec §6). */
+/**
+ * People tab data — fetched once on first open into TanStack Query (spec §6).
+ * `capped: true` (beside `data`) means a row cap cut the read.
+ */
 export async function getFolderWorkload(input: {
   folderId: string;
-}): Promise<ActionResult<WorkloadRow[]>> {
+}): Promise<ActionResult<WorkloadRow[]> & { capped?: boolean }> {
   const parsed = folderIdSchema.safeParse(input.folderId);
   if (!parsed.success) return fail("Invalid folder.");
   const supabase = await createClient();
   const res = await resolveFolderWorkload(supabase, parsed.data);
   if (!res.ok) return fail(res.error);
-  return { ok: true, data: res.rows };
+  return { ok: true, data: res.rows, ...(res.capped ? { capped: true } : {}) };
+}
+
+/**
+ * One bounded page of a board's (or the folder's) attention rows, filtered
+ * in the query. A read, not a mutation: called on demand when a board is
+ * expanded in "Needs attention", into TanStack Query. RLS client; the RPC
+ * checks folder access itself.
+ */
+export async function getFolderAttention(input: {
+  folderId: string;
+  boardId?: string | null;
+  stageKey?: string | null;
+  limit?: number;
+  offset?: number;
+}): Promise<ActionResult<AttentionPage>> {
+  const parsed = folderAttentionPageSchema.safeParse(input);
+  if (!parsed.success) return fail("Invalid request.");
+  const supabase = await createClient();
+  const res = await resolveFolderAttention(
+    supabase,
+    parsed.data.folderId,
+    parsed.data.limit ?? 20,
+    {
+      boardId: parsed.data.boardId,
+      stageKey: parsed.data.stageKey,
+      offset: parsed.data.offset,
+    },
+  );
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: { rows: res.rows, total: res.total } };
+}
+
+/**
+ * The items behind one KPI number, one bounded page per call (the drill-down
+ * opened from a KPI card). A read on the RLS client; the RPC checks folder
+ * access itself.
+ */
+export async function getFolderKpiItems(input: {
+  folderId: string;
+  kpi: KpiItemKind;
+  boardId?: string | null;
+  stageKey?: string | null;
+  limit?: number;
+  offset?: number;
+}): Promise<ActionResult<KpiItemsPage>> {
+  const parsed = folderKpiItemsSchema.safeParse(input);
+  if (!parsed.success) return fail("Invalid request.");
+  const { folderId, ...q } = parsed.data;
+  const supabase = await createClient();
+  const res = await resolveFolderKpiItems(supabase, folderId, q);
+  if (!res.ok) return fail(res.error);
+  return { ok: true, data: { rows: res.rows, total: res.total } };
 }
 
 /** Timeline tab data — fetched once when the tab first mounts (TanStack Query). */

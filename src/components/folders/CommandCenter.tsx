@@ -196,6 +196,17 @@ export function CommandCenter({ payload, widgets }: CommandCenterProps) {
             onStage={setStage}
             onBoard={setBoard}
           />
+          {payload.rollupCapped ? (
+            <p
+              role="status"
+              data-testid="rollup-capped"
+              className="text-muted-foreground rounded-lg border px-3 py-2 text-xs"
+            >
+              This folder has more boards and groups than one read returns, so
+              the numbers on this page are incomplete: only the first{" "}
+              {rollup.length.toLocaleString("en-US")} groups are counted.
+            </p>
+          ) : null}
           {activeTab?.kind === "stages" ? (
             <StagesTab
               rows={stageTabRows}

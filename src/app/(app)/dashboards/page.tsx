@@ -41,7 +41,11 @@ export default async function DashboardsIndex() {
         description="Every folder is a project with its own command center."
       />
       {gallery.ok ? (
-        <FolderGallery rows={gallery.rows} workspaceId={workspaceId} />
+        <FolderGallery
+          rows={gallery.rows}
+          workspaceId={workspaceId}
+          capped={gallery.capped === true}
+        />
       ) : (
         <EmptyState>Couldn&apos;t load folders. {gallery.error}</EmptyState>
       )}
