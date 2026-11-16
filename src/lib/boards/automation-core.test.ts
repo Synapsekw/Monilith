@@ -149,6 +149,24 @@ describe("createAutomationCore — insert", () => {
     );
     expect(r).toEqual({ ok: false, error: "denied by RLS" });
   });
+
+  it("tells a view-only caller that editors own automations, not the raw policy text", async () => {
+    // What Postgres answers when the INSERT fails `can_edit_board(board_id)`.
+    const { client } = makeAutomationClient({
+      insertError:
+        'new row violates row-level security policy for table "automations"',
+      insertErrorCode: "42501",
+    });
+    const r = await createAutomationCore(
+      client,
+      { boardId: FAKE_BOARD, trigger: someTrigger, actions: [notifyAction] },
+      FAKE_ACTOR,
+    );
+    expect(r).toEqual({
+      ok: false,
+      error: "Only editors can change this board's automations.",
+    });
+  });
 });
 
 // The fake used to discard the arguments to `.eq()`, so EVERY predicate in
@@ -361,6 +379,24 @@ describe("updateAutomationCore", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("fails when the update matched no row — a viewer's write is not a success", async () => {
+    // RLS (`can_edit_board`) filters the row out of an UPDATE for a view-only
+    // caller: zero rows, NO error. That used to come back as `ok: true`.
+    const client = {
+      from: updateDeleteClient({ mutateResult: { data: null, error: null } }),
+    };
+    const r = await updateAutomationCore(
+      client as never,
+      { id: FAKE_AUTOMATION, enabled: false },
+      FAKE_ACTOR,
+    );
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "Automation not found, or you don't have edit access to its board.",
+    });
+  });
+
   it("reports a missing automation when adding a webhook to an unknown id", async () => {
     const client = { from: updateDeleteClient({ automation: null }) };
     const r = await updateAutomationCore(
@@ -393,6 +429,20 @@ describe("deleteAutomationCore", () => {
       id: FAKE_AUTOMATION,
     });
     expect(r).toEqual({ ok: true, data: { boardId: null } });
+  });
+
+  it("fails when the delete matched no row — a viewer's write is not a success", async () => {
+    const client = {
+      from: updateDeleteClient({ mutateResult: { data: null, error: null } }),
+    };
+    const r = await deleteAutomationCore(client as never, {
+      id: FAKE_AUTOMATION,
+    });
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "Automation not found, or you don't have edit access to its board.",
+    });
   });
 
   it("surfaces a delete error", async () => {

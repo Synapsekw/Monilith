@@ -396,6 +396,7 @@ export function BoardHeader({
               if (!next) setSeedDraft(undefined);
             }}
             seedDraft={seedDraft}
+            canEdit={!isViewer}
           />
         ) : null}
         {!isViewer && workTrackingMounted ? (

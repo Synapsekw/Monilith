@@ -9,8 +9,10 @@ import {
 } from "@/lib/ai/errors";
 
 const getBoardPayload = vi.fn();
+const getBoardAccess = vi.fn();
 vi.mock("@/lib/boards/queries", () => ({
   getBoardPayload: (...args: unknown[]) => getBoardPayload(...args),
+  getBoardAccess: (...args: unknown[]) => getBoardAccess(...args),
 }));
 
 const listOrgMembersCached = vi.fn();
@@ -102,6 +104,8 @@ const goodRawDraft = {
 beforeEach(() => {
   getBoardPayload.mockReset();
   getBoardPayload.mockResolvedValue(payload());
+  getBoardAccess.mockReset();
+  getBoardAccess.mockResolvedValue("editor");
   listOrgMembersCached.mockReset();
   listOrgMembersCached.mockResolvedValue([]);
   generateAutomationDraftLLM.mockReset();
@@ -123,6 +127,35 @@ beforeEach(() => {
 });
 
 describe("generateAutomationDraft action", () => {
+  it("refuses a view-only caller before entitlement and any model call", async () => {
+    getBoardAccess.mockResolvedValue("viewer");
+    const { generateAutomationDraft } =
+      await import("@/lib/ai/automation-gen-actions");
+    const res = await generateAutomationDraft({
+      boardId: BOARD_ID,
+      prompt: "when status is done notify the owner",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only editors can create automations on this board.",
+    });
+    expect(getBoardAccess).toHaveBeenCalledWith(BOARD_ID);
+    expect(requireAiEntitlement).not.toHaveBeenCalled();
+    expect(runAi).not.toHaveBeenCalled();
+  });
+
+  it("answers 'not found' to a caller with no access to the board", async () => {
+    getBoardAccess.mockResolvedValue(null);
+    const { generateAutomationDraft } =
+      await import("@/lib/ai/automation-gen-actions");
+    const res = await generateAutomationDraft({
+      boardId: BOARD_ID,
+      prompt: "when status is done notify the owner",
+    });
+    expect(res).toEqual({ ok: false, error: "Board not found." });
+    expect(runAi).not.toHaveBeenCalled();
+  });
+
   it("gates entitlement BEFORE runAi and returns a validated draft (no persistence)", async () => {
     const { generateAutomationDraft } =
       await import("@/lib/ai/automation-gen-actions");

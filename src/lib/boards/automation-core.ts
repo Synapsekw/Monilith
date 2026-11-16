@@ -29,6 +29,18 @@ export type UpdateAutomationCoreInput = {
   condition?: unknown;
 };
 
+/**
+ * What a caller without edit access is told. The `automations` write policies
+ * are `can_edit_board(board_id)`, and Postgres reports the two refusals
+ * differently: an INSERT fails its WITH CHECK loudly (42501), while an UPDATE
+ * or DELETE simply matches zero rows and returns no error at all. Both are
+ * mapped to this one sentence so a viewer's write never reads as a success
+ * and never leaks raw policy text.
+ */
+const EDITORS_ONLY = "Only editors can change this board's automations.";
+const NOT_CHANGED =
+  "Automation not found, or you don't have edit access to its board.";
+
 /** What deleting an automation needs. */
 export type DeleteAutomationCoreInput = { id: string };
 
@@ -122,6 +134,7 @@ export async function createAutomationCore(
     })
     .select("id")
     .single();
+  if (error?.code === "42501") return fail(EDITORS_ONLY);
   if (error || !data) return fail(error?.message ?? "Failed to create");
 
   return { ok: true, data: { id: data.id } };
@@ -189,8 +202,11 @@ export async function updateAutomationCore(
     .select("board_id")
     .maybeSingle();
   if (error) return fail(error.message);
+  // Zero rows = RLS filtered the rule out (view-only access) or it is gone.
+  // Reporting that as success left a viewer's optimistic toggle on screen.
+  if (!data) return fail(NOT_CHANGED);
 
-  return { ok: true, data: { boardId: data?.board_id ?? null } };
+  return { ok: true, data: { boardId: data.board_id ?? null } };
 }
 
 /**
@@ -213,6 +229,8 @@ export async function deleteAutomationCore(
     .select("board_id")
     .maybeSingle();
   if (error) return fail(error.message);
+  // Same as update: nothing deleted is a refusal, not a success.
+  if (!data) return fail(NOT_CHANGED);
 
-  return { ok: true, data: { boardId: data?.board_id ?? null } };
+  return { ok: true, data: { boardId: data.board_id ?? null } };
 }
