@@ -24,7 +24,6 @@ import {
   KPI_ITEMS_UNAVAILABLE,
 } from "./types";
 import { parseBurnPacked, unpackLoadPacked } from "./packed";
-import { isMissingFunction, newFolderRpc } from "./rpc-shim";
 import { stageKey } from "./stages";
 
 type DB = SupabaseClient<Database>;
@@ -53,6 +52,15 @@ type PackedRead =
   | { kind: "ok"; total: number; rows: unknown[] };
 
 /**
+ * True when PostgREST (PGRST202) or Postgres (42883) says the function does
+ * not exist: a database that has not had 20261116112338_folder_drilldown yet,
+ * so the caller falls back to the older function.
+ */
+function isMissingFunction(error: { code?: string | null } | null): boolean {
+  return error?.code === "PGRST202" || error?.code === "42883";
+}
+
+/**
  * One execution of a `*_packed` function: a single jsonb value, which
  * PostgREST's row cap cannot cut. `missing` = the database has not had
  * 20261116112338_folder_drilldown yet; the caller falls back to the
@@ -63,7 +71,7 @@ async function readPacked(
   fn: "folder_rollup_packed" | "folder_workload_packed",
   folderId: string,
 ): Promise<PackedRead> {
-  const { data, error } = await newFolderRpc(supabase, fn, {
+  const { data, error } = await typedRpc(supabase, fn, {
     p_folder_id: folderId,
   });
   if (error) {
@@ -322,7 +330,7 @@ export async function resolveFolderAttention(
   const boardId = filter.boardId ?? null;
   const stage = filter.stageKey ?? null;
   const offset = filter.offset ?? 0;
-  const page = await newFolderRpc(supabase, "folder_attention_page", {
+  const page = await typedRpc(supabase, "folder_attention_page", {
     p_folder_id: folderId,
     p_board_id: boardId,
     p_stage_key: stage,
@@ -414,7 +422,7 @@ export async function resolveFolderKpiItems(
     offset?: number;
   },
 ): Promise<({ ok: true } & KpiItemsPage) | { ok: false; error: string }> {
-  const { data, error } = await newFolderRpc(supabase, "folder_kpi_items", {
+  const { data, error } = await typedRpc(supabase, "folder_kpi_items", {
     p_folder_id: folderId,
     p_kpi: q.kpi,
     p_board_id: q.boardId ?? null,
