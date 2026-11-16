@@ -162,25 +162,6 @@ type ServiceClient = SupabaseClient<Database>;
 type Bridged = { client: SupabaseClient<Database>; newBridgeSecretId: string };
 
 /**
- * `oauth_bridge_swap_secret` is added by
- * 20261115173811_oauth_token_idle_expiry_and_bridge_swap.sql and is not in the
- * generated types until the orchestrator regenerates them, so `typedRpc` cannot
- * name it yet. This is the function's exact SQL signature; once the types are
- * regenerated, replace `swapBridgeSecret`'s body with a plain `typedRpc` call.
- */
-type SwapSecretRpc = {
-  rpc(
-    fn: "oauth_bridge_swap_secret",
-    args: {
-      p_token_id: string;
-      p_expected_secret_id: string;
-      p_secret: string;
-      p_name: string;
-    },
-  ): PromiseLike<{ data: string | null; error: { message: string } | null }>;
-};
-
-/**
  * Stores `session` as the bridge secret of `tokenRowId`, compare-and-set on
  * the secret the caller read. One transaction in the database: the new secret
  * is created, the row re-pointed and the old secret deleted together, or — when
@@ -194,16 +175,13 @@ async function swapBridgeSecret(
   expectedSecretId: string,
   session: Session,
 ): Promise<string | null> {
-  const { data, error } = await (svc as unknown as SwapSecretRpc).rpc(
-    "oauth_bridge_swap_secret",
-    {
-      p_token_id: tokenRowId,
-      p_expected_secret_id: expectedSecretId,
-      p_secret: JSON.stringify(payloadFromSession(session)),
-      // A fresh unique name, never a per-user one: see bridgeSecretName().
-      p_name: bridgeSecretName(session.user.id),
-    },
-  );
+  const { data, error } = await typedRpc(svc, "oauth_bridge_swap_secret", {
+    p_token_id: tokenRowId,
+    p_expected_secret_id: expectedSecretId,
+    p_secret: JSON.stringify(payloadFromSession(session)),
+    // A fresh unique name, never a per-user one: see bridgeSecretName().
+    p_name: bridgeSecretName(session.user.id),
+  });
   if (error) throw new BridgeUnavailableError(`vault swap: ${error.message}`);
   return data;
 }
