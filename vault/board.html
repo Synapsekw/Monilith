@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-11-15 18:39",
+  "updated": "2026-11-16 16:48",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "28f6960e",
+        "value": "7199237b",
         "tone": "warn",
-        "note": "Ahead of main: folder invites, the command center Tower, the Today block and assistant retrieval (with smarter due-date and done guesses), status-coloured relation chips with filter, search, sort and export, the large-board loading fix, the dense board table and the readable timelines. Awaiting a promotion PR."
+        "note": "Ahead of main: twelve fix branches after a review of PR #152. View-only access is read-only everywhere, folder sharing needs board ownership, the invite path works end to end, guests see only who they work with, connected apps expire when unused, one rule for done and overdue, item panel fields, Today row actions, folder KPI drill-down. Awaiting a promotion PR."
       },
       {
         "name": "main",
-        "value": "e260a700",
+        "value": "c86df099",
         "tone": "ok",
-        "note": "PR #151 merged 2026-11-14: personal Monos, cross-board dependencies and the folder Timeline, theme variety. CI green."
+        "note": "PR #152 merged 2026-11-15: folder invites, the command center Tower, Today on My Work, the dense board table, MCP connector fixes."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel success on PR #151. Folder invites, the Tower, the Today block, the dense table and the timeline rework are not live yet."
+        "note": "Running PR #152. Seven newer migrations are already live on the database; the matching screens arrive with the next promotion."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on every 2026-11-15 merge (finish-task gates); 14,137 passed at the Today block merge.",
+        "note": "Green on every 2026-11-16 merge (finish-task gates); 15,272 passed at the last one.",
         "label": "test"
       },
       {
@@ -180,17 +180,17 @@
       },
       {
         "name": "ledger",
-        "value": "210/210",
+        "value": "217/217",
         "tone": "ok",
-        "note": "210 committed files / 210 live DEV ledger rows, in sync.",
+        "note": "217 committed files / 217 live DEV ledger rows, in sync.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Promote develop soon: the Tower changes saved layouts",
-      "why": "A folder layout saved on develop with the new Tower sections falls back to its preset on the old production code, and the folder burn chart on production still cuts off at 1,000 rows. Owed first: the email-invite and guest-view browser checks for folder invites.",
+      "title": "Promote develop: two fix waves are waiting",
+      "why": "Twelve branches from the 2026-11-16 review are merged and gated. After promotion the owner sets the Supabase invite email template and the /auth/confirm redirect. Owed browser checks: the invite email, a guest account, a view-only account, a connected app after a revoked session.",
       "tags": [
         "owner",
         "before promote",
@@ -385,6 +385,11 @@
   "risks": [
     {
       "sev": "amber",
+      "title": "Overdue counts differ between the assistant and folders",
+      "text": "The assistant and My Work count subitems (440 overdue in the largest folder); folder cards and board health count top-level items only (402). One rule is needed; the owner has not chosen yet."
+    },
+    {
+      "sev": "amber",
       "title": "Goals and portfolios can land in the wrong organisation",
       "text": "create_goal and create_portfolio choose an organisation with limit 1 and ignore the one requested. The assistant refuses these creates for now; the Goals and Portfolios pages may be affected for people in more than one organisation. Needs a migration."
     },
@@ -506,14 +511,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-11-15-1839-milestones-board-and-relation-chips",
-    "when": "2026-11-15 18:39",
-    "title": "Milestones board and status-tinted relation chips",
+    "id": "2026-11-16-1648-feature-review-and-two-fix-waves",
+    "when": "2026-11-16 16:48",
+    "title": "Feature review and two fix waves",
     "bullets": [
-      "Milestone on the 11 DAAS boards was free text: 162 labels over 2,127 items. It is now a link to a new Milestones board, verified row by row.",
-      "The Milestones timeline draws bars from the earliest task start to the latest due date.",
-      "Relation chips take the linked item’s status colour, show the full name and open the item; a hover pencil edits.",
-      "Relation columns now work in board filter, search, sort and export. Merged to develop; not live until promotion."
+      "A review of PR #152 found a view-only-to-editor escalation through folder sharing; it is closed on the live database.",
+      "Twelve branches merged: read-only for viewers, invite landing, guest roster, connected-app expiry, one overdue rule, item panel fields, Today actions, folder drill-down.",
+      "Largest folder: overdue 762 to 402 under the one rule; its attention list held 567 rows and showed 100.",
+      "Seven migrations live on DEV after rolled-back dry runs. Merged to develop; not live until promotion."
     ]
   }
 }
