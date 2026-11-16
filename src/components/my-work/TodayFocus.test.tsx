@@ -467,7 +467,9 @@ describe("TodayFocus row actions", () => {
       pending.resolve({ ok: true, data: { dueDate: "2026-11-15" } });
     });
     expect(toastError).not.toHaveBeenCalled();
-  });
+    // Opening the date popover mounts a calendar; on a loaded CI runner that
+    // alone has passed the default 5 s.
+  }, 20_000);
 
   it("change due date refused: the old date comes back with the reason", async () => {
     setFocusItemDueDate.mockResolvedValue({ ok: false, error: "denied" });
@@ -485,7 +487,7 @@ describe("TodayFocus row actions", () => {
     expect(toastError).toHaveBeenCalledWith(
       'The due date of "Task 1" was not changed. denied',
     );
-  });
+  }, 20_000);
 
   it("picking the date it already has writes nothing", async () => {
     const user = userEvent.setup();
@@ -502,7 +504,7 @@ describe("TodayFocus row actions", () => {
     );
     await user.click(screen.getByRole("button", { name: "Today" }));
     expect(setFocusItemDueDate).not.toHaveBeenCalled();
-  });
+  }, 20_000);
 
   it("offers 'Set date' on an editable row with no due date", () => {
     const items = [item(1, 4, "1 unread reply for you", { dueDate: null })];
