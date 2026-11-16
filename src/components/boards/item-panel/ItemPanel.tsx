@@ -33,6 +33,7 @@ import type { MonoMemberMeta } from "@/lib/monos/types";
 import { AgentChip } from "@/components/mono/MonoChip";
 import { ownerPossessive } from "@/lib/monos/labels";
 import type { TimelineViewConfig } from "@/lib/boards/schedule";
+import type { EditorMember } from "@/components/boards/cells/editors";
 
 // Lazy-load the AI assist panel (and its action/SDK imports) only when the
 // fields tab is first opened — keeps opening the item panel / switching to
@@ -68,6 +69,30 @@ const DependenciesSection = dynamic(
   { ssr: false },
 );
 
+// The board's column values for this item, edited with the table's own cells.
+// Lazy like the sections above: it pulls in every cell editor, and it renders
+// from the already-hydrated board cache — 0 round-trips to open.
+const FieldsSection = dynamic(
+  () =>
+    import("@/components/boards/item-panel/FieldsSection").then(
+      (m) => m.FieldsSection,
+    ),
+  { ssr: false },
+);
+
+// Relation backlinks: one bounded, RLS-scoped read that fires when the fields
+// tab first shows this item — never on board first paint.
+const LinkedFromSection = dynamic(
+  () =>
+    import("@/components/boards/item-panel/LinkedFromSection").then(
+      (m) => m.LinkedFromSection,
+    ),
+  { ssr: false },
+);
+
+/** Stable default so the memoized panel keeps its props when none are given. */
+const NO_CELL_MEMBERS: EditorMember[] = [];
+
 type Tab = "fields" | "updates" | "activity" | "files";
 
 // Memoized: BoardViews re-renders on every presence sync, and every prop it
@@ -86,6 +111,7 @@ function ItemPanelInner({
   currentUserId,
   columns,
   members,
+  cellMembers = NO_CELL_MEMBERS,
   createdBy,
   createdAt,
   onClose,
@@ -97,8 +123,9 @@ function ItemPanelInner({
   boardName: string;
   /** The board's first timeline view config — decides which dates mark "Late". */
   timelineConfig: TimelineViewConfig;
-  /** False for view-only access: hides adding/removing dependencies, the
-   *  update composer and the file upload (each mirrors its table's RLS). */
+  /** False for view-only access: fields render read-only, and adding/removing
+   *  dependencies, the update composer and the file upload are hidden (each
+   *  mirrors its table's RLS). */
   canEdit: boolean;
   currentUserId: string;
   columns: readonly Column[];
@@ -108,6 +135,9 @@ function ItemPanelInner({
     avatarUrl?: string | null;
     mono?: MonoMemberMeta;
   })[];
+  /** The board's members in the shape the cell editors take (people cells,
+   *  pickers). The same list the board views hand to the table. */
+  cellMembers?: EditorMember[];
   createdBy: string | null;
   createdAt: string | null;
   onClose: () => void;
@@ -221,6 +251,15 @@ function ItemPanelInner({
           <div key={tab} className="animate-fadein">
             {tab === "fields" && (
               <div className="space-y-4 py-6">
+                {itemId && (
+                  <FieldsSection
+                    itemId={itemId}
+                    boardId={boardId}
+                    canEdit={canEdit}
+                    currentUserId={currentUserId}
+                    members={cellMembers}
+                  />
+                )}
                 {/* Every assist entry ends in a board write (a cell upsert or
                     new subitems), so view-only access does not get it. */}
                 {itemId && canEdit && (
@@ -239,6 +278,9 @@ function ItemPanelInner({
                     schedule={timelineConfig}
                     canEdit={canEdit}
                   />
+                )}
+                {itemId && (
+                  <LinkedFromSection itemId={itemId} boardId={boardId} />
                 )}
                 <dl className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between gap-4">

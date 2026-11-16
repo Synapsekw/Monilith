@@ -32,7 +32,12 @@ import {
 import { isStatusValueComplete } from "@/lib/boards/overdue";
 import { celebrateStatusEdit } from "@/components/ui/done-burst";
 import { useIsCellEditing } from "./editing-store";
-import { CELL_CENTER, type CellControls } from "./shared";
+import {
+  CELL_CENTER,
+  CELL_START,
+  type CellSurface,
+  type EditableCellControls,
+} from "./shared";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -58,6 +63,9 @@ function statusOptionChanged(prev: unknown, next: unknown): boolean {
  * nothing that writes — no edit activation, no editor, no upload, timer or
  * relation picker. It is not inert: links, linked-item chips and file previews
  * still open, the cell stays in the tab order and its text can be selected.
+ *
+ * Also rendered by the item panel's Fields section (`surface="panel"`,
+ * `align="start"`): same controls, same writes, its own edit-mode key.
  */
 export const EditableCell = memo(function EditableCell({
   item,
@@ -66,22 +74,31 @@ export const EditableCell = memo(function EditableCell({
   controls,
   overdue = false,
   dependents,
+  surface,
+  align = "center",
 }: {
   item: Item;
   column: Column;
   value: CacheCellValue["value"];
-  controls: CellControls;
+  controls: EditableCellControls;
   /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
   overdue?: boolean;
   /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
   dependents?: number;
+  /** Absent in the table. `"panel"` keys edit mode to the item panel's copy. */
+  surface?: CellSurface;
+  /** Value alignment: centered in the table grid, start in the panel list. */
+  align?: "center" | "start";
 }) {
   const { setEditing, setCell, clearCellValue, members } = controls;
   const readOnly = !controls.canEdit;
   // Per-cell subscription (see ./editing-store): the ~300 cells that are NOT
   // being edited select a stable `false` and never re-render on a click.
   // A viewer's cell is never in edit mode, whatever the store says.
-  const isEditing = useIsCellEditing(item.id, column.id) && !readOnly;
+  const isEditing = useIsCellEditing(item.id, column.id, surface) && !readOnly;
+  const cellAlign = align === "start" ? CELL_START : CELL_CENTER;
+  const startEditing = () =>
+    setEditing({ itemId: item.id, columnId: column.id, surface });
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
   const target = presenceTarget.cell(item.id, column.id);
@@ -105,7 +122,7 @@ export const EditableCell = memo(function EditableCell({
       <div
         aria-label={accessibleName}
         aria-disabled
-        className={`flex h-full items-center truncate px-2 opacity-50 ${CELL_CENTER}`}
+        className={`flex h-full items-center truncate px-2 opacity-50 ${cellAlign}`}
       >
         <CellRenderer
           kind={column.kind}
@@ -125,7 +142,7 @@ export const EditableCell = memo(function EditableCell({
   if (column.kind === "files") {
     const files = filesForCell(controls.cache, item.id, column.id);
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         <FilesCell
           files={files}
           previewUrls={controls.filesPreviewUrls ?? {}}
@@ -149,7 +166,7 @@ export const EditableCell = memo(function EditableCell({
     const estimate =
       (value as { estimateSeconds?: number } | null)?.estimateSeconds ?? null;
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         <TimeTrackingCell
           entries={entries}
           estimateSeconds={estimate}
@@ -180,7 +197,7 @@ export const EditableCell = memo(function EditableCell({
     };
     const targetBoardId = relSettings.target_board_id ?? "";
     return (
-      <div className={`flex h-full items-center px-1 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-1 ${cellAlign}`}>
         <RelationCell
           links={links}
           allowMultiple={relSettings.allow_multiple ?? true}
@@ -226,7 +243,7 @@ export const EditableCell = memo(function EditableCell({
     const values = mirrorValuesForCell(controls.cache, item.id, column);
     const target = mirrorTargetColumnFor(controls.cache, column);
     return (
-      <div className={`flex h-full items-center px-2 ${CELL_CENTER}`}>
+      <div className={`flex h-full items-center px-2 ${cellAlign}`}>
         {target ? (
           <MirrorCell
             values={values}
@@ -244,7 +261,7 @@ export const EditableCell = memo(function EditableCell({
     return (
       <div
         ref={cellRef}
-        className={`relative flex items-center px-2 ${CELL_CENTER}`}
+        className={`relative flex items-center px-2 ${cellAlign}`}
       >
         <CellEditor
           kind={column.kind}
@@ -296,7 +313,7 @@ export const EditableCell = memo(function EditableCell({
         role="group"
         tabIndex={0}
         aria-label={accessibleName}
-        className={`focus-visible:ring-ring relative flex h-full items-center truncate px-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${CELL_CENTER}`}
+        className={`focus-visible:ring-ring relative flex h-full items-center truncate px-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${cellAlign}`}
       >
         <CellRenderer
           kind={column.kind}
@@ -318,14 +335,14 @@ export const EditableCell = memo(function EditableCell({
       role="button"
       tabIndex={0}
       aria-label={accessibleName}
-      onClick={() => setEditing({ itemId: item.id, columnId: column.id })}
+      onClick={startEditing}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          setEditing({ itemId: item.id, columnId: column.id });
+          startEditing();
         }
       }}
-      className={`focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-2 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${CELL_CENTER}`}
+      className={`focus-visible:ring-ring hover:after:border-border-bright hover:after:bg-state-hover relative flex h-full cursor-pointer items-center truncate px-2 transition-colors after:pointer-events-none after:absolute after:inset-1 after:rounded-md after:border after:border-transparent after:transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${cellAlign}`}
     >
       <CellRenderer
         kind={column.kind}

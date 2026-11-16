@@ -314,6 +314,7 @@ export function BoardViews({
             currentUserId={currentUserId}
             columns={payload.columns}
             members={panelMembers}
+            cellMembers={members}
             createdBy={openItem?.created_by ?? null}
             createdAt={openItem?.created_at ?? null}
             onClose={closeItem}

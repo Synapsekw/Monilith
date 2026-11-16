@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { EditingCell } from "./shared";
+import type { CellSurface, EditingCell } from "./shared";
 
 /**
  * Which cell of the board table is in edit mode.
@@ -28,9 +28,20 @@ export const useEditingCell = create<EditingCellState>((set) => ({
   setEditing: (cell) => set({ editing: cell }),
 }));
 
-/** Subscribe to "is THIS cell the one being edited?" — and nothing else. */
-export function useIsCellEditing(itemId: string, columnId: string): boolean {
+/**
+ * Subscribe to "is THIS cell the one being edited?" — and nothing else.
+ * `surface` tells the table's cell from the item panel's copy of it (see
+ * {@link CellSurface}); a table cell passes nothing.
+ */
+export function useIsCellEditing(
+  itemId: string,
+  columnId: string,
+  surface?: CellSurface,
+): boolean {
   return useEditingCell(
-    (s) => s.editing?.itemId === itemId && s.editing?.columnId === columnId,
+    (s) =>
+      s.editing?.itemId === itemId &&
+      s.editing?.columnId === columnId &&
+      s.editing?.surface === surface,
   );
 }
