@@ -15,6 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 
+import { BoardCapNotice } from "@/components/boards/BoardCapNotice";
+import type { BoardTruncation } from "@/lib/boards/caps";
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
 import { IntelligenceStrip } from "@/components/boards/IntelligenceStrip";
@@ -128,6 +130,7 @@ export function BoardHeader({
   columns = EMPTY,
   members = EMPTY,
   groups = EMPTY,
+  truncation,
   access = "owner",
   grants = EMPTY,
   currentUserId = "",
@@ -147,6 +150,9 @@ export function BoardHeader({
   members?: HeaderMember[];
   /** Board groups, threaded into the automations builder (move-to-group action). */
   groups?: HeaderGroup[];
+  /** Capped reads that left rows behind, from the board cache. Drives the
+   *  notice under the header. */
+  truncation?: BoardTruncation;
   /** The current user's access to this board. Owners can share; viewers are read-only. */
   access?: BoardAccess;
   /** Existing share grants, seeding the share dialog. Only meaningful for owners. */
@@ -443,6 +449,9 @@ export function BoardHeader({
           BoardHeader, so this is the one place that appears exactly once in
           all four views. Renders nothing without a BoardIntelligenceProvider. */}
       <IntelligenceStrip />
+      {/* Same reasoning: once per view, directly above the surface whose
+          values a capped read left out. Nothing when no cap was hit. */}
+      <BoardCapNotice truncation={truncation} />
     </>
   );
 }

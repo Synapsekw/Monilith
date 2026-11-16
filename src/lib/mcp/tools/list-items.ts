@@ -1,11 +1,22 @@
 import * as z from "zod";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
+import { fetchCappedRows } from "@/lib/supabase/paginate";
 
 /** Page size when the caller does not ask for one. Most boards fit in one page. */
 export const LIST_ITEMS_DEFAULT_LIMIT = 100;
 /** Hard ceiling — working agreement #5: a hot-path read is never unbounded. */
 export const LIST_ITEMS_MAX_LIMIT = 200;
+
+/**
+ * Most cell values one call returns: a full page ({@link LIST_ITEMS_MAX_LIMIT}
+ * items) of a 100-column board. The cell read pages through PostgREST's
+ * 1,000-row responses up to this bound, so an ordinary page always comes back
+ * complete; it used to stop at the first response, which cut the default page
+ * on any board wider than 10 filled columns without saying so. A read that
+ * still exceeds this is reported (`truncated`), never silent.
+ */
+export const LIST_ITEMS_CELLS_CAP = LIST_ITEMS_MAX_LIMIT * 100;
 
 export const listItemsInput = {
   boardId: z.string().uuid(),
@@ -142,16 +153,41 @@ export async function listItemsHandler(
   const page = hasMore ? rows.slice(0, limit) : rows;
 
   const cellsByItem = new Map<string, Record<string, unknown>>();
+  /** Items whose cell values are not all in this response. */
+  const incomplete = new Set<string>();
   if (page.length > 0) {
-    const { data: cells, error: cellErr } = await supabase
-      .from("cell_values")
-      .select("item_id, column_id, value")
-      .in(
-        "item_id",
-        page.map((r) => r.id),
-      );
+    // Ordered by the `(item_id, column_id)` PRIMARY KEY so a cut is
+    // deterministic, and read one row past the cap so a cut is known: without
+    // it, items past the cap came back with empty `cells` that looked real.
+    const {
+      data: cells,
+      error: cellErr,
+      truncated,
+    } = await fetchCappedRows(
+      (from, to) =>
+        supabase
+          .from("cell_values")
+          .select("item_id, column_id, value")
+          .in(
+            "item_id",
+            page.map((r) => r.id),
+          )
+          .order("item_id", { ascending: true })
+          .order("column_id", { ascending: true })
+          .range(from, to),
+      // A typical wide page is 2 to 3 responses; a small wave keeps the
+      // follow-up requests from fanning out past what the page can hold.
+      { cap: LIST_ITEMS_CELLS_CAP, wave: 3 },
+    );
     if (cellErr) {
       return toolError(`Failed to fetch cell values: ${cellErr.message}`);
+    }
+    const lastLoaded = truncated ? cells?.at(-1)?.item_id : undefined;
+    if (lastLoaded !== undefined) {
+      // Rows arrive in item_id order, so every item sorting before the last
+      // loaded row is complete. That last item may be cut mid-way and every
+      // later one has nothing loaded: all of those are reported, never guessed.
+      for (const r of page) if (r.id >= lastLoaded) incomplete.add(r.id);
     }
     for (const cell of cells ?? []) {
       const bucket = cellsByItem.get(cell.item_id) ?? {};
@@ -161,6 +197,16 @@ export async function listItemsHandler(
   }
 
   const last = page.at(-1);
+  const columnCount = (columnsRes.data ?? []).length;
+  // An item holds at most one cell per column, so this many items always fit
+  // under the cap. With no column list to go on, fall back to what did fit.
+  const safeLimit = Math.max(
+    1,
+    columnCount > 0
+      ? Math.floor(LIST_ITEMS_CELLS_CAP / columnCount)
+      : page.length - incomplete.size,
+  );
+  const cellsCut = incomplete.size > 0;
   return {
     content: [
       {
@@ -178,10 +224,32 @@ export async function listItemsHandler(
             // Keyed by column id, empty cells omitted — a missing cell_values
             // row IS an empty cell, so absence is the accurate encoding.
             cells: cellsByItem.get(r.id) ?? {},
+            ...(incomplete.has(r.id) ? { cellsTruncated: true } : {}),
           })),
           hasMore,
           ...(hasMore && last
             ? { nextCursor: encodeCursor(last.position, last.id) }
+            : {}),
+          // Always present, so a client can tell "complete" from "not told".
+          truncated: cellsCut,
+          ...(cellsCut
+            ? {
+                next: {
+                  tool: "list_items",
+                  args: {
+                    boardId: input.boardId,
+                    ...(input.groupId ? { groupId: input.groupId } : {}),
+                    ...(input.cursor ? { cursor: input.cursor } : {}),
+                    limit: safeLimit,
+                  },
+                  incompleteItemIds: [...incomplete],
+                  hint:
+                    `Cell values stop at ${LIST_ITEMS_CELLS_CAP} per call, so ${incomplete.size} of the ${page.length} items here ` +
+                    `(marked "cellsTruncated") have missing or partial "cells" — do not read them as empty. ` +
+                    `Call list_items again with the same cursor and "limit" ${safeLimit} or lower to get every item complete, ` +
+                    `narrow with "groupId", or call get_item for a single item.`,
+                },
+              }
             : {}),
         }),
       },
@@ -198,7 +266,9 @@ export const listItemsDescriptor: ToolDescriptor = {
     `Prefer this over calling get_item repeatedly. ` +
     `Returns up to ${LIST_ITEMS_DEFAULT_LIMIT} items by default (max ${LIST_ITEMS_MAX_LIMIT}); ` +
     `when "hasMore" is true, call again passing "nextCursor" as "cursor" to get the next page. ` +
-    `Optionally filter to one group with "groupId".`,
+    `Optionally filter to one group with "groupId". ` +
+    `One call carries at most ${LIST_ITEMS_CELLS_CAP} cell values: on an extremely wide board, when "truncated" is true, ` +
+    `the items marked "cellsTruncated" are incomplete and "next" gives the arguments (a smaller "limit") that return them in full.`,
   inputSchema: listItemsInput,
   capability: null,
   scope: "boardId",

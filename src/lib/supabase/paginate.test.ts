@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { fetchAllRows, POSTGREST_MAX_ROWS } from "@/lib/supabase/paginate";
+import {
+  fetchAllRows,
+  fetchCappedRows,
+  POSTGREST_MAX_ROWS,
+} from "@/lib/supabase/paginate";
 
 /** A fake table of `total` rows served in PostgREST-style inclusive ranges. */
 function fakeTable(total: number, failAt?: number) {
@@ -96,5 +100,45 @@ describe("fetchAllRows", () => {
     const t = fakeTable(5000, 0);
     const res = await fetchAllRows(t.page, { cap: 60000 });
     expect(res).toEqual({ data: null, error: { message: "boom" } });
+  });
+});
+
+describe("fetchCappedRows", () => {
+  it("reports no truncation and one request for a short read", async () => {
+    const t = fakeTable(12);
+    const res = await fetchCappedRows(t.page, { cap: 2000 });
+    expect(res.truncated).toBe(false);
+    expect(res.data).toHaveLength(12);
+    expect(t.calls).toEqual([[0, 999]]);
+  });
+
+  it("reports no truncation when the table holds exactly the cap", async () => {
+    const t = fakeTable(2000);
+    const res = await fetchCappedRows(t.page, { cap: 2000 });
+    expect(res.truncated).toBe(false);
+    expect(res.data).toHaveLength(2000);
+  });
+
+  it("reports truncation and returns only the cap when one more row exists", async () => {
+    const t = fakeTable(2001);
+    const res = await fetchCappedRows(t.page, { cap: 2000 });
+    expect(res.truncated).toBe(true);
+    expect(res.data).toHaveLength(2000);
+    expect(res.data?.[1999]).toBe(1999);
+  });
+
+  it("reads exactly one row past the cap, never more", async () => {
+    const t = fakeTable(50_000);
+    await fetchCappedRows(t.page, { cap: 2000 });
+    expect(Math.max(...t.calls.map(([, to]) => to))).toBe(2000);
+    expect(t.calls).toContainEqual([2000, 2000]);
+  });
+
+  it("passes an error through without a truncation claim", async () => {
+    const t = fakeTable(5000, 1000);
+    const res = await fetchCappedRows(t.page, { cap: 2000 });
+    expect(res.error?.message).toBe("boom");
+    expect(res.data).toBeNull();
+    expect(res.truncated).toBe(false);
   });
 });

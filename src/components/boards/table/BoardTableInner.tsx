@@ -850,6 +850,7 @@ export function BoardTableInner({
         boardId={board.id}
         boardName={board.name}
         board={board}
+        truncation={cache.truncation}
         views={payload.views}
         selectedViewId={selectedViewId}
         columns={columns}

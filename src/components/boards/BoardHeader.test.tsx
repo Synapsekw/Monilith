@@ -142,6 +142,39 @@ describe("BoardHeader", () => {
     expect(renameBoard).toHaveBeenCalledWith("Q2 roadmap");
   });
 
+  it("shows the cap notice under the header when a read was cut off", () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        board={BOARD}
+        views={views}
+        selectedViewId="v1"
+        truncation={{
+          cells: true,
+          relationLinks: false,
+          linkedItemNames: false,
+        }}
+      />,
+    );
+    expect(screen.getByTestId("board-cap-notice").textContent).toBe(
+      "Showing the first 60,000 cells. Some values are not loaded.",
+    );
+  });
+
+  it("shows no cap notice on a board that loaded in full", () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        board={BOARD}
+        views={views}
+        selectedViewId="v1"
+      />,
+    );
+    expect(screen.queryByTestId("board-cap-notice")).toBeNull();
+  });
+
   // The Input base carries `md:text-sm`; a bare `text-xl` does not displace
   // it, so the rename field used to drop to 14px on desktop while the title it
   // replaces is 20px.

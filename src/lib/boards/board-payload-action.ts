@@ -12,7 +12,7 @@ const boardIdSchema = z.string().uuid();
  * invalidates the query to resync after a channel drop/reconnect.
  *
  * Reuses `getBoardPayload` verbatim, so the same first-paint bounds apply
- * (items 5000 / cell_values 20000 / deps 5000 / attachments 200 / entries 1000)
+ * (items 5000 / cell_values 60000 / deps 5000 / attachments 200 / entries 1000)
  * — no unbounded read is introduced. Returns null when the board is no longer
  * visible (RLS) or was deleted; the caller keeps the last-known cache in that
  * case rather than clearing it.

@@ -1,6 +1,7 @@
 import type { Tables } from "@/types/database.types";
 import type { BoardCellValue } from "@/lib/boards/queries";
 import type { RelationLink } from "@/lib/boards/relations";
+import type { BoardTruncation } from "@/lib/boards/caps";
 
 export type CacheBoard = Tables<"boards">;
 export type CacheGroup = Tables<"groups">;
@@ -35,6 +36,9 @@ export type BoardCache = {
   mirrorTargetCells: CacheCellValue[];
   /** Referenced target columns' render metadata (kind + settings). Read-only. */
   mirrorTargetColumns: Pick<CacheColumn, "id" | "kind" | "settings">[];
+  /** Capped reads that left rows behind (see `caps.ts`). Read-only: set by the
+   *  server payload and replaced on a full resync, never patched. */
+  truncation?: BoardTruncation;
 };
 
 /** Stable lookup key for a cell value (item + column). */

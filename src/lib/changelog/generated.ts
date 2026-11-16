@@ -6,6 +6,27 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-11-16",
     kind: "fixed",
+    title: "Connected apps see complete board rows",
+    description:
+      "Listing a wide board from a connected app no longer returns items with missing values.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Folder layouts survive an unknown panel",
+    description:
+      "A folder layout that contains a panel this version does not recognise now keeps the rest of your arrangement instead of resetting.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Boards say when values are left out",
+    description:
+      "A very large board, and the list_items tool for AI clients, now tell you when they show only part of the data instead of leaving values blank.",
+  },
+  {
+    date: "2026-11-16",
+    kind: "fixed",
     title: "Automations are read-only for viewers",
     description:
       "People with view-only access can see a board's automations and run history but no longer get controls to add, change or delete them.",
