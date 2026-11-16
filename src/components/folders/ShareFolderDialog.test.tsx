@@ -163,6 +163,29 @@ describe("ShareFolderDialog", () => {
     expect(screen.queryByText(/already have a/i)).not.toBeInTheDocument();
   });
 
+  it("shows why a folder holding someone else's boards cannot be shared, and adds nobody", async () => {
+    const reason =
+      "You can only share a folder when you own every board in it, or are an admin. 2 boards in this folder belong to someone else.";
+    inviteToFolder.mockResolvedValue({ ok: false, error: reason });
+    open();
+    await screen.findByText("Dana Lee");
+    await settled();
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value: "pat@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(reason);
+    // The reason is tied to the field that was submitted, and the address
+    // stays so the person can see what was refused.
+    const field = screen.getByLabelText("Name or email");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAttribute("aria-describedby", alert.id);
+    expect(field).toHaveValue("pat@x.com");
+    expect(screen.queryByText("pat@x.com")).not.toBeInTheDocument();
+    expect(loadFolderAccess).toHaveBeenCalledTimes(1);
+  });
+
   it("says what is true when the invitation email could not be delivered", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
