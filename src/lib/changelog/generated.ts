@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-16",
+    kind: "fixed",
+    title: "Automations are read-only for viewers",
+    description:
+      "People with view-only access can see a board's automations and run history but no longer get controls to add, change or delete them.",
+  },
+  {
     date: "2026-11-15",
     kind: "improved",
     title: "One rule for done and overdue",
