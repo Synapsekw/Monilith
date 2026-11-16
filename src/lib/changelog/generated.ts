@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-11-15",
+    kind: "fixed",
+    title: "Folder sharing can no longer raise your own access",
+    description:
+      "Sharing or inviting to a folder now needs you to own every board in it, or be an admin.",
+  },
+  {
     date: "2026-11-16",
     kind: "fixed",
     title: "Folder invitations reach the person invited",
