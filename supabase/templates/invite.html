@@ -40,7 +40,7 @@
                   style="margin:12px 0 0 0;font-size:15px;line-height:24px;color:#52525b;"
                 >
                   You've been invited to join a team on MONOLITH. Accept the
-                  invitation to set up your account and get started.
+                  invitation to choose a password and set up your account.
                 </p>
               </td>
             </tr>
@@ -53,7 +53,7 @@
                       style="border-radius:10px;background-color:#18181b;"
                     >
                       <a
-                        href="{{ .ConfirmationURL }}"
+                        href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite"
                         target="_blank"
                         style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;border-radius:10px;"
                         >Accept invitation</a
@@ -73,8 +73,10 @@
                 <p
                   style="margin:6px 0 0 0;font-size:13px;line-height:20px;word-break:break-all;"
                 >
-                  <a href="{{ .ConfirmationURL }}" style="color:#3f3f46;"
-                    >{{ .ConfirmationURL }}</a
+                  <a
+                    href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite"
+                    style="color:#3f3f46;"
+                    >{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite</a
                   >
                 </p>
               </td>

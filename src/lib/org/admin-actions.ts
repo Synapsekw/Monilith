@@ -3,6 +3,8 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { deliverInvite, inviterLabel } from "@/lib/auth/invite-delivery";
+import { getUserOrgs } from "@/lib/auth/session";
 import {
   boardsTag,
   orgAdminTag,
@@ -135,22 +137,20 @@ export async function inviteMember(
     return fail("You don't have permission to invite members.");
   }
 
-  // Service role: create the auth user if absent + send the branded invite email.
-  // If the email is already a registered user, swallow — they redeem on next login.
+  // Service role: create the auth user if absent + send the branded invite
+  // email (its link lands on /auth/confirm and sets a password). An address
+  // that already has an account gets a notice email when email is configured,
+  // and otherwise finds the invitation in its notifications; both count as
+  // delivered. Only a failed invite email to a new address is reported back.
   const svc = createServiceClient();
-  const { error: inviteErr } = await svc.auth.admin.inviteUserByEmail(email);
-  // A "User already registered" error is expected & fine; only surface unexpected ones.
-  let emailSent = true;
-  if (inviteErr && !/already.*regist/i.test(inviteErr.message)) {
-    // Invitation row persists; user can still redeem after a normal sign-in — but
-    // the branded email failed to send, so report it back rather than swallow it.
-    console.error("[inviteMember] invite email delivery failed", {
-      orgId,
-      email,
-      error: inviteErr.message,
-    });
-    emailSent = false;
-  }
+  const orgs = await getUserOrgs().catch(() => []);
+  const delivery = await deliverInvite(svc, {
+    email,
+    inviterName: inviterLabel(user),
+    orgName: orgs.find((o) => o.id === orgId)?.name ?? null,
+    scope: "inviteMember",
+  });
+  const emailSent = delivery !== "failed";
 
   // Compliance-relevant audit trail (who invited whom). Best-effort: a failed
   // write must not fail the invite, but it must not be silent either.

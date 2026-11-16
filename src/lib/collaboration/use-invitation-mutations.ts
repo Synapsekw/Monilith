@@ -20,9 +20,10 @@ export function useInvitationMutations(userId: string) {
     // accept_invitation ran in the browser, so the server's cached nav reads
     // never saw it: expire this user's access entries (a failure here must not
     // fail an accept that already succeeded).
-    onSuccess: (orgId) => {
-      void refreshAccessAfterInvitation(orgId).catch(() => {});
-    },
+    // Returned, so the mutation settles (and a caller's own onSuccess runs)
+    // only after the caches are expired: the caller navigates next, and a
+    // navigation would abort a refresh still in flight.
+    onSuccess: (orgId) => refreshAccessAfterInvitation(orgId).catch(() => {}),
     onSettled: invalidate,
   });
   const decline = useMutation({

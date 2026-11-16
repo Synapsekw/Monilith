@@ -5,7 +5,7 @@ vi.mock("next/cache", () => ({ updateTag: (t: string) => updateTag(t) }));
 
 const rpc = vi.fn();
 const fromResult: { data: unknown; error: unknown } = {
-  data: { id: "f1", org_id: "o1" },
+  data: { id: "f1", org_id: "o1", name: "Launch" },
   error: null,
 };
 const deleteEq = vi.fn();
@@ -25,7 +25,17 @@ vi.mock("@/lib/org/queries-cached", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     rpc: (...a: unknown[]) => rpc(...a),
-    auth: { getUser: async () => ({ data: { user: { id: "me" } } }) },
+    auth: {
+      getUser: async () => ({
+        data: {
+          user: {
+            id: "me",
+            email: "me@x.com",
+            user_metadata: { full_name: "Me Myself" },
+          },
+        },
+      }),
+    },
     from: (table: string) => ({
       select: () => ({
         eq: () =>
@@ -52,9 +62,23 @@ const inviteUserByEmail = vi.fn();
 const auditInsert = vi.fn(async (_row: unknown) => ({ error: null }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: vi.fn(() => ({
-    auth: { admin: { inviteUserByEmail: (e: string) => inviteUserByEmail(e) } },
+    auth: {
+      admin: {
+        inviteUserByEmail: (e: string, o: unknown) => inviteUserByEmail(e, o),
+      },
+    },
     from: () => ({ insert: auditInsert }),
   })),
+}));
+const sendEmail = vi.fn();
+vi.mock("@/lib/email/send", () => ({
+  sendEmail: (m: unknown) => sendEmail(m),
+}));
+vi.mock("@/lib/auth/origin", () => ({
+  getAppOrigin: async () => "https://app.example.com",
+}));
+vi.mock("@/lib/auth/session", () => ({
+  getUserOrgs: async () => [{ id: "o1", name: "Acme" }],
 }));
 
 import {
@@ -74,6 +98,7 @@ beforeEach(() => {
   updateTag.mockReset();
   rpc.mockReset();
   inviteUserByEmail.mockReset();
+  sendEmail.mockReset().mockResolvedValue("disabled");
   auditInsert.mockClear();
   deleteEq.mockReset();
   deleted.rows = [{ user_id: "me" }];
@@ -162,7 +187,7 @@ describe("inviteToFolder", () => {
     expect(inviteUserByEmail).not.toHaveBeenCalled();
     expect(updateTag).toHaveBeenCalledWith(`shared-boards:user:${U}`);
   });
-  it("sends the invite email for an outside address and reports it sent", async () => {
+  it("sends the invite email for an outside address, linking to the confirm route", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     inviteUserByEmail.mockResolvedValue({ error: null });
     const r = await inviteToFolder({
@@ -170,35 +195,59 @@ describe("inviteToFolder", () => {
       email: "new@x.com",
       level: "editor",
     });
-    expect(inviteUserByEmail).toHaveBeenCalledWith("new@x.com");
-    expect(r).toEqual({ ok: true, data: { kind: "invited", emailSent: true } });
+    expect(inviteUserByEmail).toHaveBeenCalledWith("new@x.com", {
+      redirectTo: "https://app.example.com/auth/confirm",
+    });
+    expect(r).toEqual({
+      ok: true,
+      data: { kind: "invited", delivery: "sent" },
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
     expect(auditInsert).toHaveBeenCalledTimes(1);
   });
-  it("returns the identical result for an address with an account elsewhere and one with none", async () => {
+  it("emails an address that already has an account, naming inviter, folder and org", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
-    inviteUserByEmail.mockResolvedValueOnce({ error: null });
-    const none = await inviteToFolder({
-      folderId: F,
-      email: "new@x.com",
-      level: "viewer",
-    });
-    inviteUserByEmail.mockResolvedValueOnce({
+    inviteUserByEmail.mockResolvedValue({
       error: {
         message: "A user with this email address has already been registered",
+        code: "email_exists",
       },
     });
-    const elsewhere = await inviteToFolder({
+    sendEmail.mockResolvedValue("sent");
+    const r = await inviteToFolder({
       folderId: F,
       email: "old@x.com",
       level: "viewer",
     });
-    expect(elsewhere).toEqual(none);
-    expect(elsewhere).toEqual({
+    expect(r).toEqual({
       ok: true,
-      data: { kind: "invited", emailSent: true },
+      data: { kind: "invited", delivery: "sent" },
+    });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0]).toMatchObject({
+      to: "old@x.com",
+      subject: "Me Myself invited you to the folder Launch in Acme",
     });
   });
-  it("reports emailSent false on a genuine delivery error, still records the audit row", async () => {
+  it("says in-app only, and still succeeds, when an existing account cannot be emailed", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    inviteUserByEmail.mockResolvedValue({
+      error: { message: "x", code: "email_exists" },
+    });
+    for (const outcome of ["disabled", "failed"]) {
+      sendEmail.mockResolvedValue(outcome);
+      const r = await inviteToFolder({
+        folderId: F,
+        email: "old@x.com",
+        level: "viewer",
+      });
+      expect(r).toEqual({
+        ok: true,
+        data: { kind: "invited", delivery: "sent" },
+      });
+    }
+  });
+  it("reports a failed delivery on a genuine invite-email error, still records the audit row", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     rpc.mockResolvedValue({ data: null, error: null });
     inviteUserByEmail.mockResolvedValue({
@@ -211,8 +260,9 @@ describe("inviteToFolder", () => {
     });
     expect(r).toEqual({
       ok: true,
-      data: { kind: "invited", emailSent: false },
+      data: { kind: "invited", delivery: "failed" },
     });
+    expect(sendEmail).not.toHaveBeenCalled();
     // The invitation was recorded by the RPC before the email was attempted.
     expect(rpc).toHaveBeenCalledWith("invite_to_folder", expect.anything());
     expect(auditInsert).toHaveBeenCalledTimes(1);
@@ -228,7 +278,7 @@ describe("inviteToFolder", () => {
       actor_kind: "org",
       action: "folder.invited",
       target_email: "new@x.com",
-      metadata: { folderId: F, level: "editor" },
+      metadata: { folderId: F, level: "editor", delivery: "invite_email" },
     });
   });
   it("rejects an email over 254 characters without calling the database", async () => {

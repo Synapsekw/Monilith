@@ -1,10 +1,16 @@
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getActiveOrgId, isOrgAdmin, isOrgAdminCached } = vi.hoisted(() => ({
-  getActiveOrgId: vi.fn(),
-  isOrgAdmin: vi.fn(),
-  isOrgAdminCached: vi.fn(),
+const { getActiveOrgId, isOrgAdmin, isOrgAdminCached, isActiveOrgGuest } =
+  vi.hoisted(() => ({
+    isActiveOrgGuest: vi.fn(),
+    getActiveOrgId: vi.fn(),
+    isOrgAdmin: vi.fn(),
+    isOrgAdminCached: vi.fn(),
+  }));
+
+vi.mock("@/lib/org/guest", () => ({
+  isActiveOrgGuest: (userId: string) => isActiveOrgGuest(userId),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -50,6 +56,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   getActiveOrgId.mockResolvedValue("o1");
   isOrgAdminCached.mockResolvedValue(true);
+  isActiveOrgGuest.mockResolvedValue(false);
+});
+
+describe("WorkloadPage — guests", () => {
+  it("renders the not-available state for a guest instead of the grid", async () => {
+    isActiveOrgGuest.mockResolvedValue(true);
+    const el = (await WorkloadPage({
+      searchParams: Promise.resolve({}),
+    })) as ReactElement<{ title?: string; isOrgAdmin?: boolean }>;
+
+    expect(isActiveOrgGuest).toHaveBeenCalledWith("u1");
+    expect(el.props.title).toBe("Workload");
+    expect(el.props.isOrgAdmin).toBeUndefined();
+    expect(isOrgAdminCached).not.toHaveBeenCalled();
+  });
 });
 
 describe("WorkloadPage — admin flag", () => {

@@ -23,6 +23,24 @@ describe("ChangePasswordForm", () => {
     expect(screen.getByLabelText("New password")).toBeInTheDocument();
   });
 
+  it("reads as a first password, not a change, for an invited person", () => {
+    render(<ChangePasswordForm variant="invite" />);
+
+    expect(screen.getByText("Set your password")).toBeInTheDocument();
+    expect(
+      screen.getByText(/your invitation is confirmed/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/administrator set a temporary/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/resetting/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirm password")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Set password and continue" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders a confirm-password field", () => {
     render(<ChangePasswordForm variant="recovery" />);
 

@@ -43,6 +43,31 @@ describe("InvitationsSection", () => {
     expect(onDecline).toHaveBeenCalledWith("inv-1");
   });
 
+  it("names the inviter and the folder for a folder invitation", () => {
+    render(
+      <InvitationsSection
+        invites={[
+          {
+            ...invite,
+            role: "guest",
+            inviter_name: "Ann Lee",
+            folder_id: "f-1",
+            folder_name: "Launch",
+            folder_count: 1,
+          },
+        ]}
+        onAccept={() => {}}
+        onDecline={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText("Ann Lee invited you to the folder Launch in Acme Inc"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Accepting opens the folder/)).toBeInTheDocument();
+    // The bare role line is replaced, not repeated.
+    expect(screen.queryByText(/as guest/i)).not.toBeInTheDocument();
+  });
+
   it("renders the Invitations label as a Keystone kicker", () => {
     render(
       <InvitationsSection

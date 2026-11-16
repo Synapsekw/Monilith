@@ -1,4 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
+import { isActiveOrgGuest } from "@/lib/org/guest";
+import { GuestUnavailable } from "@/components/shell/guest-unavailable";
 import { getActiveOrgId } from "@/lib/org/active";
 import { listReportsForOrg, listReportTemplates } from "@/lib/reports/queries";
 import { ReportsIndex } from "@/components/reports/ReportsIndex";
@@ -14,7 +16,12 @@ import { ReportsIndex } from "@/components/reports/ReportsIndex";
  * the Phase-9.3 rule.
  */
 export default async function ReportsIndexPage() {
-  await requireUser();
+  const user = await requireUser();
+  // Org-wide planning is not offered to guests (the sidebar hides the link);
+  // reached by URL, say so instead of rendering an empty page whose create
+  // buttons the database refuses. Same cached role read as the shell.
+  if (await isActiveOrgGuest(user.id))
+    return <GuestUnavailable title="Reports" />;
   const orgId = await getActiveOrgId();
   const [reports, templates] = orgId
     ? await Promise.all([

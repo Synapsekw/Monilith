@@ -19,6 +19,7 @@ import {
   unshareFolder,
 } from "@/lib/folders/sharing-actions";
 import type {
+  InviteDeliveryKind,
   FolderAccessData,
   FolderLevel,
 } from "@/lib/folders/sharing-types";
@@ -89,6 +90,15 @@ function LevelSelect({
  * change. Reads carry their own sequence number so an older answer never
  * replaces a newer one.
  */
+/** What the inviter is told. One sentence for every delivered invitation, on
+ *  purpose: different copy for "has an account" would let anyone who can share
+ *  a folder test whether an address is registered. */
+const INVITE_NOTICE: Record<InviteDeliveryKind, string> = {
+  sent: "Invitation saved. They are told by email, or in their Monolith notifications if they already use it. Access starts when they accept; a new account also needs an administrator's approval.",
+  failed:
+    "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+};
+
 export function ShareFolderDialog({
   folderId,
   folderName,
@@ -258,9 +268,7 @@ export function ShareFolderDialog({
         setNotice(
           r.data.kind === "shared"
             ? "Added. They can open every board in this folder now."
-            : r.data.emailSent
-              ? "Invitation sent. They get access after they sign up and are approved."
-              : "The invitation is saved, but we couldn't send the email. They'll get access when they sign up with this address and are approved. You can revoke it below.",
+            : INVITE_NOTICE[r.data.delivery],
         );
         await reload(e);
       },

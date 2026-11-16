@@ -121,7 +121,7 @@ describe("ShareFolderDialog", () => {
   it("invites an email address at the chosen level", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: true },
+      data: { kind: "invited", delivery: "sent" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -141,16 +141,32 @@ describe("ShareFolderDialog", () => {
       }),
     );
     expect(
-      await screen.findByText(
-        "Invitation sent. They get access after they sign up and are approved.",
-      ),
+      await screen.findByText(/^Invitation saved\. They are told by email/),
     ).toBeInTheDocument();
+  });
+
+  it("gives one answer for every delivered invitation and never reveals an existing account", async () => {
+    inviteToFolder.mockResolvedValue({
+      ok: true,
+      data: { kind: "invited", delivery: "sent" },
+    });
+    open();
+    await screen.findByText("Dana Lee");
+    await settled();
+    fireEvent.change(screen.getByLabelText("Name or email"), {
+      target: { value: "old@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    expect(
+      await screen.findByText(/^Invitation saved\. They are told by email/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already have a/i)).not.toBeInTheDocument();
   });
 
   it("says what is true when the invitation email could not be delivered", async () => {
     inviteToFolder.mockResolvedValue({
       ok: true,
-      data: { kind: "invited", emailSent: false },
+      data: { kind: "invited", delivery: "failed" },
     });
     open();
     await screen.findByText("Dana Lee");
@@ -407,7 +423,10 @@ describe("ShareFolderDialog concurrency", () => {
     fireEvent.submit(form());
     expect(inviteToFolder).toHaveBeenCalledTimes(1);
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "sent" },
+      });
     });
   });
 
@@ -497,7 +516,10 @@ describe("ShareFolderDialog concurrency", () => {
 
     loadFolderAccess.mockClear();
     await act(async () => {
-      d.resolve({ ok: true, data: { kind: "invited", emailSent: true } });
+      d.resolve({
+        ok: true,
+        data: { kind: "invited", delivery: "sent" },
+      });
     });
     // No reload for a dialog that is gone, and nothing counted as a change.
     expect(loadFolderAccess).not.toHaveBeenCalled();

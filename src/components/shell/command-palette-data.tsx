@@ -33,6 +33,8 @@ export async function CommandPaletteData() {
         memberFolderIds: new Set(folderAccess.folderIds),
       }).map((f) => ({ id: f.id, name: f.name }))}
       workspaces={workspaces}
+      // From the folder-access read above: no extra query.
+      isGuest={folderAccess.isGuest}
     />
   );
 }

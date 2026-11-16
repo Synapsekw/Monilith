@@ -1,4 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
+import { isActiveOrgGuest } from "@/lib/org/guest";
+import { GuestUnavailable } from "@/components/shell/guest-unavailable";
 import { getActiveOrgId } from "@/lib/org/active";
 import { isOrgAdminCached } from "@/lib/org/guard";
 import { getWorkloadPageData } from "@/lib/workload/queries";
@@ -10,6 +12,11 @@ export default async function WorkloadPage({
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const [user, sp] = await Promise.all([requireUser(), searchParams]);
+  // Org-wide planning is not offered to guests (the sidebar hides the link);
+  // reached by URL, say so instead of rendering an empty page whose create
+  // buttons the database refuses. Same cached role read as the shell.
+  if (await isActiveOrgGuest(user.id))
+    return <GuestUnavailable title="Workload" />;
 
   // from/to in the URL only changes when paging BEYOND the loaded horizon (rare,
   // genuine RSC nav for more data). In-window sort/pan/filter/metric is

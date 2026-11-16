@@ -87,17 +87,21 @@ function PasswordField({
  * `forced` (default) — the admin-set-temporary-password path (app_metadata
  * must_change_password). `recovery` — the self-serve forgot-password flow,
  * reached via the recovery link → /auth/callback → here; same form, honest
- * copy (no "administrator" framing).
+ * copy (no "administrator" framing). `invite` — an invited person's first
+ * password, reached from the invite email → /auth/confirm → here: the account
+ * has no password yet, so nothing is being "changed".
  */
 export function ChangePasswordForm({
   variant = "forced",
 }: {
-  variant?: "forced" | "recovery";
+  variant?: "forced" | "recovery" | "invite";
 } = {}) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     changeOwnPassword,
     initialState,
   );
+
+  const invite = variant === "invite";
 
   const form = useForm<ChangePasswordInput>({
     resolver: zodResolver(changePasswordSchema),
@@ -116,12 +120,16 @@ export function ChangePasswordForm({
         <div className="bg-surface mb-1 flex size-9 items-center justify-center rounded-lg border">
           <KeyRound className="text-primary size-4" />
         </div>
-        <Kicker>SECURITY</Kicker>
-        <CardTitle>Choose a new password</CardTitle>
+        <Kicker>{invite ? "WELCOME" : "SECURITY"}</Kicker>
+        <CardTitle>
+          {invite ? "Set your password" : "Choose a new password"}
+        </CardTitle>
         <CardDescription>
-          {variant === "recovery"
-            ? "Enter a new password for your account to finish resetting it."
-            : "Your administrator set a temporary password. Pick a new one to continue."}
+          {invite
+            ? "Your invitation is confirmed. Choose a password so you can sign in to Monolith with this email address."
+            : variant === "recovery"
+              ? "Enter a new password for your account to finish resetting it."
+              : "Your administrator set a temporary password. Pick a new one to continue."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -150,7 +158,7 @@ export function ChangePasswordForm({
 
           <PasswordField
             id="password"
-            label="New password"
+            label={invite ? "Password" : "New password"}
             placeholder="At least 8 characters"
             registration={form.register("password")}
             error={form.formState.errors.password?.message}
@@ -158,8 +166,10 @@ export function ChangePasswordForm({
 
           <PasswordField
             id="confirmPassword"
-            label="Confirm new password"
-            placeholder="Re-enter your new password"
+            label={invite ? "Confirm password" : "Confirm new password"}
+            placeholder={
+              invite ? "Re-enter your password" : "Re-enter your new password"
+            }
             registration={form.register("confirmPassword")}
             error={form.formState.errors.confirmPassword?.message}
           />
@@ -171,7 +181,7 @@ export function ChangePasswordForm({
             disabled={pending}
           >
             {pending && <Loader2 className="size-4 animate-spin" />}
-            Update password
+            {invite ? "Set password and continue" : "Update password"}
           </Button>
         </form>
       </CardContent>

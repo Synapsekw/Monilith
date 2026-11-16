@@ -12,7 +12,9 @@ const {
   cookieStore,
   boardProbe,
   getAccountApproval,
+  getFolderAccessForUserCached,
 } = vi.hoisted(() => ({
+  getFolderAccessForUserCached: vi.fn(),
   getAccountApproval: vi.fn(),
   getUser: vi.fn(),
   getUserOrgs: vi.fn(),
@@ -59,6 +61,23 @@ vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: () => listMyBoards(),
   listSharedBoards: () => listSharedBoards(),
 }));
+vi.mock("@/lib/folders/access-cached", () => ({
+  getFolderAccessForUserCached: (userId: string, orgId: string) =>
+    getFolderAccessForUserCached(userId, orgId),
+}));
+// The guest empty state reads invitations through client hooks (TanStack
+// Query + Realtime); they are unit-tested with the component.
+vi.mock("@/lib/collaboration/use-invitations", () => ({
+  useInvitations: () => ({ invites: [], count: 0 }),
+}));
+vi.mock("@/lib/collaboration/use-invitation-responses", () => ({
+  useInvitationResponses: () => ({
+    onAccept: () => {},
+    onDecline: () => {},
+    pendingId: null,
+    error: null,
+  }),
+}));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: (orgId: string) => listWorkspacesCached(orgId),
 }));
@@ -99,6 +118,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   cookieStore.clear();
   getAccountApproval.mockResolvedValue("approved");
+  getFolderAccessForUserCached.mockResolvedValue({
+    isGuest: false,
+    folderIds: [],
+  });
 });
 
 const LAST = "0b9e2a51-6f5c-4d7a-9c3e-8f1d2b4a6c0e";
@@ -252,5 +275,50 @@ describe("Home dispatcher (/home)", () => {
     expect(screen.getByText("Sprint planning")).toBeInTheDocument();
     expect(listWorkspacesCached).toHaveBeenCalledWith("o1");
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("gives a guest with no boards the guest empty state, with nothing to create", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([]);
+    getFolderAccessForUserCached.mockResolvedValue({
+      isGuest: true,
+      folderIds: [],
+    });
+
+    render(await HomeDispatch());
+
+    expect(getFolderAccessForUserCached).toHaveBeenCalledWith("u1", "o1");
+    expect(
+      screen.getByRole("heading", { name: "You're a guest in Acme" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /create your first board/i }),
+    ).toBeNull();
+    expect(screen.queryByText("Sprint planning")).toBeNull();
+    // The create target is never looked up for a guest.
+    expect(listWorkspacesCached).not.toHaveBeenCalled();
+  });
+
+  it("still sends a guest who can open a shared board straight to it", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([{ id: "s1" }]);
+    getFolderAccessForUserCached.mockResolvedValue({
+      isGuest: true,
+      folderIds: ["f1"],
+    });
+
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/boards/s1");
   });
 });
